@@ -1,0 +1,18 @@
+# Ignorar carpetas de compilación local
+bin/
+obj/
+
+# Ignorar archivos de configuración local y secretos
+.vscode/
+appsettings.Development.json
+*.user
+
+# Ignorar archivos de Git si existieran dentro
+.git/
+.gitignore
+
+# No es necesario subir el archivo .http al contenedor
+*.http
+
+# Por si acaso, ignorar la carpeta Front (aunque el Root Directory ya ayuda)
+../Front/

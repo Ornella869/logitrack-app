@@ -1,0 +1,27 @@
+## Formato estándar de .NET
+bin/
+obj/
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+## VS Code
+.vscode/
+
+## Secretos y Configuración
+appsettings.Development.json
+secrets.json
+.env
+
+## Paquetes y Herramientas
+*.nupkg
+**/packages/*
+!**/packages/build/
+TestResults/
+
+## Sistema Operativo
+thumbs.db
+.DS_Store
