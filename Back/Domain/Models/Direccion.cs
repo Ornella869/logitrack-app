@@ -45,8 +45,9 @@ namespace Back.Domain.Models
     [Owned]
     public class Cliente
     {
-        public string Nombre { get; private set; } 
+        public string Nombre { get; private set; }
         public string Apellido { get; private set; }
+        public string? Telefono { get; private set; }
         public Direccion Direccion { get; private set; }
 
 
@@ -54,11 +55,12 @@ namespace Back.Domain.Models
         {
         }
 
-        public Cliente(string nombre, string apellido, Direccion direccion)
+        public Cliente(string nombre, string apellido, Direccion direccion, string? telefono = null)
         {
             Nombre = nombre;
             Apellido = apellido;
             Direccion = direccion;
+            Telefono = telefono;
         }
 
 

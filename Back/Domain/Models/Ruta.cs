@@ -15,7 +15,7 @@ namespace Back.Domain.Models
         public DateTimeOffset? IniciadoEn { get; private set; }
         public DateTimeOffset? FinalizadoEn { get; private set; }
         public string? RazonCancelacion { get; private set; }
-        public Transportista Transportista { get; private set; }
+        public Repartidor Repartidor { get; private set; }
         public Vehiculo Vehiculo { get; private set; }
         public ICollection<Paquete> Paquetes { get; } = [];
 
@@ -23,10 +23,10 @@ namespace Back.Domain.Models
         {
         }
 
-        public Ruta(Transportista transportista, Vehiculo vehiculo)
+        public Ruta(Repartidor repartidor, Vehiculo vehiculo)
         {
             Id = Guid.NewGuid();
-            Transportista = transportista;
+            Repartidor = repartidor;
             Vehiculo = vehiculo;
             vehiculo.MarcarEnUso();
         }
@@ -71,7 +71,7 @@ namespace Back.Domain.Models
 
             foreach (var paquete in Paquetes)
             {
-                paquete.EnTransito();
+                paquete.IniciarTransito();
             }
         }
 
@@ -86,7 +86,7 @@ namespace Back.Domain.Models
 
             foreach (var paquete in Paquetes)
             {
-                paquete.VolverASucursal();
+                paquete.VolverAListoParaSalir();
             }
 
             Vehiculo.MarcarDisponible();
@@ -106,12 +106,12 @@ namespace Back.Domain.Models
             Vehiculo.MarcarDisponible();
         }
 
-        public void ReasignarTransportista(Transportista nuevoTransportista)
+        public void ReasignarRepartidor(Repartidor nuevoRepartidor)
         {
             if (Estado is RutaStatus.Finalizada or RutaStatus.Cancelada)
-                throw new InvalidOperationException("No se puede reasignar transportista en una ruta finalizada o cancelada.");
+                throw new InvalidOperationException("No se puede reasignar repartidor en una ruta finalizada o cancelada.");
 
-            Transportista = nuevoTransportista;
+            Repartidor = nuevoRepartidor;
         }
 
         public void EntregarPaquete(Guid id)

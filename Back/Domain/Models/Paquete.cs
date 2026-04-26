@@ -7,10 +7,24 @@ namespace Back.Domain.Models
 {
     public enum PaqueteStatus
     {
-        EnSucursal,
-        EnTransito,
-        Entregado,
-        Cancelado
+        PendienteDeCalendarizacion = 0,
+        EnTransito = 1,
+        Entregado = 2,
+        Cancelado = 3,
+        ListoParaSalir = 4,
+    }
+
+    public enum TipoEnvio
+    {
+        Comun = 0,
+        Prioritario = 1,
+    }
+
+    public enum TipoPaquete
+    {
+        Comun = 0,
+        Fragil = 1,
+        Pesado = 2,
     }
 
     public class Paquete
@@ -23,7 +37,9 @@ namespace Back.Domain.Models
         [JsonIgnore]
         public float Prioridad { get; set; }
         public DateTime CreadoEn { get; init; } = DateTime.UtcNow;
-        public PaqueteStatus Status { get; private set; } = PaqueteStatus.EnSucursal;
+        public PaqueteStatus Status { get; private set; } = PaqueteStatus.PendienteDeCalendarizacion;
+        public TipoEnvio TipoEnvio { get; set; } = TipoEnvio.Comun;
+        public TipoPaquete TipoPaquete { get; set; } = TipoPaquete.Comun;
         public Cliente Remitente { get; private set; }
         public Cliente Destinatario { get; private set; }
         public string DestinatarioCompleto => $"{Destinatario.Nombre} {Destinatario.Apellido}";
@@ -40,7 +56,8 @@ namespace Back.Domain.Models
             _ => "Baja"
         };
 
-        public bool EstaEnSucursal => Status == PaqueteStatus.EnSucursal;
+        public bool EstaPendienteDeCalendarizacion => Status == PaqueteStatus.PendienteDeCalendarizacion;
+        public bool IsEditable => Status == PaqueteStatus.PendienteDeCalendarizacion;
 
 
         private Paquete()
@@ -65,10 +82,18 @@ namespace Back.Domain.Models
             CodigoSeguimiento = codigoSeguimiento;
         }
 
-        public void EnTransito()
+        public void MarcarListoParaSalir()
         {
-            if (Status != PaqueteStatus.EnSucursal)
-                throw new InvalidOperationException("Solo se pueden enviar paquetes que están en sucursal.");
+            if (Status != PaqueteStatus.PendienteDeCalendarizacion)
+                throw new InvalidOperationException("Solo se pueden marcar como listos los paquetes pendientes de calendarización.");
+
+            Status = PaqueteStatus.ListoParaSalir;
+        }
+
+        public void IniciarTransito()
+        {
+            if (Status != PaqueteStatus.ListoParaSalir)
+                throw new InvalidOperationException("Solo se pueden enviar paquetes que están listos para salir.");
 
             Status = PaqueteStatus.EnTransito;
         }
@@ -88,7 +113,7 @@ namespace Back.Domain.Models
             if (Status != PaqueteStatus.Cancelado)
                 throw new InvalidOperationException("Solo se pueden reenviar paquetes cancelados.");
 
-            Status = PaqueteStatus.EnSucursal;
+            Status = PaqueteStatus.PendienteDeCalendarizacion;
             RazonCancelacion = null;
         }
 
@@ -102,19 +127,45 @@ namespace Back.Domain.Models
             RazonCancelacion = razon;
         }
 
-        public void VolverASucursal()
+        public void VolverAListoParaSalir()
         {
-            if(Status == PaqueteStatus.EnSucursal) return;
+            if (Status == PaqueteStatus.ListoParaSalir) return;
 
             if (Status != PaqueteStatus.EnTransito)
-                throw new InvalidOperationException("Solo se pueden volver a sucursal los paquetes que están en tránsito.");
+                throw new InvalidOperationException("Solo se pueden devolver a 'Listo para Salir' los paquetes que están en tránsito.");
 
-            Status = PaqueteStatus.EnSucursal;
+            Status = PaqueteStatus.ListoParaSalir;
         }
 
         public void CambiarEstado(PaqueteStatus status)
         {
             Status = status;
+        }
+
+        public void ActualizarDatos(
+            Cliente remitente,
+            Cliente destinatario,
+            double peso,
+            TipoEnvio tipoEnvio,
+            TipoPaquete tipoPaquete,
+            string? descripcion,
+            float distancia,
+            float prioridad)
+        {
+            if (Status != PaqueteStatus.PendienteDeCalendarizacion)
+                throw new InvalidOperationException("Solo se pueden editar paquetes pendientes de calendarización.");
+
+            if (peso <= 0)
+                throw new InvalidOperationException("El peso debe ser mayor a 0.");
+
+            Remitente = remitente;
+            Destinatario = destinatario;
+            Peso = peso;
+            TipoEnvio = tipoEnvio;
+            TipoPaquete = tipoPaquete;
+            Descripcion = descripcion;
+            Distancia = distancia;
+            Prioridad = prioridad;
         }
 
         public override string ToString()

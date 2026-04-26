@@ -12,6 +12,7 @@ namespace Back.Infrastructure.Database
         public DbSet<Sucursal> Sucursales { get; set; }
         public DbSet<Paquete> Paquetes { get; set; }
         public DbSet<Direccion> Direcciones { get; set; }
+        public DbSet<HistorialEstadoEnvio> HistorialEstadosEnvio { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -21,12 +22,13 @@ namespace Back.Infrastructure.Database
         {
             modelBuilder.Entity<Paquete>(p =>
             {
-                // Esto le dice a EF: "Lo que ves en el objeto Remitente, 
+                // Esto le dice a EF: "Lo que ves en el objeto Remitente,
                 // guárdalo en estas columnas específicas de la tabla Paquetes"
                 p.OwnsOne(x => x.Remitente, r =>
                 {
                     r.Property(c => c.Nombre).HasColumnName("Remitente_Nombre");
                     r.Property(c => c.Apellido).HasColumnName("Remitente_Apellido");
+                    r.Property(c => c.Telefono).HasColumnName("Remitente_Telefono");
 
                     r.OwnsOne(x => x.Direccion, d =>
                     {
@@ -34,7 +36,7 @@ namespace Back.Infrastructure.Database
                         {
                             ubicacion.Property(u => u.Latitud).HasColumnName("Remitente_Ubicacion_Latitud");
                             ubicacion.Property(u => u.Longitud).HasColumnName("Remitente_Ubicacion_Longitud");
-                        });   
+                        });
                     });
                 });
 
@@ -42,6 +44,7 @@ namespace Back.Infrastructure.Database
                 {
                     d.Property(c => c.Nombre).HasColumnName("Destinatario_Nombre");
                     d.Property(c => c.Apellido).HasColumnName("Destinatario_Apellido");
+                    d.Property(c => c.Telefono).HasColumnName("Destinatario_Telefono");
 
                     d.OwnsOne(x => x.Direccion, dir =>
                     {
@@ -54,12 +57,19 @@ namespace Back.Infrastructure.Database
                 });
             });
 
-        modelBuilder.Entity<Usuario>()
-        .HasDiscriminator<string>("Discriminator")
-        .HasValue<Transportista>("Transportista")
-        .HasValue<Supervisor>("Supervisor")
-        .HasValue<Operador>("Operador");
+            modelBuilder.Entity<Usuario>()
+                .HasDiscriminator<string>("Discriminator")
+                .HasValue<Repartidor>("Repartidor")
+                .HasValue<Supervisor>("Supervisor")
+                .HasValue<Operador>("Operador")
+                .HasValue<Administrador>("Administrador");
 
+            modelBuilder.Entity<HistorialEstadoEnvio>(h =>
+            {
+                h.HasKey(x => x.Id);
+                h.HasIndex(x => x.PaqueteId);
+                h.HasIndex(x => x.FechaHora);
+            });
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -68,7 +78,7 @@ namespace Back.Infrastructure.Database
             {
                 if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
                 {
-                
+
                 }
             }
             return await base.SaveChangesAsync(cancellationToken);

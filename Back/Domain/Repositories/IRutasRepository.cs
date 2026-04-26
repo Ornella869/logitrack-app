@@ -6,9 +6,10 @@ namespace Back.Domain.Repositories
     {
         Task Add(Ruta ruta);
         Task<Ruta?> GetRutaById(Guid id);
-        Task<List<Ruta>> GetHistorialRutas(Guid transportista);
+        Task<List<Ruta>> GetHistorialRutas(Guid repartidor);
         Task<List<Ruta>> GetMisRutasSupervisadas(Guid supervisor);
         Task<List<Ruta>> GetRutas();
         Task<bool> IsVehiculoEnRuta(Guid vehiculoId);
+        Task<List<Ruta>> GetRutasPendientesConPaquete(Guid paqueteId);
     }
 }

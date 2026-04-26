@@ -57,6 +57,8 @@ builder.Services.AddDbContext<LogiTrackDbContext>(options =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EnviosService>();
 builder.Services.AddScoped<RutasService>();
+builder.Services.AddScoped<HistorialEstadoEnvioService>();
+builder.Services.AddSingleton<QrService>();
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddHttpClient<IRecaptchaValidationService, GoogleRecaptchaValidationService>();
 // Registrar el HttpClient

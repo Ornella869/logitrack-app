@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
+using Back.Application.Common;
 using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
 using Back.Infrastructure.Database;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Back.Controllers
@@ -13,347 +15,114 @@ namespace Back.Controllers
     {
         private readonly IEnviosRepository _enviosRepository;
         private readonly IVehiculoRepository _vehiculoRepository;
-
         private readonly IRutasRepository _rutasRepository;
         private readonly EnviosService _enviosService;
+        private readonly HistorialEstadoEnvioService _historialService;
+        private readonly QrService _qrService;
         private readonly LogiTrackDbContext _context;
 
 
         public EnviosController(
             LogiTrackDbContext context,
             IRutasRepository rutasRepository,
-            IEnviosRepository enviosRepository, IVehiculoRepository vehiculoRepository, EnviosService enviosService)
+            IEnviosRepository enviosRepository,
+            IVehiculoRepository vehiculoRepository,
+            EnviosService enviosService,
+            HistorialEstadoEnvioService historialService,
+            QrService qrService)
         {
             _context = context;
             _rutasRepository = rutasRepository;
             _enviosService = enviosService;
             _vehiculoRepository = vehiculoRepository;
             _enviosRepository = enviosRepository;
+            _historialService = historialService;
+            _qrService = qrService;
         }
 
-        /// <summary>
-        /// Registra un nuevo paquete en el sistema.
-        /// </summary>
-        /// <param name="request">Datos del paquete a registrar</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("registrar-paquete")]
-        public async Task<ActionResult> RegistrarPaquete([FromBody] RegistrarPaqueteRequest request)
+        private Guid? CurrentUserId()
         {
-            await _enviosService.RegistrarPaquete(request);
-
-
-            await _context.SaveChangesAsync();
-
-            return Ok();
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            return Guid.TryParse(userIdStr, out var id) ? id : null;
         }
 
+        // ============== G1L-10: Alta de envío ==============
 
-        /// <summary>
-        /// Obtiene el paquete por código de seguimiento.
-        /// </summary>
-        /// <param name="codigoSeguimiento">Código único de seguimiento</param>
-        /// <returns>El paquete encontrado o NotFound</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        /// <summary>Registra un nuevo paquete (Operador).</summary>
+        [Authorize(Roles = Roles.Operador)]
+        [HttpPost("registrar-paquete")]
+        public async Task<ActionResult<RegistrarPaqueteResult>> RegistrarPaquete([FromBody] RegistrarPaqueteRequest request)
+        {
+            try
+            {
+                var result = await _enviosService.RegistrarPaquete(request, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ============== Vista pública (no requiere auth) ==============
+
+        /// <summary>Vista pública de seguimiento por código.</summary>
         [HttpGet("seguimiento/{codigoSeguimiento}")]
         public async Task<ActionResult<Paquete>> Seguimiento(string codigoSeguimiento)
         {
-
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento);
-
-            if (paquete is null)
-                return NotFound();
-
-            await _context.SaveChangesAsync();
-
+            if (paquete is null) return NotFound();
             return Ok(paquete);
         }
 
-        /// <summary>
-        /// Obtiene el paquete con el id provisto.
-        /// </summary>
-        /// <param name="paqueteId">ID del paquete</param>
-        /// <returns>El paquete encontrado o NotFound</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        // ============== G1L-39 + G1L-40: Listado, búsqueda y filtros ==============
+
+        /// <summary>Listado de paquetes con búsqueda parcial y filtros por estado y fecha (Operador o Supervisor).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("paquetes")]
+        public async Task<ActionResult<List<Paquete>>> BuscarYFiltrar(
+            [FromQuery] string? search,
+            [FromQuery(Name = "status")] List<PaqueteStatus>? estados,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to)
+        {
+            var paquetes = await _enviosRepository.Buscar(search, estados, from, to);
+            return Ok(paquetes);
+        }
+
+        /// <summary>Paquetes pendientes de calendarización (Operador o Supervisor).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("paquetes-pendientes")]
+        public async Task<ActionResult<List<Paquete>>> GetPaquetesPendientesDeCalendarizacion()
+        {
+            var paquetes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion();
+            return Ok(paquetes);
+        }
+
+        // ============== G1L-41: Detalle de envío ==============
+
+        /// <summary>Detalle del paquete por ID (incluye flag isEditable).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
         [HttpGet("paquete/{paqueteId:guid}")]
         public async Task<ActionResult<Paquete>> GetPaquete(Guid paqueteId)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
-
-            if (paquete is null)
-                return NotFound();
-
-            await _context.SaveChangesAsync();
-
+            if (paquete is null) return NotFound();
             return Ok(paquete);
         }
 
-        /// <summary>
-        /// Consulta paquetes que se encuentran en sucursal.
-        /// </summary>
-        /// <returns>Lista de paquetes en sucursal</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("paquetes-en-sucursal")]
-        public async Task<ActionResult<List<Paquete>>> GetPaquetesEnSucursal()
+        // ============== G1L-12: Edición de envío ==============
+
+        /// <summary>Edita un envío pendiente de calendarización (Operador).</summary>
+        [Authorize(Roles = Roles.Operador)]
+        [HttpPut("paquete/{paqueteId:guid}")]
+        public async Task<ActionResult> EditarPaquete(Guid paqueteId, [FromBody] RegistrarPaqueteRequest request)
         {
-            var paquetes = await _enviosRepository.GetPaquetesEnSucursal();
-
-            await _context.SaveChangesAsync();
-
-            return Ok(paquetes);
-        }
-
-        /// <summary>
-        /// Devuelve todos los paquetes registrados.
-        /// </summary>
-        /// <returns>Lista completa de paquetes</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("todos-los-paquetes")]
-        public async Task<ActionResult<List<Paquete>>> GetTodosLosPaquetes()
-        {
-            var paquetes = await _enviosRepository.GetAll();
-            await _context.SaveChangesAsync();
-            return Ok(paquetes);
-        }
-
-
-        /// <summary>
-        /// Busca paquetes por código de seguimiento o destinatario.
-        /// </summary>
-        /// <param name="request">Filtros de búsqueda</param>
-        /// <returns>Lista de paquetes coincidencia</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("busqueda-de-paquetes")]
-        public async Task<ActionResult<List<Paquete>>> BusquedaDePaquetes([FromBody] BusquedaDePaquetesRequest request)
-        {
-            var paquetes = await _enviosRepository.GetPaquetes(request.CodigoSeguimiento, request.Destinatario);
-
-            await _context.SaveChangesAsync();
-
-            return Ok(paquetes);
-        }
-
-        /// <summary>
-        /// Registra un vehículo en el sistema.
-        /// </summary>
-        /// <param name="request">Datos del vehículo</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("vehiculos/registrar-vehiculo")]
-        public async Task<ActionResult> RegistrarVehiculo([FromBody] RegistrarVehiculoRequest request)
-        {
-            var vehiculo = new Vehiculo(
-                request.Patente,
-                request.Modelo,
-                request.Capacidad
-            );
-
-            await _vehiculoRepository.Add(vehiculo);
-
-            await _context.SaveChangesAsync();
-
-            return Ok();
-        }
-
-        /// <summary>
-        /// Obtiene vehículos activos.
-        /// </summary>
-        /// <returns>Lista de vehículos activos</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("vehiculos/activos")]
-        public async Task<ActionResult<List<Vehiculo>>> GetVehiculosActivos()
-        {
-            var vehiculos = await _vehiculoRepository.GetVehiculosActivos();
-
-            await _context.SaveChangesAsync();
-
-            return Ok(vehiculos);
-        }
-
-        /// <summary>
-        /// Obtiene todos los vehículos registrados con la posibilidad de filtrarlos por estado.
-        /// </summary>
-        /// <returns>Lista de todos los vehículos</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("vehiculos")]
-        public async Task<ActionResult<List<Vehiculo>>> GetVehiculos([FromQuery] VehiculoEstado? estado)
-        {
-            var vehiculos = await _vehiculoRepository.GetAll(estado);
-
-            return Ok(vehiculos);
-        }
-
-
-        /// <summary>
-        /// Obtiene un vehículo por ID.
-        /// </summary>
-        /// <param name="vehiculoId">ID del vehículo</param>
-        /// <returns>Vehículo encontrado o NotFound</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("vehiculos/{vehiculoId:guid}")]
-        public async Task<ActionResult<Vehiculo>> GetVehiculo(Guid vehiculoId)
-        {
-            var vehiculo = await _vehiculoRepository.GetVehiculo(vehiculoId);
-
-            if (vehiculo is null)
-                return NotFound("Vehículo no encontrado");
-
-            await _context.SaveChangesAsync();
-
-            return Ok(vehiculo);
-        }
-
-        /// <summary>
-        /// Suspende un vehículo por ID.
-        /// </summary>
-        /// <param name="vehiculoId">ID del vehículo</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("vehiculos/{vehiculoId:guid}/suspender")]
-        public async Task<ActionResult> SuspenderVehiculo(Guid vehiculoId)
-        {
-            var vehiculo = await _vehiculoRepository.GetVehiculo(vehiculoId);
-
-            if (vehiculo is null)
-                return NotFound("Vehículo no encontrado");
-
-            vehiculo.Suspender();
-
-            await _context.SaveChangesAsync();
-
-            return Ok();
-        }
-
-        /// <summary>
-        /// Cambia el estado de un vehículo.
-        /// </summary>
-        /// <param name="vehiculoId">ID del vehículo</param>
-        /// <param name="estado">Estado deseado</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("vehiculos/{vehiculoId:guid}/estado/{estado}")]
-        public async Task<ActionResult> CambiarEstadoVehiculo(Guid vehiculoId, VehiculoEstado estado)
-        {
-            var vehiculo = await _vehiculoRepository.GetVehiculo(vehiculoId);
-
-            if (vehiculo is null)
-                return NotFound("Vehículo no encontrado");
-
-            vehiculo.CambiarEstado(estado);
-
-            await _context.SaveChangesAsync();
-
-            return Ok();
-        }
-
-        /// <summary>
-        /// Obtiene todas las sucursales.
-        /// </summary>
-        /// <returns>Lista de sucursales</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("sucursales")]
-        public async Task<ActionResult<List<Sucursal>>> GetSucursales()
-        {
-            var sucursales = await _enviosRepository.GetSucursales();
-            await _context.SaveChangesAsync();
-            return Ok(sucursales);
-        }
-
-        /// <summary>
-        /// Registra una nueva sucursal.
-        /// </summary>
-        /// <param name="request">Datos de la sucursal</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("sucursales/registrar-sucursal")]
-        public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
-        {
-            var sucursal = new Sucursal(
-                request.Nombre,
-                request.Direccion,
-                request.Ciudad,
-                request.Telefono
-            );
-
-            await _enviosRepository.Add(sucursal);
-
-            await _context.SaveChangesAsync();
-
-            return Ok();
-        }
-
-
-        /// <summary>
-        /// Cambia el estado de un paquete.
-        /// </summary>
-        /// <param name="paqueteId">ID del paquete</param>
-        /// <param name="status">Estado objetivo</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("cambiar-estado-paquete/{paqueteId:guid}/estado/{status}")]
-        public async Task<ActionResult> CambiarEstadoPaquete(Guid paqueteId, PaqueteStatus status)
-        {
-            var paquete = await _enviosRepository.GetPaquete(paqueteId);
-
-            if (paquete is null)
-                return NotFound("Paquete no encontrado");
-
             try
             {
-                // Usar los métodos del dominio que incluyen validaciones
-                switch (status)
-                {
-                    case PaqueteStatus.EnTransito:
-                        paquete.EnTransito();
-                        break;
-                    case PaqueteStatus.Entregado:
-                        paquete.Entregar();
-                        break;
-                    case PaqueteStatus.Cancelado:
-                        paquete.Cancelar("Cancelado desde el sistema");
-                        break;
-                    case PaqueteStatus.EnSucursal:
-                        // Para volver a sucursal, usar reenvío si está cancelado
-                        if (paquete.Status == PaqueteStatus.Cancelado)
-                        {
-                            paquete.ReEnviar();
-                        }
-                        else
-                        {
-                            return BadRequest("Transición de estado no válida");
-                        }
-                        break;
-                    default:
-                        return BadRequest("Estado no válido");
-                }
-
+                await _enviosService.EditarPaquete(paqueteId, request, CurrentUserId());
                 await _context.SaveChangesAsync();
-
                 return Ok();
             }
             catch (InvalidOperationException ex)
@@ -362,31 +131,35 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>
-        /// Cancela un paquete existente.
-        /// </summary>
-        /// <param name="paqueteId">ID del paquete</param>
-        /// <param name="request">Motivo de cancelación</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        // ============== G1L-9: Repartidor cambia estado ==============
+
+        /// <summary>Repartidor: transición de estado (ListoParaSalir → EnTransito → Entregado/Cancelado).</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("cambiar-estado-paquete/{paqueteId:guid}/estado/{status}")]
+        public async Task<ActionResult> CambiarEstadoPaquete(Guid paqueteId, PaqueteStatus status, [FromBody] CambiarEstadoRequest? request)
+        {
+            try
+            {
+                await _enviosService.CambiarEstadoPorRepartidor(paqueteId, status, request?.Motivo, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ============== G1L-13: Cancelación con motivo ==============
+
+        /// <summary>Cancelar un paquete con motivo obligatorio (Operador o Supervisor).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
         [HttpPost("cancelar-paquete/{paqueteId:guid}")]
         public async Task<ActionResult> CancelarPaquete(Guid paqueteId, [FromBody] CancelarPaqueteRequest request)
         {
-            var paquete = await _enviosRepository.GetPaquete(paqueteId);
-
-            if (paquete is null)
-                return NotFound("Paquete no encontrado");
-
             try
             {
-                var motivo = !string.IsNullOrWhiteSpace(request.Motivo)
-                    ? request.Motivo
-                    : "Cancelado desde el sistema";
-
-                paquete.Cancelar(motivo);
+                await _enviosService.CancelarPaquete(paqueteId, request.Motivo, request.Mode, CurrentUserId());
                 await _context.SaveChangesAsync();
                 return Ok();
             }
@@ -396,28 +169,18 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>
-        /// Reenvía un paquete que se encontraba cancelado.
-        /// </summary>
-        /// <param name="paqueteId">ID del paquete</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        /// <summary>Reenvía un paquete cancelado (Operador o Supervisor).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
         [HttpPost("reenviar-paquete/{paqueteId:guid}")]
         public async Task<ActionResult> ReenviarPaquete(Guid paqueteId)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
-
-            if (paquete is null)
-                return NotFound("Paquete no encontrado");
+            if (paquete is null) return NotFound("Paquete no encontrado");
             try
             {
                 paquete.ReEnviar();
-                
+                await _historialService.RegistrarCambioAsync(paquete.Id, paquete.Status, CurrentUserId(), OrigenCambioEstado.Manual, "Reenvío del paquete");
                 await _context.SaveChangesAsync();
-
                 return Ok();
             }
             catch (InvalidOperationException ex)
@@ -426,58 +189,223 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>
-        /// Marca un paquete como entregado en una ruta específica.
-        /// </summary>
-        /// <param name="rutaId">ID de la ruta</param>
-        /// <param name="paqueteId">ID del paquete</param>
-        /// <returns>Resultado de la operación</returns>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        // ============== G1L-15: Historial de estados ==============
+
+        /// <summary>Historial cronológico (descendente) de cambios de estado del paquete.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("paquete/{paqueteId:guid}/historial")]
+        public async Task<ActionResult<List<HistorialEstadoEnvio>>> GetHistorial(Guid paqueteId)
+        {
+            var paquete = await _enviosRepository.GetPaquete(paqueteId);
+            if (paquete is null) return NotFound();
+            var historial = await _historialService.GetHistorialPorPaqueteAsync(paqueteId);
+            return Ok(historial);
+        }
+
+        // ============== G1L-32: QR ==============
+
+        /// <summary>Devuelve el QR del paquete como PNG.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("paquete/{paqueteId:guid}/qr")]
+        public async Task<ActionResult> GetQr(Guid paqueteId)
+        {
+            var paquete = await _enviosRepository.GetPaquete(paqueteId);
+            if (paquete is null) return NotFound();
+            var bytes = _qrService.GenerarPng(paquete.CodigoSeguimiento);
+            return File(bytes, "image/png");
+        }
+
+        // ============== G1L-43: Escaneo de QR ==============
+
+        /// <summary>Escaneo de QR: transiciona estado o abre la ficha de entrega (Operador o Repartidor).</summary>
+        [Authorize(Roles = Roles.OperadorORepartidor)]
+        [HttpPost("escanear-qr/{codigoSeguimiento}")]
+        public async Task<ActionResult<EscaneoResultado>> EscanearQr(string codigoSeguimiento)
+        {
+            try
+            {
+                var result = await _enviosService.EscanearQr(codigoSeguimiento, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ============== G1L-28: Etiqueta ==============
+
+        /// <summary>Datos de la etiqueta imprimible (Operador o Supervisor).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("paquete/{paqueteId:guid}/etiqueta")]
+        public async Task<ActionResult<EtiquetaResponse>> GetEtiqueta(Guid paqueteId)
+        {
+            var paquete = await _enviosRepository.GetPaquete(paqueteId);
+            if (paquete is null) return NotFound();
+
+            var dto = new EtiquetaResponse
+            {
+                CodigoSeguimiento = paquete.CodigoSeguimiento,
+                UrlSeguimiento = _qrService.BuildTrackingUrl(paquete.CodigoSeguimiento),
+                QrBase64 = _qrService.GenerarBase64(paquete.CodigoSeguimiento),
+                Remitente = new EtiquetaCliente
+                {
+                    Nombre = paquete.Remitente.Nombre,
+                    Apellido = paquete.Remitente.Apellido,
+                    Telefono = paquete.Remitente.Telefono,
+                    Direccion = paquete.Remitente.Direccion.Calle,
+                    Ciudad = paquete.Remitente.Direccion.Ciudad,
+                    CP = paquete.Remitente.Direccion.CP,
+                },
+                Destinatario = new EtiquetaCliente
+                {
+                    Nombre = paquete.Destinatario.Nombre,
+                    Apellido = paquete.Destinatario.Apellido,
+                    Telefono = paquete.Destinatario.Telefono,
+                    Direccion = paquete.Destinatario.Direccion.Calle,
+                    Ciudad = paquete.Destinatario.Direccion.Ciudad,
+                    CP = paquete.Destinatario.Direccion.CP,
+                },
+                Peso = paquete.Peso,
+                TipoEnvio = paquete.TipoEnvio.ToString(),
+                TipoPaquete = paquete.TipoPaquete.ToString(),
+            };
+            return Ok(dto);
+        }
+
+        // ============== Marcaje desde Ruta (Repartidor) ==============
+
+        [Authorize(Roles = Roles.Repartidor)]
         [HttpPost("entregar-paquete/ruta/{rutaId:guid}/paquete/{paqueteId:guid}")]
         public async Task<ActionResult> EntregarPaquete(Guid rutaId, Guid paqueteId)
         {
             var ruta = await _rutasRepository.GetRutaById(rutaId);
+            if (ruta is null) return NotFound();
+            try
+            {
+                ruta.EntregarPaquete(paqueteId);
+                await _historialService.RegistrarCambioAsync(paqueteId, PaqueteStatus.Entregado, CurrentUserId(), OrigenCambioEstado.Manual);
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
 
+        // ============== Vehículos / Sucursales (mantener acceso administrativo) ==============
 
-            if (ruta is null)
-                return NotFound();
-
-            ruta.EntregarPaquete(paqueteId);
-
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPost("vehiculos/registrar-vehiculo")]
+        public async Task<ActionResult> RegistrarVehiculo([FromBody] RegistrarVehiculoRequest request)
+        {
+            var vehiculo = new Vehiculo(request.Patente, request.Modelo, request.Capacidad);
+            await _vehiculoRepository.Add(vehiculo);
             await _context.SaveChangesAsync();
+            return Ok();
+        }
 
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpGet("vehiculos/activos")]
+        public async Task<ActionResult<List<Vehiculo>>> GetVehiculosActivos()
+        {
+            var vehiculos = await _vehiculoRepository.GetVehiculosActivos();
+            return Ok(vehiculos);
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpGet("vehiculos")]
+        public async Task<ActionResult<List<Vehiculo>>> GetVehiculos([FromQuery] VehiculoEstado? estado)
+        {
+            var vehiculos = await _vehiculoRepository.GetAll(estado);
+            return Ok(vehiculos);
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpGet("vehiculos/{vehiculoId:guid}")]
+        public async Task<ActionResult<Vehiculo>> GetVehiculo(Guid vehiculoId)
+        {
+            var vehiculo = await _vehiculoRepository.GetVehiculo(vehiculoId);
+            if (vehiculo is null) return NotFound("Vehículo no encontrado");
+            return Ok(vehiculo);
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPost("vehiculos/{vehiculoId:guid}/suspender")]
+        public async Task<ActionResult> SuspenderVehiculo(Guid vehiculoId)
+        {
+            var vehiculo = await _vehiculoRepository.GetVehiculo(vehiculoId);
+            if (vehiculo is null) return NotFound("Vehículo no encontrado");
+            vehiculo.Suspender();
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPost("vehiculos/{vehiculoId:guid}/estado/{estado}")]
+        public async Task<ActionResult> CambiarEstadoVehiculo(Guid vehiculoId, VehiculoEstado estado)
+        {
+            var vehiculo = await _vehiculoRepository.GetVehiculo(vehiculoId);
+            if (vehiculo is null) return NotFound("Vehículo no encontrado");
+            vehiculo.CambiarEstado(estado);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpGet("sucursales")]
+        public async Task<ActionResult<List<Sucursal>>> GetSucursales()
+        {
+            var sucursales = await _enviosRepository.GetSucursales();
+            return Ok(sucursales);
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPost("sucursales/registrar-sucursal")]
+        public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
+        {
+            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.Telefono);
+            await _enviosRepository.Add(sucursal);
+            await _context.SaveChangesAsync();
             return Ok();
         }
     }
 
 
+    // ============== DTOs ==============
+
     public class CancelarPaqueteRequest
     {
+        [Required(ErrorMessage = "El motivo de cancelación es obligatorio.")]
         public string Motivo { get; set; } = string.Empty;
+        public CancelarEnvioMode Mode { get; set; } = CancelarEnvioMode.Definitivo;
+    }
+
+    public class CambiarEstadoRequest
+    {
+        public string? Motivo { get; set; }
     }
 
     public class RegistrarPaqueteRequest
     {
-        public double Peso { get; set; }
+        [Required] public double Peso { get; set; }
         public string? Comentarios { get; set; }
-        public RegistrarClienteRequest Remitente { get; set; }
-        public RegistrarClienteRequest Destinatario { get; set; }
+        public TipoEnvio TipoEnvio { get; set; } = TipoEnvio.Comun;
+        public TipoPaquete TipoPaquete { get; set; } = TipoPaquete.Comun;
+        [Required] public RegistrarClienteRequest Remitente { get; set; }
+        [Required] public RegistrarClienteRequest Destinatario { get; set; }
     }
 
     public class RegistrarClienteRequest
     {
-        [Required]
-        public string Direccion { get; set; } = string.Empty;
-        [Required]
-        public string Localidad { get; set; } = string.Empty;
-        [Required]
-        public string CP { get; set; } = string.Empty;
-        [Required]
-        public string Nombre { get; set; } = string.Empty;
-        [Required]
-        public string Apellido { get; set; } = string.Empty;
+        [Required] public string Direccion { get; set; } = string.Empty;
+        [Required] public string Localidad { get; set; } = string.Empty;
+        [Required] public string CP { get; set; } = string.Empty;
+        [Required] public string Nombre { get; set; } = string.Empty;
+        [Required] public string Apellido { get; set; } = string.Empty;
+        public string? Telefono { get; set; }
     }
 
     public class RegistrarVehiculoRequest
@@ -489,20 +417,31 @@ namespace Back.Controllers
 
     public class RegistarSucursal
     {
-        [Required]
-        public string Nombre { get; set; } = string.Empty;
-        [Required]
-        public string Direccion { get; set; } = string.Empty;
-        [Required]
-        public string Ciudad { get; set; } = string.Empty;
-        [Required]
-        public string Telefono { get; set; } = string.Empty;
-
+        [Required] public string Nombre { get; set; } = string.Empty;
+        [Required] public string Direccion { get; set; } = string.Empty;
+        [Required] public string Ciudad { get; set; } = string.Empty;
+        [Required] public string Telefono { get; set; } = string.Empty;
     }
 
-    public class BusquedaDePaquetesRequest
+    public class EtiquetaResponse
     {
-        public string? CodigoSeguimiento { get; set; }
-        public string? Destinatario { get; set; }
+        public string CodigoSeguimiento { get; set; } = string.Empty;
+        public string UrlSeguimiento { get; set; } = string.Empty;
+        public string QrBase64 { get; set; } = string.Empty;
+        public EtiquetaCliente Remitente { get; set; } = new();
+        public EtiquetaCliente Destinatario { get; set; } = new();
+        public double Peso { get; set; }
+        public string TipoEnvio { get; set; } = string.Empty;
+        public string TipoPaquete { get; set; } = string.Empty;
+    }
+
+    public class EtiquetaCliente
+    {
+        public string Nombre { get; set; } = string.Empty;
+        public string Apellido { get; set; } = string.Empty;
+        public string? Telefono { get; set; }
+        public string Direccion { get; set; } = string.Empty;
+        public string Ciudad { get; set; } = string.Empty;
+        public string CP { get; set; } = string.Empty;
     }
 }

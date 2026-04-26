@@ -12,6 +12,7 @@ namespace Back.Domain.Models
         public string Email { get; private set; }
         public string Password { get; private set; }
         public string DNI { get; private set; }
+        public bool Activo { get; private set; } = true;
 
         public Usuario()
         {
@@ -24,6 +25,16 @@ namespace Back.Domain.Models
             Email = email;
             Password = password;
             DNI = dni;
+        }
+
+        public void Activar() => Activo = true;
+        public void Desactivar() => Activo = false;
+
+        public void CambiarPassword(string nuevoPasswordHash)
+        {
+            if (string.IsNullOrWhiteSpace(nuevoPasswordHash))
+                throw new InvalidOperationException("La contraseña no puede estar vacía.");
+            Password = nuevoPasswordHash;
         }
     }
 
@@ -47,9 +58,18 @@ namespace Back.Domain.Models
         }
     }
 
-    public class Transportista : Usuario
+    public class Administrador : Usuario
     {
-        public enum EstadoTransportista
+        public Administrador() { }
+
+        public Administrador(string nombre, string apellido, string email, string password, string dni) : base(nombre, apellido, email, password, dni)
+        {
+        }
+    }
+
+    public class Repartidor : Usuario
+    {
+        public enum EstadoRepartidor
         {
             Activo,
             Suspendido,
@@ -57,14 +77,14 @@ namespace Back.Domain.Models
         }
 
         public string Licencia { get; private set; }
-        public EstadoTransportista Estado { get; private set; } = EstadoTransportista.Activo;
+        public EstadoRepartidor Estado { get; private set; } = EstadoRepartidor.Activo;
 
-        public Transportista()
+        public Repartidor()
         {
             Licencia = string.Empty;
         }
 
-        public Transportista(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada") : base(nombre, apellido, email, password, dni)
+        public Repartidor(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada") : base(nombre, apellido, email, password, dni)
         {
             Licencia = licencia;
         }
@@ -77,16 +97,16 @@ namespace Back.Domain.Models
             Licencia = licencia.Trim();
         }
 
-        public void CambiarEstado(EstadoTransportista estado)
+        public void CambiarEstado(EstadoRepartidor estado)
         {
             Estado = estado;
         }
 
-        public bool PuedeSerAsignado => Estado == EstadoTransportista.Activo;
+        public bool PuedeSerAsignado => Estado == EstadoRepartidor.Activo;
 
         public string EstadoLabel => Estado.ToString();
 
-        public bool EstaSuspendido => Estado != EstadoTransportista.Activo;
+        public bool EstaSuspendido => Estado != EstadoRepartidor.Activo;
     }
 
 }

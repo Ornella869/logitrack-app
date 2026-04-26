@@ -7,7 +7,8 @@ public interface IUserRepository
 {
     Task<List<Operador>> GetOperadores();
     Task<List<Supervisor>> GetSupervisores();
-    Task<List<Transportista>> GetTransportistas();
+    Task<List<Repartidor>> GetRepartidores();
+    Task<List<Administrador>> GetAdministradores();
     Task<Usuario?> GetUsuarioByEmail(string email);
     Task<Usuario?> GetUsuarioByDni(string dni);
     Task<Usuario?> GetUsuarioById(Guid id);

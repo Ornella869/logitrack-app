@@ -18,12 +18,12 @@ namespace Back.Infrastructure.Database.Repositories
             await _context.Rutas.AddAsync(ruta);
         }
 
-        public async Task<List<Ruta>> GetHistorialRutas(Guid transportista)
+        public async Task<List<Ruta>> GetHistorialRutas(Guid repartidor)
         {
             return await _context.Rutas
-                .Where(r => r.Transportista.Id == transportista)
+                .Where(r => r.Repartidor.Id == repartidor)
                 .Include(r => r.Paquetes)
-                .Include(r => r.Transportista)
+                .Include(r => r.Repartidor)
                 .Include(r => r.Vehiculo)
                 .ToListAsync();
         }
@@ -32,17 +32,17 @@ namespace Back.Infrastructure.Database.Repositories
         {
             return await _context.Rutas
                 .Include(r => r.Paquetes)
-                .Include(r => r.Transportista)
+                .Include(r => r.Repartidor)
                 .Include(r => r.Vehiculo)
                 .Where(r => true)
                 .ToListAsync();
         }
 
         public async Task<Ruta?> GetRutaById(Guid id)
-        {   
+        {
             return await _context.Rutas
                 .Include(r => r.Paquetes)
-                .Include(r => r.Transportista)
+                .Include(r => r.Repartidor)
                 .Include(r => r.Vehiculo)
                 .FirstOrDefaultAsync(r => r.Id == id);
         }
@@ -51,14 +51,22 @@ namespace Back.Infrastructure.Database.Repositories
         {
             return await _context.Rutas
                 .Include(r => r.Paquetes)
-                .Include(r => r.Transportista)
+                .Include(r => r.Repartidor)
                 .Include(r => r.Vehiculo)
                 .ToListAsync();
         }
 
         public async Task<bool> IsVehiculoEnRuta(Guid vehiculoId)
-        {   
+        {
             return await _context.Rutas.AnyAsync(r => r.Vehiculo.Id == vehiculoId && r.Estado == RutaStatus.EnCurso);
+        }
+
+        public async Task<List<Ruta>> GetRutasPendientesConPaquete(Guid paqueteId)
+        {
+            return await _context.Rutas
+                .Include(r => r.Paquetes)
+                .Where(r => r.Estado == RutaStatus.Pendiente && r.Paquetes.Any(p => p.Id == paqueteId))
+                .ToListAsync();
         }
     }
 }
