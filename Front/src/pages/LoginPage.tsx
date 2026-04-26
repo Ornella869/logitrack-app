@@ -20,6 +20,7 @@ import ReCAPTCHA from 'react-google-recaptcha'
 import { authService } from '../services/authService'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import type { User, LoginCredentials } from '../types'
+import ForgotPasswordDialog from '../components/ForgotPasswordDialog'
 
 interface LoginPageProps {
   onLogin: (user: User) => void
@@ -65,6 +66,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
     open: false,
     message: '',
   })
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   useEffect(() => {
     if (!locationState?.registrationSuccess) return
@@ -290,6 +292,16 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
                 Registrate aquí
               </Link>
             </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              <Link
+                component="button"
+                variant="body2"
+                onClick={() => setShowForgotPassword(true)}
+                sx={{ fontWeight: 600, color: 'primary.main' }}
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </Typography>
           </Box>
 
           {showAdminDemo && (
@@ -341,6 +353,11 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
             </Box>
           )}
         </Card>
+
+        <ForgotPasswordDialog
+          open={showForgotPassword}
+          onClose={() => setShowForgotPassword(false)}
+        />
 
         <Snackbar
           open={registrationToast.open}
