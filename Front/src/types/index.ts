@@ -1,7 +1,6 @@
 export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador'
 export type UserEstado = 'Activo' | 'Inactivo'
 export type RepartidorEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
-export type TransportistaEstado = RepartidorEstado // alias para compatibilidad
 
 export interface User {
   id: string
@@ -22,7 +21,6 @@ export interface CreateRepartidorData {
   dni: string
   licencia: string
 }
-export type CreateTransportistaData = CreateRepartidorData // alias para compatibilidad
 
 export interface CreateUsuarioData {
   name: string

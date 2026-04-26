@@ -21,7 +21,7 @@ const backendRoute = {
   estado: 'EnCurso',
   iniciadoEn: '2026-03-28T10:00:00Z',
   vehiculo: { id: 'v-1', marca: 'Iveco' },
-  transportista: { id: 't-1' },
+  Repartidor: { id: 't-1' },
   paquetes: [{ id: 'p-1' }, { id: 'p-2' }],
 }
 
@@ -40,7 +40,7 @@ describe('routeService', () => {
       id: 'route-1',
       status: 'En Curso',
       vehicleId: 'v-1',
-      transportistId: 't-1',
+      repartidorId: 't-1',
       shipmentIds: ['p-1', 'p-2'],
     })
   })
@@ -51,7 +51,7 @@ describe('routeService', () => {
     const created = await routeService.createRoute({
       shipmentIds: ['p-1', 'p-2', 'p-3'],
       vehicleId: 'v-1',
-      transportistId: 't-1',
+      repartidorId: 't-1',
       status: 'Creada',
       origin: 'Buenos Aires',
       destination: 'La Plata',
@@ -59,7 +59,7 @@ describe('routeService', () => {
 
     expect(mockedApi.post).toHaveBeenCalledWith('/rutas/crear-ruta', {
       VehiculoId: 'v-1',
-      TransportistaId: 't-1',
+      RepartidorId: 't-1',
       PaqueteIds: ['p-1', 'p-2', 'p-3'],
     })
     expect(created.status).toBe('Creada')

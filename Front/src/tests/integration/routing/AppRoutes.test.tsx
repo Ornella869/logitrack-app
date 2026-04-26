@@ -7,8 +7,8 @@ vi.mock('../../../pages/RegisterPage', () => ({ default: () => <div>REGISTER_PAG
 vi.mock('../../../pages/Dashboard', () => ({ default: () => <div>DASHBOARD_PAGE</div> }))
 vi.mock('../../../pages/ShipmentDetail', () => ({ default: () => <div>SHIPMENT_DETAIL</div> }))
 vi.mock('../../../pages/VehicleDetail', () => ({ default: () => <div>VEHICLE_DETAIL</div> }))
-vi.mock('../../../pages/transportista/RoutesDashboard', () => ({ default: () => <div>TRANSPORTISTA_HOME</div> }))
-vi.mock('../../../pages/transportista/RouteDetail', () => ({ default: () => <div>TRANSPORTISTA_DETAIL</div> }))
+vi.mock('../../../pages/repartidor/RoutesDashboard', () => ({ default: () => <div>Repartidor_HOME</div> }))
+vi.mock('../../../pages/repartidor/RouteDetail', () => ({ default: () => <div>Repartidor_DETAIL</div> }))
 vi.mock('../../../components/Layout', () => ({
   default: () => <div>LAYOUT_WRAPPER</div>,
 }))

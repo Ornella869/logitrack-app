@@ -39,7 +39,7 @@ Database__EnableSeedData=true
 # Configurar cantidades
 DatabaseSeederConfiguration__CantidadOperadores=20
 DatabaseSeederConfiguration__CantidadSupervisores=10
-DatabaseSeederConfiguration__CantidadTransportistas=30
+DatabaseSeederConfiguration__CantidadRepartidores=30
 DatabaseSeederConfiguration__CantidadVehiculos=25
 DatabaseSeederConfiguration__CantidadPaquetes=100
 ```
@@ -53,7 +53,7 @@ Si no se especifica configuración, se usan estos valores por defecto:
   "DatabaseSeederConfiguration": {
     "CantidadOperadores": 20,
     "CantidadSupervisores": 10,
-    "CantidadTransportistas": 30,
+    "CantidadRepartidores": 30,
     "CantidadVehiculos": 25,
     "CantidadPaquetes": 100
   }
@@ -72,15 +72,15 @@ Si no se especifica configuración, se usan estos valores por defecto:
 | `maria.gomez@logitrack.com` | Operador | `kjkszpj1234` | maria | gomez |
 | `carlos.rodriguez@logitrack.com` | Supervisor | `kjkszpj1234` | carlos | rodriguez |
 | `ana.martinez@logitrack.com` | Supervisor | `kjkszpj1234` | ana | martinez |
-| `luis.lopez@logitrack.com` | Transportista | `kjkszpj1234` | luis | lopez |
-| `sofia.fernandez@logitrack.com` | Transportista | `kjkszpj1234` | sofia | fernandez |
+| `luis.lopez@logitrack.com` | Repartidor | `kjkszpj1234` | luis | lopez |
+| `sofia.fernandez@logitrack.com` | Repartidor | `kjkszpj1234` | sofia | fernandez |
 
 #### Usuarios Aleatorios Adicionales
 
 Además de los usuarios específicos, se generan usuarios aleatorios según la configuración:
 - **Operadores**: Cantidad configurable (por defecto 20)
 - **Supervisores**: Cantidad configurable (por defecto 10)
-- **Transportistas**: Cantidad configurable (por defecto 30)
+- **repartidores**: Cantidad configurable (por defecto 30)
 
 ### 🚚 Vehículos (7 específicos + aleatorios)
 
@@ -122,13 +122,13 @@ Se generan paquetes aleatorios adicionales según la configuración (por defecto
 
 #### Ruta Específica Asignada
 
-| Transportista | Vehículo | Paquetes | Descripción |
+| Repartidor | Vehículo | Paquetes | Descripción |
 |---------------|----------|----------|-------------|
-| `luis.lopez@logitrack.com` | `ABC123` (Ford) | Paquetes específicos | Ruta asignada al transportista específico con todos los paquetes de prueba |
+| `luis.lopez@logitrack.com` | `ABC123` (Ford) | Paquetes específicos | Ruta asignada al Repartidor específico con todos los paquetes de prueba |
 
 #### Rutas Aleatorias Adicionales
 
-Se generan rutas aleatorias que combinan transportistas, vehículos y paquetes según la configuración.
+Se generan rutas aleatorias que combinan repartidores, vehículos y paquetes según la configuración.
 
 ## Pasos para usar
 
@@ -144,7 +144,7 @@ Edita `Back/appsettings.json`:
   "DatabaseSeederConfiguration": {
     "CantidadOperadores": 15,
     "CantidadSupervisores": 8,
-    "CantidadTransportistas": 20,
+    "CantidadRepartidores": 20,
     "CantidadVehiculos": 30,
     "CantidadPaquetes": 200
   }
@@ -166,8 +166,8 @@ Verás en la consola:
 [SEED] Usuario Operador: maria.gomez@logitrack.com
 [SEED] Usuario Supervisor: carlos.rodriguez@logitrack.com
 [SEED] Usuario Supervisor: ana.martinez@logitrack.com
-[SEED] Usuario Transportista: luis.lopez@logitrack.com
-[SEED] Usuario Transportista: sofia.fernandez@logitrack.com
+[SEED] Usuario Repartidor: luis.lopez@logitrack.com
+[SEED] Usuario Repartidor: sofia.fernandez@logitrack.com
 [SEED] ✓ 6 usuarios específicos creados
 [SEED] ✓ Usuarios aleatorios adicionales creados
 [SEED] ✓ 7 vehículos específicos creados
@@ -185,18 +185,18 @@ Inicia el frontend y prueba el login con cualquiera de estos usuarios:
 ```
 Operador: juan.perez@logitrack.com / kjkszpj1234
 Supervisor: carlos.rodriguez@logitrack.com / kjkszpj1234
-Transportista: luis.lopez@logitrack.com / kjkszpj1234
+Repartidor: luis.lopez@logitrack.com / kjkszpj1234
 ```
 
 ## 🎯 Casos de Prueba Disponibles
 
 Los datos están diseñados para validar:
 
-✅ **Autenticación**: 3 roles diferentes (Supervisor, Operador, Transportista)
+✅ **Autenticación**: 3 roles diferentes (Supervisor, Operador, Repartidor)
 ✅ **Estados de paquetes**: Todos los estados posibles
 ✅ **Estados de rutas**: Pendiente, EnCurso, Finalizada
 ✅ **Vehículos**: Vehículos específicos con patentes conocidas
-✅ **Rutas específicas**: Transportista `luis.lopez` asignado a ruta con paquetes específicos
+✅ **Rutas específicas**: Repartidor `luis.lopez` asignado a ruta con paquetes específicos
 ✅ **Búsqueda**: Por código de seguimiento, destinatario
 ✅ **Filtrado**: Rutas activas, paquetes en sucursal, etc.
 ✅ **Asignación**: Vehículos a rutas, paquetes a rutas
@@ -236,7 +236,7 @@ Database__EnableSeedData=true
 # Configuración de cantidades
 DatabaseSeederConfiguration__CantidadOperadores=25
 DatabaseSeederConfiguration__CantidadSupervisores=15
-DatabaseSeederConfiguration__CantidadTransportistas=40
+DatabaseSeederConfiguration__CantidadRepartidores=40
 DatabaseSeederConfiguration__CantidadVehiculos=35
 DatabaseSeederConfiguration__CantidadPaquetes=300
 ```
@@ -248,7 +248,7 @@ environment:
   - Database__EnableSeedData=true
   - DatabaseSeederConfiguration__CantidadOperadores=10
   - DatabaseSeederConfiguration__CantidadSupervisores=5
-  - DatabaseSeederConfiguration__CantidadTransportistas=15
+  - DatabaseSeederConfiguration__CantidadRepartidores=15
   - DatabaseSeederConfiguration__CantidadVehiculos=20
   - DatabaseSeederConfiguration__CantidadPaquetes=150
 ```
@@ -270,7 +270,7 @@ Los usuarios específicos garantizan datos consistentes para testing:
 
 - **juan.perez@logitrack.com** (Operador)
 - **carlos.rodriguez@logitrack.com** (Supervisor)
-- **luis.lopez@logitrack.com** (Transportista con ruta específica)
+- **luis.lopez@logitrack.com** (Repartidor con ruta específica)
 
 ### Vehículos de Prueba
 

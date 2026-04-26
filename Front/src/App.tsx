@@ -7,11 +7,12 @@ import Dashboard from './pages/Dashboard'
 import ShipmentDetail from './pages/ShipmentDetail'
 import VehicleDetail from './pages/VehicleDetail'
 import Layout from './components/Layout'
-import RoutesDashboard from './pages/transportista/RoutesDashboard'
-import RouteDetail from './pages/transportista/RouteDetail'
+import RoutesDashboard from './pages/repartidor/RoutesDashboard'
+import RouteDetail from './pages/repartidor/RouteDetail'
 import LandingPage from './pages/landing/LandingPage'
 import AccessDenied from './pages/AccessDenied'
 import type { User } from './types'
+import { isRepartidorRole, normalizeUserRole } from './utils/roleUtils'
 
 const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
 const DEFAULT_SESSION_TIMEOUT_MS = 15 * 60 * 1000
@@ -55,7 +56,16 @@ function App() {
         clearStoredSession()
         setSessionExpired(true)
       } else {
-        setUser(parsedUser)
+        const normalizedUser: User = {
+          ...parsedUser,
+          role: normalizeUserRole(parsedUser.role),
+        }
+
+        if (normalizedUser.role !== parsedUser.role) {
+          localStorage.setItem('user', JSON.stringify(normalizedUser))
+        }
+
+        setUser(normalizedUser)
         touchSessionActivity()
       }
     } catch {
@@ -131,21 +141,21 @@ function App() {
           path="/login"
           element={
             user
-              ? <Navigate to={user.role === 'repartidor' ? '/transportista' : '/app'} />
+              ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : '/app'} />
               : <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} />
           }
         />
         <Route
           path="/register"
           element={
-            user ? <Navigate to={user.role === 'repartidor' ? '/transportista' : '/app'} /> : <RegisterPage />
+            user ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : '/app'} /> : <RegisterPage />
           }
         />
 
         <Route
-          path="/transportista"
+          path="/repartidor"
           element={
-            user?.role === 'repartidor' ? (
+            user && isRepartidorRole(user.role) ? (
               <Layout user={user} onLogout={handleLogout} />
             ) : user ? (
               <AccessDenied user={user} />
@@ -161,7 +171,7 @@ function App() {
         <Route
           element={
             user ? (
-              user.role === 'repartidor' ? (
+              isRepartidorRole(user.role) ? (
                 <AccessDenied user={user} />
               ) : (
                 <Layout user={user} onLogout={handleLogout} />
@@ -176,7 +186,7 @@ function App() {
           <Route path="/vehiculo/:id" element={<VehicleDetail />} />
         </Route>
 
-        <Route path="*" element={<Navigate to={user ? (user.role === 'repartidor' ? '/transportista' : '/app') : '/login'} />} />
+        <Route path="*" element={<Navigate to={user ? (isRepartidorRole(user.role) ? '/repartidor' : '/app') : '/login'} />} />
       </Routes>
     </BrowserRouter>
   )

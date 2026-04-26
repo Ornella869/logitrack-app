@@ -39,7 +39,7 @@ describe('LoginPage integration', () => {
         <Routes>
           <Route path="/login" element={<LoginPage onLogin={onLogin} />} />
           <Route path="/app" element={<div>APP_DASHBOARD</div>} />
-          <Route path="/transportista" element={<div>TRANSPORTISTA_DASHBOARD</div>} />
+          <Route path="/repartidor" element={<div>Repartidor_DASHBOARD</div>} />
           <Route path="/register" element={<div>REGISTER_PAGE</div>} />
         </Routes>
       </MemoryRouter>,

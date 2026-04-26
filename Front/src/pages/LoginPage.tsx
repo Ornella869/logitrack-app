@@ -21,6 +21,7 @@ import { authService } from '../services/authService'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import type { User, LoginCredentials } from '../types'
 import ForgotPasswordDialog from '../components/ForgotPasswordDialog'
+import { isRepartidorRole } from '../utils/roleUtils'
 
 interface LoginPageProps {
   onLogin: (user: User) => void
@@ -45,8 +46,8 @@ const demoUsers = [
   { label: 'Supervisor · Ana', email: 'ana.martinez@logitrack.com', color: 'error' as const },
   { label: 'Operador · Juan', email: 'juan.perez@logitrack.com', color: 'primary' as const },
   { label: 'Operador · Maria', email: 'maria.gomez@logitrack.com', color: 'primary' as const },
-  { label: 'Transportista · Luis', email: 'luis.lopez@logitrack.com', color: 'success' as const },
-  { label: 'Transportista · Sofia', email: 'sofia.fernandez@logitrack.com', color: 'success' as const },
+  { label: 'Repartidor · Luis', email: 'luis.lopez@logitrack.com', color: 'success' as const },
+  { label: 'Repartidor · Sofia', email: 'sofia.fernandez@logitrack.com', color: 'success' as const },
 ]
 
 function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
@@ -116,7 +117,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
 
       if (user) {
         onLogin(user)
-        navigate(user.role === 'repartidor' ? '/transportista' : '/app')
+        navigate(isRepartidorRole(user.role) ? '/repartidor' : '/app')
       } else {
         setError('Email o contraseña incorrectos')
       }

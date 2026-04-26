@@ -37,7 +37,7 @@ import ShipmentForm from '../components/ShipmentForm'
 import VehicleForm from '../components/VehicleForm'
 import BranchForm from '../components/BranchForm'
 import RoutesList from '../components/RoutesList'
-import TransportistasList from '../components/TransportistasList'
+import RepartidoresList from '../components/RepartidoresList'
 import UsersManagement from '../components/UsersManagement'
 import SearchBar from '../components/SearchBar'
 
@@ -107,7 +107,7 @@ function Dashboard() {
       setLoading(true);
       try {
         // Pasamos el string del estado por query param
-        const response = await vehicleService.getAllVehiclesByStatus(vehicleStatusFilter);
+        const response = await vehicleService.getAllVehiclesByStatus();
         setVehicles(response);
       } catch (err) {
         setError('Error al cargar vehículos');
@@ -171,7 +171,7 @@ function Dashboard() {
     try {
       const [shipmentsData, vehiclesData, branchesData] = await Promise.all([
         shipmentService.getAllShipments(),
-        vehicleService.getAllVehiclesByStatus("Disponible"),
+        vehicleService.getAllVehiclesByStatus(),
         branchService.getAllBranches(),
       ])
       setShipments(shipmentsData)
@@ -321,7 +321,7 @@ function Dashboard() {
           <Tabs value={tab} onChange={(_, newValue) => setTab(newValue)} sx={{ mb: 3 }}>
             <Tab label={`Envíos ${filteredShipments.length > 0 ? `(${filteredShipments.length})` : ''}`} />
             <Tab label={`Sucursales ${branches.length > 0 ? `(${branches.length})` : ''}`} />
-            <Tab label="Transportistas" />
+            <Tab label="Repartidores" />
             <Tab label="Rutas" />
           </Tabs>
 
@@ -372,8 +372,8 @@ function Dashboard() {
             />
           )}
 
-          {/* TAB TRANSPORTISTAS */}
-          {tab === 2 && <TransportistasList userRole="supervisor" />}
+          {/* TAB REPARTIDORES */}
+          {tab === 2 && <RepartidoresList userRole="supervisor" />}
 
           {/* TAB RUTAS */}
           {tab === 3 && <RoutesList userRole="supervisor" />}
@@ -387,7 +387,7 @@ function Dashboard() {
             <Tab label={`Envíos ${filteredShipments.length > 0 ? `(${filteredShipments.length})` : ''}`} />
             <Tab label={`Vehículos ${vehicles.length > 0 ? `(${vehicles.length})` : ''}`} />
             <Tab label={`Sucursales ${branches.length > 0 ? `(${branches.length})` : ''}`} />
-            <Tab label="Transportistas" />
+            <Tab label="Repartidores" />
             <Tab label="Rutas" />
           </Tabs>
 
@@ -537,8 +537,8 @@ function Dashboard() {
             />
           )}
 
-          {/* TAB TRANSPORTISTAS */}
-          {tab === 3 && <TransportistasList userRole="operador" />}
+          {/* TAB REPARTIDORES */}
+          {tab === 3 && <RepartidoresList userRole="operador" />}
 
           {/* TAB RUTAS */}
           {tab === 4 && <RoutesList userRole="operador" />}

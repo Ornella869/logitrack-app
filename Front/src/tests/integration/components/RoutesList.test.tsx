@@ -9,13 +9,13 @@ vi.mock('../../../services/routeService', () => ({
     getAllRoutes: vi.fn(),
     getRoutesByStatus: vi.fn(),
     createRoute: vi.fn(),
-    assignTransportist: vi.fn(),
+    assignRepartidor: vi.fn(),
   },
 }))
 
 vi.mock('../../../services/authService', () => ({
   authService: {
-    getTransportistas: vi.fn(),
+    getRepartidores: vi.fn(),
   },
 }))
 
@@ -40,11 +40,11 @@ const mockedRouteService = routeService as unknown as {
   getAllRoutes: ReturnType<typeof vi.fn>
   getRoutesByStatus: ReturnType<typeof vi.fn>
   createRoute: ReturnType<typeof vi.fn>
-  assignTransportist: ReturnType<typeof vi.fn>
+  assignRepartidor: ReturnType<typeof vi.fn>
 }
 
 const mockedAuthService = authService as unknown as {
-  getTransportistas: ReturnType<typeof vi.fn>
+  getRepartidores: ReturnType<typeof vi.fn>
 }
 
 const mockedVehicleService = vehicleService as unknown as {
@@ -64,7 +64,7 @@ describe('RoutesList', () => {
         routeId: 'R-1',
         shipmentIds: ['p1'],
         vehicleId: 'v1',
-        transportistId: 't1',
+        repartidorId: 't1',
         status: 'En Curso',
         createdDate: '2026-03-28',
         origin: 'Centro',
@@ -72,7 +72,7 @@ describe('RoutesList', () => {
       },
     ])
     mockedRouteService.getRoutesByStatus.mockResolvedValue([])
-    mockedAuthService.getTransportistas.mockResolvedValue([
+    mockedAuthService.getRepartidores.mockResolvedValue([
       { id: 't1', name: 'Ana', lastname: 'Diaz', dni: '12345678', estado: 'Activo' },
       { id: 't2', name: 'Luis', lastname: 'Lopez', dni: '87654321', estado: 'Suspendido' },
     ])

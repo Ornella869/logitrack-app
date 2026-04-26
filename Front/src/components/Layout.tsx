@@ -13,11 +13,14 @@ import {
   useTheme,
   IconButton,
   Tooltip,
+  Divider,
 } from '@mui/material'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
+import LockIcon from '@mui/icons-material/Lock'
 import { useState } from 'react'
 import type { User } from '../types'
+import ChangePasswordDialog from './ChangePasswordDialog'
 
 interface LayoutProps {
   user: User
@@ -29,6 +32,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [openChangePassword, setOpenChangePassword] = useState(false)
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -36,6 +40,11 @@ function Layout({ user, onLogout }: LayoutProps) {
 
   const handleMenuClose = () => {
     setAnchorEl(null)
+  }
+
+  const handleOpenChangePassword = () => {
+    handleMenuClose()
+    setOpenChangePassword(true)
   }
 
   const handleLogout = () => {
@@ -73,7 +82,7 @@ function Layout({ user, onLogout }: LayoutProps) {
               alignItems: 'center',
               gap: 1,
             }}
-            onClick={() => navigate(user.role === 'repartidor' ? '/transportista' : '/app')}
+            onClick={() => navigate(user.role === 'repartidor' ? '/repartidor' : '/app')}
           >
             <Box
               sx={{
@@ -153,6 +162,11 @@ function Layout({ user, onLogout }: LayoutProps) {
                   </Typography>
                 </Box>
               </MenuItem>
+              <Divider />
+              <MenuItem onClick={handleOpenChangePassword} sx={{ gap: 1 }}>
+                <LockIcon fontSize="small" />
+                Cambiar contraseña
+              </MenuItem>
               <MenuItem onClick={handleLogout} sx={{ color: 'error.main', gap: 1 }}>
                 <LogoutIcon fontSize="small" />
                 Cerrar sesión
@@ -170,6 +184,9 @@ function Layout({ user, onLogout }: LayoutProps) {
           </Box>
         </Toolbar>
       </AppBar>
+
+      {/* Dialog para cambiar contraseña */}
+      <ChangePasswordDialog open={openChangePassword} onClose={() => setOpenChangePassword(false)} />
 
       <Container
         maxWidth="lg"

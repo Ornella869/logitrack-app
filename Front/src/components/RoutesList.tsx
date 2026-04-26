@@ -197,13 +197,13 @@ const handleOpenCreateDialog = () => {
     }
   }
 
-  const handleAssignTransportist = async () => {
+  const handleAssignRepartidor = async () => {
     if (!assignDialogRoute || !selectedRepartidorId) return
 
     setSubmitting(true)
     setFormError('')
     try {
-      await routeService.assignTransportist(assignDialogRoute.id, selectedRepartidorId)
+      await routeService.assignRepartidor(assignDialogRoute.id, selectedRepartidorId)
       const updatedRoutes = await routeService.getAllRoutes()
       setRoutes(updatedRoutes)
       applyStatusFilter(updatedRoutes, selectedStatus)
@@ -459,7 +459,7 @@ const handleOpenCreateDialog = () => {
         <DialogActions>
           <Button onClick={handleCloseAssignDialog} disabled={submitting}>Cancelar</Button>
           <Button
-            onClick={handleAssignTransportist}
+            onClick={handleAssignRepartidor}
             variant="contained"
             disabled={submitting || selectedRepartidorId === assignDialogRoute?.repartidorId}
           >

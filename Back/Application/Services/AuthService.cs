@@ -250,5 +250,34 @@ namespace Back.Application.Services
             repartidor.CambiarEstado(estado);
             return repartidor;
         }
+
+        // Actualizar datos de usuario (nombre, apellido, email, DNI)
+        public async Task<Usuario> ActualizarUsuario(Guid userId, string nombre, string apellido, string email, string dni)
+        {
+            if (string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(apellido))
+                throw new InvalidOperationException("Nombre y apellido son obligatorios.");
+
+            if (string.IsNullOrWhiteSpace(email) || !EmailService.IsEmailValid(email.Trim()))
+                throw new InvalidOperationException("El email no es válido.");
+
+            if (string.IsNullOrWhiteSpace(dni) || dni.Trim().Length != 8)
+                throw new InvalidOperationException("El DNI debe tener exactamente 8 caracteres.");
+
+            var user = await _userRepository.GetUsuarioById(userId)
+                ?? throw new InvalidOperationException("Usuario no encontrado.");
+
+            // Verificar que no exista otro usuario con el mismo email
+            var existingByEmail = await _userRepository.GetUsuarioByEmail(email.Trim());
+            if (existingByEmail is not null && existingByEmail.Id != userId)
+                throw new InvalidOperationException("El email ya está registrado para otro usuario.");
+
+            // Verificar que no exista otro usuario con el mismo DNI
+            var existingByDni = await _userRepository.GetUsuarioByDni(dni.Trim());
+            if (existingByDni is not null && existingByDni.Id != userId)
+                throw new InvalidOperationException("El DNI ya está registrado para otro usuario.");
+
+            user.ActualizarDatos(nombre, apellido, email, dni);
+            return user;
+        }
     }
 }

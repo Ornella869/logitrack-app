@@ -1,23 +1,23 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Snackbar, Alert } from '@mui/material'
 import type { User } from '../../types'
-import { useTransportistaState } from '../../hooks/useTransportistaState'
+import { useRepartidorState } from '../../hooks/useRepartidorState'
 import RoutesDashboard from './RoutesDashboard'
 import RouteDetail from './RouteDetail'
 
-interface TransportistaAppProps {
+interface RepartidorAppProps {
   user: User
 }
 
-export default function TransportistaApp({ user }: TransportistaAppProps) {
-  const { state, hideSnackbar } = useTransportistaState()
+export default function RepartidorApp({ user }: RepartidorAppProps) {
+  const { state, hideSnackbar } = useRepartidorState()
 
   return (
     <>
       <Routes>
         <Route index element={<RoutesDashboard user={user} />} />
         <Route path="ruta/:id" element={<RouteDetail />} />
-        <Route path="*" element={<Navigate to="/transportista" replace />} />
+        <Route path="*" element={<Navigate to="/repartidor" replace />} />
       </Routes>
 
       <Snackbar

@@ -25,24 +25,24 @@ import BlockIcon from '@mui/icons-material/Block'
 import EditIcon from '@mui/icons-material/Edit'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 
-import type { User, Route, TransportistaEstado } from '../types'
+import type { User, Route, RepartidorEstado } from '../types'
 import { authService } from '../services/authService'
 import { routeService } from '../services/routeService'
 
-interface TransportistsListProps {
+interface RepartidoresListProps {
   userRole?: string
 }
 
-const estadoColorMap: Record<TransportistaEstado, 'success' | 'warning' | 'error'> = {
+const estadoColorMap: Record<RepartidorEstado, 'success' | 'warning' | 'error'> = {
   Activo: 'success',
   Suspendido: 'warning',
   Inhabilitado: 'error',
 }
 
-function TransportistasList({ userRole }: TransportistsListProps) {
+function RepartidoresList({ userRole }: RepartidoresListProps) {
   const nameRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
   const isSupervisor = userRole === 'supervisor'
-  const [transportistas, setTransportistas] = useState<User[]>([])
+  const [repartidores, setRepartidores] = useState<User[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -56,7 +56,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
   const [openCreateDialog, setOpenCreateDialog] = useState(false)
   const [openLicenciaDialog, setOpenLicenciaDialog] = useState(false)
   const [openEstadoDialog, setOpenEstadoDialog] = useState(false)
-  const [selectedTransportista, setSelectedTransportista] = useState<User | null>(null)
+  const [selectedRepartidor, setSelectedRepartidor] = useState<User | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -67,7 +67,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
   })
   const [formError, setFormError] = useState('')
   const [licenciaValue, setLicenciaValue] = useState('')
-  const [estadoValue, setEstadoValue] = useState<TransportistaEstado>('Suspendido')
+  const [estadoValue, setEstadoValue] = useState<RepartidorEstado>('Suspendido')
 
   const showToast = (
     message: string,
@@ -82,35 +82,35 @@ function TransportistasList({ userRole }: TransportistsListProps) {
   }
 
   useEffect(() => {
-    loadTransportistas()
+    loadRepartidores()
   }, [])
 
-  const routesByTransportista = useMemo(() => {
+  const routesByRepartidor = useMemo(() => {
     return routes.reduce<Record<string, Route[]>>((acc, route) => {
       acc[route.repartidorId] = [...(acc[route.repartidorId] ?? []), route]
       return acc
     }, {})
   }, [routes])
 
-  const loadTransportistas = async () => {
+  const loadRepartidores= async () => {
     setLoading(true)
     setError('')
     try {
-        const [transportistasData, routesData] = await Promise.all([
+        const [repartidoresData, routesData] = await Promise.all([
         authService.getRepartidores(),
         routeService.getAllRoutes(),
       ])
-      setTransportistas(transportistasData)
+      setRepartidores(repartidoresData)
       setRoutes(routesData)
     } catch (err) {
-      setError('Error al cargar los transportistas')
+      setError('Error al cargar los Repartidores')
     } finally {
       setLoading(false)
     }
   }
 
-  const getRouteStatus = (transportistaId: string) => {
-    const assignedRoutes = routesByTransportista[transportistaId] ?? []
+  const getRouteStatus = (RepartidorId: string) => {
+    const assignedRoutes = routesByRepartidor[RepartidorId] ?? []
     if (assignedRoutes.some((route) => route.status === 'En Curso')) {
       return { label: 'En viaje', color: 'warning' as const }
     }
@@ -129,7 +129,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
     setOpenCreateDialog(true)
   }
 
-  const handleCreateTransportista = async () => {
+  const handleCreateRepartidor = async () => {
     if (!formData.name.trim() || !formData.lastname.trim() || !formData.licencia.trim() || !formData.email.trim()) {
       setFormError('Completá nombre, apellido, email y licencia.')
       return
@@ -150,7 +150,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
     setSubmitting(true)
     setFormError('')
     try {
-      const created = await authService.createTransportista({
+      const created = await authService.createRepartidor({
         name: formData.name,
         lastname: formData.lastname,
         email: formData.email,
@@ -159,34 +159,34 @@ function TransportistasList({ userRole }: TransportistsListProps) {
       })
 
       if (!created) {
-        setFormError('No se pudo registrar el transportista.')
-        showToast('No se pudo registrar el transportista.', 'error')
+        setFormError('No se pudo registrar el Repartidor.')
+        showToast('No se pudo registrar el Repartidor.', 'error')
         return
       }
 
-      await loadTransportistas()
+      await loadRepartidores()
       showToast(
-        `Transportista registrado. Credenciales de acceso: ${created.user.email}. Contraseña temporal: ${created.temporaryPassword}`,
+        `Repartidor registrado. Credenciales de acceso: ${created.user.email}. Contraseña temporal: ${created.temporaryPassword}`,
         'success',
       )
       setOpenCreateDialog(false)
     } catch {
-      setFormError('Ocurrió un error al registrar el transportista.')
-      showToast('Ocurrió un error al registrar el transportista.', 'error')
+      setFormError('Ocurrió un error al registrar el Repartidor.')
+      showToast('Ocurrió un error al registrar el Repartidor.', 'error')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const openEditLicenciaDialog = (transportista: User) => {
-    setSelectedTransportista(transportista)
-    setLicenciaValue(transportista.licencia ?? '')
+  const openEditLicenciaDialog = (Repartidor: User) => {
+    setSelectedRepartidor(Repartidor)
+    setLicenciaValue(Repartidor.licencia ?? '')
     setFormError('')
     setOpenLicenciaDialog(true)
   }
 
   const handleUpdateLicencia = async () => {
-    if (!selectedTransportista) return
+    if (!selectedRepartidor) return
     if (!licenciaValue.trim()) {
       setFormError('La licencia es obligatoria.')
       return
@@ -195,15 +195,15 @@ function TransportistasList({ userRole }: TransportistsListProps) {
     setSubmitting(true)
     setFormError('')
     try {
-      const updated = await authService.updateTransportistaLicencia(selectedTransportista.id, licenciaValue.trim())
+      const updated = await authService.updateRepartidorLicencia(selectedRepartidor.id, licenciaValue.trim())
       if (!updated) {
         setFormError('No se pudo actualizar la licencia.')
         showToast('No se pudo actualizar la licencia.', 'error')
         return
       }
-      await loadTransportistas()
+      await loadRepartidores()
       setOpenLicenciaDialog(false)
-      setSelectedTransportista(null)
+      setSelectedRepartidor(null)
       showToast('Licencia actualizada correctamente', 'info')
     } catch {
       setFormError('Ocurrió un error al actualizar la licencia.')
@@ -213,35 +213,35 @@ function TransportistasList({ userRole }: TransportistsListProps) {
     }
   }
 
-  const openChangeEstadoDialog = (transportista: User) => {
-    setSelectedTransportista(transportista)
+  const openChangeEstadoDialog = (Repartidor: User) => {
+    setSelectedRepartidor(Repartidor)
     setEstadoValue('Suspendido')
     setFormError('')
     setOpenEstadoDialog(true)
   }
 
   const handleUpdateEstado = async () => {
-    if (!selectedTransportista) return
+    if (!selectedRepartidor) return
 
     setSubmitting(true)
     setFormError('')
     try {
-      const updated = await authService.updateTransportistaEstado(selectedTransportista.id, estadoValue)
+      const updated = await authService.updateRepartidorEstado(selectedRepartidor.id, estadoValue)
       if (!updated) {
-        setFormError('No se pudo cambiar el estado del transportista.')
-        showToast('No se pudo cambiar el estado del transportista.', 'error')
+        setFormError('No se pudo cambiar el estado del Repartidor.')
+        showToast('No se pudo cambiar el estado del Repartidor.', 'error')
         return
       }
-      await loadTransportistas()
+      await loadRepartidores()
       setOpenEstadoDialog(false)
-      setSelectedTransportista(null)
+      setSelectedRepartidor(null)
       showToast(
-        `Estado de transportista actualizado a ${estadoValue}`,
+        `Estado de repartidor actualizado a ${estadoValue}`,
         estadoValue === 'Activo' ? 'success' : 'warning',
       )
     } catch {
-      setFormError('Ocurrió un error al cambiar el estado del transportista.')
-      showToast('Ocurrió un error al cambiar el estado del transportista.', 'error')
+      setFormError('Ocurrió un error al cambiar el estado del Repartidor.')
+      showToast('Ocurrió un error al cambiar el estado del Repartidor.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -260,51 +260,51 @@ function TransportistasList({ userRole }: TransportistsListProps) {
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">
-            Transportistas - Total: {transportistas.length}
+            repartidores - Total: {repartidores.length}
           </Typography>
           {isSupervisor && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateDialog}>
-              Registrar transportista
+              Registrar Repartidor
             </Button>
           )}
         </Box>
 
         {error && <Alert severity="error">{error}</Alert>}
 
-        {transportistas.length === 0 ? (
-          <Alert severity="info">No hay transportistas registrados</Alert>
+        {repartidores.length === 0 ? (
+          <Alert severity="info">No hay repartidores registrados</Alert>
         ) : (
           <Grid container spacing={3}>
-            {transportistas.map((transportista) => {
-              const routeStatus = getRouteStatus(transportista.id)
-              const assignedRoutes = routesByTransportista[transportista.id] ?? []
-              const estadoCuenta = (transportista.estado ?? 'Activo') as TransportistaEstado
+            {repartidores.map((Repartidor) => {
+              const routeStatus = getRouteStatus(Repartidor.id)
+              const assignedRoutes = routesByRepartidor[Repartidor.id] ?? []
+              const estadoCuenta = (Repartidor.estado ?? 'Activo') as RepartidorEstado
 
               return (
-                <Grid item xs={12} sm={6} md={4} lg={3} key={transportista.id}>
+                <Grid item xs={12} sm={6} md={4} lg={3} key={Repartidor.id}>
                   <Card>
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
-                        {transportista.name} {transportista.lastname}
+                        {Repartidor.name} {Repartidor.lastname}
                       </Typography>
                       <Stack spacing={1}>
                         <Box>
                           <Typography variant="body2" color="textSecondary">
                             Email
                           </Typography>
-                          <Typography variant="body2">{transportista.email}</Typography>
+                          <Typography variant="body2">{Repartidor.email}</Typography>
                         </Box>
                         <Box>
                           <Typography variant="body2" color="textSecondary">
                             DNI
                           </Typography>
-                          <Typography variant="body2">{transportista.dni}</Typography>
+                          <Typography variant="body2">{Repartidor.dni}</Typography>
                         </Box>
                         <Box>
                           <Typography variant="body2" color="textSecondary">
                             Licencia
                           </Typography>
-                          <Typography variant="body2">{transportista.licencia || 'No informada'}</Typography>
+                          <Typography variant="body2">{Repartidor.licencia || 'No informada'}</Typography>
                         </Box>
                         <Box>
                           <Typography variant="body2" color="textSecondary">
@@ -333,7 +333,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
                               size="small"
                               variant="outlined"
                               startIcon={<BadgeIcon />}
-                              onClick={() => openEditLicenciaDialog(transportista)}
+                              onClick={() => openEditLicenciaDialog(Repartidor)}
                             >
                               Editar licencia
                             </Button>
@@ -342,7 +342,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
                               variant="outlined"
                               color="warning"
                               startIcon={<BlockIcon />}
-                              onClick={() => openChangeEstadoDialog(transportista)}
+                              onClick={() => openChangeEstadoDialog(Repartidor)}
                             >
                               Suspender/Inhabilitar
                             </Button>
@@ -359,7 +359,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
       </Box>
 
       <Dialog open={openCreateDialog} onClose={() => !submitting && setOpenCreateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Registrar transportista</DialogTitle>
+        <DialogTitle>Registrar Repartidor</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
@@ -408,7 +408,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenCreateDialog(false)} disabled={submitting}>Cancelar</Button>
-          <Button onClick={handleCreateTransportista} variant="contained" disabled={submitting}>
+          <Button onClick={handleCreateRepartidor} variant="contained" disabled={submitting}>
             Guardar
           </Button>
         </DialogActions>
@@ -420,7 +420,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
           <Stack spacing={2} sx={{ mt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
             <Typography variant="body2" color="text.secondary">
-              Transportista: {selectedTransportista?.name} {selectedTransportista?.lastname}
+              Repartidor: {selectedRepartidor?.name} {selectedRepartidor?.lastname}
             </Typography>
             <TextField
               label="Licencia"
@@ -439,16 +439,16 @@ function TransportistasList({ userRole }: TransportistsListProps) {
       </Dialog>
 
       <Dialog open={openEstadoDialog} onClose={() => !submitting && setOpenEstadoDialog(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Cambiar estado del transportista</DialogTitle>
+        <DialogTitle>Cambiar estado del Repartidor</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
             <Typography variant="body2" color="text.secondary">
-              Seleccioná el nuevo estado para {selectedTransportista?.name} {selectedTransportista?.lastname}.
+              Seleccioná el nuevo estado para {selectedRepartidor?.name} {selectedRepartidor?.lastname}.
             </Typography>
             <Select
               value={estadoValue}
-              onChange={(e) => setEstadoValue(e.target.value as TransportistaEstado)}
+              onChange={(e) => setEstadoValue(e.target.value as RepartidorEstado)}
               fullWidth
             >
               <MenuItem value="Suspendido">Suspendido</MenuItem>
@@ -484,4 +484,4 @@ function TransportistasList({ userRole }: TransportistsListProps) {
   )
 }
 
-export default TransportistasList
+export default RepartidoresList

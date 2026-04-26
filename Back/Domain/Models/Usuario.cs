@@ -36,6 +36,19 @@ namespace Back.Domain.Models
                 throw new InvalidOperationException("La contraseña no puede estar vacía.");
             Password = nuevoPasswordHash;
         }
+
+        public void ActualizarDatos(string nombre, string apellido, string email, string dni)
+        {
+            if (string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(apellido))
+                throw new InvalidOperationException("Nombre y apellido son obligatorios.");
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(dni))
+                throw new InvalidOperationException("Email y DNI son obligatorios.");
+
+            Nombre = nombre.Trim();
+            Apellido = apellido.Trim();
+            Email = email.Trim();
+            DNI = dni.Trim();
+        }
     }
 
     public class Supervisor : Usuario

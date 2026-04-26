@@ -35,7 +35,7 @@ const mapToRoute = (ruta: any): Route => {
   const iniciadoEn = getValue<string>(ruta, 'iniciadoEn', 'IniciadoEn')
   const finalizadoEn = getValue<string>(ruta, 'finalizadoEn', 'FinalizadoEn')
   const vehiculo = getValue<any>(ruta, 'vehiculo', 'Vehiculo') ?? {}
-  const repartidor = getValue<any>(ruta, 'repartidor', 'Repartidor', 'transportista', 'Transportista') ?? {}
+  const repartidor = getValue<any>(ruta, 'repartidor', 'Repartidor') ?? {}
   const paquetes = getValue<any[]>(ruta, 'paquetes', 'Paquetes') ?? []
 
   return {
@@ -177,7 +177,7 @@ export const routeService = {
   },
 
   // Reasignar repartidor a ruta
-  assignTransportist: async (routeId: string, repartidorId: string): Promise<Route | undefined> => {
+  assignRepartidor: async (routeId: string, repartidorId: string): Promise<Route | undefined> => {
     try {
       const success = await routeService.reassignRoute(routeId, repartidorId)
       if (success) {

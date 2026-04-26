@@ -11,7 +11,7 @@ export interface Review {
 
 export const MOCK_REVIEWS: Review[] = [
   { id: '1', name: 'Martina González', role: 'Empresaria', category: 'entrega', rating: 5, comment: 'Excelente tiempo de entrega. Mi pedido llegó antes de lo esperado y en perfectas condiciones. El sistema de seguimiento en tiempo real es increíble.', date: '15/03/2026', avatar: 'MG' },
-  { id: '2', name: 'Roberto Sánchez', role: 'Comerciante', category: 'vehiculo', rating: 4, comment: 'La flota de vehículos está muy bien mantenida. Los transportistas son profesionales y cuidan mucho los paquetes.', date: '10/03/2026', avatar: 'RS' },
+  { id: '2', name: 'Roberto Sánchez', role: 'Comerciante', category: 'vehiculo', rating: 4, comment: 'La flota de vehículos está muy bien mantenida. Los repartidores son profesionales y cuidan mucho los paquetes.', date: '10/03/2026', avatar: 'RS' },
   { id: '3', name: 'Ana Rodríguez', role: 'Diseñadora', category: 'general', rating: 5, comment: 'La plataforma es muy fácil de usar. Pude rastrear mi envío en todo momento y el soporte al cliente fue excelente.', date: '08/03/2026', avatar: 'AR' },
   { id: '4', name: 'Diego Martínez', role: 'Importador', category: 'entrega', rating: 4, comment: 'Muy buen servicio. Los tiempos de entrega son precisos y el sistema de rutas optimizado me ha ahorrado mucho dinero.', date: '05/03/2026', avatar: 'DM' },
   { id: '5', name: 'Sofía Herrera', role: 'Emprendedora', category: 'vehiculo', rating: 5, comment: 'Los vehículos llegan siempre impecables y los conductores son muy amables. Se nota que hay un control de calidad riguroso.', date: '01/03/2026', avatar: 'SH' },

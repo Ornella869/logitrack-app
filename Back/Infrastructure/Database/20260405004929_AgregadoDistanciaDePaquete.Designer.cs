@@ -90,7 +90,7 @@ namespace Back.Infrastructure.Database
                     b.Property<string>("RazonCancelacion")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("TransportistaId")
+                    b.Property<Guid>("RepartidorId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("VehiculoId")
@@ -98,7 +98,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TransportistaId");
+                    b.HasIndex("RepartidorId");
 
                     b.HasIndex("VehiculoId");
 
@@ -214,7 +214,7 @@ namespace Back.Infrastructure.Database
                     b.HasDiscriminator().HasValue("Supervisor");
                 });
 
-            modelBuilder.Entity("Back.Domain.Models.Transportista", b =>
+            modelBuilder.Entity("Back.Domain.Models.Repartidor", b =>
                 {
                     b.HasBaseType("Back.Domain.Models.Usuario");
 
@@ -225,7 +225,7 @@ namespace Back.Infrastructure.Database
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.HasDiscriminator().HasValue("Transportista");
+                    b.HasDiscriminator().HasValue("Repartidor");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Paquete", b =>
@@ -397,9 +397,9 @@ namespace Back.Infrastructure.Database
 
             modelBuilder.Entity("Back.Domain.Models.Ruta", b =>
                 {
-                    b.HasOne("Back.Domain.Models.Transportista", "Transportista")
+                    b.HasOne("Back.Domain.Models.Repartidor", "Repartidor")
                         .WithMany()
-                        .HasForeignKey("TransportistaId")
+                        .HasForeignKey("RepartidorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -409,7 +409,7 @@ namespace Back.Infrastructure.Database
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Transportista");
+                    b.Navigation("Repartidor");
 
                     b.Navigation("Vehiculo");
                 });

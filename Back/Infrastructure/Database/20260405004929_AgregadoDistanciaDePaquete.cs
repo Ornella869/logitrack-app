@@ -70,15 +70,15 @@ namespace Back.Infrastructure.Database
                     IniciadoEn = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     FinalizadoEn = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     RazonCancelacion = table.Column<string>(type: "text", nullable: true),
-                    TransportistaId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RepartidorId = table.Column<Guid>(type: "uuid", nullable: false),
                     VehiculoId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Rutas", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Rutas_Usuarios_TransportistaId",
-                        column: x => x.TransportistaId,
+                        name: "FK_Rutas_Usuarios_RepartidorId",
+                        column: x => x.RepartidorId,
                         principalTable: "Usuarios",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -139,9 +139,9 @@ namespace Back.Infrastructure.Database
                 column: "RutaId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Rutas_TransportistaId",
+                name: "IX_Rutas_RepartidorId",
                 table: "Rutas",
-                column: "TransportistaId");
+                column: "RepartidorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Rutas_VehiculoId",

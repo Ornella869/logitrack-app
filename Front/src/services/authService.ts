@@ -9,6 +9,7 @@ import type {
   CreateUsuarioData,
 } from '../types'
 import api from './api'
+import { normalizeUserRole } from '../utils/roleUtils'
 
 interface CreateRepartidorResult {
   user: User
@@ -42,7 +43,7 @@ export const authService = {
 
       const userId = userInfo?.id ?? userInfo?.Id ?? ''
       const userRoleRaw = userInfo?.role ?? userInfo?.Role ?? ''
-      const userRole = String(userRoleRaw).toLowerCase() as UserRole
+      const userRole = normalizeUserRole(userRoleRaw)
 
       localStorage.setItem('authToken', token)
 
@@ -157,11 +158,6 @@ export const authService = {
     }
   },
 
-  // Alias para compatibilidad
-  getTransportistas: async (): Promise<User[]> => {
-    return authService.getRepartidores()
-  },
-
   // Registrar repartidor (solo gestión interna)
   createRepartidor: async (data: CreateRepartidorData): Promise<CreateRepartidorResult | null> => {
     try {
@@ -183,11 +179,6 @@ export const authService = {
     }
   },
 
-  // Alias para compatibilidad
-  createTransportista: async (data: CreateRepartidorData): Promise<CreateRepartidorResult | null> => {
-    return authService.createRepartidor(data)
-  },
-
   updateRepartidorLicencia: async (repartidorId: string, licencia: string): Promise<User | null> => {
     try {
       const response = await api.put(`/auth/repartidores/${repartidorId}/licencia`, {
@@ -198,11 +189,6 @@ export const authService = {
       console.error('Update repartidor licencia error:', error)
       return null
     }
-  },
-
-  // Alias para compatibilidad
-  updateTransportistaLicencia: async (id: string, licencia: string): Promise<User | null> => {
-    return authService.updateRepartidorLicencia(id, licencia)
   },
 
   updateRepartidorEstado: async (repartidorId: string, estado: RepartidorEstado): Promise<User | null> => {
@@ -217,11 +203,6 @@ export const authService = {
     }
   },
 
-  // Alias para compatibilidad
-  updateTransportistaEstado: async (id: string, estado: RepartidorEstado): Promise<User | null> => {
-    return authService.updateRepartidorEstado(id, estado)
-  },
-
   // Obtener todos los usuarios
   getUsuarios: async (): Promise<User[]> => {
     try {
@@ -232,7 +213,7 @@ export const authService = {
         lastname: usuario.apellido,
         email: usuario.email,
         dni: usuario.dni,
-        role: String(usuario.role ?? usuario.Role ?? '').toLowerCase() as UserRole,
+        role: normalizeUserRole(usuario.role ?? usuario.Role ?? ''),
         activo: usuario.activo ?? true,
         licencia: usuario.licencia,
         estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
@@ -267,7 +248,7 @@ export const authService = {
         lastname: u.apellido,
         email: u.email,
         dni: u.dni,
-        role: String(u.role ?? u.Role ?? '').toLowerCase() as UserRole,
+        role: normalizeUserRole(u.role ?? u.Role ?? ''),
         activo: u.activo ?? true,
         licencia: u.licencia,
         estado: (u.estado as UserEstado) || 'Activo',
@@ -305,7 +286,7 @@ export const authService = {
         lastname: u.apellido,
         email: u.email,
         dni: u.dni,
-        role: String(u.role ?? u.Role ?? '').toLowerCase() as UserRole,
+        role: normalizeUserRole(u.role ?? u.Role ?? ''),
         activo: u.activo ?? true,
         estado: u.estado,
       }

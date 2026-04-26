@@ -1,9 +1,7 @@
 import { useReducer, useCallback } from 'react'
 import type { Route, Shipment } from '../types'
 
-// ─── State Shape ────────────────────────────────────────────────────────────
-
-export interface TransportistaState {
+export interface RepartidorState {
   routes: Route[]
   shipments: Shipment[]
   loading: boolean
@@ -11,15 +9,13 @@ export interface TransportistaState {
   snackbar: { open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }
 }
 
-const initialState: TransportistaState = {
+const initialState: RepartidorState = {
   routes: [],
   shipments: [],
   loading: false,
   error: null,
   snackbar: { open: false, message: '', severity: 'success' },
 }
-
-// ─── Actions ─────────────────────────────────────────────────────────────────
 
 type Action =
   | { type: 'SET_LOADING'; payload: boolean }
@@ -31,9 +27,7 @@ type Action =
   | { type: 'SHOW_SNACKBAR'; payload: { message: string; severity: 'success' | 'error' | 'info' | 'warning' } }
   | { type: 'HIDE_SNACKBAR' }
 
-// ─── Reducer ─────────────────────────────────────────────────────────────────
-
-function reducer(state: TransportistaState, action: Action): TransportistaState {
+function reducer(state: RepartidorState, action: Action): RepartidorState {
   switch (action.type) {
     case 'SET_LOADING':
       return { ...state, loading: action.payload }
@@ -50,14 +44,14 @@ function reducer(state: TransportistaState, action: Action): TransportistaState 
     case 'UPDATE_ROUTE':
       return {
         ...state,
-        routes: state.routes.map((r) => (r.id === action.payload.id ? action.payload : r)),
+        routes: state.routes.map((route) => (route.id === action.payload.id ? action.payload : route)),
       }
 
     case 'UPDATE_SHIPMENT':
       return {
         ...state,
-        shipments: state.shipments.map((s) =>
-          s.id === action.payload.id ? action.payload : s,
+        shipments: state.shipments.map((shipment) =>
+          shipment.id === action.payload.id ? action.payload : shipment,
         ),
       }
 
@@ -75,9 +69,7 @@ function reducer(state: TransportistaState, action: Action): TransportistaState 
   }
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
-
-export function useTransportistaState() {
+export function useRepartidorState() {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   const setLoading = useCallback((loading: boolean) => {
@@ -115,13 +107,13 @@ export function useTransportistaState() {
     dispatch({ type: 'HIDE_SNACKBAR' })
   }, [])
 
-  /** Returns true when every shipment in a route is Entregado or Rechazado */
   const allShipmentsCompleted = useCallback(
     (route: Route): boolean => {
-      const routeShipments = state.shipments.filter((s) => route.shipmentIds.includes(s.id))
+      const routeShipments = state.shipments.filter((shipment) => route.shipmentIds.includes(shipment.id))
       if (routeShipments.length === 0) return false
+
       return routeShipments.every(
-        (s) => s.status === 'Entregado' || s.status === 'Rechazado' || s.status === 'Cancelado',
+        (shipment) => shipment.status === 'Entregado' || shipment.status === 'Cancelado',
       )
     },
     [state.shipments],

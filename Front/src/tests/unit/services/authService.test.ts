@@ -94,7 +94,7 @@ describe('authService', () => {
     expect(localStorage.getItem('authToken')).toBeNull()
   })
 
-  it('CP-20 registra transportista internamente', async () => {
+  it('CP-20 registra Repartidor internamente', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: {
         id: 't-1',
@@ -108,7 +108,7 @@ describe('authService', () => {
       },
     })
 
-    const result = await authService.createTransportista({
+    const result = await authService.createRepartidor({
       name: 'Juan',
       lastname: 'Perez',
       email: 'juan@logi.com',
@@ -116,7 +116,7 @@ describe('authService', () => {
       licencia: 'LIC-001',
     })
 
-    expect(mockedApi.post).toHaveBeenCalledWith('/auth/transportistas', {
+    expect(mockedApi.post).toHaveBeenCalledWith('/auth/repartidores', {
       Nombre: 'Juan',
       Apellido: 'Perez',
       Email: 'juan@logi.com',
@@ -127,12 +127,12 @@ describe('authService', () => {
     expect(result?.temporaryPassword).toBe('temp1234')
   })
 
-  it('CP-21 falla alta de transportista con dni duplicado', async () => {
+  it('CP-21 falla alta de Repartidor con dni duplicado', async () => {
     mockedApi.post.mockRejectedValueOnce({
       response: { data: 'El DNI ingresado ya se encuentra registrado' },
     })
 
-    const result = await authService.createTransportista({
+    const result = await authService.createRepartidor({
       name: 'Juan',
       lastname: 'Perez',
       email: 'juan@logi.com',

@@ -230,6 +230,23 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>Actualizar datos de usuario (nombre, apellido, email, DNI).</summary>
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpPut("usuarios/{userId:guid}")]
+        public async Task<ActionResult<UserInfoResponse>> ActualizarUsuario(Guid userId, [FromBody] ActualizarUsuarioRequest request)
+        {
+            try
+            {
+                var updated = await _authService.ActualizarUsuario(userId, request.Nombre, request.Apellido, request.Email, request.DNI);
+                await _context.SaveChangesAsync();
+                return Ok(MapUsuario(updated));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         /// <summary>Soft-delete: desactivar usuario sin perder historial.</summary>
         [Authorize(Roles = Roles.Administrador)]
         [HttpPost("usuarios/{userId:guid}/desactivar")]
@@ -371,6 +388,16 @@ namespace Back.Controllers
         [Required][MinLength(8, ErrorMessage = "La contraseña temporal debe tener al menos 8 caracteres.")]
         public string PasswordTemporal { get; set; } = string.Empty;
         public string? Licencia { get; set; }
+    }
+
+    public class ActualizarUsuarioRequest
+    {
+        [Required] public string Nombre { get; set; } = string.Empty;
+        [Required] public string Apellido { get; set; } = string.Empty;
+        [Required][EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
+        public string Email { get; set; } = string.Empty;
+        [Required][Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
+        public string DNI { get; set; } = string.Empty;
     }
 
     public class ResetPasswordRequest

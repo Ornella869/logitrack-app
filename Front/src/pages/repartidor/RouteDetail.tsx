@@ -41,7 +41,7 @@ import ScaleIcon from '@mui/icons-material/Scale'
 import type { Route, Shipment } from '../../types'
 import { routeService } from '../../services/routeService'
 import { shipmentService } from '../../services/shipmentService'
-import { useTransportistaState } from '../../hooks/useTransportistaState'
+import { useRepartidorState } from '../../hooks/useRepartidorState'
 import StatusBadge from '../../components/StatusBadge'
 import LoadingState from '../../components/LoadingState'
 
@@ -52,7 +52,7 @@ export default function RouteDetail() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
 
   const { state, setLoading, setRoutes, setShipments, showSnackbar } =
-    useTransportistaState()
+    useRepartidorState()
 
   const [route, setRoute] = useState<Route | null>(null)
   const [routeShipments, setRouteShipments] = useState<Shipment[]>([])
@@ -171,7 +171,7 @@ export default function RouteDetail() {
       return
     }
 
-    if (found.status === 'Entregado' || found.status === 'Rechazado' || found.status === 'Cancelado') {
+    if (found.status === 'Entregado' || found.status === 'Cancelado') {
       setScanError(`Este paquete ya fue ${found.status.toLowerCase()}`)
       return
     }
@@ -200,9 +200,9 @@ export default function RouteDetail() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const delivered = routeShipments.filter((s) => s.status === 'Entregado').length
-  const rejected = routeShipments.filter((s) => s.status === 'Rechazado' || s.status === 'Cancelado').length
+  const rejected = routeShipments.filter((s) => s.status === 'Cancelado').length
   const pending = routeShipments.filter(
-    (s) => s.status !== 'Entregado' && s.status !== 'Rechazado' && s.status !== 'Cancelado',
+    (s) => s.status !== 'Entregado' && s.status !== 'Cancelado',
   ).length
   const total = routeShipments.length
   const progress = total > 0 ? Math.round(((delivered + rejected) / total) * 100) : 0
@@ -215,7 +215,7 @@ export default function RouteDetail() {
   if (!route) {
     return (
       <Box>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/transportista')} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/repartidor')} sx={{ mb: 2 }}>
           Volver a mis rutas
         </Button>
         <Alert severity="error">Ruta no encontrada.</Alert>
@@ -230,7 +230,7 @@ export default function RouteDetail() {
       {/* Back + Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <IconButton
-          onClick={() => navigate('/transportista')}
+          onClick={() => navigate('/repartidor')}
           size="small"
           sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}
         >
@@ -387,7 +387,6 @@ export default function RouteDetail() {
               {routeShipments.map((shipment) => {
                 const isDone =
                   shipment.status === 'Entregado' ||
-                  shipment.status === 'Rechazado' ||
                   shipment.status === 'Cancelado'
                 const hlType = scanHighlight?.id === shipment.id ? scanHighlight.type : null
                 return (
@@ -553,7 +552,6 @@ interface ShipmentCardProps {
 function ShipmentCard({ shipment, highlight, routeActive, onDeliver, onReject }: ShipmentCardProps) {
   const isDone =
     shipment.status === 'Entregado' ||
-    shipment.status === 'Rechazado' ||
     shipment.status === 'Cancelado'
 
   return (

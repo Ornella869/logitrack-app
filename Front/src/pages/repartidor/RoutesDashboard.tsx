@@ -31,7 +31,7 @@ import type { Route, User } from '../../types'
 import { routeService } from '../../services/routeService'
 import { shipmentService } from '../../services/shipmentService'
 import { authService } from '../../services/authService'
-import { useTransportistaState } from '../../hooks/useTransportistaState'
+import { useRepartidorState } from '../../hooks/useRepartidorState'
 import StatusBadge from '../../components/StatusBadge'
 import LoadingState from '../../components/LoadingState'
 
@@ -49,7 +49,7 @@ export default function RoutesDashboard({ user }: RoutesDashboardProps) {
     updateRoute,
     showSnackbar,
     allShipmentsCompleted,
-  } = useTransportistaState()
+  } = useRepartidorState()
 
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; routeId: string | null }>({
     open: false,
@@ -102,7 +102,7 @@ export default function RoutesDashboard({ user }: RoutesDashboardProps) {
       if (updated) {
         updateRoute(updated)
         showSnackbar(`Ruta ${route.routeId} iniciada correctamente`, 'success')
-        navigate(`/transportista/ruta/${route.id}`)
+        navigate(`/repartidor/ruta/${route.id}`)
       }
     } finally {
       setLoading(false)
@@ -110,7 +110,7 @@ export default function RoutesDashboard({ user }: RoutesDashboardProps) {
   }
 
   const handleViewRoute = (routeId: string) => {
-    navigate(`/transportista/ruta/${routeId}`)
+    navigate(`/repartidor/ruta/${routeId}`)
   }
 
   const handleFinishRoute = async (route: Route) => {

@@ -12,16 +12,16 @@ namespace Back.Infrastructure.Database
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_Rutas_Usuarios_TransportistaId",
+                name: "FK_Rutas_Usuarios_RepartidorId",
                 table: "Rutas");
 
             migrationBuilder.RenameColumn(
-                name: "TransportistaId",
+                name: "RepartidorId",
                 table: "Rutas",
                 newName: "RepartidorId");
 
             migrationBuilder.RenameIndex(
-                name: "IX_Rutas_TransportistaId",
+                name: "IX_Rutas_RepartidorId",
                 table: "Rutas",
                 newName: "IX_Rutas_RepartidorId");
 
@@ -32,8 +32,8 @@ namespace Back.Infrastructure.Database
                 nullable: false,
                 defaultValue: true);
 
-            // Renombre del discriminador heredado: filas con Transportista pasan a Repartidor.
-            migrationBuilder.Sql("UPDATE \"Usuarios\" SET \"Discriminator\" = 'Repartidor' WHERE \"Discriminator\" = 'Transportista';");
+            // Renombre del discriminador heredado: filas con Repartidor pasan a Repartidor.
+            migrationBuilder.Sql("UPDATE \"Usuarios\" SET \"Discriminator\" = 'Repartidor' WHERE \"Discriminator\" = 'Repartidor';");
 
             migrationBuilder.AddColumn<string>(
                 name: "Destinatario_Telefono",
@@ -130,17 +130,17 @@ namespace Back.Infrastructure.Database
             migrationBuilder.RenameColumn(
                 name: "RepartidorId",
                 table: "Rutas",
-                newName: "TransportistaId");
+                newName: "RepartidorId");
 
             migrationBuilder.RenameIndex(
                 name: "IX_Rutas_RepartidorId",
                 table: "Rutas",
-                newName: "IX_Rutas_TransportistaId");
+                newName: "IX_Rutas_RepartidorId");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Rutas_Usuarios_TransportistaId",
+                name: "FK_Rutas_Usuarios_RepartidorId",
                 table: "Rutas",
-                column: "TransportistaId",
+                column: "RepartidorId",
                 principalTable: "Usuarios",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Cascade);
