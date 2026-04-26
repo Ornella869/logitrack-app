@@ -8,10 +8,10 @@ namespace Back.Domain.Repositories
         Task Add(Sucursal sucursal);
         Task<Paquete?> GetPaquete(Guid id);
         Task<Paquete?> GetPaqueteByCodigoSeguimiento(string codigoSeguimiento);
-        Task<List<Paquete>> GetPaquetesEnSucursal();
+        Task<List<Paquete>> GetPaquetesPendientesDeCalendarizacion();
         Task<List<Sucursal>> GetSucursales();
         Task<List<Paquete>> GetPaquetesByIds(List<Guid> paqueteIds);
-        Task<List<Paquete>> GetPaquetes(string? codigoSeguimiento, string? destinatario);
+        Task<List<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to);
         Task<List<Paquete>> GetAll();
-    }}
-
+    }
+}

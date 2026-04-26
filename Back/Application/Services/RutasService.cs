@@ -39,15 +39,15 @@ namespace Back.Application.Services
 
             var paquetes = await _enviosRepository.GetPaquetesByIds(request.PaqueteIds);
 
-            Usuario? user = await _userRepository.GetUsuarioById(request.TransportistaId);
+            Usuario? user = await _userRepository.GetUsuarioById(request.RepartidorId);
 
-            if (user is null || user is not Transportista transportista)
-                throw new InvalidOperationException("Transportista no encontrado.");
+            if (user is null || user is not Repartidor repartidor)
+                throw new InvalidOperationException("Repartidor no encontrado.");
 
-            if (!transportista.PuedeSerAsignado)
-                throw new InvalidOperationException("El transportista está suspendido o inhabilitado y no puede recibir rutas.");
+            if (!repartidor.PuedeSerAsignado)
+                throw new InvalidOperationException("El repartidor está suspendido o inhabilitado y no puede recibir rutas.");
 
-            var ruta = new Ruta(transportista, vehiculo);
+            var ruta = new Ruta(repartidor, vehiculo);
 
             ruta.AgregarPaquetes(paquetes);
 

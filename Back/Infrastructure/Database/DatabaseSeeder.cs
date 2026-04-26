@@ -57,6 +57,12 @@ namespace Back.Infrastructure.Database
         {
             DatabaseSeederConfiguration config = _configuration.GetSection("DatabaseSeederConfiguration").Get<DatabaseSeederConfiguration>() ?? new DatabaseSeederConfiguration();
 
+            // Guard de idempotencia: si ya hay datos, no duplicar.
+            if (await _context.Usuarios.AnyAsync())
+            {
+                return;
+            }
+
             // Generar usuarios específicos (establecidos)
             var usuariosEspecificos = UsuarioGenerator.GenerarUsuariosEspecificos();
             _context.Usuarios.AddRange(usuariosEspecificos);
@@ -64,9 +70,9 @@ namespace Back.Infrastructure.Database
             // Generar usuarios aleatorios adicionales
             List<Operador> operadores = UsuarioGenerator.GenerarOperadores(config.CantidadOperadores);
             List<Supervisor> supervisores = UsuarioGenerator.GenerarSupervisores(config.CantidadSupervisores);
-            List<Transportista> transportistas = UsuarioGenerator.GenerarTransportistas(config.CantidadTransportistas);
+            List<Repartidor> repartidores = UsuarioGenerator.GenerarRepartidores(config.CantidadRepartidores);
 
-            _context.Usuarios.AddRange([.. operadores, .. supervisores, .. transportistas]);
+            _context.Usuarios.AddRange([.. operadores, .. supervisores, .. repartidores]);
 
             _context.Sucursales.AddRange(new List<Sucursal>
             {
@@ -88,7 +94,7 @@ namespace Back.Infrastructure.Database
 
             var paquetes = PaquetesGenerator.GenerarPaquetes(config.CantidadPaquetes);
 
-            var rutas = RutasGenerator.GenerarRutas(paquetes, transportistas, vehiculos);
+            var rutas = RutasGenerator.GenerarRutas(paquetes, repartidores, vehiculos);
 
             RutaRandomizerManager.Randomizar(rutas);
 
@@ -96,14 +102,16 @@ namespace Back.Infrastructure.Database
             var paquetesEspecificos = PaquetesGenerator.GenerarPaquetesEspecificos();
             _context.Paquetes.AddRange(paquetesEspecificos);
 
-            // Asignar ruta específica al transportista luis.lopez con vehículo específico
-            var transportistaLuis = usuariosEspecificos.FirstOrDefault(u => u.Email == "luis.lopez@logitrack.com") as Transportista;
+            // Asignar ruta específica al repartidor luis.lopez con vehículo específico
+            var repartidorLuis = usuariosEspecificos.FirstOrDefault(u => u.Email == "luis.lopez@logitrack.com") as Repartidor;
             var vehiculoEspecifico = vehiculosEspecificos.FirstOrDefault(v => v.Patente == "ABC123"); // Usar el primer vehículo específico
 
-            if (transportistaLuis != null && vehiculoEspecifico != null)
+            if (repartidorLuis != null && vehiculoEspecifico != null)
             {
-                var rutaEspecifica = new Ruta(transportistaLuis, vehiculoEspecifico);
-                rutaEspecifica.AgregarPaquetes(paquetesEspecificos.Where(p => p.EstaEnSucursal).ToList());
+                var rutaEspecifica = new Ruta(repartidorLuis, vehiculoEspecifico);
+                var paquetesPendientes = paquetesEspecificos.Where(p => p.EstaPendienteDeCalendarizacion).ToList();
+                paquetesPendientes.ForEach(p => p.MarcarListoParaSalir());
+                rutaEspecifica.AgregarPaquetes(paquetesPendientes);
                 rutas.Add(rutaEspecifica);
             }
 
@@ -204,7 +212,8 @@ namespace Back.Infrastructure.Database
             return new Cliente(
                 nombres[_random.Next(nombres.Count)],
                 apellidos[_random.Next(apellidos.Count)],
-                new Direccion(calles[_random.Next(calles.Count)] + " " + _random.Next(100, 999), municipios[_random.Next(municipios.Count)], _random.Next(100, 9999).ToString(), null)
+                new Direccion(calles[_random.Next(calles.Count)] + " " + _random.Next(100, 999), municipios[_random.Next(municipios.Count)], _random.Next(100, 9999).ToString(), null),
+                $"11{_random.Next(1000, 9999)}{_random.Next(1000, 9999)}"
             );
         }
 
@@ -301,11 +310,11 @@ namespace Back.Infrastructure.Database
 
             var paquetesData = new List<(string codigo, string estado, string descripcion)>
             {
-                ("LOG-2024-001", "EnSucursal", "En espera de ser enviado"),
+                ("LOG-2024-001", "PendienteDeCalendarizacion", "En espera de ser enviado"),
                 ("LOG-2024-002", "EnTransito", "En ruta de entrega"),
                 ("LOG-2024-003", "Entregado", "Ya fue entregado"),
                 ("LOG-2024-004", "Cancelado", "Cancelado por cliente"),
-                ("LOG-2024-005", "EnSucursal", "Pequeño documento"),
+                ("LOG-2024-005", "PendienteDeCalendarizacion", "Pequeño documento"),
                 ("LOG-2024-006", "EnTransito", "Carga grande"),
                 ("LOG-2024-007", "Entregado", "Histórico")
             };
@@ -329,14 +338,16 @@ namespace Back.Infrastructure.Database
                 // Establecer el estado del paquete
                 switch (estado)
                 {
-                    case "EnSucursal":
+                    case "PendienteDeCalendarizacion":
                         // Estado por defecto
                         break;
                     case "EnTransito":
-                        paquete.EnTransito();
+                        paquete.MarcarListoParaSalir();
+                        paquete.IniciarTransito();
                         break;
                     case "Entregado":
-                        paquete.EnTransito();
+                        paquete.MarcarListoParaSalir();
+                        paquete.IniciarTransito();
                         paquete.Entregar();
                         break;
                     case "Cancelado":
@@ -357,31 +368,32 @@ namespace Back.Infrastructure.Database
     public static class RutasGenerator
     {
 
-        public static List<Ruta> GenerarRutas(List<Paquete> paquetes, List<Transportista> transportistas, List<Vehiculo> vehiculos)
+        public static List<Ruta> GenerarRutas(List<Paquete> paquetes, List<Repartidor> repartidores, List<Vehiculo> vehiculos)
         {
             var rutas = new List<Ruta>();
 
-            var paquetesDisponibles = paquetes.Where(p => p.EstaEnSucursal).ToList();
+            var paquetesDisponibles = paquetes.Where(p => p.EstaPendienteDeCalendarizacion).ToList();
 
-            var transportistasActivos = transportistas.Where(t => t.PuedeSerAsignado).ToList();
+            var repartidoresActivos = repartidores.Where(r => r.PuedeSerAsignado).ToList();
             var vehiculosDisponibles = vehiculos.Where(v => v.Estado == VehiculoEstado.Disponible).ToList();
 
-            if (!paquetesDisponibles.Any() || !transportistasActivos.Any() || !vehiculosDisponibles.Any())
+            if (!paquetesDisponibles.Any() || !repartidoresActivos.Any() || !vehiculosDisponibles.Any())
                 return rutas;
 
-            int cantidadRutas = Math.Min(transportistasActivos.Count, vehiculosDisponibles.Count);
+            int cantidadRutas = Math.Min(repartidoresActivos.Count, vehiculosDisponibles.Count);
 
             int paquetesPorRuta = (int)Math.Ceiling((double)paquetesDisponibles.Count / cantidadRutas);
 
             for (int i = 0; i < cantidadRutas; i++)
             {
-                var transportista = transportistasActivos[i];
+                var repartidor = repartidoresActivos[i];
                 var vehiculo = vehiculosDisponibles[i];
                 var paquetesAsignados = paquetesDisponibles.Skip(i * paquetesPorRuta).Take(paquetesPorRuta).ToList();
 
                 if (paquetesAsignados.Any())
                 {
-                    var ruta = new Ruta(transportista, vehiculo);
+                    paquetesAsignados.ForEach(p => p.MarcarListoParaSalir());
+                    var ruta = new Ruta(repartidor, vehiculo);
                     ruta.AgregarPaquetes(paquetesAsignados);
 
                     rutas.Add(ruta);
@@ -455,7 +467,7 @@ namespace Back.Infrastructure.Database
 
     public class DatabaseSeederConfiguration
     {
-        public int CantidadTransportistas { get; set; } = 50;
+        public int CantidadRepartidores { get; set; } = 50;
         public int CantidadOperadores { get; set; } = 20;
         public int CantidadSupervisores { get; set; } = 20;
         public int CantidadVehiculos { get; set; } = 20;
@@ -562,24 +574,24 @@ namespace Back.Infrastructure.Database
             return new Operador(nombre, apellido, email, password, dni);
         }
 
-        public static Transportista GenerateTransportista(string nombre, string apellido, string email, string password, string dni, string licencia)
+        public static Repartidor GenerateRepartidor(string nombre, string apellido, string email, string password, string dni, string licencia)
         {
-            return new Transportista(nombre, apellido, email, password, dni, licencia);
+            return new Repartidor(nombre, apellido, email, password, dni, licencia);
         }
 
-        public static List<Transportista> GenerarTransportistas(int count)
+        public static List<Repartidor> GenerarRepartidores(int count)
         {
-            var result = new List<Transportista>();
+            var result = new List<Repartidor>();
 
             for (int i = 0; i < count; i++)
             {
                 var nombre = nombres[random.Next(nombres.Count)];
                 var apellido = apellidos[random.Next(apellidos.Count)];
 
-                result.Add(new Transportista(
+                result.Add(new Repartidor(
                     nombre,
                     apellido,
-                    $"transportista{i + 1}@logitrack.com",
+                    $"repartidor{i + 1}@logitrack.com",
                     PasswordHasher.HashPassword($"kjkszpj1234"),
                     $"{random.Next(10000000, 99999999)}",
                     $"LIC-{random.Next(1000, 9999)}"
@@ -639,31 +651,37 @@ namespace Back.Infrastructure.Database
 
             var usuariosData = new List<(string nombre, string apellido, string rol)>
             {
+                ("admin", "logitrack", "Administrador"),
                 ("juan", "perez", "Operador"),
                 ("maria", "gomez", "Operador"),
                 ("carlos", "rodriguez", "Supervisor"),
                 ("ana", "martinez", "Supervisor"),
-                ("luis", "lopez", "Transportista"),
-                ("sofia", "fernandez", "Transportista")
+                ("luis", "lopez", "Repartidor"),
+                ("sofia", "fernandez", "Repartidor")
             };
 
             foreach (var (nombre, apellido, rol) in usuariosData)
             {
-                string email = $"{nombre}.{apellido}@logitrack.com";
+                string email = rol == "Administrador"
+                    ? "admin@logitrack.com"
+                    : $"{nombre}.{apellido}@logitrack.com";
                 string password = "kjkszpj1234";
 
                 Usuario usuario;
                 string dni = random.Next(10000000, 99999999).ToString();
                 switch (rol)
                 {
+                    case "Administrador":
+                        usuario = new Administrador(nombre, apellido, email, PasswordHasher.HashPassword(password), dni);
+                        break;
                     case "Operador":
                         usuario = new Operador(nombre, apellido, email, PasswordHasher.HashPassword(password), dni);
                         break;
                     case "Supervisor":
                         usuario = new Supervisor(nombre, apellido, email, PasswordHasher.HashPassword(password), dni);
                         break;
-                    case "Transportista":
-                        usuario = new Transportista(nombre, apellido, email, PasswordHasher.HashPassword(password), dni);
+                    case "Repartidor":
+                        usuario = new Repartidor(nombre, apellido, email, PasswordHasher.HashPassword(password), dni);
                         break;
                     default:
                         continue;

@@ -1,3 +1,4 @@
+using Back.Application.Common;
 using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
@@ -39,6 +40,7 @@ namespace Back.Controllers
         /// <returns>Lista de rutas</returns>
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
         [HttpGet()]
         public async Task<ActionResult<List<Ruta>>> Index()
         {
@@ -48,17 +50,18 @@ namespace Back.Controllers
         }
 
         /// <summary>
-        /// Obtiene historial de rutas de un transportista específico.
+        /// Obtiene historial de rutas de un repartidor específico.
         /// </summary>
-        /// <param name="transportistaId">ID del transportista</param>
-        /// <returns>Listado de rutas del transportista</returns>
+        /// <param name="repartidorId">ID del repartidor</param>
+        /// <returns>Listado de rutas del repartidor</returns>
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpGet("transportista/{transportistaId:guid}")]
-        public async Task<ActionResult<List<Ruta>>> GetRutasByTransportista(Guid transportistaId)
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador + "," + Roles.Repartidor)]
+        [HttpGet("repartidor/{repartidorId:guid}")]
+        public async Task<ActionResult<List<Ruta>>> GetRutasByRepartidor(Guid repartidorId)
         {
-            var rutas = await _rutasRepository.GetHistorialRutas(transportistaId);
+            var rutas = await _rutasRepository.GetHistorialRutas(repartidorId);
 
             // Mapear a un objeto sin referencias circulares
             var rutasResponse = rutas.Select(r => new
@@ -68,12 +71,12 @@ namespace Back.Controllers
                 iniciadoEn = r.IniciadoEn,
                 finalizadoEn = r.FinalizadoEn,
                 razonCancelacion = r.RazonCancelacion,
-                transportista = new
+                repartidor = new
                 {
-                    id = r.Transportista.Id,
-                    nombre = r.Transportista.Nombre,
-                    apellido = r.Transportista.Apellido,
-                    email = r.Transportista.Email
+                    id = r.Repartidor.Id,
+                    nombre = r.Repartidor.Nombre,
+                    apellido = r.Repartidor.Apellido,
+                    email = r.Repartidor.Email
                 },
                 vehiculo = new
                 {
@@ -120,10 +123,10 @@ namespace Back.Controllers
         }
 
         /// <summary>
-        /// Obtiene el historial de rutas del transportista logueado.
+        /// Obtiene el historial de rutas del repartidor logueado.
         /// </summary>
         /// <returns>Historial de rutas</returns>
-        /// 
+        ///
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [HttpGet("historial")]
@@ -137,7 +140,7 @@ namespace Back.Controllers
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
             if (userId == null) return Unauthorized();
-            
+
             var rutas = await _rutasRepository.GetHistorialRutas(Guid.Parse(userId));
 
             return Ok(rutas);
@@ -151,6 +154,7 @@ namespace Back.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Roles = Roles.Repartidor)]
         [HttpPost("comenzar-ruta/{rutaId:guid}")]
         public async Task<ActionResult> ComenzarRuta(Guid rutaId)
         {
@@ -176,6 +180,7 @@ namespace Back.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Roles = Roles.Repartidor + "," + Roles.Supervisor)]
         [HttpPost("finalizar-ruta/{rutaId:guid}")]
         public async Task<ActionResult> FinalizarRuta(Guid rutaId)
         {
@@ -205,6 +210,7 @@ namespace Back.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
         [HttpPost("cancelar-ruta/{rutaId:guid}")]
         public async Task<ActionResult> CancelarRuta(Guid rutaId, [FromBody] CancelarRutaRequest request)
         {
@@ -226,18 +232,19 @@ namespace Back.Controllers
 
 
         /// <summary>
-        /// Reasigna una ruta a otro transportista.
+        /// Reasigna una ruta a otro repartidor.
         /// </summary>
         /// <param name="rutaId">ID de la ruta</param>
-        /// <param name="transportistaId">ID del transportista</param>
+        /// <param name="repartidorId">ID del repartidor</param>
         /// <returns>Resultado de la operación</returns>
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost("reasignar-ruta/ruta/{rutaId:guid}/transportista/{transportistaId:guid}")]
-        public async Task<ActionResult> ReasignarRuta(Guid rutaId, Guid transportistaId)
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [HttpPost("reasignar-ruta/ruta/{rutaId:guid}/repartidor/{repartidorId:guid}")]
+        public async Task<ActionResult> ReasignarRuta(Guid rutaId, Guid repartidorId)
         {
-            await _enviosService.ReasignarRuta(rutaId, transportistaId);
+            await _enviosService.ReasignarRuta(rutaId, repartidorId);
 
             await _context.SaveChangesAsync();
 
@@ -245,13 +252,14 @@ namespace Back.Controllers
         }
 
         /// <summary>
-        /// Crea una nueva ruta con un vehículo, transportista y paquetes.
+        /// Crea una nueva ruta con un vehículo, repartidor y paquetes.
         /// </summary>
         /// <param name="request">Datos para crear la ruta</param>
         /// <returns>Resultado de la operación</returns>
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
         [HttpPost("crear-ruta")]
         public async Task<ActionResult> CrearRuta([FromBody] CrearRutaRequest request)
         {
@@ -268,7 +276,7 @@ namespace Back.Controllers
     public class CrearRutaRequest
     {
         public Guid VehiculoId { get; set; }
-        public Guid TransportistaId { get; set; }
+        public Guid RepartidorId { get; set; }
         public List<Guid> PaqueteIds { get; set; }
     }
 
