@@ -43,7 +43,7 @@ type RouteFormState = {
   origin: string
   destination: string
   vehicleId: string
-  transportistId: string
+  repartidorId: string
   shipmentIds: string[]
 }
 
@@ -51,7 +51,7 @@ const initialForm: RouteFormState = {
   origin: '',
   destination: '',
   vehicleId: '',
-  transportistId: '',
+  repartidorId: '',
   shipmentIds: [],
 }
 
@@ -59,7 +59,7 @@ function RoutesList({ userRole }: RoutesListProps) {
   const isSupervisor = userRole === 'supervisor'
   const [routes, setRoutes] = useState<Route[]>([])
   const [filteredRoutes, setFilteredRoutes] = useState<Route[]>([])
-   const [transportistas, setTransportistas] = useState<User[]>([])
+   const [repartidores, setRepartidores] = useState<User[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [assignableShipments, setAssignableShipments] = useState<Shipment[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,7 +67,7 @@ function RoutesList({ userRole }: RoutesListProps) {
   const [selectedStatus, setSelectedStatus] = useState<Route['status'] | 'Todas'>('Todas')
   const [openCreateDialog, setOpenCreateDialog] = useState(false)
   const [assignDialogRoute, setAssignDialogRoute] = useState<Route | null>(null)
-  const [selectedTransportistId, setSelectedTransportistId] = useState<string>('')
+  const [selectedRepartidorId, setSelectedRepartidorId] = useState<string>('')
   const [form, setForm] = useState<RouteFormState>(initialForm)
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -89,18 +89,18 @@ function RoutesList({ userRole }: RoutesListProps) {
     setFormError('')
   }
 
-  const activeTransportistas = useMemo(
-    () => transportistas.filter((transportista) => (transportista.estado ?? 'Activo') === 'Activo'),
-    [transportistas],
+  const activeRepartidores = useMemo(
+    () => repartidores.filter((r) => (r.estado ?? 'Activo') === 'Activo'),
+    [repartidores],
   )
-  
+
   useEffect(() => {
     loadRoutes()
   }, [])
 
-    const transportistaMap = useMemo(
-    () => new Map(transportistas.map((transportista) => [transportista.id, transportista])),
-    [transportistas],
+    const repartidorMap = useMemo(
+    () => new Map(repartidores.map((r) => [r.id, r])),
+    [repartidores],
   )
 
 
@@ -113,12 +113,12 @@ function RoutesList({ userRole }: RoutesListProps) {
       setFilteredRoutes(selectedStatus === 'Todas' ? data : data.filter((route) => route.status === selectedStatus))
 
       if (isSupervisor) {
-        const [transportistasData, vehiclesData, shipmentsData] = await Promise.all([
-          authService.getTransportistas(),
+        const [repartidoresData, vehiclesData, shipmentsData] = await Promise.all([
+          authService.getRepartidores(),
           vehicleService.getAssignableVehicles(),
           shipmentService.getAssignableShipments(),
         ])
-        setTransportistas(transportistasData)
+        setRepartidores(repartidoresData)
         setVehicles(vehiclesData)
         setAssignableShipments(shipmentsData)
       }
@@ -155,8 +155,8 @@ const handleOpenCreateDialog = () => {
   }
 
   const handleCreateRoute = async () => {
-    if (!form.origin.trim() || !form.destination.trim() || !form.vehicleId || !form.transportistId || form.shipmentIds.length === 0) {
-      setFormError('Completá origen, destino, vehículo, transportista y al menos un envío.')
+    if (!form.origin.trim() || !form.destination.trim() || !form.vehicleId || !form.repartidorId || form.shipmentIds.length === 0) {
+      setFormError('Completá origen, destino, vehículo, repartidor y al menos un envío.')
       return
     }
 
@@ -168,7 +168,7 @@ const handleOpenCreateDialog = () => {
         origin: form.origin.trim(),
         destination: form.destination.trim(),
         vehicleId: form.vehicleId,
-        transportistId: form.transportistId,
+        repartidorId: form.repartidorId,
         shipmentIds: form.shipmentIds,
         status: 'Creada',
       })
@@ -185,34 +185,34 @@ const handleOpenCreateDialog = () => {
 
   const handleOpenAssignDialog = (route: Route) => {
     setAssignDialogRoute(route)
-    setSelectedTransportistId(route.transportistId)
+    setSelectedRepartidorId(route.repartidorId)
     setFormError('')
   }
 
   const handleCloseAssignDialog = () => {
     if (!submitting) {
       setAssignDialogRoute(null)
-      setSelectedTransportistId('')
+      setSelectedRepartidorId('')
       setFormError('')
     }
   }
 
   const handleAssignTransportist = async () => {
-    if (!assignDialogRoute || !selectedTransportistId) return
+    if (!assignDialogRoute || !selectedRepartidorId) return
 
     setSubmitting(true)
     setFormError('')
     try {
-      await routeService.assignTransportist(assignDialogRoute.id, selectedTransportistId)
+      await routeService.assignTransportist(assignDialogRoute.id, selectedRepartidorId)
       const updatedRoutes = await routeService.getAllRoutes()
       setRoutes(updatedRoutes)
       applyStatusFilter(updatedRoutes, selectedStatus)
       setAssignDialogRoute(null)
-      setSelectedTransportistId('')
-      showToast('Transportista reasignado correctamente', 'info')
+      setSelectedRepartidorId('')
+      showToast('Repartidor reasignado correctamente', 'info')
     } catch {
-      setFormError('No se pudo asignar el transportista.')
-      showToast('No se pudo asignar el transportista.', 'error')
+      setFormError('No se pudo asignar el repartidor.')
+      showToast('No se pudo asignar el repartidor.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -232,9 +232,9 @@ const handleOpenCreateDialog = () => {
     }
   }
 
-  const getTransportistaName = (transportistId: string) => {
-    const transportista = transportistaMap.get(transportistId)
-    return transportista ? `${transportista.name} ${transportista.lastname}` : `Transportista ${transportistId}`
+  const getRepartidorName = (repartidorId: string) => {
+    const repartidor = repartidorMap.get(repartidorId)
+    return repartidor ? `${repartidor.name} ${repartidor.lastname}` : `Repartidor ${repartidorId}`
   }
 
   if (loading) {
@@ -287,7 +287,7 @@ const handleOpenCreateDialog = () => {
               <TableHead sx={{ bgcolor: '#f5f5f5' }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 'bold' }}>ID Viaje</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Transportista</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Repartidor</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Vehículo</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Origen</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Destino</TableCell>
@@ -303,7 +303,7 @@ const handleOpenCreateDialog = () => {
                 {filteredRoutes.map((route) => (
                   <TableRow key={route.id} sx={{ '&:hover': { bgcolor: '#f9f9f9' } }}>
                     <TableCell sx={{ fontWeight: 500 }}>{route.routeId}</TableCell>
-                    <TableCell>{getTransportistaName(route.transportistId)}</TableCell>
+                    <TableCell>{getRepartidorName(route.repartidorId)}</TableCell>
                     <TableCell>Vehículo {route.vehicleId}</TableCell>
                     <TableCell>{route.origin}</TableCell>
                     <TableCell>{route.destination}</TableCell>
@@ -377,21 +377,21 @@ const handleOpenCreateDialog = () => {
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>Transportista</InputLabel>
+              <InputLabel>Repartidor</InputLabel>
               <Select
-                value={form.transportistId}
-                label="Transportista"
-                onChange={(e) => setForm((current) => ({ ...current, transportistId: e.target.value }))}
+                value={form.repartidorId}
+                label="Repartidor"
+                onChange={(e) => setForm((current) => ({ ...current, repartidorId: e.target.value }))}
               >
-                {activeTransportistas.map((transportista) => (
-                  <MenuItem key={transportista.id} value={transportista.id}>
-                    {transportista.name} {transportista.lastname} · DNI {transportista.dni}
+                {activeRepartidores.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>
+                    {r.name} {r.lastname} · DNI {r.dni}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            {activeTransportistas.length === 0 && (
-              <Alert severity="warning">No hay transportistas activos disponibles para asignar.</Alert>
+            {activeRepartidores.length === 0 && (
+              <Alert severity="warning">No hay repartidores activos disponibles para asignar.</Alert>
             )}
             <FormControl fullWidth>
               <InputLabel>Envíos disponibles</InputLabel>
@@ -429,30 +429,30 @@ const handleOpenCreateDialog = () => {
       </Dialog>
 
       <Dialog open={Boolean(assignDialogRoute)} onClose={handleCloseAssignDialog} maxWidth="xs" fullWidth>
-        <DialogTitle>Reasignar transportista</DialogTitle>
+        <DialogTitle>Reasignar repartidor</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
             <Typography variant="body2" color="text.secondary">
-              Seleccioná el nuevo transportista responsable de la ruta {assignDialogRoute?.routeId}.
+              Seleccioná el nuevo repartidor responsable de la ruta {assignDialogRoute?.routeId}.
             </Typography>
             <FormControl fullWidth>
-              <InputLabel>Transportista</InputLabel>
+              <InputLabel>Repartidor</InputLabel>
               <Select
-                value={selectedTransportistId}
-                label="Transportista"
-                onChange={(e) => setSelectedTransportistId(e.target.value)}
+                value={selectedRepartidorId}
+                label="Repartidor"
+                onChange={(e) => setSelectedRepartidorId(e.target.value)}
                 disabled={submitting}
               >
-                {activeTransportistas.map((transportista) => (
-                  <MenuItem key={transportista.id} value={transportista.id}>
-                    {transportista.name} {transportista.lastname}
+                {activeRepartidores.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>
+                    {r.name} {r.lastname}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            {activeTransportistas.length === 0 && (
-              <Alert severity="warning">No hay transportistas activos disponibles para reasignar.</Alert>
+            {activeRepartidores.length === 0 && (
+              <Alert severity="warning">No hay repartidores activos disponibles para reasignar.</Alert>
             )}
           </Stack>
         </DialogContent>
@@ -461,7 +461,7 @@ const handleOpenCreateDialog = () => {
           <Button
             onClick={handleAssignTransportist}
             variant="contained"
-            disabled={submitting || selectedTransportistId === assignDialogRoute?.transportistId}
+            disabled={submitting || selectedRepartidorId === assignDialogRoute?.repartidorId}
           >
             {submitting ? <CircularProgress size={20} /> : 'Confirmar'}
           </Button>

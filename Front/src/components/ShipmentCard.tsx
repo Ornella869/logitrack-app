@@ -11,8 +11,8 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'En sucursal':
       case 'Pendiente':
+      case 'Listo para salir':
         return 'default'
       case 'En tránsito':
         return 'info'
@@ -26,10 +26,11 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
   }
 
   const getStatusLabel = (status: string) => {
-    // Mapear posibles variaciones de estado a display consistente
     switch (status) {
-      case 'EnSucursal':
-        return 'En sucursal'
+      case 'PendienteDeCalendarizacion':
+        return 'Pendiente'
+      case 'ListoParaSalir':
+        return 'Listo para salir'
       case 'EnTransito':
         return 'En tránsito'
       case 'Entregado':

@@ -131,21 +131,21 @@ function App() {
           path="/login"
           element={
             user
-              ? <Navigate to={user.role === 'transportista' ? '/transportista' : '/app'} />
+              ? <Navigate to={user.role === 'repartidor' ? '/transportista' : '/app'} />
               : <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} />
           }
         />
         <Route
           path="/register"
           element={
-            user ? <Navigate to={user.role === 'transportista' ? '/transportista' : '/app'} /> : <RegisterPage />
+            user ? <Navigate to={user.role === 'repartidor' ? '/transportista' : '/app'} /> : <RegisterPage />
           }
         />
 
         <Route
           path="/transportista"
           element={
-            user?.role === 'transportista' ? (
+            user?.role === 'repartidor' ? (
               <Layout user={user} onLogout={handleLogout} />
             ) : user ? (
               <AccessDenied user={user} />
@@ -161,7 +161,7 @@ function App() {
         <Route
           element={
             user ? (
-              user.role === 'transportista' ? (
+              user.role === 'repartidor' ? (
                 <AccessDenied user={user} />
               ) : (
                 <Layout user={user} onLogout={handleLogout} />
@@ -176,7 +176,7 @@ function App() {
           <Route path="/vehiculo/:id" element={<VehicleDetail />} />
         </Route>
 
-        <Route path="*" element={<Navigate to={user ? (user.role === 'transportista' ? '/transportista' : '/app') : '/login'} />} />
+        <Route path="*" element={<Navigate to={user ? (user.role === 'repartidor' ? '/transportista' : '/app') : '/login'} />} />
       </Routes>
     </BrowserRouter>
   )

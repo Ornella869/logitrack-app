@@ -4,7 +4,7 @@ import api from './api'
 // Tipos para requests al backend
 interface CrearRutaRequest {
   VehiculoId: string
-  TransportistaId: string
+  RepartidorId: string
   PaqueteIds: string[]
 }
 
@@ -35,7 +35,7 @@ const mapToRoute = (ruta: any): Route => {
   const iniciadoEn = getValue<string>(ruta, 'iniciadoEn', 'IniciadoEn')
   const finalizadoEn = getValue<string>(ruta, 'finalizadoEn', 'FinalizadoEn')
   const vehiculo = getValue<any>(ruta, 'vehiculo', 'Vehiculo') ?? {}
-  const transportista = getValue<any>(ruta, 'transportista', 'Transportista') ?? {}
+  const repartidor = getValue<any>(ruta, 'repartidor', 'Repartidor', 'transportista', 'Transportista') ?? {}
   const paquetes = getValue<any[]>(ruta, 'paquetes', 'Paquetes') ?? []
 
   return {
@@ -43,7 +43,7 @@ const mapToRoute = (ruta: any): Route => {
     routeId: getValue<string>(ruta, 'routeId', 'RouteId') || (id ? `R-${id.split('-')[0].substring(0, 4)}` : 'R-0000'),
     shipmentIds: paquetes.map((p: any) => String(getValue<string>(p, 'id', 'Id') ?? '')).filter(Boolean),
     vehicleId: String(getValue<string>(vehiculo, 'id', 'Id') ?? getValue<string>(ruta, 'vehiculoId', 'VehiculoId') ?? ''),
-    transportistId: String(getValue<string>(transportista, 'id', 'Id') ?? getValue<string>(ruta, 'transportistaId', 'TransportistaId') ?? ''),
+    repartidorId: String(getValue<string>(repartidor, 'id', 'Id') ?? getValue<string>(ruta, 'repartidorId', 'RepartidorId') ?? ''),
     status: mapStatus(estado),
     createdDate: iniciadoEn ? new Date(iniciadoEn).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     startDate: iniciadoEn ? new Date(iniciadoEn).toISOString() : undefined,
@@ -65,13 +65,13 @@ export const routeService = {
     }
   },
 
-  // Obtener rutas por transportista
-  getRoutesByTransportista: async (transportistaId: string): Promise<Route[]> => {
+  // Obtener rutas por repartidor
+  getRoutesByRepartidor: async (repartidorId: string): Promise<Route[]> => {
     try {
-      const response = await api.get(`/rutas/transportista/${transportistaId}`)
+      const response = await api.get(`/rutas/repartidor/${repartidorId}`)
       return response.data.map(mapToRoute)
     } catch (error) {
-      console.error('Get routes by transportista error:', error)
+      console.error('Get routes by repartidor error:', error)
       return []
     }
   },
@@ -92,13 +92,12 @@ export const routeService = {
     try {
       const request: CrearRutaRequest = {
         VehiculoId: route.vehicleId,
-        TransportistaId: route.transportistId,
+        RepartidorId: route.repartidorId,
         PaqueteIds: route.shipmentIds
       }
 
       await api.post('/rutas/crear-ruta', request)
 
-      // Devolver un objeto simulado ya que el backend no devuelve la ruta creada
       return {
         ...route,
         id: Date.now().toString(),
@@ -145,9 +144,9 @@ export const routeService = {
   },
 
   // Reasignar ruta
-  reassignRoute: async (routeId: string, transportistId: string): Promise<boolean> => {
+  reassignRoute: async (routeId: string, repartidorId: string): Promise<boolean> => {
     try {
-      await api.post(`/rutas/reasignar-ruta/ruta/${routeId}/transportista/${transportistId}`)
+      await api.post(`/rutas/reasignar-ruta/ruta/${routeId}/repartidor/${repartidorId}`)
       return true
     } catch (error) {
       console.error('Reassign route error:', error)
@@ -177,18 +176,28 @@ export const routeService = {
     }
   },
 
-  // Asignar transportista a ruta
-  assignTransportist: async (routeId: string, transportistId: string): Promise<Route | undefined> => {
+  // Reasignar repartidor a ruta
+  assignTransportist: async (routeId: string, repartidorId: string): Promise<Route | undefined> => {
     try {
-      // Usar el método reassignRoute que ya existe
-      const success = await routeService.reassignRoute(routeId, transportistId)
+      const success = await routeService.reassignRoute(routeId, repartidorId)
       if (success) {
         return await routeService.getRouteById(routeId)
       }
       return undefined
     } catch (error) {
-      console.error('Assign transportist error:', error)
+      console.error('Assign repartidor error:', error)
       return undefined
     }
-  }
+  },
+
+  // Marcar paquete como entregado desde una ruta (Repartidor)
+  entregarPaquete: async (rutaId: string, paqueteId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post(`/envios/entregar-paquete/ruta/${rutaId}/paquete/${paqueteId}`)
+      return { success: true }
+    } catch (error: any) {
+      const errorMessage = error.response?.data || 'Error al entregar el paquete'
+      return { success: false, error: errorMessage }
+    }
+  },
 }

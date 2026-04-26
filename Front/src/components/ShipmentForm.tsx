@@ -12,8 +12,10 @@ import {
   Typography,
   Select,
   MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material'
-import type { Shipment, Branch } from '../types'
+import type { Shipment, Branch, TipoEnvio, TipoPaquete } from '../types'
 import { shipmentService } from '../services/shipmentService'
 import { branchService } from '../services/branchService'
 
@@ -35,15 +37,19 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
     senderAddress: '',
     senderCity: '',
     senderPostal: '',
+    senderPhone: '',
     receiverName: '',
     receiverAddress: '',
     receiverCity: '',
     receiverPostal: '',
+    receiverPhone: '',
     origin: '',
     destination: '',
     weight: '',
     description: '',
     estimatedDelivery: '',
+    tipoEnvio: 'Comun' as TipoEnvio,
+    tipoPaquete: 'Comun' as TipoPaquete,
   })
 
   // Cargar sucursales y generar tracking ID cuando se abre el modal
@@ -146,19 +152,23 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
           address: formData.senderAddress,
           city: formData.senderCity,
           postalCode: formData.senderPostal,
+          phone: formData.senderPhone || undefined,
         },
         receiver: {
           name: formData.receiverName,
           address: formData.receiverAddress,
           city: formData.receiverCity,
           postalCode: formData.receiverPostal,
+          phone: formData.receiverPhone || undefined,
         },
         origin: formData.origin,
         destination: formData.destination,
         weight: Number(formData.weight),
         description: formData.description,
         estimatedDelivery: formData.estimatedDelivery,
-        status: 'En tránsito',
+        status: 'Pendiente',
+        tipoEnvio: formData.tipoEnvio,
+        tipoPaquete: formData.tipoPaquete,
         createdDate: new Date().toISOString().split('T')[0],
       })
 
@@ -169,15 +179,19 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
         senderAddress: '',
         senderCity: '',
         senderPostal: '',
+        senderPhone: '',
         receiverName: '',
         receiverAddress: '',
         receiverCity: '',
         receiverPostal: '',
+        receiverPhone: '',
         origin: '',
         destination: '',
         weight: '',
         description: '',
         estimatedDelivery: '',
+        tipoEnvio: 'Comun',
+        tipoPaquete: 'Comun',
       })
       onClose()
     } catch (error) {
@@ -268,6 +282,16 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
                   size="small"
                 />
               </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Teléfono (opcional)"
+                  name="senderPhone"
+                  value={formData.senderPhone}
+                  onChange={handleChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
             </Grid>
           </Box>
 
@@ -321,8 +345,48 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
                   size="small"
                 />
               </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Teléfono (opcional)"
+                  name="receiverPhone"
+                  value={formData.receiverPhone}
+                  onChange={handleChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
             </Grid>
           </Box>
+
+          <Grid container spacing={1}>
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Tipo de envío</InputLabel>
+                <Select
+                  value={formData.tipoEnvio}
+                  label="Tipo de envío"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, tipoEnvio: e.target.value as TipoEnvio }))}
+                >
+                  <MenuItem value="Comun">Común</MenuItem>
+                  <MenuItem value="Prioritario">Prioritario</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Tipo de paquete</InputLabel>
+                <Select
+                  value={formData.tipoPaquete}
+                  label="Tipo de paquete"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, tipoPaquete: e.target.value as TipoPaquete }))}
+                >
+                  <MenuItem value="Comun">Común</MenuItem>
+                  <MenuItem value="Fragil">Frágil</MenuItem>
+                  <MenuItem value="Pesado">Pesado</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
 
           <Grid container spacing={1}>
             <Grid item xs={6}>

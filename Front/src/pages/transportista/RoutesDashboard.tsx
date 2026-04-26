@@ -64,21 +64,21 @@ export default function RoutesDashboard({ user }: RoutesDashboardProps) {
       try {
         // Intentar con el ID actual del usuario logueado
         const [initialRoutes, shipments] = await Promise.all([
-          routeService.getRoutesByTransportista(user.id),
+          routeService.getRoutesByRepartidor(user.id),
           shipmentService.getAllShipments(),
         ])
 
         let routes = initialRoutes
 
-        // Fallback para sesiones viejas: resolver transportista por email y reintentar
+        // Fallback para sesiones viejas: resolver repartidor por email y reintentar
         if (routes.length === 0 && user.email) {
-          const transportistas = await authService.getTransportistas()
-          const transportistaActual = transportistas.find(
+          const repartidores = await authService.getRepartidores()
+          const repartidorActual = repartidores.find(
             (t) => t.email.toLowerCase() === user.email.toLowerCase(),
           )
 
-          if (transportistaActual && transportistaActual.id !== user.id) {
-            routes = await routeService.getRoutesByTransportista(transportistaActual.id)
+          if (repartidorActual && repartidorActual.id !== user.id) {
+            routes = await routeService.getRoutesByRepartidor(repartidorActual.id)
           }
         }
 

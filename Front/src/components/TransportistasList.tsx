@@ -87,7 +87,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
 
   const routesByTransportista = useMemo(() => {
     return routes.reduce<Record<string, Route[]>>((acc, route) => {
-      acc[route.transportistId] = [...(acc[route.transportistId] ?? []), route]
+      acc[route.repartidorId] = [...(acc[route.repartidorId] ?? []), route]
       return acc
     }, {})
   }, [routes])
@@ -97,7 +97,7 @@ function TransportistasList({ userRole }: TransportistsListProps) {
     setError('')
     try {
         const [transportistasData, routesData] = await Promise.all([
-        authService.getTransportistas(),
+        authService.getRepartidores(),
         routeService.getAllRoutes(),
       ])
       setTransportistas(transportistasData)

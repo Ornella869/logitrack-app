@@ -13,7 +13,7 @@ function AccessDenied({ user }: AccessDeniedProps) {
 
   const homeUrl = !user
     ? '/login'
-    : user.role === 'transportista'
+    : user.role === 'repartidor'
     ? '/transportista'
     : '/app'
 
@@ -68,7 +68,7 @@ function AccessDenied({ user }: AccessDeniedProps) {
                     administrador: 'Administrador',
                     supervisor: 'Supervisor',
                     operador: 'Operador',
-                    transportista: 'Transportista',
+                    repartidor: 'Repartidor',
                   }[user.role] ?? user.role}
                 </strong>
                 .

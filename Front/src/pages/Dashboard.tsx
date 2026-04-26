@@ -548,8 +548,8 @@ function Dashboard() {
       {/* ADMINISTRADOR */}
       {user.role === 'administrador' && <UsersManagement />}
 
-      {/* TRANSPORTISTA */}
-      {user.role === 'transportista' && (
+      {/* REPARTIDOR */}
+      {user.role === 'repartidor' && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6">Mis Rutas</Typography>

@@ -52,8 +52,8 @@ function ShipmentDetail() {
     setActionToast((prev) => ({ ...prev, open: false, message: '' }))
   }
 
-  // Solo supervisor y transportista pueden cambiar estados
-  const canUserChangeStatus = user?.role === 'supervisor' || user?.role === 'transportista'
+  // Solo supervisor y repartidor pueden cambiar estados
+  const canUserChangeStatus = user?.role === 'supervisor' || user?.role === 'repartidor'
 
   useEffect(() => {
     loadShipment()
@@ -94,7 +94,7 @@ function ShipmentDetail() {
 
   const getAllowedTransitions = (currentStatus: Shipment['status']): Shipment['status'][] => {
     switch (currentStatus) {
-      case 'En sucursal':
+      case 'Listo para salir':
         return ['En tránsito', 'Cancelado']
       case 'En tránsito':
         return ['Entregado', 'Cancelado']
@@ -199,7 +199,7 @@ function ShipmentDetail() {
         if (updated) {
           setShipment(updated)
         }
-        showActionToast('Envío reenviado correctamente. Estado: En sucursal', 'success')
+        showActionToast('Envío reenviado correctamente. Estado: Pendiente de calendarización', 'success')
       } else {
         showActionToast(result.error || 'Error al reenviar el envío', 'error')
       }
@@ -213,7 +213,7 @@ function ShipmentDetail() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pendiente':
-      case 'En sucursal':
+      case 'Listo para salir':
         return 'default'
       case 'En tránsito':
         return 'info'
@@ -292,7 +292,7 @@ function ShipmentDetail() {
                 color="primary"
                 onClick={handleResendShipment}
                 disabled={updatingStatus || !canUserChangeStatus}
-                title={!canUserChangeStatus ? 'Solo supervisores y transportistas pueden reenviar' : ''}
+                title={!canUserChangeStatus ? 'Solo supervisores y repartidores pueden reenviar' : ''}
               >
                 {updatingStatus ? <CircularProgress size={20} /> : 'Reenviar Envío'}
               </Button>
@@ -339,7 +339,7 @@ function ShipmentDetail() {
                   onClick={() => setOpenStatusDialog(true)}
                   fullWidth
                   disabled={!canUserChangeStatus}
-                  title={!canUserChangeStatus ? 'Solo supervisores y transportistas pueden cambiar el estado' : ''}
+                  title={!canUserChangeStatus ? 'Solo supervisores y repartidores pueden cambiar el estado' : ''}
                 >
                   {!canUserChangeStatus ? '🔒 Sin permiso para cambiar estado' : 'Cambiar estado'}
                 </Button>

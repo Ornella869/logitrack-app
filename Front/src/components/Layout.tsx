@@ -50,14 +50,14 @@ function Layout({ user, onLogout }: LayoutProps) {
     administrador: 'secondary',
     supervisor: 'error',
     operador: 'primary',
-    transportista: 'success',
+    repartidor: 'success',
   }
 
   const roleLabel: Record<string, string> = {
     administrador: 'Administrador',
     supervisor: 'Supervisor',
     operador: 'Operador',
-    transportista: 'Transportista',
+    repartidor: 'Repartidor',
   }
 
   return (
@@ -73,7 +73,7 @@ function Layout({ user, onLogout }: LayoutProps) {
               alignItems: 'center',
               gap: 1,
             }}
-            onClick={() => navigate(user.role === 'transportista' ? '/transportista' : '/app')}
+            onClick={() => navigate(user.role === 'repartidor' ? '/transportista' : '/app')}
           >
             <Box
               sx={{

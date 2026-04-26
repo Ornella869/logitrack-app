@@ -4,16 +4,28 @@ import type {
   RegisterData,
   UserRole,
   UserEstado,
-  TransportistaEstado,
-  CreateTransportistaData,
+  RepartidorEstado,
+  CreateRepartidorData,
   CreateUsuarioData,
 } from '../types'
 import api from './api'
 
-interface CreateTransportistaResult {
+interface CreateRepartidorResult {
   user: User
   temporaryPassword: string
 }
+
+const mapRepartidor = (t: any): User => ({
+  id: t.id,
+  name: t.nombre,
+  lastname: t.apellido,
+  email: t.email,
+  dni: t.dni,
+  role: 'repartidor',
+  activo: t.activo ?? true,
+  licencia: t.licencia,
+  estado: (t.estado as RepartidorEstado) || 'Activo',
+})
 
 export const authService = {
   // Login
@@ -31,7 +43,7 @@ export const authService = {
       const userId = userInfo?.id ?? userInfo?.Id ?? ''
       const userRoleRaw = userInfo?.role ?? userInfo?.Role ?? ''
       const userRole = String(userRoleRaw).toLowerCase() as UserRole
-      
+
       localStorage.setItem('authToken', token)
 
       const user: User = {
@@ -40,7 +52,8 @@ export const authService = {
         lastname: userInfo?.apellido ?? userInfo?.Apellido ?? '',
         email: userInfo?.email ?? userInfo?.Email ?? '',
         dni: '',
-        role: userRole
+        role: userRole,
+        activo: userInfo?.activo ?? true,
       }
 
       console.log('✓ Login exitoso:', user)
@@ -80,8 +93,8 @@ export const authService = {
         operador: 'Operador',
       } as const
 
-      if (data.role === 'transportista') {
-        throw new Error('El rol transportista no está habilitado para registro público')
+      if (data.role === 'repartidor') {
+        throw new Error('El rol repartidor no está habilitado para registro público')
       }
 
       await api.post('/auth/registrarse', {
@@ -133,30 +146,26 @@ export const authService = {
     return password.length >= 8
   },
 
-  // Obtener transportistas
-  getTransportistas: async (): Promise<User[]> => {
+  // Obtener repartidores
+  getRepartidores: async (): Promise<User[]> => {
     try {
-      const response = await api.get('/auth/transportistas')
-      return response.data.map((transportista: any) => ({
-        id: transportista.id,
-        name: transportista.nombre,
-        lastname: transportista.apellido,
-        email: transportista.email,
-        dni: transportista.dni,
-        role: 'transportista' as const,
-        licencia: transportista.licencia,
-        estado: (transportista.estado as TransportistaEstado) || 'Activo',
-      }))
+      const response = await api.get('/auth/repartidores')
+      return response.data.map(mapRepartidor)
     } catch (error) {
-      console.error('Get transportistas error:', error)
+      console.error('Get repartidores error:', error)
       return []
     }
   },
 
-  // Registrar transportista (solo gestión interna)
-  createTransportista: async (data: CreateTransportistaData): Promise<CreateTransportistaResult | null> => {
+  // Alias para compatibilidad
+  getTransportistas: async (): Promise<User[]> => {
+    return authService.getRepartidores()
+  },
+
+  // Registrar repartidor (solo gestión interna)
+  createRepartidor: async (data: CreateRepartidorData): Promise<CreateRepartidorResult | null> => {
     try {
-      const response = await api.post('/auth/transportistas', {
+      const response = await api.post('/auth/repartidores', {
         Nombre: data.name,
         Apellido: data.lastname,
         Email: data.email,
@@ -165,66 +174,52 @@ export const authService = {
       })
       const t = response.data
       return {
-        user: {
-        id: t.id,
-        name: t.nombre,
-        lastname: t.apellido,
-        email: t.email,
-        dni: t.dni,
-        role: 'transportista',
-        licencia: t.licencia,
-        estado: (t.estado as TransportistaEstado) || 'Activo',
-        },
+        user: mapRepartidor(t),
         temporaryPassword: t.temporaryPassword || '',
       }
     } catch (error) {
-      console.error('Create transportista error:', error)
+      console.error('Create repartidor error:', error)
       return null
     }
   },
 
-  updateTransportistaLicencia: async (transportistaId: string, licencia: string): Promise<User | null> => {
+  // Alias para compatibilidad
+  createTransportista: async (data: CreateRepartidorData): Promise<CreateRepartidorResult | null> => {
+    return authService.createRepartidor(data)
+  },
+
+  updateRepartidorLicencia: async (repartidorId: string, licencia: string): Promise<User | null> => {
     try {
-      const response = await api.put(`/auth/transportistas/${transportistaId}/licencia`, {
+      const response = await api.put(`/auth/repartidores/${repartidorId}/licencia`, {
         Licencia: licencia,
       })
-      const t = response.data
-      return {
-        id: t.id,
-        name: t.nombre,
-        lastname: t.apellido,
-        email: t.email,
-        dni: t.dni,
-        role: 'transportista',
-        licencia: t.licencia,
-        estado: (t.estado as TransportistaEstado) || 'Activo',
-      }
+      return mapRepartidor(response.data)
     } catch (error) {
-      console.error('Update transportista licencia error:', error)
+      console.error('Update repartidor licencia error:', error)
       return null
     }
   },
 
-  updateTransportistaEstado: async (transportistaId: string, estado: TransportistaEstado): Promise<User | null> => {
+  // Alias para compatibilidad
+  updateTransportistaLicencia: async (id: string, licencia: string): Promise<User | null> => {
+    return authService.updateRepartidorLicencia(id, licencia)
+  },
+
+  updateRepartidorEstado: async (repartidorId: string, estado: RepartidorEstado): Promise<User | null> => {
     try {
-      const response = await api.put(`/auth/transportistas/${transportistaId}/estado`, {
+      const response = await api.put(`/auth/repartidores/${repartidorId}/estado`, {
         Estado: estado,
       })
-      const t = response.data
-      return {
-        id: t.id,
-        name: t.nombre,
-        lastname: t.apellido,
-        email: t.email,
-        dni: t.dni,
-        role: 'transportista',
-        licencia: t.licencia,
-        estado: (t.estado as TransportistaEstado) || 'Activo',
-      }
+      return mapRepartidor(response.data)
     } catch (error) {
-      console.error('Update transportista estado error:', error)
+      console.error('Update repartidor estado error:', error)
       return null
     }
+  },
+
+  // Alias para compatibilidad
+  updateTransportistaEstado: async (id: string, estado: RepartidorEstado): Promise<User | null> => {
+    return authService.updateRepartidorEstado(id, estado)
   },
 
   // Obtener todos los usuarios
@@ -238,8 +233,9 @@ export const authService = {
         email: usuario.email,
         dni: usuario.dni,
         role: String(usuario.role ?? usuario.Role ?? '').toLowerCase() as UserRole,
+        activo: usuario.activo ?? true,
         licencia: usuario.licencia,
-        estado: usuario.estado as (UserEstado | TransportistaEstado) | undefined,
+        estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
       }))
     } catch (error) {
       console.error('Get usuarios error:', error)
@@ -251,7 +247,7 @@ export const authService = {
     const roleMap: Record<UserRole, string> = {
       supervisor: 'Supervisor',
       operador: 'Operador',
-      transportista: 'Transportista',
+      repartidor: 'Repartidor',
       administrador: 'Administrador',
     }
     const response = await api.post('/auth/usuarios', {
@@ -271,6 +267,7 @@ export const authService = {
         email: u.email,
         dni: u.dni,
         role: String(u.role ?? u.Role ?? '').toLowerCase() as UserRole,
+        activo: u.activo ?? true,
         licencia: u.licencia,
         estado: (u.estado as UserEstado) || 'Activo',
       },
@@ -280,7 +277,8 @@ export const authService = {
 
   updateUsuarioEstado: async (userId: string, estado: UserEstado): Promise<boolean> => {
     try {
-      await api.put(`/auth/usuarios/${userId}/estado`, { Estado: estado })
+      const endpoint = estado === 'Activo' ? 'activar' : 'desactivar'
+      await api.post(`/auth/usuarios/${userId}/${endpoint}`)
       return true
     } catch (error) {
       console.error('Update usuario estado error:', error)
@@ -307,6 +305,7 @@ export const authService = {
         email: u.email,
         dni: u.dni,
         role: String(u.role ?? u.Role ?? '').toLowerCase() as UserRole,
+        activo: u.activo ?? true,
         estado: u.estado,
       }
     } catch (error: any) {
@@ -316,6 +315,47 @@ export const authService = {
         error?.message ||
         'Error al actualizar el usuario'
       throw new Error(msg)
+    }
+  },
+
+  cambiarPassword: async (
+    passwordActual: string,
+    passwordNueva: string,
+    passwordConfirmacion: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post('/auth/cambiar-password', {
+        PasswordActual: passwordActual,
+        PasswordNueva: passwordNueva,
+        PasswordConfirmacion: passwordConfirmacion,
+      })
+      return { success: true }
+    } catch (error: any) {
+      const msg =
+        (typeof error?.response?.data === 'string' && error.response.data) ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Error al cambiar la contraseña'
+      return { success: false, error: msg }
+    }
+  },
+
+  resetPassword: async (
+    userId: string,
+    passwordTemporal?: string,
+  ): Promise<{ success: boolean; temporaryPassword?: string; error?: string }> => {
+    try {
+      const response = await api.post(`/auth/usuarios/${userId}/reset-password`, {
+        PasswordTemporal: passwordTemporal ?? null,
+      })
+      return { success: true, temporaryPassword: response.data?.temporaryPassword }
+    } catch (error: any) {
+      const msg =
+        (typeof error?.response?.data === 'string' && error.response.data) ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Error al resetear la contraseña'
+      return { success: false, error: msg }
     }
   },
 }

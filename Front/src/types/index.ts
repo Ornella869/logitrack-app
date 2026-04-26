@@ -1,6 +1,7 @@
-export type UserRole = 'supervisor' | 'operador' | 'transportista' | 'administrador'
+export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador'
 export type UserEstado = 'Activo' | 'Inactivo'
-export type TransportistaEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
+export type RepartidorEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
+export type TransportistaEstado = RepartidorEstado // alias para compatibilidad
 
 export interface User {
   id: string
@@ -9,17 +10,19 @@ export interface User {
   email: string
   dni: string
   role: UserRole
+  activo?: boolean
   licencia?: string
-  estado?: UserEstado | TransportistaEstado
+  estado?: UserEstado | RepartidorEstado
 }
 
-export interface CreateTransportistaData {
+export interface CreateRepartidorData {
   name: string
   lastname: string
   email: string
   dni: string
   licencia: string
 }
+export type CreateTransportistaData = CreateRepartidorData // alias para compatibilidad
 
 export interface CreateUsuarioData {
   name: string
@@ -46,7 +49,7 @@ export interface Route {
   routeId: string // Número identificador de la ruta
   shipmentIds: string[] // IDs de los envíos asignados
   vehicleId: string
-  transportistId: string // ID del transportista asignado
+  repartidorId: string // ID del repartidor asignado
   status: 'Creada' | 'En Curso' | 'Finalizada' | 'Cancelada'
   createdDate: string
   startDate?: string
@@ -68,6 +71,9 @@ export interface Branch {
   status: BranchStatus
 }
 
+export type TipoEnvio = 'Comun' | 'Prioritario'
+export type TipoPaquete = 'Comun' | 'Fragil' | 'Pesado'
+
 export interface Shipment {
   id: string
   trackingId: string
@@ -76,14 +82,19 @@ export interface Shipment {
     address: string
     city: string
     postalCode: string
+    phone?: string
   }
   receiver: {
     name: string
     address: string
     city: string
     postalCode: string
+    phone?: string
   }
-  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente' | 'En sucursal' | 'Rechazado'
+  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente' | 'Listo para salir'
+  tipoEnvio?: TipoEnvio
+  tipoPaquete?: TipoPaquete
+  isEditable?: boolean
   origin: string
   destination: string
   createdDate: string

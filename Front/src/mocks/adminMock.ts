@@ -9,8 +9,8 @@ const mockStore: User[] = [
   { id: 'mock-2', name: 'Ana', lastname: 'Martínez', email: 'ana.martinez@logitrack.com', dni: '31234567', role: 'supervisor', estado: 'Activo' },
   { id: 'mock-3', name: 'Juan', lastname: 'Pérez', email: 'juan.perez@logitrack.com', dni: '32345678', role: 'operador', estado: 'Activo' },
   { id: 'mock-4', name: 'María', lastname: 'Gómez', email: 'maria.gomez@logitrack.com', dni: '33456789', role: 'operador', estado: 'Activo' },
-  { id: 'mock-5', name: 'Luis', lastname: 'López', email: 'luis.lopez@logitrack.com', dni: '34567890', role: 'transportista', estado: 'Activo', licencia: 'LIC-2024-001' },
-  { id: 'mock-6', name: 'Sofía', lastname: 'Fernández', email: 'sofia.fernandez@logitrack.com', dni: '35678901', role: 'transportista', estado: 'Activo', licencia: 'LIC-2024-002' },
+  { id: 'mock-5', name: 'Luis', lastname: 'López', email: 'luis.lopez@logitrack.com', dni: '34567890', role: 'repartidor', estado: 'Activo', licencia: 'LIC-2024-001' },
+  { id: 'mock-6', name: 'Sofía', lastname: 'Fernández', email: 'sofia.fernandez@logitrack.com', dni: '35678901', role: 'repartidor', estado: 'Activo', licencia: 'LIC-2024-002' },
   { id: 'mock-7', name: 'Lucía', lastname: 'Torres', email: 'lucia.torres@logitrack.com', dni: '36789012', role: 'operador', estado: 'Inactivo' },
   { id: 'mock-8', name: 'Martín', lastname: 'García', email: 'martin.garcia@logitrack.com', dni: '37890123', role: 'supervisor', estado: 'Activo' },
 ]

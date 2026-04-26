@@ -116,7 +116,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
 
       if (user) {
         onLogin(user)
-        navigate(user.role === 'transportista' ? '/transportista' : '/app')
+        navigate(user.role === 'repartidor' ? '/transportista' : '/app')
       } else {
         setError('Email o contraseña incorrectos')
       }

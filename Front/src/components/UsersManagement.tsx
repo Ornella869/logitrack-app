@@ -43,14 +43,14 @@ const ROLE_LABELS: Record<UserRole, string> = {
   administrador: 'Administrador',
   supervisor: 'Supervisor',
   operador: 'Operador',
-  transportista: 'Transportista',
+  repartidor: 'Repartidor',
 }
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
   administrador: { bg: '#EDE7F6', color: '#4527A0' },
   supervisor: { bg: '#FFEBEE', color: '#B71C1C' },
   operador: { bg: '#E3F2FD', color: '#0D47A1' },
-  transportista: { bg: '#E8F5E9', color: '#1B5E20' },
+  repartidor: { bg: '#E8F5E9', color: '#1B5E20' },
 }
 
 type RoleFilter = UserRole | 'all'
@@ -174,7 +174,7 @@ export default function UsersManagement() {
         email: formData.email.trim(),
         dni: formData.dni.trim(),
         role: formData.role,
-        ...(formData.role === 'transportista' && formData.licencia ? { licencia: formData.licencia.trim() } : {}),
+        ...(formData.role === 'repartidor' && formData.licencia ? { licencia: formData.licencia.trim() } : {}),
       })
       await loadUsers()
       setOpenCreate(false)
@@ -267,8 +267,8 @@ export default function UsersManagement() {
       setFormError('El DNI debe tener exactamente 8 dígitos.')
       return false
     }
-    if (checkRole && formData.role === 'transportista' && !formData.licencia.trim()) {
-      setFormError('La licencia es obligatoria para transportistas.')
+    if (checkRole && formData.role === 'repartidor' && !formData.licencia.trim()) {
+      setFormError('La licencia es obligatoria para repartidores.')
       return false
     }
     setFormError('')
@@ -351,7 +351,7 @@ export default function UsersManagement() {
               Operadores
             </ToggleButton>
             <ToggleButton
-              value="transportista"
+              value="repartidor"
               sx={{
                 color: '#8c1a4a',
                 bgcolor: '#fff2f7',
@@ -544,10 +544,10 @@ export default function UsersManagement() {
                 <MenuItem value="administrador">Administrador</MenuItem>
                 <MenuItem value="supervisor">Supervisor</MenuItem>
                 <MenuItem value="operador">Operador</MenuItem>
-                <MenuItem value="transportista">Transportista</MenuItem>
+                <MenuItem value="repartidor">Repartidor</MenuItem>
               </Select>
             </FormControl>
-            {formData.role === 'transportista' && (
+            {formData.role === 'repartidor' && (
               <TextField
                 label="Licencia *"
                 value={formData.licencia}

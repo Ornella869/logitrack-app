@@ -245,7 +245,7 @@ function RegisterPage() {
                 </Select>
               </FormControl>
               <Typography variant="caption" color="text.secondary">
-                El rol transportista solo puede ser creado por un supervisor desde el panel interno.
+                El rol repartidor solo puede ser creado por un supervisor desde el panel interno.
               </Typography>
 
               <TextField
