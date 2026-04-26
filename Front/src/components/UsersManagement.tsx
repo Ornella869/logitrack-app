@@ -6,11 +6,13 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -35,6 +37,10 @@ import EditIcon from '@mui/icons-material/Edit'
 import BlockIcon from '@mui/icons-material/Block'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import SearchIcon from '@mui/icons-material/Search'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import KeyIcon from '@mui/icons-material/Key'
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import type { User, UserRole, UserEstado } from '../types'
 import { authService } from '../services/authService'
 import ConfirmDialog from './ConfirmDialog'
@@ -55,6 +61,12 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
 
 type RoleFilter = UserRole | 'all'
 type EstadoFilter = 'all' | 'active' | 'inactive'
+
+interface PendingReset {
+  email: string
+  requestedAt: string
+  status: 'pending'
+}
 
 function normalize(str: string): string {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -97,7 +109,15 @@ function RoleChip({ role }: { role: UserRole }) {
   )
 }
 
-const emptyForm = { name: '', lastname: '', email: '', dni: '', role: 'operador' as UserRole, licencia: '' }
+const emptyForm = {
+  name: '',
+  lastname: '',
+  email: '',
+  dni: '',
+  role: 'operador' as UserRole,
+  licencia: '',
+  passwordTemporal: '',
+}
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([])
@@ -116,16 +136,41 @@ export default function UsersManagement() {
 
   const [formData, setFormData] = useState(emptyForm)
   const [formError, setFormError] = useState('')
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
 
-  const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
-    open: false, message: '', severity: 'success',
-  })
+  // Reset password desde el diálogo de edición
+  const [showResetSection, setShowResetSection] = useState(false)
+  const [resetPassValue, setResetPassValue] = useState('')
+  const [showResetPassValue, setShowResetPassValue] = useState(false)
+  const [resetPassSubmitting, setResetPassSubmitting] = useState(false)
+
+  // Solicitudes pendientes de restablecimiento de contraseña
+  const [pendingResets, setPendingResets] = useState<PendingReset[]>([])
+  const [openResolvePending, setOpenResolvePending] = useState(false)
+  const [pendingResetEmail, setPendingResetEmail] = useState('')
+  const [resolvePassValue, setResolvePassValue] = useState('')
+  const [showResolvePassValue, setShowResolvePassValue] = useState(false)
+  const [resolveSubmitting, setResolveSubmitting] = useState(false)
+
+  const [toast, setToast] = useState<{
+    open: boolean
+    message: string
+    severity: 'success' | 'error' | 'info' | 'warning'
+  }>({ open: false, message: '', severity: 'success' })
 
   const showToast = (message: string, severity: typeof toast.severity = 'success') => {
     setToast({ open: true, message, severity })
   }
 
-  useEffect(() => { loadUsers() }, [])
+  const loadPendingResets = () => {
+    const stored: PendingReset[] = JSON.parse(localStorage.getItem('passwordResetRequests') || '[]')
+    setPendingResets(stored)
+  }
+
+  useEffect(() => {
+    loadUsers()
+    loadPendingResets()
+  }, [])
 
   const loadUsers = async () => {
     setLoading(true)
@@ -161,11 +206,12 @@ export default function UsersManagement() {
   const handleOpenCreate = () => {
     setFormData(emptyForm)
     setFormError('')
+    setShowCreatePassword(false)
     setOpenCreate(true)
   }
 
   const handleCreate = async () => {
-    if (!validateForm()) return
+    if (!validateForm(true)) return
     setSubmitting(true)
     try {
       const result = await authService.createUsuario({
@@ -174,12 +220,13 @@ export default function UsersManagement() {
         email: formData.email.trim(),
         dni: formData.dni.trim(),
         role: formData.role,
+        passwordTemporal: formData.passwordTemporal.trim(),
         ...(formData.role === 'repartidor' && formData.licencia ? { licencia: formData.licencia.trim() } : {}),
       })
       await loadUsers()
       setOpenCreate(false)
       showToast(
-        `Usuario creado. Email: ${result.user.email}${result.temporaryPassword ? ` · Contraseña temporal: ${result.temporaryPassword}` : ''}`,
+        `Usuario creado. Email: ${result.user.email} · Contraseña temporal: ${formData.passwordTemporal.trim()}`,
         'success',
       )
     } catch (err: any) {
@@ -193,8 +240,19 @@ export default function UsersManagement() {
 
   const handleOpenEdit = (user: User) => {
     setSelectedUser(user)
-    setFormData({ name: user.name, lastname: user.lastname, email: user.email, dni: user.dni, role: user.role, licencia: user.licencia ?? '' })
+    setFormData({
+      name: user.name,
+      lastname: user.lastname,
+      email: user.email,
+      dni: user.dni,
+      role: user.role,
+      licencia: user.licencia ?? '',
+      passwordTemporal: '',
+    })
     setFormError('')
+    setShowResetSection(false)
+    setResetPassValue('')
+    setShowResetPassValue(false)
     setOpenEdit(true)
   }
 
@@ -218,6 +276,29 @@ export default function UsersManagement() {
       setFormError(err?.message ?? 'Error al actualizar el usuario')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // ── Reset Password (desde edición) ──────────────────────────────────────────
+
+  const handleResetPassword = async () => {
+    if (!selectedUser || !resetPassValue.trim()) {
+      showToast('Ingresá una contraseña temporal.', 'warning')
+      return
+    }
+    setResetPassSubmitting(true)
+    const result = await authService.resetPassword(selectedUser.id, resetPassValue.trim())
+    setResetPassSubmitting(false)
+    if (result.success) {
+      setOpenEdit(false)
+      setShowResetSection(false)
+      setResetPassValue('')
+      showToast(
+        `Contraseña reseteada para ${selectedUser.name} ${selectedUser.lastname}. Contraseña temporal: ${resetPassValue.trim()}`,
+        'success',
+      )
+    } else {
+      showToast(result.error ?? 'Error al resetear la contraseña', 'error')
     }
   }
 
@@ -246,11 +327,48 @@ export default function UsersManagement() {
     }
   }
 
-  // ── Validation ───────────────────────────────────────────────────────────────
+  // ── Resolver solicitud pendiente de reseteo ──────────────────────────────────
+
+  const handleOpenResolvePending = (email: string) => {
+    setPendingResetEmail(email)
+    setResolvePassValue('')
+    setShowResolvePassValue(false)
+    setOpenResolvePending(true)
+  }
+
+  const handleResolvePending = async () => {
+    if (!resolvePassValue.trim()) {
+      showToast('Ingresá una contraseña temporal.', 'warning')
+      return
+    }
+    const foundUser = users.find((u) => u.email.toLowerCase() === pendingResetEmail.toLowerCase())
+    if (!foundUser) {
+      showToast('No se encontró un usuario con ese email en el sistema.', 'error')
+      return
+    }
+    setResolveSubmitting(true)
+    const result = await authService.resetPassword(foundUser.id, resolvePassValue.trim())
+    setResolveSubmitting(false)
+    if (result.success) {
+      const stored: PendingReset[] = JSON.parse(localStorage.getItem('passwordResetRequests') || '[]')
+      const updated = stored.filter((r) => r.email.toLowerCase() !== pendingResetEmail.toLowerCase())
+      localStorage.setItem('passwordResetRequests', JSON.stringify(updated))
+      loadPendingResets()
+      setOpenResolvePending(false)
+      showToast(
+        `Contraseña asignada a ${foundUser.name} ${foundUser.lastname}. Contraseña temporal: ${resolvePassValue.trim()}`,
+        'success',
+      )
+    } else {
+      showToast(result.error ?? 'Error al resetear la contraseña', 'error')
+    }
+  }
+
+  // ── Validación ───────────────────────────────────────────────────────────────
 
   const nameRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
 
-  const validateForm = (checkRole = true): boolean => {
+  const validateForm = (isCreate: boolean): boolean => {
     if (!formData.name.trim() || !formData.lastname.trim() || !formData.email.trim() || !formData.dni.trim()) {
       setFormError('Completá todos los campos obligatorios.')
       return false
@@ -267,9 +385,19 @@ export default function UsersManagement() {
       setFormError('El DNI debe tener exactamente 8 dígitos.')
       return false
     }
-    if (checkRole && formData.role === 'repartidor' && !formData.licencia.trim()) {
-      setFormError('La licencia es obligatoria para repartidores.')
-      return false
+    if (isCreate) {
+      if (!formData.passwordTemporal.trim()) {
+        setFormError('La contraseña temporal es obligatoria.')
+        return false
+      }
+      if (formData.passwordTemporal.trim().length < 6) {
+        setFormError('La contraseña temporal debe tener al menos 6 caracteres.')
+        return false
+      }
+      if (formData.role === 'repartidor' && !formData.licencia.trim()) {
+        setFormError('La licencia es obligatoria para repartidores.')
+        return false
+      }
     }
     setFormError('')
     return true
@@ -299,6 +427,56 @@ export default function UsersManagement() {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
+      {/* Solicitudes pendientes de restablecimiento */}
+      {pendingResets.length > 0 && (
+        <Paper
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3, overflow: 'hidden', borderColor: '#F57C00' }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1.5, bgcolor: '#FFF3E0' }}>
+            <NotificationsActiveIcon sx={{ color: '#F57C00', fontSize: 20 }} />
+            <Typography variant="subtitle2" sx={{ color: '#E65100', fontWeight: 700 }}>
+              Solicitudes de restablecimiento de contraseña ({pendingResets.length})
+            </Typography>
+          </Box>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: '#FFF8F0', fontSize: '0.75rem' } }}>
+                <TableCell>Email</TableCell>
+                <TableCell>Fecha de solicitud</TableCell>
+                <TableCell align="center">Acción</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pendingResets.map((req) => (
+                <TableRow key={req.email} sx={{ '&:last-child td': { border: 0 } }}>
+                  <TableCell>
+                    <Typography variant="body2">{req.email}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                      {new Date(req.requestedAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<KeyIcon sx={{ fontSize: 14 }} />}
+                      onClick={() => handleOpenResolvePending(req.email)}
+                      sx={{ fontSize: '0.72rem', py: 0.3, px: 1 }}
+                    >
+                      Asignar contraseña
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Paper>
+      )}
+
       {/* Search + filters */}
       <Stack spacing={1.5} sx={{ mb: 2.5 }}>
         <TextField
@@ -317,7 +495,6 @@ export default function UsersManagement() {
         />
 
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Role filter */}
           <ToggleButtonGroup
             value={roleFilter}
             exclusive
@@ -328,43 +505,24 @@ export default function UsersManagement() {
             <ToggleButton value="all">Todos</ToggleButton>
             <ToggleButton
               value="supervisor"
-              sx={{
-                color: '#7c4010',
-                bgcolor: '#fff8f1',
-                '&:hover': { bgcolor: '#ffeedd' },
-                '&.Mui-selected': { color: '#BF360C', bgcolor: '#FFE0B2', borderColor: '#FFCC80' },
-                '&.Mui-selected:hover': { bgcolor: '#ffd494' },
-              }}
+              sx={{ color: '#7c4010', bgcolor: '#fff8f1', '&:hover': { bgcolor: '#ffeedd' }, '&.Mui-selected': { color: '#BF360C', bgcolor: '#FFE0B2', borderColor: '#FFCC80' }, '&.Mui-selected:hover': { bgcolor: '#ffd494' } }}
             >
               Supervisores
             </ToggleButton>
             <ToggleButton
               value="operador"
-              sx={{
-                color: '#4a1a7a',
-                bgcolor: '#f8f2ff',
-                '&:hover': { bgcolor: '#efe2ff' },
-                '&.Mui-selected': { color: '#6A1B9A', bgcolor: '#E1BEE7', borderColor: '#CE93D8' },
-                '&.Mui-selected:hover': { bgcolor: '#d4a8e0' },
-              }}
+              sx={{ color: '#4a1a7a', bgcolor: '#f8f2ff', '&:hover': { bgcolor: '#efe2ff' }, '&.Mui-selected': { color: '#6A1B9A', bgcolor: '#E1BEE7', borderColor: '#CE93D8' }, '&.Mui-selected:hover': { bgcolor: '#d4a8e0' } }}
             >
               Operadores
             </ToggleButton>
             <ToggleButton
               value="repartidor"
-              sx={{
-                color: '#8c1a4a',
-                bgcolor: '#fff2f7',
-                '&:hover': { bgcolor: '#ffe0ee' },
-                '&.Mui-selected': { color: '#AD1457', bgcolor: '#F8BBD0', borderColor: '#F48FB1' },
-                '&.Mui-selected:hover': { bgcolor: '#f5a3c0' },
-              }}
+              sx={{ color: '#8c1a4a', bgcolor: '#fff2f7', '&:hover': { bgcolor: '#ffe0ee' }, '&.Mui-selected': { color: '#AD1457', bgcolor: '#F8BBD0', borderColor: '#F48FB1' }, '&.Mui-selected:hover': { bgcolor: '#f5a3c0' } }}
             >
               Repartidores
             </ToggleButton>
           </ToggleButtonGroup>
 
-          {/* Estado filter */}
           <ToggleButtonGroup
             value={estadoFilter}
             exclusive
@@ -429,13 +587,7 @@ export default function UsersManagement() {
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            bgcolor: roleColor.color,
-                          }}
+                          sx={{ width: 32, height: 32, fontSize: '0.75rem', fontWeight: 700, bgcolor: roleColor.color }}
                         >
                           {initials}
                         </Avatar>
@@ -450,16 +602,10 @@ export default function UsersManagement() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-                        {user.dni}
-                      </Typography>
+                      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{user.dni}</Typography>
                     </TableCell>
-                    <TableCell>
-                      <RoleChip role={user.role} />
-                    </TableCell>
-                    <TableCell>
-                      <EstadoChip estado={user.estado} />
-                    </TableCell>
+                    <TableCell><RoleChip role={user.role} /></TableCell>
+                    <TableCell><EstadoChip estado={user.estado} /></TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.5} justifyContent="center">
                         <Tooltip title="Editar datos">
@@ -481,7 +627,11 @@ export default function UsersManagement() {
                               size="small"
                               variant="outlined"
                               color={active ? 'error' : 'success'}
-                              startIcon={active ? <BlockIcon sx={{ fontSize: 14 }} /> : <CheckCircleIcon sx={{ fontSize: 14 }} />}
+                              startIcon={
+                                active
+                                  ? <BlockIcon sx={{ fontSize: 14 }} />
+                                  : <CheckCircleIcon sx={{ fontSize: 14 }} />
+                              }
                               onClick={() => handleOpenToggle(user)}
                               sx={{ fontSize: '0.72rem', py: 0.3, px: 1 }}
                             >
@@ -499,7 +649,7 @@ export default function UsersManagement() {
         </TableContainer>
       )}
 
-      {/* Create dialog */}
+      {/* Diálogo: Crear usuario */}
       <Dialog open={openCreate} onClose={() => !submitting && setOpenCreate(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Nuevo usuario</DialogTitle>
         <DialogContent dividers>
@@ -555,6 +705,27 @@ export default function UsersManagement() {
                 fullWidth
               />
             )}
+            <TextField
+              label="Contraseña Temporal *"
+              type={showCreatePassword ? 'text' : 'password'}
+              value={formData.passwordTemporal}
+              onChange={(e) => setFormData((p) => ({ ...p, passwordTemporal: e.target.value }))}
+              fullWidth
+              helperText="Mínimo 6 caracteres. El usuario deberá cambiarla al ingresar."
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowCreatePassword((p) => !p)}
+                      edge="end"
+                      size="small"
+                    >
+                      {showCreatePassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -565,8 +736,13 @@ export default function UsersManagement() {
         </DialogActions>
       </Dialog>
 
-      {/* Edit dialog */}
-      <Dialog open={openEdit} onClose={() => !submitting && setOpenEdit(false)} maxWidth="sm" fullWidth>
+      {/* Diálogo: Editar usuario */}
+      <Dialog
+        open={openEdit}
+        onClose={() => !submitting && !resetPassSubmitting && setOpenEdit(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Editar usuario</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -605,17 +781,128 @@ export default function UsersManagement() {
                 Rol actual: <strong>{ROLE_LABELS[selectedUser?.role ?? 'operador']}</strong> — el rol no se puede modificar desde este panel.
               </Typography>
             </Box>
+
+            {/* Sección: Reseteo de contraseña de emergencia */}
+            <Box>
+              <Button
+                size="small"
+                variant={showResetSection ? 'contained' : 'outlined'}
+                color="warning"
+                startIcon={<KeyIcon sx={{ fontSize: 14 }} />}
+                onClick={() => {
+                  setShowResetSection((p) => !p)
+                  setResetPassValue('')
+                  setShowResetPassValue(false)
+                }}
+                sx={{ fontSize: '0.78rem' }}
+              >
+                {showResetSection ? 'Cancelar reseteo' : 'Asignar contraseña temporal'}
+              </Button>
+              <Collapse in={showResetSection}>
+                <Box sx={{ mt: 1.5, p: 2, bgcolor: '#FFF8E1', borderRadius: 1, border: '1px solid #FFD54F' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
+                    Ingresá la nueva contraseña temporal. La contraseña actual del usuario será reemplazada.
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <TextField
+                      label="Nueva contraseña temporal"
+                      type={showResetPassValue ? 'text' : 'password'}
+                      value={resetPassValue}
+                      onChange={(e) => setResetPassValue(e.target.value)}
+                      size="small"
+                      fullWidth
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowResetPassValue((p) => !p)}
+                              edge="end"
+                              size="small"
+                            >
+                              {showResetPassValue ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      onClick={handleResetPassword}
+                      disabled={resetPassSubmitting || !resetPassValue.trim()}
+                      sx={{ whiteSpace: 'nowrap', minWidth: 'auto', py: '7px' }}
+                    >
+                      {resetPassSubmitting
+                        ? <CircularProgress size={16} color="inherit" />
+                        : 'Guardar'}
+                    </Button>
+                  </Stack>
+                </Box>
+              </Collapse>
+            </Box>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenEdit(false)} disabled={submitting}>Cancelar</Button>
-          <Button onClick={handleEdit} variant="contained" disabled={submitting}>
+          <Button onClick={() => setOpenEdit(false)} disabled={submitting || resetPassSubmitting}>Cancelar</Button>
+          <Button onClick={handleEdit} variant="contained" disabled={submitting || resetPassSubmitting}>
             {submitting ? 'Guardando…' : 'Guardar cambios'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Confirm toggle dialog */}
+      {/* Diálogo: Resolver solicitud pendiente */}
+      <Dialog
+        open={openResolvePending}
+        onClose={() => !resolveSubmitting && setOpenResolvePending(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <KeyIcon color="warning" />
+          Asignar contraseña temporal
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
+              El usuario <strong>{pendingResetEmail}</strong> solicitó un restablecimiento de contraseña.
+            </Alert>
+            <TextField
+              label="Nueva contraseña temporal"
+              type={showResolvePassValue ? 'text' : 'password'}
+              value={resolvePassValue}
+              onChange={(e) => setResolvePassValue(e.target.value)}
+              fullWidth
+              autoFocus
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowResolvePassValue((p) => !p)}
+                      edge="end"
+                      size="small"
+                    >
+                      {showResolvePassValue ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenResolvePending(false)} disabled={resolveSubmitting}>Cancelar</Button>
+          <Button
+            onClick={handleResolvePending}
+            variant="contained"
+            color="warning"
+            disabled={resolveSubmitting || !resolvePassValue.trim()}
+          >
+            {resolveSubmitting ? 'Guardando…' : 'Asignar contraseña'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmar cambio de estado */}
       <ConfirmDialog
         open={openConfirmToggle}
         title={isActive(selectedUser?.estado) ? 'Desactivar usuario' : 'Activar usuario'}
@@ -633,7 +920,7 @@ export default function UsersManagement() {
       {/* Toast */}
       <Snackbar
         open={toast.open}
-        autoHideDuration={5000}
+        autoHideDuration={6000}
         onClose={() => setToast((p) => ({ ...p, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >

@@ -256,6 +256,7 @@ export const authService = {
       Email: data.email,
       DNI: data.dni,
       Role: roleMap[data.role],
+      PasswordTemporal: data.passwordTemporal,
       ...(data.licencia ? { Licencia: data.licencia } : {}),
     })
     const u = response.data

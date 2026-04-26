@@ -31,6 +31,7 @@ export interface CreateUsuarioData {
   dni: string
   role: UserRole
   licencia?: string
+  passwordTemporal: string
 }
 
 export interface Vehicle {
