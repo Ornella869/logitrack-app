@@ -268,7 +268,7 @@ export const shipmentService = {
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       if (status && status.length > 0) status.forEach(s => params.append('status', s))
-      const response = await api.get(`/envios/todos-los-paquetes${params.toString() ? `?${params}` : ''}`)
+      const response = await api.get(`/envios/paquetes${params.toString() ? `?${params}` : ''}`)
       return response.data.map(mapToShipment)
     } catch (error) {
       console.error('Get all shipments error:', error)

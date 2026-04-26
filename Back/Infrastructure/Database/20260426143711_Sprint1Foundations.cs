@@ -15,16 +15,6 @@ namespace Back.Infrastructure.Database
                 name: "FK_Rutas_Usuarios_RepartidorId",
                 table: "Rutas");
 
-            migrationBuilder.RenameColumn(
-                name: "RepartidorId",
-                table: "Rutas",
-                newName: "RepartidorId");
-
-            migrationBuilder.RenameIndex(
-                name: "IX_Rutas_RepartidorId",
-                table: "Rutas",
-                newName: "IX_Rutas_RepartidorId");
-
             migrationBuilder.AddColumn<bool>(
                 name: "Activo",
                 table: "Usuarios",
@@ -126,16 +116,6 @@ namespace Back.Infrastructure.Database
             migrationBuilder.DropColumn(
                 name: "TipoPaquete",
                 table: "Paquetes");
-
-            migrationBuilder.RenameColumn(
-                name: "RepartidorId",
-                table: "Rutas",
-                newName: "RepartidorId");
-
-            migrationBuilder.RenameIndex(
-                name: "IX_Rutas_RepartidorId",
-                table: "Rutas",
-                newName: "IX_Rutas_RepartidorId");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Rutas_Usuarios_RepartidorId",

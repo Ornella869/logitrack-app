@@ -78,8 +78,8 @@ namespace Back.Controllers
 
         // ============== G1L-39 + G1L-40: Listado, búsqueda y filtros ==============
 
-        /// <summary>Listado de paquetes con búsqueda parcial y filtros por estado y fecha (Operador o Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        /// <summary>Listado de paquetes con búsqueda parcial y filtros por estado y fecha.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("paquetes")]
         public async Task<ActionResult<List<Paquete>>> BuscarYFiltrar(
             [FromQuery] string? search,

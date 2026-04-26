@@ -37,7 +37,7 @@ describe('shipmentService', () => {
       origin: 'Buenos Aires',
       destination: 'Cordoba',
     })
-    expect(mockedApi.get).toHaveBeenCalledWith('/envios/todos-los-paquetes')
+    expect(mockedApi.get).toHaveBeenCalledWith('/envios/paquetes')
   })
 
   it('devuelve lista vacia cuando falla obtener envios', async () => {
