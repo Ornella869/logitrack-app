@@ -46,13 +46,15 @@ function Layout({ user, onLogout }: LayoutProps) {
 
   const initials = `${user.name.charAt(0)}${user.lastname.charAt(0)}`.toUpperCase()
 
-  const roleColor: Record<string, 'error' | 'primary' | 'success' | 'default'> = {
+  const roleColor: Record<string, 'error' | 'primary' | 'success' | 'secondary' | 'default'> = {
+    administrador: 'secondary',
     supervisor: 'error',
     operador: 'primary',
     transportista: 'success',
   }
 
   const roleLabel: Record<string, string> = {
+    administrador: 'Administrador',
     supervisor: 'Supervisor',
     operador: 'Operador',
     transportista: 'Transportista',

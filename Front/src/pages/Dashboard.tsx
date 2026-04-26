@@ -38,6 +38,7 @@ import VehicleForm from '../components/VehicleForm'
 import BranchForm from '../components/BranchForm'
 import RoutesList from '../components/RoutesList'
 import TransportistasList from '../components/TransportistasList'
+import UsersManagement from '../components/UsersManagement'
 import SearchBar from '../components/SearchBar'
 
 // ─── Vehicle status chip (inline) ────────────────────────────────────────────
@@ -192,12 +193,15 @@ function Dashboard() {
         setFilteredShipments(shipments)
         setHasSearched(false)
       } else {
-        const normalizedQuery = query.trim().toLowerCase()
+        const normalize = (s: string) =>
+          s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+        const q = normalize(query.trim())
         const localMatches = shipments.filter((shipment) => {
-          const trackingMatch = shipment.trackingId.toLowerCase().includes(normalizedQuery)
-          const destinatarioFullName = `${shipment.receiver.name}`.toLowerCase()
-          const destinatarioNameOnly = shipment.receiver.name.split(' ')[0]?.toLowerCase() || ''
-          return trackingMatch || destinatarioFullName.includes(normalizedQuery) || destinatarioNameOnly.includes(normalizedQuery)
+          return (
+            normalize(shipment.trackingId).includes(q) ||
+            normalize(shipment.sender.name).includes(q) ||
+            normalize(shipment.receiver.name).includes(q)
+          )
         })
 
         if (localMatches.length > 0) {
@@ -392,23 +396,13 @@ function Dashboard() {
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6">Nuevos Envíos</Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FileDownloadIcon />}
-                    onClick={handleDownloadShipments}
-                    size="small"
-                  >
-                    Descargar CSV
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => setOpenShipmentForm(true)}
-                  >
-                    Registrar envío
-                  </Button>
-                </Box>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setOpenShipmentForm(true)}
+                >
+                  Registrar envío
+                </Button>
               </Box>
               <SearchBar onSearch={handleSearch} loading={searchLoading} />
               {loading ? (
@@ -550,6 +544,9 @@ function Dashboard() {
           {tab === 4 && <RoutesList userRole="operador" />}
         </Box>
       )}
+
+      {/* ADMINISTRADOR */}
+      {user.role === 'administrador' && <UsersManagement />}
 
       {/* TRANSPORTISTA */}
       {user.role === 'transportista' && (

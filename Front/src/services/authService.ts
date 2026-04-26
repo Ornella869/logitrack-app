@@ -3,8 +3,10 @@ import type {
   LoginCredentials,
   RegisterData,
   UserRole,
+  UserEstado,
   TransportistaEstado,
   CreateTransportistaData,
+  CreateUsuarioData,
 } from '../types'
 import api from './api'
 
@@ -235,13 +237,85 @@ export const authService = {
         lastname: usuario.apellido,
         email: usuario.email,
         dni: usuario.dni,
-        role: usuario.role.toLowerCase() as UserRole,
+        role: String(usuario.role ?? usuario.Role ?? '').toLowerCase() as UserRole,
         licencia: usuario.licencia,
-        estado: usuario.estado as TransportistaEstado | undefined,
+        estado: usuario.estado as (UserEstado | TransportistaEstado) | undefined,
       }))
     } catch (error) {
       console.error('Get usuarios error:', error)
       return []
     }
-  }
+  },
+
+  createUsuario: async (data: CreateUsuarioData): Promise<{ user: User; temporaryPassword: string }> => {
+    const roleMap: Record<UserRole, string> = {
+      supervisor: 'Supervisor',
+      operador: 'Operador',
+      transportista: 'Transportista',
+      administrador: 'Administrador',
+    }
+    const response = await api.post('/auth/usuarios', {
+      Nombre: data.name,
+      Apellido: data.lastname,
+      Email: data.email,
+      DNI: data.dni,
+      Role: roleMap[data.role],
+      ...(data.licencia ? { Licencia: data.licencia } : {}),
+    })
+    const u = response.data
+    return {
+      user: {
+        id: u.id,
+        name: u.nombre,
+        lastname: u.apellido,
+        email: u.email,
+        dni: u.dni,
+        role: String(u.role ?? u.Role ?? '').toLowerCase() as UserRole,
+        licencia: u.licencia,
+        estado: (u.estado as UserEstado) || 'Activo',
+      },
+      temporaryPassword: u.temporaryPassword || '',
+    }
+  },
+
+  updateUsuarioEstado: async (userId: string, estado: UserEstado): Promise<boolean> => {
+    try {
+      await api.put(`/auth/usuarios/${userId}/estado`, { Estado: estado })
+      return true
+    } catch (error) {
+      console.error('Update usuario estado error:', error)
+      return false
+    }
+  },
+
+  updateUsuario: async (
+    userId: string,
+    data: Pick<CreateUsuarioData, 'name' | 'lastname' | 'email' | 'dni'>,
+  ): Promise<User | null> => {
+    try {
+      const response = await api.put(`/auth/usuarios/${userId}`, {
+        Nombre: data.name,
+        Apellido: data.lastname,
+        Email: data.email,
+        DNI: data.dni,
+      })
+      const u = response.data
+      return {
+        id: u.id,
+        name: u.nombre,
+        lastname: u.apellido,
+        email: u.email,
+        dni: u.dni,
+        role: String(u.role ?? u.Role ?? '').toLowerCase() as UserRole,
+        estado: u.estado,
+      }
+    } catch (error: any) {
+      const msg =
+        (typeof error?.response?.data === 'string' && error.response.data) ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Error al actualizar el usuario'
+      throw new Error(msg)
+    }
+  },
 }

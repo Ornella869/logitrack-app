@@ -1,4 +1,5 @@
-export type UserRole = 'supervisor' | 'operador' | 'transportista'
+export type UserRole = 'supervisor' | 'operador' | 'transportista' | 'administrador'
+export type UserEstado = 'Activo' | 'Inactivo'
 export type TransportistaEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
 
 export interface User {
@@ -9,7 +10,7 @@ export interface User {
   dni: string
   role: UserRole
   licencia?: string
-  estado?: TransportistaEstado
+  estado?: UserEstado | TransportistaEstado
 }
 
 export interface CreateTransportistaData {
@@ -18,6 +19,15 @@ export interface CreateTransportistaData {
   email: string
   dni: string
   licencia: string
+}
+
+export interface CreateUsuarioData {
+  name: string
+  lastname: string
+  email: string
+  dni: string
+  role: UserRole
+  licencia?: string
 }
 
 export interface Vehicle {

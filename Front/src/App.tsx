@@ -10,6 +10,7 @@ import Layout from './components/Layout'
 import RoutesDashboard from './pages/transportista/RoutesDashboard'
 import RouteDetail from './pages/transportista/RouteDetail'
 import LandingPage from './pages/landing/LandingPage'
+import AccessDenied from './pages/AccessDenied'
 import type { User } from './types'
 
 const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
@@ -147,7 +148,7 @@ function App() {
             user?.role === 'transportista' ? (
               <Layout user={user} onLogout={handleLogout} />
             ) : user ? (
-              <Navigate to="/app" />
+              <AccessDenied user={user} />
             ) : (
               <Navigate to="/login" />
             )
@@ -161,7 +162,7 @@ function App() {
           element={
             user ? (
               user.role === 'transportista' ? (
-                <Navigate to="/transportista" />
+                <AccessDenied user={user} />
               ) : (
                 <Layout user={user} onLogout={handleLogout} />
               )

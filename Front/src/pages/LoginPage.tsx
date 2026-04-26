@@ -18,6 +18,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import ReCAPTCHA from 'react-google-recaptcha'
 import { authService } from '../services/authService'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import type { User, LoginCredentials } from '../types'
 
 interface LoginPageProps {
@@ -50,6 +51,7 @@ const demoUsers = [
 function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
   const location = useLocation()
   const showDemoUsers = import.meta.env.VITE_SHOW_DEMO_USERS === 'true'
+  const showAdminDemo = import.meta.env.VITE_ADMIN_DEMO === 'true' || import.meta.env.VITE_ADMIN_DEMO === '1'
   const navigate = useNavigate()
   const locationState = location.state as LoginLocationState | null
   const [credentials, setCredentials] = useState<Omit<LoginCredentials, 'recaptchaToken'>>({
@@ -131,6 +133,20 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
   const fillDemo = (email: string) => {
     setCredentials({ email, password: DEMO_PASSWORD })
     setError('')
+  }
+
+  const enterAsAdminDemo = () => {
+    const adminDemo: User = {
+      id: 'demo-admin-001',
+      name: 'Admin',
+      lastname: 'Demo',
+      email: 'admin.demo@logitrack.com',
+      dni: '00000000',
+      role: 'administrador',
+      estado: 'Activo',
+    }
+    onLogin(adminDemo)
+    navigate('/app')
   }
 
   const handleRegistrationToastClose = (_event: Event | SyntheticEvent, reason?: string) => {
@@ -275,6 +291,26 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
               </Link>
             </Typography>
           </Box>
+
+          {showAdminDemo && (
+            <Box sx={{ mt: 2 }}>
+              <Divider sx={{ my: 2 }}>
+                <Typography variant="caption" color="text.disabled" fontWeight={600}>
+                  DEV
+                </Typography>
+              </Divider>
+              <Button
+                fullWidth
+                variant="outlined"
+                color="secondary"
+                startIcon={<AdminPanelSettingsIcon />}
+                onClick={enterAsAdminDemo}
+                sx={{ fontWeight: 700, borderStyle: 'dashed' }}
+              >
+                Entrar como Administrador (demo)
+              </Button>
+            </Box>
+          )}
 
           {/* Demo credentials */}
           {showDemoUsers && (
