@@ -72,12 +72,16 @@ function normalize(str: string): string {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
-function isActive(estado?: string): boolean {
-  return !estado || estado === 'Activo'
+// Prioriza `activo` (soft-delete flag del back). Si no viene, usa `estado` como fallback.
+function isActive(user?: { activo?: boolean; estado?: string }): boolean {
+  if (!user) return false
+  if (user.activo === false) return false
+  if (user.activo === true) return true
+  return !user.estado || user.estado === 'Activo'
 }
 
-function EstadoChip({ estado }: { estado?: string }) {
-  if (isActive(estado)) {
+function EstadoChip({ activo, estado }: { activo?: boolean; estado?: string }) {
+  if (isActive({ activo, estado })) {
     return (
       <Chip
         icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
@@ -119,7 +123,11 @@ const emptyForm = {
   passwordTemporal: '',
 }
 
-export default function UsersManagement() {
+interface UsersManagementProps {
+  currentUserId?: string
+}
+
+export default function UsersManagement({ currentUserId }: UsersManagementProps = {}) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -189,8 +197,8 @@ export default function UsersManagement() {
     const q = normalize(search.trim())
     return users.filter((u) => {
       if (roleFilter !== 'all' && u.role !== roleFilter) return false
-      if (estadoFilter === 'active' && !isActive(u.estado)) return false
-      if (estadoFilter === 'inactive' && isActive(u.estado)) return false
+      if (estadoFilter === 'active' && !isActive(u)) return false
+      if (estadoFilter === 'inactive' && isActive(u)) return false
       if (!q) return true
       return (
         normalize(`${u.name} ${u.lastname}`).includes(q) ||
@@ -305,19 +313,31 @@ export default function UsersManagement() {
   // ── Toggle estado ────────────────────────────────────────────────────────────
 
   const handleOpenToggle = (user: User) => {
+    // Guard: no permitir desactivarse a uno mismo
+    if (currentUserId && user.id === currentUserId) {
+      showToast('No podés desactivar tu propia cuenta de administrador.', 'warning')
+      return
+    }
     setSelectedUser(user)
     setOpenConfirmToggle(true)
   }
 
   const handleToggleEstado = async () => {
     if (!selectedUser) return
-    const nuevoEstado: UserEstado = isActive(selectedUser.estado) ? 'Inactivo' : 'Activo'
+    const nuevoEstado: UserEstado = isActive(selectedUser) ? 'Inactivo' : 'Activo'
     setSubmitting(true)
     const ok = await authService.updateUsuarioEstado(selectedUser.id, nuevoEstado)
     setSubmitting(false)
     setOpenConfirmToggle(false)
     if (ok) {
-      setUsers((prev) => prev.map((u) => (u.id === selectedUser.id ? { ...u, estado: nuevoEstado } : u)))
+      // Actualizar tanto el flag `activo` (soft-delete) como `estado` para reflejar al instante
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === selectedUser.id
+            ? { ...u, estado: nuevoEstado, activo: nuevoEstado === 'Activo' }
+            : u,
+        ),
+      )
       showToast(
         `Usuario ${nuevoEstado === 'Inactivo' ? 'desactivado' : 'activado'} correctamente`,
         nuevoEstado === 'Inactivo' ? 'warning' : 'success',
@@ -405,7 +425,7 @@ export default function UsersManagement() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const activeCount = users.filter((u) => isActive(u.estado)).length
+  const activeCount = users.filter((u) => isActive(u)).length
   const inactiveCount = users.length - activeCount
 
   return (
@@ -573,7 +593,7 @@ export default function UsersManagement() {
             <TableBody>
               {filtered.map((user) => {
                 const initials = `${user.name.charAt(0)}${user.lastname.charAt(0)}`.toUpperCase()
-                const active = isActive(user.estado)
+                const active = isActive(user)
                 const roleColor = ROLE_COLORS[user.role] ?? { color: '#555' }
                 return (
                   <TableRow
@@ -605,7 +625,7 @@ export default function UsersManagement() {
                       <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{user.dni}</Typography>
                     </TableCell>
                     <TableCell><RoleChip role={user.role} /></TableCell>
-                    <TableCell><EstadoChip estado={user.estado} /></TableCell>
+                    <TableCell><EstadoChip activo={user.activo} estado={user.estado} /></TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.5} justifyContent="center">
                         <Tooltip title="Editar datos">
@@ -621,24 +641,35 @@ export default function UsersManagement() {
                             </Button>
                           </span>
                         </Tooltip>
-                        <Tooltip title={active ? 'Desactivar usuario' : 'Activar usuario'}>
-                          <span>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color={active ? 'error' : 'success'}
-                              startIcon={
-                                active
-                                  ? <BlockIcon sx={{ fontSize: 14 }} />
-                                  : <CheckCircleIcon sx={{ fontSize: 14 }} />
-                              }
-                              onClick={() => handleOpenToggle(user)}
-                              sx={{ fontSize: '0.72rem', py: 0.3, px: 1 }}
-                            >
-                              {active ? 'Desactivar' : 'Activar'}
-                            </Button>
-                          </span>
-                        </Tooltip>
+                        {(() => {
+                          const isSelf = !!currentUserId && user.id === currentUserId
+                          const tooltip = isSelf
+                            ? 'No podés desactivar tu propia cuenta'
+                            : active
+                              ? 'Desactivar usuario'
+                              : 'Activar usuario'
+                          return (
+                            <Tooltip title={tooltip}>
+                              <span>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color={active ? 'error' : 'success'}
+                                  disabled={isSelf}
+                                  startIcon={
+                                    active
+                                      ? <BlockIcon sx={{ fontSize: 14 }} />
+                                      : <CheckCircleIcon sx={{ fontSize: 14 }} />
+                                  }
+                                  onClick={() => handleOpenToggle(user)}
+                                  sx={{ fontSize: '0.72rem', py: 0.3, px: 1 }}
+                                >
+                                  {active ? 'Desactivar' : 'Activar'}
+                                </Button>
+                              </span>
+                            </Tooltip>
+                          )
+                        })()}
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -905,14 +936,14 @@ export default function UsersManagement() {
       {/* Confirmar cambio de estado */}
       <ConfirmDialog
         open={openConfirmToggle}
-        title={isActive(selectedUser?.estado) ? 'Desactivar usuario' : 'Activar usuario'}
+        title={isActive(selectedUser ?? undefined) ? 'Desactivar usuario' : 'Activar usuario'}
         message={
-          isActive(selectedUser?.estado)
+          isActive(selectedUser ?? undefined)
             ? `¿Estás segura de que querés desactivar a ${selectedUser?.name} ${selectedUser?.lastname}? El historial de envíos y rutas no se verá afectado.`
             : `¿Querés volver a activar a ${selectedUser?.name} ${selectedUser?.lastname}?`
         }
-        confirmLabel={isActive(selectedUser?.estado) ? 'Desactivar' : 'Activar'}
-        confirmColor={isActive(selectedUser?.estado) ? 'error' : 'success'}
+        confirmLabel={isActive(selectedUser ?? undefined) ? 'Desactivar' : 'Activar'}
+        confirmColor={isActive(selectedUser ?? undefined) ? 'error' : 'success'}
         onConfirm={handleToggleEstado}
         onCancel={() => setOpenConfirmToggle(false)}
       />

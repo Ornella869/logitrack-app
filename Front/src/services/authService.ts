@@ -64,25 +64,27 @@ export const authService = {
 
       const status = error?.response?.status
       const responseData = error?.response?.data
-      const unauthorizedByMessage =
-        (typeof responseData === 'string' && /unauthorized|no autorizado/i.test(responseData)) ||
-        /unauthorized|no autorizado/i.test(String(error?.message || ''))
+      const responseMsg =
+        (typeof responseData === 'string' && responseData) ||
+        responseData?.message ||
+        ''
 
+      // 401 puede ser credencial inválida o usuario inactivo. Diferenciar:
       if (status === 401) {
+        if (/inactivo/i.test(responseMsg)) {
+          throw new Error(responseMsg)
+        }
         return null
       }
 
+      const unauthorizedByMessage =
+        /unauthorized|no autorizado/i.test(responseMsg) ||
+        /unauthorized|no autorizado/i.test(String(error?.message || ''))
       if (unauthorizedByMessage) {
         return null
       }
 
-      const errorMessage =
-        (typeof responseData === 'string' && responseData) ||
-        responseData?.message ||
-        error?.message ||
-        'Error al iniciar sesión'
-
-      throw new Error(errorMessage)
+      throw new Error(responseMsg || error?.message || 'Error al iniciar sesión')
     }
   },
 
