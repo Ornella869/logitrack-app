@@ -5,10 +5,9 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import Dashboard from './pages/Dashboard'
 import ShipmentDetail from './pages/ShipmentDetail'
-import VehicleDetail from './pages/VehicleDetail'
+import ShipmentLabel from './pages/ShipmentLabel'
 import Layout from './components/Layout'
-import RoutesDashboard from './pages/repartidor/RoutesDashboard'
-import RouteDetail from './pages/repartidor/RouteDetail'
+import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import LandingPage from './pages/landing/LandingPage'
 import AccessDenied from './pages/AccessDenied'
 import type { User } from './types'
@@ -152,39 +151,45 @@ function App() {
           }
         />
 
+        {/* Rutas autenticadas (cualquier rol) */}
         <Route
-          path="/repartidor"
           element={
-            user && isRepartidorRole(user.role) ? (
-              <Layout user={user} onLogout={handleLogout} />
-            ) : user ? (
-              <AccessDenied user={user} />
-            ) : (
-              <Navigate to="/login" />
-            )
+            user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
           }
         >
-          <Route index element={<RoutesDashboard user={user as User} />} />
-          <Route path="ruta/:id" element={<RouteDetail />} />
+          {/* Rutas comunes — el componente decide qué hacer según rol */}
+          <Route path="/shipment/:id" element={<ShipmentDetail />} />
+          <Route path="/shipment/:id/etiqueta" element={<ShipmentLabel />} />
+
+          {/* Repartidor */}
+          <Route
+            path="/repartidor"
+            element={
+              user && isRepartidorRole(user.role) ? (
+                <RepartidorDashboard />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+
+          {/* Operador / Supervisor / Administrador */}
+          <Route
+            path="/app"
+            element={
+              user && !isRepartidorRole(user.role) ? (
+                <Dashboard />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
         </Route>
 
         <Route
-          element={
-            user ? (
-              isRepartidorRole(user.role) ? (
-                <AccessDenied user={user} />
-              ) : (
-                <Layout user={user} onLogout={handleLogout} />
-              )
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        >
-          <Route path="/app" element={<Dashboard />} />
-          <Route path="/shipment/:id" element={<ShipmentDetail />} />
-          <Route path="/vehiculo/:id" element={<VehicleDetail />} />
-        </Route>
+          path="/access-denied"
+          element={user ? <AccessDenied user={user} /> : <Navigate to="/login" />}
+        />
 
         <Route path="*" element={<Navigate to={user ? (isRepartidorRole(user.role) ? '/repartidor' : '/app') : '/login'} />} />
       </Routes>

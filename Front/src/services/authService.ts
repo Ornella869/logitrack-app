@@ -231,29 +231,45 @@ export const authService = {
       repartidor: 'Repartidor',
       administrador: 'Administrador',
     }
-    const response = await api.post('/auth/usuarios', {
-      Nombre: data.name,
-      Apellido: data.lastname,
-      Email: data.email,
-      DNI: data.dni,
-      Role: roleMap[data.role],
-      PasswordTemporal: data.passwordTemporal,
-      ...(data.licencia ? { Licencia: data.licencia } : {}),
-    })
-    const u = response.data
-    return {
-      user: {
-        id: u.id,
-        name: u.nombre,
-        lastname: u.apellido,
-        email: u.email,
-        dni: u.dni,
-        role: normalizeUserRole(u.role ?? u.Role ?? ''),
-        activo: u.activo ?? true,
-        licencia: u.licencia,
-        estado: (u.estado as UserEstado) || 'Activo',
-      },
-      temporaryPassword: u.temporaryPassword || '',
+    try {
+      const response = await api.post('/auth/usuarios', {
+        Nombre: data.name,
+        Apellido: data.lastname,
+        Email: data.email,
+        DNI: data.dni,
+        Role: roleMap[data.role],
+        PasswordTemporal: data.passwordTemporal,
+        ...(data.licencia ? { Licencia: data.licencia } : {}),
+      })
+      const u = response.data
+      return {
+        user: {
+          id: u.id,
+          name: u.nombre,
+          lastname: u.apellido,
+          email: u.email,
+          dni: u.dni,
+          role: normalizeUserRole(u.role ?? u.Role ?? ''),
+          activo: u.activo ?? true,
+          licencia: u.licencia,
+          estado: (u.estado as UserEstado) || 'Activo',
+        },
+        temporaryPassword: u.temporaryPassword || '',
+      }
+    } catch (error: any) {
+      // Sacar el mensaje del back si lo hay; si no, mensaje genérico
+      const data = error?.response?.data
+      let msg: string | undefined
+      if (typeof data === 'string') {
+        msg = data
+      } else if (data?.message) {
+        msg = data.message
+      } else if (data?.errors) {
+        // ASP.NET Core ModelState validation: { errors: { Field: ["msg"] } }
+        const first = Object.values(data.errors)[0]
+        if (Array.isArray(first) && first.length) msg = String(first[0])
+      }
+      throw new Error(msg || error?.message || 'Error al crear el usuario')
     }
   },
 

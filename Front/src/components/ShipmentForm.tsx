@@ -15,22 +15,23 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material'
-import type { Shipment, Branch, TipoEnvio, TipoPaquete } from '../types'
+import type { Shipment, TipoEnvio, TipoPaquete } from '../types'
 import { shipmentService } from '../services/shipmentService'
-import { branchService } from '../services/branchService'
 
 interface ShipmentFormProps {
   open: boolean
   onClose: () => void
   onSubmit: (shipment: Omit<Shipment, 'id' | 'lastUpdate'>) => Promise<void>
+  mode?: 'create' | 'edit'
+  initialData?: Shipment
 }
 
-function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
+function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }: ShipmentFormProps) {
+  const isEdit = mode === 'edit'
   const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
   const [loading, setLoading] = useState(false)
   const [generatingId, setGeneratingId] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [branches, setBranches] = useState<Branch[]>([])
   const [formData, setFormData] = useState({
     trackingId: '',
     senderName: '',
@@ -52,22 +53,35 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
     tipoPaquete: 'Comun' as TipoPaquete,
   })
 
-  // Cargar sucursales y generar tracking ID cuando se abre el modal
+  // Al abrir: prefillear si es edición; generar tracking nuevo si es alta
   useEffect(() => {
-    if (open) {
-      loadBranches()
+    if (!open) return
+    if (isEdit && initialData) {
+      setFormData({
+        trackingId: initialData.trackingId,
+        senderName: initialData.sender.name,
+        senderAddress: initialData.sender.address,
+        senderCity: initialData.sender.city,
+        senderPostal: initialData.sender.postalCode,
+        senderPhone: initialData.sender.phone ?? '',
+        receiverName: initialData.receiver.name,
+        receiverAddress: initialData.receiver.address,
+        receiverCity: initialData.receiver.city,
+        receiverPostal: initialData.receiver.postalCode,
+        receiverPhone: initialData.receiver.phone ?? '',
+        origin: initialData.origin,
+        destination: initialData.destination,
+        weight: String(initialData.weight),
+        description: initialData.description,
+        estimatedDelivery: initialData.estimatedDelivery,
+        tipoEnvio: initialData.tipoEnvio ?? 'Comun',
+        tipoPaquete: initialData.tipoPaquete ?? 'Comun',
+      })
+    } else {
       generateNewTrackingId()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
-
-  const loadBranches = async () => {
-    try {
-      const data = await branchService.getAllBranches()
-      setBranches(data)
-    } catch (error) {
-      console.error('Error cargando sucursales:', error)
-    }
-  }
 
   const generateNewTrackingId = async () => {
     setGeneratingId(true)
@@ -122,14 +136,13 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
     if (!formData.receiverName) newErrors.receiverName = 'Requerido'
     if (formData.senderCity && !cityRegex.test(formData.senderCity.trim())) newErrors.senderCity = 'Solo letras'
     if (formData.receiverCity && !cityRegex.test(formData.receiverCity.trim())) newErrors.receiverCity = 'Solo letras'
-    if (!formData.origin) newErrors.origin = 'Requerido'
-    if (!formData.destination) newErrors.destination = 'Requerido'
-    if (!formData.weight || isNaN(Number(formData.weight))) newErrors.weight = 'Debe ser un número'
-    if (!formData.description) newErrors.description = 'Requerido'
-    if (!formData.estimatedDelivery) newErrors.estimatedDelivery = 'Requerido'
+    // G1L-10: Peso > 0 obligatorio
+    if (!formData.weight || isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
+      newErrors.weight = 'El peso debe ser mayor a 0'
+    }
 
-    // Validar que el tracking ID no exista
-    if (formData.trackingId && !newErrors.trackingId) {
+    // En modo create validar que el tracking ID no exista (en edit es el mismo)
+    if (!isEdit && formData.trackingId && !newErrors.trackingId) {
       const exists = await shipmentService.trackingIdExists(formData.trackingId)
       if (exists) {
         newErrors.trackingId = 'Este ID de tracking ya existe'
@@ -161,12 +174,14 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
           postalCode: formData.receiverPostal,
           phone: formData.receiverPhone || undefined,
         },
-        origin: formData.origin,
-        destination: formData.destination,
+        // G1L-10: origin/destination se derivan de las ciudades para no pedirlos al usuario
+        origin: formData.senderCity,
+        destination: formData.receiverCity,
         weight: Number(formData.weight),
         description: formData.description,
-        estimatedDelivery: formData.estimatedDelivery,
-        status: 'Pendiente',
+        // G1L-10 AC6: la fecha estimada se calcula en la calendarización (Sprint 2)
+        estimatedDelivery: '',
+        status: 'Pendiente de calendarización',
         tipoEnvio: formData.tipoEnvio,
         tipoPaquete: formData.tipoPaquete,
         createdDate: new Date().toISOString().split('T')[0],
@@ -203,7 +218,7 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Registrar nuevo envío</DialogTitle>
+      <DialogTitle>{isEdit ? 'Editar envío' : 'Registrar nuevo envío'}</DialogTitle>
       <DialogContent sx={{ pt: 3 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Box>
@@ -219,16 +234,18 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
                 fullWidth
                 size="small"
               />
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={generateNewTrackingId}
-                disabled={generatingId || loading}
-                sx={{ whiteSpace: 'nowrap', mt: 0.5 }}
-                title="Generar nuevo ID"
-              >
-                {generatingId ? <CircularProgress size={16} /> : '🔄'}
-              </Button>
+              {!isEdit && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={generateNewTrackingId}
+                  disabled={generatingId || loading}
+                  sx={{ whiteSpace: 'nowrap', mt: 0.5 }}
+                  title="Generar nuevo ID"
+                >
+                  {generatingId ? <CircularProgress size={16} /> : '🔄'}
+                </Button>
+              )}
             </Box>
           </Box>
 
@@ -388,67 +405,6 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
             </Grid>
           </Grid>
 
-          <Grid container spacing={1}>
-            <Grid item xs={6}>
-              <Select
-                label="Origen"
-                name="origin"
-                value={formData.origin}
-                onChange={(e) => {
-                  setFormData((prev) => ({
-                    ...prev,
-                    origin: e.target.value,
-                  }))
-                  if (errors.origin) {
-                    setErrors((prev) => ({
-                      ...prev,
-                      origin: '',
-                    }))
-                  }
-                }}
-                error={!!errors.origin}
-                fullWidth
-                displayEmpty
-              >
-                <MenuItem value="">Seleccionar origen</MenuItem>
-                {branches.map((branch) => (
-                  <MenuItem key={branch.id} value={branch.name}>
-                    {branch.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Grid>
-            <Grid item xs={6}>
-              <Select
-                label="Destino"
-                name="destination"
-                value={formData.destination}
-                onChange={(e) => {
-                  setFormData((prev) => ({
-                    ...prev,
-                    destination: e.target.value,
-                  }))
-                  if (errors.destination) {
-                    setErrors((prev) => ({
-                      ...prev,
-                      destination: '',
-                    }))
-                  }
-                }}
-                error={!!errors.destination}
-                fullWidth
-                displayEmpty
-              >
-                <MenuItem value="">Seleccionar destino</MenuItem>
-                {branches.map((branch) => (
-                  <MenuItem key={branch.id} value={branch.name}>
-                    {branch.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Grid>
-          </Grid>
-
           <TextField
             label="Peso (kg)"
             name="weight"
@@ -462,28 +418,15 @@ function ShipmentForm({ open, onClose, onSubmit }: ShipmentFormProps) {
           />
 
           <TextField
-            label="Descripción"
+            label="Observaciones (opcional)"
             name="description"
             value={formData.description}
             onChange={handleChange}
-            error={!!errors.description}
-            helperText={errors.description}
             fullWidth
             multiline
             rows={2}
           />
 
-          <TextField
-            label="Fecha estimada de entrega"
-            name="estimatedDelivery"
-            type="date"
-            value={formData.estimatedDelivery}
-            onChange={handleChange}
-            error={!!errors.estimatedDelivery}
-            helperText={errors.estimatedDelivery}
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-          />
         </Box>
       </DialogContent>
       <DialogActions>

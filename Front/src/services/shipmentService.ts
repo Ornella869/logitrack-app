@@ -28,21 +28,19 @@ interface RegistrarPaqueteRequest {
 // Mapear status del backend al frontend
 const mapStatus = (status: string): Shipment['status'] => {
   switch (status) {
-    case 'PendienteDeCalendarizacion': return 'Pendiente'
+    case 'PendienteDeCalendarizacion': return 'Pendiente de calendarización'
     case 'ListoParaSalir': return 'Listo para salir'
-    case 'EnSucursal': return 'Pendiente'
     case 'EnTransito': return 'En tránsito'
     case 'Entregado': return 'Entregado'
-    case 'Rechazado': return 'Cancelado'
     case 'Cancelado': return 'Cancelado'
-    default: return 'Pendiente'
+    default: return 'Pendiente de calendarización'
   }
 }
 
 // Mapear status del frontend al backend
 const mapStatusToBackend = (status: string): string => {
   switch (status) {
-    case 'Pendiente': return 'PendienteDeCalendarizacion'
+    case 'Pendiente de calendarización': return 'PendienteDeCalendarizacion'
     case 'Listo para salir': return 'ListoParaSalir'
     case 'En tránsito':
     case 'EnTransito':
@@ -262,12 +260,19 @@ export const shipmentService = {
     }
   },
 
-  // Obtener todos los envíos (con búsqueda y filtros opcionales)
-  getAllShipments: async (search?: string, status?: string[]): Promise<Shipment[]> => {
+  // Obtener todos los envíos con búsqueda y filtros opcionales — G1L-39, G1L-40
+  getAllShipments: async (
+    search?: string,
+    status?: string[],
+    from?: string,
+    to?: string,
+  ): Promise<Shipment[]> => {
     try {
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       if (status && status.length > 0) status.forEach(s => params.append('status', s))
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
       const response = await api.get(`/envios/paquetes${params.toString() ? `?${params}` : ''}`)
       return response.data.map(mapToShipment)
     } catch (error) {

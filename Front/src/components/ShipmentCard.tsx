@@ -11,7 +11,7 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pendiente':
+      case 'Pendiente de calendarización':
       case 'Listo para salir':
         return 'default'
       case 'En tránsito':
@@ -28,7 +28,7 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'PendienteDeCalendarizacion':
-        return 'Pendiente'
+        return 'Pendiente de calendarización'
       case 'ListoParaSalir':
         return 'Listo para salir'
       case 'EnTransito':

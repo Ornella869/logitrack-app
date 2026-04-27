@@ -139,17 +139,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
   }
 
   const enterAsAdminDemo = () => {
-    const adminDemo: User = {
-      id: 'demo-admin-001',
-      name: 'Admin',
-      lastname: 'Demo',
-      email: 'admin.demo@logitrack.com',
-      dni: '00000000',
-      role: 'administrador',
-      estado: 'Activo',
-    }
-    onLogin(adminDemo)
-    navigate('/app')
+    fillDemo('admin@logitrack.com')
   }
 
   const handleRegistrationToastClose = (_event: Event | SyntheticEvent, reason?: string) => {

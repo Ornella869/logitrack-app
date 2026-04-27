@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Box, TextField, Button, CircularProgress, Stack, InputAdornment } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 
-const DEBOUNCE_MS = 350
+const DEBOUNCE_MS = 500
 
 interface SearchBarProps {
   onSearch: (query: string) => Promise<void>
@@ -62,8 +62,8 @@ function SearchBar({
           value={query}
           onChange={(e) => handleInputChange(e.target.value)}
           fullWidth
-          disabled={loading}
           size="small"
+          autoFocus
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -76,16 +76,8 @@ function SearchBar({
             ),
           }}
         />
-        <Button
-          variant="contained"
-          type="submit"
-          disabled={loading || !query.trim()}
-          sx={{ whiteSpace: 'nowrap' }}
-        >
-          Buscar
-        </Button>
         {query && (
-          <Button variant="outlined" onClick={handleClear} disabled={loading}>
+          <Button variant="outlined" onClick={handleClear}>
             Limpiar
           </Button>
         )}

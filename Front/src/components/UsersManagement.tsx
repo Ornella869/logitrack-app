@@ -390,8 +390,8 @@ export default function UsersManagement() {
         setFormError('La contraseña temporal es obligatoria.')
         return false
       }
-      if (formData.passwordTemporal.trim().length < 6) {
-        setFormError('La contraseña temporal debe tener al menos 6 caracteres.')
+      if (formData.passwordTemporal.trim().length < 8) {
+        setFormError('La contraseña temporal debe tener al menos 8 caracteres.')
         return false
       }
       if (formData.role === 'repartidor' && !formData.licencia.trim()) {
@@ -711,7 +711,7 @@ export default function UsersManagement() {
               value={formData.passwordTemporal}
               onChange={(e) => setFormData((p) => ({ ...p, passwordTemporal: e.target.value }))}
               fullWidth
-              helperText="Mínimo 6 caracteres. El usuario deberá cambiarla al ingresar."
+              helperText="Mínimo 8 caracteres. El usuario deberá cambiarla al ingresar."
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
