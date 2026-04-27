@@ -34,8 +34,7 @@ interface LoginLocationState {
 }
 
 const DEMO_PASSWORD = 'kjkszpj1234'
-const DEFAULT_RECAPTCHA_SITE_KEY = '6LdRraUsAAAAABDom6H8iyjAqSoigIn5qPgQXqfR'
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY
+const RECAPTCHA_SITE_KEY = "6Le_KcwsAAAAAFn6cTQMkYKoTBxUOh4hUHgm4G9M"
 const RecaptchaWidget = ReCAPTCHA as unknown as ComponentType<{
   sitekey: string
   onChange: (token: string | null) => void
