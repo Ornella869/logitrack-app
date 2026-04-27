@@ -162,7 +162,7 @@ function Dashboard() {
       )}
 
       {/* Administrador → Gestión de usuarios (G1L-30) */}
-      {user.role === 'administrador' && <UsersManagement />}
+      {user.role === 'administrador' && <UsersManagement currentUserId={user.id} />}
 
       {/* Operador y Supervisor → Listado de envíos (G1L-39 + G1L-40) */}
       {(user.role === 'operador' || user.role === 'supervisor') && (
