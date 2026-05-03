@@ -78,9 +78,14 @@ function ShipmentDetail() {
   const isRepartidor = user?.role === 'repartidor'
 
   // G1L-9: Repartidor cambia estados (Listo→Tránsito, Tránsito→Entregado/Cancelado)
-  // Operador y Supervisor también pueden cancelar (G1L-13)
+  // G1L-13: Operador/Supervisor cancelan Pendiente o Listo para Salir.
+  // G1L-9: Repartidor cancela solo En Tránsito (Entrega Fallida).
   const canChangeStatus = isRepartidor
-  const canCancel = isOperador || isSupervisor || isRepartidor
+  const status = shipment?.status
+  const canCancel =
+    ((isOperador || isSupervisor) &&
+      (status === 'Pendiente de calendarización' || status === 'Listo para salir')) ||
+    (isRepartidor && status === 'En tránsito')
   // G1L-12, G1L-41: Editar solo si está pendiente de calendarización (paquete.isEditable)
   const canEdit = isOperador && shipment?.isEditable === true
 
@@ -192,7 +197,7 @@ function ShipmentDetail() {
     setUpdatingStatus(false)
   }
 
-  const handleEditSubmit = async (data: Omit<Shipment, 'id' | 'lastUpdate'>) => {
+  const handleEditSubmit = async (data: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => {
     if (!id) return
     const result = await shipmentService.editShipment(id, data)
     if (result.success) {

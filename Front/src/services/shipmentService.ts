@@ -245,21 +245,6 @@ export const shipmentService = {
     }
   },
 
-  // Generar tracking ID único
-  generateTrackingId: async (): Promise<string> => {
-    return `LT-${Date.now()}`
-  },
-
-  // Verificar si tracking ID existe
-  trackingIdExists: async (trackingId: string): Promise<boolean> => {
-    try {
-      const shipment = await shipmentService.getShipmentTracking(trackingId)
-      return shipment !== null
-    } catch (error) {
-      return false
-    }
-  },
-
   // Obtener todos los envíos con búsqueda y filtros opcionales — G1L-39, G1L-40
   getAllShipments: async (
     search?: string,

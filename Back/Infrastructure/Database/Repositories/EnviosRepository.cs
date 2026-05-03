@@ -88,5 +88,15 @@ namespace Back.Infrastructure.Database.Repositories
         {
             return await _context.Sucursales.ToListAsync();
         }
+
+        public async Task<Sucursal?> GetSucursalById(Guid id)
+        {
+            return await _context.Sucursales.FindAsync(id);
+        }
+
+        public void DeleteSucursal(Sucursal sucursal)
+        {
+            _context.Sucursales.Remove(sucursal);
+        }
     }
 }

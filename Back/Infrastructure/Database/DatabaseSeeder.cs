@@ -74,16 +74,14 @@ namespace Back.Infrastructure.Database
 
             _context.Usuarios.AddRange([.. operadores, .. supervisores, .. repartidores]);
 
-            _context.Sucursales.AddRange(new List<Sucursal>
-            {
-                new Sucursal("Sucursal Quilmes", "Rivadavia 350", "Quilmes", "4253-1122"),
-                new Sucursal("Sucursal Morón", "9 de Julio 450", "Morón", "4483-5566"),
-                new Sucursal("Sucursal Ramos Mejía", "Av. de Mayo 200", "La Matanza", "4654-7788"),
-                new Sucursal("Sucursal Olivos", "Av. Maipú 2300", "Vicente López", "4799-3344"),
-                new Sucursal("Sucursal Tigre", "Cazón 1100", "Tigre", "4749-0011"),
-                new Sucursal("Sucursal Lanús", "25 de Mayo 150", "Lanús", "4241-9900")
-
-            });
+            // Por ahora una única sucursal de demo. El admin puede eliminarla y crear la suya.
+            _context.Sucursales.Add(new Sucursal(
+                "Sucursal Centro",
+                "Av. Corrientes 1234",
+                "CABA",
+                "1043",
+                "011-4000-0000"
+            ));
 
             // Generar vehículos específicos (establecidos)
             var vehiculosEspecificos = PaquetesGenerator.GenerarVehiculosEspecificos();

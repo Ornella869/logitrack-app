@@ -10,6 +10,8 @@ namespace Back.Domain.Repositories
         Task<Paquete?> GetPaqueteByCodigoSeguimiento(string codigoSeguimiento);
         Task<List<Paquete>> GetPaquetesPendientesDeCalendarizacion();
         Task<List<Sucursal>> GetSucursales();
+        Task<Sucursal?> GetSucursalById(Guid id);
+        void DeleteSucursal(Sucursal sucursal);
         Task<List<Paquete>> GetPaquetesByIds(List<Guid> paqueteIds);
         Task<List<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to);
         Task<List<Paquete>> GetAll();

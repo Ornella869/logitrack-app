@@ -16,6 +16,7 @@ import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
 import ShipmentForm from '../components/ShipmentForm'
 import UsersManagement from '../components/UsersManagement'
+import BranchManagement from '../components/BranchManagement'
 import SearchBar from '../components/SearchBar'
 import ShipmentFilters, { type ShipmentFiltersValue } from '../components/ShipmentFilters'
 
@@ -94,12 +95,12 @@ function Dashboard() {
     setSearch(query.trim())
   }
 
-  const handleCreateShipment = async (shipment: Omit<Shipment, 'id' | 'lastUpdate'>) => {
+  const handleCreateShipment = async (shipment: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => {
     try {
       const newShipment = await shipmentService.registerShipment(shipment)
       if (newShipment) {
         setShipments((prev) => [newShipment, ...prev])
-        showActionToast('Envío creado correctamente', 'success')
+        showActionToast(`Envío creado. Tracking ID: ${newShipment.trackingId}`, 'success')
         setOpenShipmentForm(false)
         return
       }
@@ -162,7 +163,12 @@ function Dashboard() {
       )}
 
       {/* Administrador → Gestión de usuarios (G1L-30) */}
-      {user.role === 'administrador' && <UsersManagement currentUserId={user.id} />}
+      {user.role === 'administrador' && (
+        <>
+          <UsersManagement currentUserId={user.id} />
+          <BranchManagement />
+        </>
+      )}
 
       {/* Operador y Supervisor → Listado de envíos (G1L-39 + G1L-40) */}
       {(user.role === 'operador' || user.role === 'supervisor') && (
