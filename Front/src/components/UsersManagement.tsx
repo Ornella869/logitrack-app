@@ -41,6 +41,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import KeyIcon from '@mui/icons-material/Key'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
+import CasinoIcon from '@mui/icons-material/Casino'
+import { generateTempPassword } from '../utils/passwordGenerator'
 import type { User, UserRole, UserEstado } from '../types'
 import { authService } from '../services/authService'
 import ConfirmDialog from './ConfirmDialog'
@@ -747,6 +749,17 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
+                      onClick={() => {
+                        setFormData((p) => ({ ...p, passwordTemporal: generateTempPassword() }))
+                        setShowCreatePassword(true)
+                      }}
+                      edge="end"
+                      size="small"
+                      title="Generar contraseña automáticamente"
+                    >
+                      <CasinoIcon />
+                    </IconButton>
+                    <IconButton
                       onClick={() => setShowCreatePassword((p) => !p)}
                       edge="end"
                       size="small"
@@ -846,6 +859,17 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                         endAdornment: (
                           <InputAdornment position="end">
                             <IconButton
+                              onClick={() => {
+                                setResetPassValue(generateTempPassword())
+                                setShowResetPassValue(true)
+                              }}
+                              edge="end"
+                              size="small"
+                              title="Generar contraseña automáticamente"
+                            >
+                              <CasinoIcon />
+                            </IconButton>
+                            <IconButton
                               onClick={() => setShowResetPassValue((p) => !p)}
                               edge="end"
                               size="small"
@@ -907,6 +931,17 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => {
+                        setResolvePassValue(generateTempPassword())
+                        setShowResolvePassValue(true)
+                      }}
+                      edge="end"
+                      size="small"
+                      title="Generar contraseña automáticamente"
+                    >
+                      <CasinoIcon />
+                    </IconButton>
                     <IconButton
                       onClick={() => setShowResolvePassValue((p) => !p)}
                       edge="end"

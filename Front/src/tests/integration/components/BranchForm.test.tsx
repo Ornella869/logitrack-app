@@ -26,7 +26,7 @@ describe('BranchForm', () => {
   it('CP-48 muestra error por campos incompletos', async () => {
     const user = userEvent.setup()
 
-    render(<BranchForm open={true} onClose={vi.fn()} onBranchCreated={vi.fn()} />)
+    render(<BranchForm open={true} onClose={vi.fn()} onSaved={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Registrar Sucursal' }))
 
@@ -38,7 +38,7 @@ describe('BranchForm', () => {
 
     mockedBranchService.branchExists.mockResolvedValue(true)
 
-    render(<BranchForm open={true} onClose={vi.fn()} onBranchCreated={vi.fn()} />)
+    render(<BranchForm open={true} onClose={vi.fn()} onSaved={vi.fn()} />)
 
     await user.type(screen.getByLabelText('Nombre de la sucursal'), 'Sucursal Centro')
     await user.type(screen.getByLabelText('Dirección'), 'Av. 9 de Julio 100')
@@ -52,7 +52,7 @@ describe('BranchForm', () => {
 
   it('CP-47 registra sucursal exitosamente', async () => {
     const user = userEvent.setup()
-    const onBranchCreated = vi.fn()
+    const onSaved = vi.fn()
 
     mockedBranchService.branchExists.mockResolvedValue(false)
     mockedBranchService.createBranch.mockResolvedValue({
@@ -66,7 +66,7 @@ describe('BranchForm', () => {
       createdDate: '2026-03-28',
     })
 
-    render(<BranchForm open={true} onClose={vi.fn()} onBranchCreated={onBranchCreated} />)
+    render(<BranchForm open={true} onClose={vi.fn()} onSaved={onSaved} />)
 
     await user.type(screen.getByLabelText('Nombre de la sucursal'), 'Sucursal Centro')
     await user.type(screen.getByLabelText('Dirección'), 'Av. 9 de Julio 100')
@@ -75,13 +75,13 @@ describe('BranchForm', () => {
     await user.type(screen.getByLabelText('Teléfono'), '1144556677')
     await user.click(screen.getByRole('button', { name: 'Registrar Sucursal' }))
 
-    await waitFor(() => expect(onBranchCreated).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
   })
 
   it('CP-50 aplica validacion numerica en codigo postal y telefono', async () => {
     const user = userEvent.setup()
 
-    render(<BranchForm open={true} onClose={vi.fn()} onBranchCreated={vi.fn()} />)
+    render(<BranchForm open={true} onClose={vi.fn()} onSaved={vi.fn()} />)
 
     const postalInput = screen.getByLabelText('Código Postal') as HTMLInputElement
     const phoneInput = screen.getByLabelText('Teléfono') as HTMLInputElement

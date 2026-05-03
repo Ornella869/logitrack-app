@@ -152,14 +152,17 @@ namespace Back.Controllers
 
         // ============== G1L-13: Cancelación con motivo ==============
 
-        /// <summary>Cancelar un paquete con motivo obligatorio (Operador o Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        /// <summary>Cancelar un paquete con motivo obligatorio.
+        /// Operador/Supervisor: Pendiente o Listo para Salir (G1L-13).
+        /// Repartidor: solo En Tránsito (G1L-9, Entrega Fallida).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
         [HttpPost("cancelar-paquete/{paqueteId:guid}")]
         public async Task<ActionResult> CancelarPaquete(Guid paqueteId, [FromBody] CancelarPaqueteRequest request)
         {
             try
             {
-                await _enviosService.CancelarPaquete(paqueteId, request.Motivo, request.Mode, CurrentUserId());
+                var esRepartidor = User.IsInRole(Roles.Repartidor);
+                await _enviosService.CancelarPaquete(paqueteId, request.Motivo, request.Mode, CurrentUserId(), esRepartidor);
                 await _context.SaveChangesAsync();
                 return Ok();
             }
@@ -354,7 +357,7 @@ namespace Back.Controllers
             return Ok();
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor + "," + Roles.Operador)]
         [HttpGet("sucursales")]
         public async Task<ActionResult<List<Sucursal>>> GetSucursales()
         {
@@ -366,10 +369,38 @@ namespace Back.Controllers
         [HttpPost("sucursales/registrar-sucursal")]
         public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
         {
-            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.Telefono);
+            // Por ahora se permite una única sucursal por empresa.
+            var existentes = await _enviosRepository.GetSucursales();
+            if (existentes.Count > 0)
+            {
+                return BadRequest(new { error = "Ya existe una sucursal registrada. Eliminala antes de crear otra." });
+            }
+            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono);
             await _enviosRepository.Add(sucursal);
             await _context.SaveChangesAsync();
             return Ok();
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPut("sucursales/{id:guid}")]
+        public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request)
+        {
+            var sucursal = await _enviosRepository.GetSucursalById(id);
+            if (sucursal == null) return NotFound();
+            sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpDelete("sucursales/{id:guid}")]
+        public async Task<ActionResult> EliminarSucursal(Guid id)
+        {
+            var sucursal = await _enviosRepository.GetSucursalById(id);
+            if (sucursal == null) return NotFound();
+            _enviosRepository.DeleteSucursal(sucursal);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
     }
 
@@ -420,6 +451,7 @@ namespace Back.Controllers
         [Required] public string Nombre { get; set; } = string.Empty;
         [Required] public string Direccion { get; set; } = string.Empty;
         [Required] public string Ciudad { get; set; } = string.Empty;
+        [Required] public string CodigoPostal { get; set; } = string.Empty;
         [Required] public string Telefono { get; set; } = string.Empty;
     }
 

@@ -127,8 +127,10 @@ namespace Back.Application.Services
                 "Datos del envío editados");
         }
 
-        // G1L-13
-        public async Task CancelarPaquete(Guid paqueteId, string motivo, CancelarEnvioMode mode, Guid? usuarioId)
+        // G1L-13 + G1L-9. Reglas cruzadas rol/estado:
+        //   Operador / Supervisor → solo PendienteDeCalendarizacion o ListoParaSalir.
+        //   Repartidor             → solo EnTransito (Entrega Fallida).
+        public async Task CancelarPaquete(Guid paqueteId, string motivo, CancelarEnvioMode mode, Guid? usuarioId, bool esRepartidor)
         {
             if (string.IsNullOrWhiteSpace(motivo))
                 throw new InvalidOperationException("El motivo de cancelación es obligatorio.");
@@ -139,11 +141,15 @@ namespace Back.Application.Services
             switch (paquete.Status)
             {
                 case PaqueteStatus.PendienteDeCalendarizacion:
+                    if (esRepartidor)
+                        throw new InvalidOperationException("El repartidor solo puede cancelar envíos En Tránsito.");
                     paquete.Cancelar(motivo);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     break;
 
                 case PaqueteStatus.ListoParaSalir:
+                    if (esRepartidor)
+                        throw new InvalidOperationException("El repartidor solo puede cancelar envíos En Tránsito.");
                     if (mode == CancelarEnvioMode.Reagendar)
                     {
                         paquete.CambiarEstado(PaqueteStatus.PendienteDeCalendarizacion);
@@ -156,6 +162,14 @@ namespace Back.Application.Services
                         await DesvincularDeRutasPendientes(paquete.Id);
                         await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     }
+                    break;
+
+                case PaqueteStatus.EnTransito:
+                    // G1L-9 (Entrega Fallida): solo repartidor.
+                    if (!esRepartidor)
+                        throw new InvalidOperationException("Un envío En Tránsito solo puede cancelarlo el repartidor (Entrega Fallida).");
+                    paquete.Cancelar(motivo);
+                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     break;
 
                 default:

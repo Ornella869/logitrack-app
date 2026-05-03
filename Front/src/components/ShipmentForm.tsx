@@ -14,93 +14,86 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  FormHelperText,
+  Alert,
+  InputAdornment,
 } from '@mui/material'
-import type { Shipment, TipoEnvio, TipoPaquete } from '../types'
-import { shipmentService } from '../services/shipmentService'
+import type { Shipment, TipoEnvio, TipoPaquete, Branch } from '../types'
+import { postalCodeService } from '../services/postalCodeService'
+import { branchService } from '../services/branchService'
 
 interface ShipmentFormProps {
   open: boolean
   onClose: () => void
-  onSubmit: (shipment: Omit<Shipment, 'id' | 'lastUpdate'>) => Promise<void>
+  onSubmit: (shipment: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => Promise<void>
   mode?: 'create' | 'edit'
   initialData?: Shipment
 }
 
+// G1L-54: capacidad por repartidor. Un paquete que la supere no podría calendarizarse.
+const MAX_WEIGHT_KG = 500
+
+// Solo letras + espacios + tildes/diéresis + apóstrofe/guion. Sin números.
+const nameRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,}$/
+const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
+// Dirección formato "Calle Altura": empieza con letra, termina con número (opcional sufijo letra ej "1234B").
+// Ejemplos válidos: "Rosa Castillo 2487", "Av. 9 de Julio 1500", "Av. Corrientes 1234A".
+// Inválidos: "2487 Rosa Castillo", "1234", "asdfgh".
+const addressRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s.,'-]*\s\d+[A-Za-z]?$/
+const phoneRegex = /^[+\d][\d\s-]{6,19}$/
+
 function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }: ShipmentFormProps) {
   const isEdit = mode === 'edit'
-  const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
   const [loading, setLoading] = useState(false)
-  const [generatingId, setGeneratingId] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [postalChecking, setPostalChecking] = useState(false)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('')
+  const [loadingBranches, setLoadingBranches] = useState(false)
   const [formData, setFormData] = useState({
-    trackingId: '',
-    senderName: '',
-    senderAddress: '',
-    senderCity: '',
-    senderPostal: '',
-    senderPhone: '',
     receiverName: '',
     receiverAddress: '',
     receiverCity: '',
     receiverPostal: '',
     receiverPhone: '',
-    origin: '',
-    destination: '',
     weight: '',
     description: '',
-    estimatedDelivery: '',
     tipoEnvio: 'Comun' as TipoEnvio,
     tipoPaquete: 'Comun' as TipoPaquete,
   })
 
-  // Al abrir: prefillear si es edición; generar tracking nuevo si es alta
   useEffect(() => {
     if (!open) return
+    setErrors({})
+    loadBranches()
     if (isEdit && initialData) {
       setFormData({
-        trackingId: initialData.trackingId,
-        senderName: initialData.sender.name,
-        senderAddress: initialData.sender.address,
-        senderCity: initialData.sender.city,
-        senderPostal: initialData.sender.postalCode,
-        senderPhone: initialData.sender.phone ?? '',
         receiverName: initialData.receiver.name,
         receiverAddress: initialData.receiver.address,
         receiverCity: initialData.receiver.city,
         receiverPostal: initialData.receiver.postalCode,
         receiverPhone: initialData.receiver.phone ?? '',
-        origin: initialData.origin,
-        destination: initialData.destination,
         weight: String(initialData.weight),
         description: initialData.description,
-        estimatedDelivery: initialData.estimatedDelivery,
         tipoEnvio: initialData.tipoEnvio ?? 'Comun',
         tipoPaquete: initialData.tipoPaquete ?? 'Comun',
       })
-    } else {
-      generateNewTrackingId()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const generateNewTrackingId = async () => {
-    setGeneratingId(true)
+  const loadBranches = async () => {
+    setLoadingBranches(true)
     try {
-      const newId = await shipmentService.generateTrackingId()
-      setFormData((prev) => ({
-        ...prev,
-        trackingId: newId,
-      }))
-      // Limpiar error de tracking ID
-      setErrors((prev) => {
-        const newErrors = { ...prev }
-        delete newErrors.trackingId
-        return newErrors
-      })
+      const all = await branchService.getAllBranches()
+      const active = all.filter((b) => b.status === 'Activa')
+      setBranches(active)
+      if (active.length > 0) setSelectedBranchId((prev) => prev || active[0].id)
     } catch (error) {
-      console.error('Error generando tracking ID:', error)
+      console.error('Error cargando sucursales:', error)
+      setBranches([])
     } finally {
-      setGeneratingId(false)
+      setLoadingBranches(false)
     }
   }
 
@@ -108,44 +101,98 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     const { name } = e.target
     let { value } = e.target
 
-    if (name === 'senderCity' || name === 'receiverCity') {
+    if (name === 'receiverCity') {
       value = value.replace(/[^A-Za-zÀ-ÿ\s'-]/g, '')
     }
 
-    if (name === 'senderPostal' || name === 'receiverPostal') {
-      value = value.replace(/\D/g, '')
+    if (name === 'receiverPostal') {
+      value = value.replace(/\D/g, '').slice(0, 4)
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+    if (name === 'receiverPhone') {
+      value = value.replace(/[^\d+\s-]/g, '')
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: '',
-      }))
+      setErrors((prev) => ({ ...prev, [name]: '' }))
+    }
+  }
+
+  const checkReceiverPostal = async () => {
+    const cp = formData.receiverPostal.trim()
+    if (!cp) return
+
+    setPostalChecking(true)
+    try {
+      const result = await postalCodeService.validate(cp)
+      if (!result.valid) {
+        setErrors((prev) => ({ ...prev, receiverPostal: result.error ?? 'CP inválido' }))
+        return
+      }
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next.receiverPostal
+        return next
+      })
+      // Autocompletar siempre la ciudad con la que devuelva la API (sobreescribe lo escrito).
+      if (result.city) {
+        setFormData((prev) => ({ ...prev, receiverCity: result.city as string }))
+        setErrors((prev) => {
+          const next = { ...prev }
+          delete next.receiverCity
+          return next
+        })
+      }
+    } finally {
+      setPostalChecking(false)
     }
   }
 
   const validateForm = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.trackingId) newErrors.trackingId = 'Requerido'
-    if (!formData.senderName) newErrors.senderName = 'Requerido'
-    if (!formData.receiverName) newErrors.receiverName = 'Requerido'
-    if (formData.senderCity && !cityRegex.test(formData.senderCity.trim())) newErrors.senderCity = 'Solo letras'
-    if (formData.receiverCity && !cityRegex.test(formData.receiverCity.trim())) newErrors.receiverCity = 'Solo letras'
-    // G1L-10: Peso > 0 obligatorio
-    if (!formData.weight || isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
-      newErrors.weight = 'El peso debe ser mayor a 0'
+    // Destinatario — G1L-10
+    if (!formData.receiverName.trim()) {
+      newErrors.receiverName = 'Requerido'
+    } else if (!nameRegex.test(formData.receiverName.trim())) {
+      newErrors.receiverName = 'Solo letras (mín. 2 caracteres)'
     }
 
-    // En modo create validar que el tracking ID no exista (en edit es el mismo)
-    if (!isEdit && formData.trackingId && !newErrors.trackingId) {
-      const exists = await shipmentService.trackingIdExists(formData.trackingId)
-      if (exists) {
-        newErrors.trackingId = 'Este ID de tracking ya existe'
+    if (!formData.receiverAddress.trim()) {
+      newErrors.receiverAddress = 'Requerido'
+    } else if (!addressRegex.test(formData.receiverAddress.trim())) {
+      newErrors.receiverAddress = 'Formato esperado: "Calle Altura" (ej. Rosa Castillo 2487)'
+    }
+
+    if (!formData.receiverCity.trim()) {
+      newErrors.receiverCity = 'Requerido'
+    } else if (!cityRegex.test(formData.receiverCity.trim())) {
+      newErrors.receiverCity = 'Solo letras'
+    }
+
+    if (!formData.receiverPostal.trim()) {
+      newErrors.receiverPostal = 'Requerido'
+    } else if (!postalCodeService.isValidFormat(formData.receiverPostal)) {
+      newErrors.receiverPostal = 'Debe tener 4 dígitos'
+    }
+
+    if (formData.receiverPhone.trim() && !phoneRegex.test(formData.receiverPhone.trim())) {
+      newErrors.receiverPhone = 'Teléfono inválido'
+    }
+
+    // Peso — G1L-10 (>0) + G1L-54 (capacidad máxima por repartidor)
+    const weightNum = Number(formData.weight)
+    if (!formData.weight || isNaN(weightNum) || weightNum <= 0) {
+      newErrors.weight = 'El peso debe ser mayor a 0'
+    } else if (weightNum > MAX_WEIGHT_KG) {
+      newErrors.weight = `El peso no puede superar ${MAX_WEIGHT_KG} kg`
+    }
+
+    if (!newErrors.receiverPostal) {
+      const cpResult = await postalCodeService.validate(formData.receiverPostal)
+      if (!cpResult.valid) {
+        newErrors.receiverPostal = cpResult.error ?? 'CP inválido'
       }
     }
 
@@ -155,31 +202,30 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
 
   const handleSubmit = async () => {
     if (!(await validateForm())) return
+    const origin = branches.find((b) => b.id === selectedBranchId)
+    if (!origin) return
 
     setLoading(true)
     try {
       await onSubmit({
-        trackingId: formData.trackingId,
         sender: {
-          name: formData.senderName,
-          address: formData.senderAddress,
-          city: formData.senderCity,
-          postalCode: formData.senderPostal,
-          phone: formData.senderPhone || undefined,
+          name: origin.name,
+          address: origin.address,
+          city: origin.city,
+          postalCode: origin.postalCode,
+          phone: origin.phone || undefined,
         },
         receiver: {
-          name: formData.receiverName,
-          address: formData.receiverAddress,
-          city: formData.receiverCity,
-          postalCode: formData.receiverPostal,
-          phone: formData.receiverPhone || undefined,
+          name: formData.receiverName.trim(),
+          address: formData.receiverAddress.trim(),
+          city: formData.receiverCity.trim(),
+          postalCode: formData.receiverPostal.trim(),
+          phone: formData.receiverPhone.trim() || undefined,
         },
-        // G1L-10: origin/destination se derivan de las ciudades para no pedirlos al usuario
-        origin: formData.senderCity,
-        destination: formData.receiverCity,
+        origin: origin.city,
+        destination: formData.receiverCity.trim(),
         weight: Number(formData.weight),
-        description: formData.description,
-        // G1L-10 AC6: la fecha estimada se calcula en la calendarización (Sprint 2)
+        description: formData.description.trim(),
         estimatedDelivery: '',
         status: 'Pendiente de calendarización',
         tipoEnvio: formData.tipoEnvio,
@@ -187,24 +233,14 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         createdDate: new Date().toISOString().split('T')[0],
       })
 
-      // Limpiar formulario
       setFormData({
-        trackingId: '',
-        senderName: '',
-        senderAddress: '',
-        senderCity: '',
-        senderPostal: '',
-        senderPhone: '',
         receiverName: '',
         receiverAddress: '',
         receiverCity: '',
         receiverPostal: '',
         receiverPhone: '',
-        origin: '',
-        destination: '',
         weight: '',
         description: '',
-        estimatedDelivery: '',
         tipoEnvio: 'Comun',
         tipoPaquete: 'Comun',
       })
@@ -216,101 +252,76 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     }
   }
 
+  const hasErrors = Object.values(errors).some((v) => !!v)
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{isEdit ? 'Editar envío' : 'Registrar nuevo envío'}</DialogTitle>
       <DialogContent sx={{ pt: 3 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Box>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: 1 }}>
-              <TextField
-                label="ID de Tracking"
-                disabled={true}
-                name="trackingId"
-                value={formData.trackingId}
-                onChange={handleChange}
-                error={!!errors.trackingId}
-               
-                fullWidth
-                size="small"
-              />
-              {!isEdit && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={generateNewTrackingId}
-                  disabled={generatingId || loading}
-                  sx={{ whiteSpace: 'nowrap', mt: 0.5 }}
-                  title="Generar nuevo ID"
-                >
-                  {generatingId ? <CircularProgress size={16} /> : '🔄'}
-                </Button>
-              )}
-            </Box>
-          </Box>
+          {hasErrors && (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              Revisá los campos marcados en rojo.
+            </Alert>
+          )}
 
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Remitente
-            </Typography>
-            <Grid container spacing={1}>
-              <Grid item xs={12}>
-                <TextField
-                  label="Nombre"
-                  name="senderName"
-                  value={formData.senderName}
-                  onChange={handleChange}
-                  error={!!errors.senderName}
-                  helperText={errors.senderName}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Dirección"
-                  name="senderAddress"
-                  value={formData.senderAddress}
-                  onChange={handleChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  label="Ciudad"
-                  name="senderCity"
-                  value={formData.senderCity}
-                  onChange={handleChange}
-                  error={!!errors.senderCity}
-                  helperText={errors.senderCity}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  label="CP"
-                  name="senderPostal"
-                  value={formData.senderPostal}
-                  onChange={handleChange}
-                  inputProps={{ inputMode: 'numeric' }}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Teléfono (opcional)"
-                  name="senderPhone"
-                  value={formData.senderPhone}
-                  onChange={handleChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-            </Grid>
-          </Box>
+          {!loadingBranches && branches.length === 0 && (
+            <Alert severity="warning">
+              No hay una sucursal activa configurada. Pedile al administrador que cree una desde
+              "Mi sucursal" antes de registrar envíos.
+            </Alert>
+          )}
+
+          {branches.length === 1 && (
+            <Alert severity="info" icon={false} sx={{ mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+                Origen del envío
+              </Typography>
+              <Typography variant="body2">
+                {branches[0].name} — {branches[0].address}, {branches[0].city}
+                {branches[0].postalCode ? ` (CP ${branches[0].postalCode})` : ''}
+              </Typography>
+            </Alert>
+          )}
+
+          {branches.length > 1 && (
+            <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+              <InputLabel>Sucursal de origen</InputLabel>
+              <Select
+                value={selectedBranchId}
+                label="Sucursal de origen"
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+              >
+                {branches.map((b) => (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name} — {b.address}, {b.city}
+                    {b.postalCode ? ` (CP ${b.postalCode})` : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {!isEdit && (
+            <TextField
+              label="ID de Tracking"
+              disabled
+              value="Se asignará automáticamente al guardar"
+              fullWidth
+              size="small"
+              sx={{ mt: 1 }}
+            />
+          )}
+          {isEdit && initialData && (
+            <TextField
+              label="ID de Tracking"
+              disabled
+              value={initialData.trackingId}
+              fullWidth
+              size="small"
+              sx={{ mt: 1 }}
+            />
+          )}
 
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
@@ -325,6 +336,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   onChange={handleChange}
                   error={!!errors.receiverName}
                   helperText={errors.receiverName}
+                  required
                   fullWidth
                   size="small"
                 />
@@ -335,6 +347,9 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   name="receiverAddress"
                   value={formData.receiverAddress}
                   onChange={handleChange}
+                  error={!!errors.receiverAddress}
+                  helperText={errors.receiverAddress ?? 'Formato: "Calle Altura" (ej. Rosa Castillo 2487)'}
+                  required
                   fullWidth
                   size="small"
                 />
@@ -347,6 +362,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   onChange={handleChange}
                   error={!!errors.receiverCity}
                   helperText={errors.receiverCity}
+                  required
                   fullWidth
                   size="small"
                 />
@@ -357,7 +373,18 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   name="receiverPostal"
                   value={formData.receiverPostal}
                   onChange={handleChange}
-                  inputProps={{ inputMode: 'numeric' }}
+                  onBlur={checkReceiverPostal}
+                  error={!!errors.receiverPostal}
+                  helperText={errors.receiverPostal}
+                  required
+                  inputProps={{ inputMode: 'numeric', maxLength: 4 }}
+                  InputProps={{
+                    endAdornment: postalChecking ? (
+                      <InputAdornment position="end">
+                        <CircularProgress size={14} />
+                      </InputAdornment>
+                    ) : null,
+                  }}
                   fullWidth
                   size="small"
                 />
@@ -368,6 +395,8 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   name="receiverPhone"
                   value={formData.receiverPhone}
                   onChange={handleChange}
+                  error={!!errors.receiverPhone}
+                  helperText={errors.receiverPhone}
                   fullWidth
                   size="small"
                 />
@@ -405,17 +434,23 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
             </Grid>
           </Grid>
 
-          <TextField
-            label="Peso (kg)"
-            name="weight"
-            type="number"
-            value={formData.weight}
-            onChange={handleChange}
-            error={!!errors.weight}
-            helperText={errors.weight}
-            fullWidth
-            inputProps={{ step: '0.1' }}
-          />
+          <FormControl error={!!errors.weight} fullWidth>
+            <TextField
+              label="Peso (kg)"
+              name="weight"
+              type="number"
+              value={formData.weight}
+              onChange={handleChange}
+              error={!!errors.weight}
+              helperText={errors.weight}
+              required
+              fullWidth
+              inputProps={{ step: '0.1', min: 0, max: MAX_WEIGHT_KG }}
+            />
+            {!errors.weight && (
+              <FormHelperText>Máximo {MAX_WEIGHT_KG} kg por paquete</FormHelperText>
+            )}
+          </FormControl>
 
           <TextField
             label="Observaciones (opcional)"
@@ -426,17 +461,16 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
             multiline
             rows={2}
           />
-
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading || generatingId}>
+        <Button onClick={onClose} disabled={loading}>
           Cancelar
         </Button>
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || generatingId || !formData.trackingId}
+          disabled={loading || !selectedBranchId}
         >
           {loading ? <CircularProgress size={24} /> : 'Registrar'}
         </Button>

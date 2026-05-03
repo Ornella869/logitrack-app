@@ -6,6 +6,7 @@ interface RegistarSucursalRequest {
   Nombre: string
   Direccion: string
   Ciudad: string
+  CodigoPostal: string
   Telefono: string
 }
 
@@ -25,7 +26,7 @@ const mapToBranch = (sucursal: any): Branch => ({
   name: sucursal.nombre,
   address: sucursal.direccion,
   city: sucursal.ciudad,
-  postalCode: '', // El backend no devuelve CP
+  postalCode: sucursal.codigoPostal ?? '',
   phone: sucursal.telefono,
   createdDate: new Date().toISOString().split('T')[0],
   status: mapStatus(sucursal.estado)
@@ -62,12 +63,12 @@ export const branchService = {
         Nombre: branchData.name,
         Direccion: branchData.address,
         Ciudad: branchData.city,
-        Telefono: branchData.phone
+        CodigoPostal: branchData.postalCode,
+        Telefono: branchData.phone,
       }
 
       await api.post('/envios/sucursales/registrar-sucursal', request)
 
-      // Devolver objeto simulado
       return {
         ...branchData,
         id: Date.now().toString(),
@@ -75,6 +76,38 @@ export const branchService = {
       }
     } catch (error) {
       console.error('Create branch error:', error)
+      throw error
+    }
+  },
+
+  // Actualizar una sucursal existente
+  updateBranch: async (id: string, branchData: Omit<Branch, 'id' | 'createdDate'>): Promise<Branch> => {
+    try {
+      const request: RegistarSucursalRequest = {
+        Nombre: branchData.name,
+        Direccion: branchData.address,
+        Ciudad: branchData.city,
+        CodigoPostal: branchData.postalCode,
+        Telefono: branchData.phone,
+      }
+      await api.put(`/envios/sucursales/${id}`, request)
+      return {
+        ...branchData,
+        id,
+        createdDate: new Date().toISOString().split('T')[0],
+      }
+    } catch (error) {
+      console.error('Update branch error:', error)
+      throw error
+    }
+  },
+
+  // Eliminar una sucursal por ID
+  deleteBranch: async (id: string): Promise<void> => {
+    try {
+      await api.delete(`/envios/sucursales/${id}`)
+    } catch (error) {
+      console.error('Delete branch error:', error)
       throw error
     }
   },

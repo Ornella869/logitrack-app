@@ -4,26 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ShipmentForm from '../../../components/ShipmentForm'
 
-vi.mock('../../../services/shipmentService', () => ({
-  shipmentService: {
-    generateTrackingId: vi.fn(),
-    trackingIdExists: vi.fn(),
-  },
-}))
-
 vi.mock('../../../services/branchService', () => ({
   branchService: {
     getAllBranches: vi.fn(),
   },
 }))
 
-import { shipmentService } from '../../../services/shipmentService'
 import { branchService } from '../../../services/branchService'
-
-const mockedShipmentService = shipmentService as unknown as {
-  generateTrackingId: ReturnType<typeof vi.fn>
-  trackingIdExists: ReturnType<typeof vi.fn>
-}
 
 const mockedBranchService = branchService as unknown as {
   getAllBranches: ReturnType<typeof vi.fn>
@@ -32,8 +19,6 @@ const mockedBranchService = branchService as unknown as {
 describe('ShipmentForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockedShipmentService.generateTrackingId.mockResolvedValue('LT-123')
-    mockedShipmentService.trackingIdExists.mockResolvedValue(false)
     mockedBranchService.getAllBranches.mockResolvedValue([
       { id: 'b1', name: 'Centro' },
       { id: 'b2', name: 'Norte' },
@@ -46,7 +31,9 @@ describe('ShipmentForm', () => {
 
     render(<ShipmentForm open={true} onClose={vi.fn()} onSubmit={onSubmit} />)
 
-    expect(await screen.findByDisplayValue('LT-123')).toBeInTheDocument()
+    expect(
+      await screen.findByDisplayValue('Se asignará automáticamente al guardar'),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Registrar' }))
 
@@ -60,7 +47,7 @@ describe('ShipmentForm', () => {
 
     render(<ShipmentForm open={true} onClose={vi.fn()} onSubmit={onSubmit} />)
 
-    await screen.findByDisplayValue('LT-123')
+    await screen.findByDisplayValue('Se asignará automáticamente al guardar')
 
     const nameInputs = screen.getAllByLabelText('Nombre')
     await user.type(nameInputs[0], 'Ana')
