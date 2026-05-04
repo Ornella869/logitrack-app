@@ -129,7 +129,7 @@ function Dashboard() {
       s.description,
       s.createdDate,
     ])
-    const csvContent = [headers.join(','), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(';'))].join('\n')
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(';'))].join('\n')
     const element = document.createElement('a')
     element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent))
     element.setAttribute('download', `envios_${new Date().toISOString().split('T')[0]}.csv`)
