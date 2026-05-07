@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
+import TrackingPublicPage from './pages/TrackingPublicPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import LandingPage from './pages/landing/LandingPage'
@@ -134,6 +135,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/seguimiento/:trackingId" element={<TrackingPublicPage />} />
 
         <Route
           path="/login"
