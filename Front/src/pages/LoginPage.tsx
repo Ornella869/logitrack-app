@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType, type SyntheticEvent } from 'react'
+import { useState, type ComponentType } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Box,
@@ -12,7 +12,6 @@ import {
   Divider,
   Stack,
   Chip,
-  Snackbar,
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
@@ -29,8 +28,7 @@ interface LoginPageProps {
 }
 
 interface LoginLocationState {
-  registrationSuccess?: boolean
-  registeredEmail?: string
+  registrationDisabled?: boolean
 }
 
 const DEMO_PASSWORD = 'kjkszpj1234'
@@ -51,10 +49,10 @@ const demoUsers = [
 ]
 
 function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
-  const location = useLocation()
   const showDemoUsers = import.meta.env.VITE_SHOW_DEMO_USERS === 'true'
   const showAdminDemo = import.meta.env.VITE_ADMIN_DEMO === 'true' || import.meta.env.VITE_ADMIN_DEMO === '1'
   const navigate = useNavigate()
+  const location = useLocation()
   const locationState = location.state as LoginLocationState | null
   const [credentials, setCredentials] = useState<Omit<LoginCredentials, 'recaptchaToken'>>({
     email: '',
@@ -63,21 +61,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
   const [captchaToken, setCaptchaToken] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [registrationToast, setRegistrationToast] = useState({
-    open: false,
-    message: '',
-  })
   const [showForgotPassword, setShowForgotPassword] = useState(false)
-
-  useEffect(() => {
-    if (!locationState?.registrationSuccess) return
-
-    const message = `Cuenta creada correctamente${locationState.registeredEmail ? ` para ${locationState.registeredEmail}` : ''}. Iniciá sesión para continuar.`
-    setRegistrationToast({ open: true, message })
-
-    // Limpiar el estado para no volver a mostrar el toast al regresar a /login.
-    navigate(location.pathname, { replace: true, state: null })
-  }, [location.pathname, locationState, navigate])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -140,11 +124,6 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
 
   const enterAsAdminDemo = () => {
     fillDemo('admin@logitrack.com')
-  }
-
-  const handleRegistrationToastClose = (_event: Event | SyntheticEvent, reason?: string) => {
-    if (reason === 'clickaway') return
-    setRegistrationToast((prev) => ({ ...prev, open: false }))
   }
 
   return (
@@ -212,6 +191,13 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
             </Alert>
           )}
 
+          {!error && locationState?.registrationDisabled && (
+            <Alert severity="info" sx={{ mb: 2.5 }}>
+              El alta de cuentas se gestiona por el equipo comercial. 
+              Si necesitás acceso, comunicate con nosotros desde la web.
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit} noValidate>
             <Stack spacing={2.5}>
               <TextField
@@ -272,17 +258,6 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
           </form>
 
           <Box sx={{ mt: 2.5, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
-              ¿No tenés cuenta?{' '}
-              <Link
-                component="button"
-                variant="body2"
-                onClick={() => navigate('/register')}
-                sx={{ fontWeight: 600 }}
-              >
-                Registrate aquí
-              </Link>
-            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               <Link
                 component="button"
@@ -349,22 +324,6 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
           open={showForgotPassword}
           onClose={() => setShowForgotPassword(false)}
         />
-
-        <Snackbar
-          open={registrationToast.open}
-          autoHideDuration={4500}
-          onClose={handleRegistrationToastClose}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        >
-          <Alert
-            severity="success"
-            variant="filled"
-            onClose={handleRegistrationToastClose}
-            sx={{ width: '100%' }}
-          >
-            {registrationToast.message}
-          </Alert>
-        </Snackbar>
       </Box>
     </Box>
    ) 

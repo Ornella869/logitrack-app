@@ -64,22 +64,13 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>Auto-registro abierto (Operador o Supervisor). Repartidor y Administrador requieren alta por Admin.</summary>
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        /// <summary>Registro publico deshabilitado. El alta se gestiona por el equipo comercial y administradores.</summary>
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [HttpPost("registrarse")]
-        public async Task<ActionResult> Registrarse([FromBody] RegisterRequest request)
+        public ActionResult Registrarse([FromBody] RegisterRequest request)
         {
-            try
-            {
-                await _authService.Registrarse(request);
-                await _context.SaveChangesAsync();
-                return Ok();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "El registro publico esta deshabilitado. Solicita el alta al equipo comercial.");
         }
 
         /// <summary>Usuario logueado cambia su propia contraseña (G1L-47).</summary>

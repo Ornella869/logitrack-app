@@ -9,6 +9,10 @@ import {
   CardContent,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Grid,
   IconButton,
@@ -40,6 +44,7 @@ import SupportAgentRoundedIcon from '@mui/icons-material/SupportAgentRounded'
 import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded'
 import DirectionsCarFilledRoundedIcon from '@mui/icons-material/DirectionsCarFilledRounded'
 import warehouseImage from '../../assets/warehouse.jpg'
+import { leadService, type PlanInteres } from '../../services/leadService'
 
 type ReviewCategory = 'entrega' | 'vehiculo' | 'general'
 
@@ -130,10 +135,10 @@ const categoryColor: Record<ReviewCategory, string> = {
 }
 
 const quickStats = [
-  { value: '98%', label: 'entregas a tiempo', helper: 'coordinación de punta a punta' },
-  { value: '24/7', label: 'seguimiento visible', helper: 'clientes y operación conectados' },
-  { value: '+2.4k', label: 'reseñas positivas', helper: 'experiencias reales sobre el servicio' },
-  { value: '12 min', label: 'promedio de asignación', helper: 'vehículo y ruta sugeridos rápido' },
+  { value: '98%', label: 'Entregas a tiempo', helper: 'Coordinación de punta a punta' },
+  { value: '24/7', label: 'Seguimiento visible', helper: 'Clientes y operación conectados' },
+  { value: '+2.4k', label: 'Reseñas positivas', helper: 'Experiencias reales sobre el servicio' },
+  { value: '12 min', label: 'Promedio de asignación', helper: 'Vehículo y ruta sugeridos rápido' },
 ]
 
 const features = [
@@ -161,59 +166,74 @@ const features = [
 
 const steps = [
   {
-    title: 'Recibí el pedido',
-    text: 'Registrá origen, destino y prioridad en una interfaz fácil de usar para cualquier persona.',
+    title: 'Solicitá una demo',
+    text: 'Completá el formulario comercial y contanos el volumen y tipo de envíos que gestiona tu empresa.',
     icon: <StorefrontRoundedIcon />,
+    accentFrom: '#0A6FD8',
+    accentTo: '#0E88DF',
   },
   {
-    title: 'Asigná la mejor unidad',
-    text: 'Elegí el vehículo adecuado según carga, distancia y disponibilidad operativa.',
+    title: 'Definimos el plan ideal',
+    text: 'Te asesoramos con una propuesta acorde a tu operación: cuentas, funciones y acompañamiento.',
+    icon: <InsightsRoundedIcon />,
+    accentFrom: '#0E88DF',
+    accentTo: '#1498E3',
+  },
+  {
+    title: 'Activamos tu cuenta Admin',
+    text: 'Te entregamos el acceso inicial para administrar tu operación desde LogiTrack.',
+    icon: <ShieldRoundedIcon />,
+    accentFrom: '#1498E3',
+    accentTo: '#1AA8DF',
+  },
+  {
+    title: 'Configurás tu equipo',
+    text: 'Desde la cuenta Admin creás usuarios Supervisor, Operador y Repartidor según tu estructura interna.',
     icon: <WarehouseRoundedIcon />,
+    accentFrom: '#1AA8DF',
+    accentTo: '#22B6D4',
   },
   {
-    title: 'SeguÍ la entrega',
-    text: 'Monitoreá tiempos estimados, estados y desempeño con feedback de clientes reales.',
+    title: 'Operás tus envíos',
+    text: 'Tu empresa gestiona sus envíos con trazabilidad completa y auditoría.',
     icon: <ScheduleRoundedIcon />,
+    accentFrom: '#22B6D4',
+    accentTo: '#26A69A',
   },
 ]
 
-function AnimatedNumber({ value }: { value: string }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const node = ref.current
-    if (!node) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setVisible(true)
-      },
-      { threshold: 0.35 },
-    )
-
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
-
-  return (
-    <Box ref={ref}>
-      <Typography
-        variant="h3"
-        sx={{
-          fontWeight: 900,
-          letterSpacing: '-1px',
-          color: '#0B1F33',
-          transform: visible ? 'translateY(0)' : 'translateY(12px)',
-          opacity: visible ? 1 : 0,
-          transition: 'all 0.65s ease',
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  )
-}
+const plans: Array<{
+  name: string
+  planValue: PlanInteres
+  accountLimit: string
+  price: string
+  features: string[]
+}> = [
+  {
+    name: 'Basico',
+    planValue: 'Basico',
+    accountLimit: 'Hasta 50 cuentas',
+    price: '$89.900 / mes (mock)',
+    features: [
+      'Registro y seguimiento de envios',
+      'Estados de entrega y trazabilidad',
+      'Dashboard operativo estandar',
+      'Soporte por correo en horario laboral',
+    ],
+  },
+  {
+    name: 'Premium',
+    planValue: 'Premium',
+    accountLimit: 'Hasta 200 cuentas',
+    price: '$249.900 / mes (mock)',
+    features: [
+      'Todo lo incluido en Basico',
+      'Planificacion de rutas avanzada',
+      'Reportes ejecutivos y metricas ampliadas',
+      'Soporte prioritario y acompanamiento',
+    ],
+  },
+]
 
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -230,16 +250,33 @@ export default function LandingPage() {
     comment: '',
   })
   const [reviewError, setReviewError] = useState('')
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false)
+  const [leadSubmitting, setLeadSubmitting] = useState(false)
+  const [leadSent, setLeadSent] = useState(false)
+  const [leadError, setLeadError] = useState('')
+  const [leadForm, setLeadForm] = useState({
+    companyName: '',
+    contactName: '',
+    email: '',
+    phone: '',
+    plan: 'Basico' as PlanInteres,
+    comments: '',
+  })
+  const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
 
   const closeReviewToast = () => {
     setReviewSent(false)
+  }
+
+  const closeLeadToast = () => {
+    setLeadSent(false)
   }
   const [reviewSent, setReviewSent] = useState(false)
 
   const heroRef = useRef<HTMLElement | null>(null)
   const aboutRef = useRef<HTMLElement | null>(null)
   const reviewsRef = useRef<HTMLElement | null>(null)
-  const loginRef = useRef<HTMLElement | null>(null)
+  const plansRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -305,12 +342,232 @@ export default function LandingPage() {
     setReviewSent(true)
   }
 
+  const openLeadDialog = (plan: PlanInteres) => {
+    setLeadForm((current) => ({ ...current, plan }))
+    setLeadFormErrors({})
+    setLeadError('')
+    setLeadDialogOpen(true)
+  }
+
+  const closeLeadDialog = () => {
+    if (leadSubmitting) {
+      return
+    }
+    setLeadDialogOpen(false)
+  }
+
+  const handleLeadChange = (field: keyof typeof leadForm, value: string) => {
+    setLeadForm((current) => ({
+      ...current,
+      [field]: field === 'plan' ? (value as PlanInteres) : value,
+    }))
+    setLeadFormErrors((current) => ({ ...current, [field]: undefined }))
+    setLeadError('')
+  }
+
+  const validateLeadForm = () => {
+    const errors: Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>> = {}
+
+    if (!leadForm.companyName.trim()) errors.companyName = 'Completá el nombre de la empresa.'
+    if (!leadForm.contactName.trim()) errors.contactName = 'Completá el nombre de contacto.'
+    if (!leadForm.email.trim()) {
+      errors.email = 'Completá el email de contacto.'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadForm.email.trim())) {
+      errors.email = 'Ingresá un email válido.'
+    }
+
+    const digits = leadForm.phone.replace(/\D/g, '')
+    if (!leadForm.phone.trim()) {
+      errors.phone = 'Completá el teléfono de contacto.'
+    } else if (digits.length < 8) {
+      errors.phone = 'Ingresá un teléfono válido.'
+    }
+
+    if (!leadForm.plan) {
+      errors.plan = 'Seleccioná un plan de interés.'
+    }
+
+    setLeadFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleLeadSubmit = async () => {
+    if (!validateLeadForm()) {
+      return
+    }
+
+    try {
+      setLeadSubmitting(true)
+      await leadService.createLead({
+        companyName: leadForm.companyName,
+        contactName: leadForm.contactName,
+        email: leadForm.email,
+        phone: leadForm.phone,
+        plan: leadForm.plan,
+        comments: leadForm.comments,
+      })
+
+      setLeadDialogOpen(false)
+      setLeadSent(true)
+      setLeadForm({
+        companyName: '',
+        contactName: '',
+        email: '',
+        phone: '',
+        plan: 'Basico',
+        comments: '',
+      })
+      setLeadFormErrors({})
+      setLeadError('')
+    } catch (error: any) {
+      setLeadError(error?.response?.data?.message || error?.response?.data || 'No pudimos enviar tu solicitud. Probá nuevamente.')
+    } finally {
+      setLeadSubmitting(false)
+    }
+  }
+
   const navItems: Array<{ label: string; ref: React.RefObject<HTMLElement | null> }> = [
     { label: 'Inicio', ref: heroRef },
+    { label: 'Planes', ref: plansRef },
     { label: 'Servicios', ref: aboutRef },
     { label: 'Reseñas', ref: reviewsRef },
-    { label: 'Acceso', ref: loginRef },
   ]
+
+  const plansSection = (
+    <Box component="section" ref={plansRef} sx={{ pt: { xs: 8, md: 10 }, pb: { xs: 12, md: 16 }, bgcolor: '#071D31' }}>
+      <Container maxWidth="lg">
+        <Stack spacing={1.25} sx={{ mb: 4 }}>
+          <Typography sx={{ color: '#4FC3F7', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+            Planes LogiTrack
+          </Typography>
+          <Typography variant="h3" sx={{ color: '#fff', fontWeight: 900, lineHeight: 1.1 }}>
+            Elegí el plan ideal para tu operación
+          </Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,0.75)', maxWidth: 780, lineHeight: 1.75 }}>
+            Compará funcionalidades y capacidad por plan. Si ya sos cliente, podés ingresar directo al sistema desde el botón de acceso.
+          </Typography>
+        </Stack>
+
+        <Grid container spacing={3}>
+          {plans.map((plan) => {
+            const isPremium = plan.planValue === 'Premium'
+            const accentMain = isPremium ? '#26A69A' : '#0288D1'
+            const accentSoft = isPremium ? '#4DB6AC' : '#26C6DA'
+
+            return (
+            <Grid item xs={12} md={6} key={plan.planValue}>
+              <Card
+                sx={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '24px',
+                  p: { xs: 2.5, md: 3 },
+                  minHeight: '100%',
+                  boxShadow: isPremium ? '0 28px 60px rgba(38,166,154,0.35)' : '0 28px 60px rgba(2,136,209,0.35)',
+                  border: isPremium ? '2px solid rgba(38,166,154,0.4)' : '2px solid rgba(2,136,209,0.4)',
+                  background: isPremium
+                    ? 'linear-gradient(160deg,#FFFFFF 0%,#E6F7F4 100%)'
+                    : 'linear-gradient(160deg,#FFFFFF 0%,#E3F4FF 100%)',
+                  transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                  '&:hover': {
+                    transform: 'translateY(-6px)',
+                    boxShadow: isPremium ? '0 32px 66px rgba(38,166,154,0.42)' : '0 32px 66px rgba(2,136,209,0.42)',
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    width: 170,
+                    height: 170,
+                    borderRadius: '50%',
+                    top: -70,
+                    right: -55,
+                    background: isPremium ? 'rgba(2,136,209,0.12)' : 'rgba(2,136,209,0.07)',
+                  }}
+                />
+
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.4 }}>
+                  {isPremium ? (
+                    <Chip
+                      label="Más elegido"
+                      size="small"
+                      sx={{
+                        fontWeight: 800,
+                        color: '#fff',
+                        background: `linear-gradient(135deg,${accentMain},${accentSoft})`,
+                        zIndex: 2,
+                      }}
+                    />
+                  ) : (
+                    <Box />
+                  )}
+                  <Chip
+                    label={plan.accountLimit}
+                    sx={{
+                      bgcolor: isPremium ? '#DFF4F1' : '#D5EEFF',
+                      color: accentMain,
+                      fontWeight: 800,
+                      zIndex: 1,
+                    }}
+                  />
+                </Stack>
+
+                <Typography variant="h5" sx={{ fontWeight: 900, color: '#0B1F33' }}>
+                  {plan.name}
+                </Typography>
+
+                <Typography sx={{ mt: 1.5, color: accentMain, fontWeight: 900, fontSize: '1.5rem' }}>
+                  {plan.price}
+                </Typography>
+
+                <Stack spacing={1.15} sx={{ mt: 2.5 }}>
+                  {plan.features.map((feature) => (
+                    <Stack key={feature} direction="row" spacing={1.2} alignItems="center">
+                      <CheckCircleRoundedIcon sx={{ color: accentMain, fontSize: 20 }} />
+                      <Typography sx={{ color: '#244156', fontWeight: 600 }}>{feature}</Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 3 }}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={() => openLeadDialog(plan.planValue)}
+                    sx={{
+                      py: 1.25,
+                      borderRadius: '14px',
+                      fontWeight: 800,
+                      bgcolor: accentMain,
+                      '&:hover': { bgcolor: accentSoft },
+                    }}
+                  >
+                    Quiero contratar
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    onClick={() => openLeadDialog(plan.planValue)}
+                    sx={{
+                      py: 1.25,
+                      borderRadius: '14px',
+                      fontWeight: 800,
+                      borderColor: accentMain,
+                      color: accentMain,
+                      '&:hover': { borderColor: accentSoft, bgcolor: isPremium ? 'rgba(38,166,154,0.08)' : 'rgba(2,136,209,0.08)' },
+                    }}
+                  >
+                    Más información
+                  </Button>
+                </Stack>
+              </Card>
+            </Grid>
+          )})}
+        </Grid>
+      </Container>
+    </Box>
+  )
 
   return (
     <Box sx={{ bgcolor: '#F4F9FE', overflowX: 'hidden' }}>
@@ -372,7 +629,7 @@ export default function LandingPage() {
                   boxShadow: '0 10px 22px rgba(2,136,209,0.28)',
                 }}
               >
-                Ingresar
+                Iniciar sesión
               </Button>
             </Stack>
 
@@ -390,6 +647,9 @@ export default function LandingPage() {
                   {item.label}
                 </Button>
               ))}
+              <Button variant="contained" onClick={() => navigate('/login')} sx={{ mt: 0.5 }}>
+                Iniciar sesión
+              </Button>
             </Stack>
           </Paper>
         )}
@@ -478,23 +738,35 @@ export default function LandingPage() {
               <Typography
                 variant="h1"
                 sx={{
-                  fontSize: { xs: '2.7rem', md: '4.3rem' },
-                  lineHeight: 1.02,
-                  letterSpacing: '-1.6px',
-                  fontWeight: 900,
+                  fontSize: { xs: '2.45rem', md: '4.6rem' },
+                  lineHeight: { xs: 1.07, md: 0.98 },
+                  letterSpacing: { xs: '-1.1px', md: '-1.9px' },
+                  fontWeight: 950,
                   color: '#fff',
-                  maxWidth: 740,
+                  maxWidth: 780,
+                  textWrap: 'balance',
+                  textShadow: '0 10px 28px rgba(1,17,31,0.35)',
                 }}
               >
-                Una página de logística
+                Gestioná tu negocio
                 <Box component="span" sx={{ color: '#9DE7FF', display: 'inline' }}>
-                  {' '}clara, linda y lista para usar
+                  {' '}con una plataforma clara y confiable
                 </Box>
               </Typography>
 
+              <Box
+                sx={{
+                  mt: 2,
+                  width: { xs: 110, md: 150 },
+                  height: 6,
+                  borderRadius: '999px',
+                  background: 'linear-gradient(90deg,#9DE7FF 0%, rgba(157,231,255,0.1) 100%)',
+                }}
+              />
+
               <Typography sx={{ mt: 3, maxWidth: 640, color: 'rgba(255,255,255,0.82)', fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.8 }}>
-                Inspirada en plataformas modernas de delivery y operación, esta propuesta presenta envíos, rutas, vehículos,
-                reseñas reales y acceso rápido desde una sola landing pensada para cualquier persona.
+                Mostrá profesionalismo desde el primer contacto: centralizá tus operaciones, métricas y administra entregas,
+                rutas y equipos desde un solo lugar.
               </Typography>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
@@ -502,7 +774,10 @@ export default function LandingPage() {
                   size="large"
                   variant="contained"
                   endIcon={<ArrowForwardRoundedIcon />}
-                  onClick={() => navigate('/login')}
+                  onClick={() => {
+                    scrollTo(plansRef)
+                    openLeadDialog('Basico')
+                  }}
                   sx={{
                     px: 3.5,
                     py: 1.4,
@@ -513,12 +788,12 @@ export default function LandingPage() {
                     '&:hover': { background: '#E1F5FE', transform: 'translateY(-2px)' },
                   }}
                 >
-                  Ir a iniciar sesión
+                  Quiero contratar
                 </Button>
                 <Button
                   size="large"
                   variant="outlined"
-                  onClick={() => scrollTo(reviewsRef)}
+                  onClick={() => scrollTo(plansRef)}
                   sx={{
                     px: 3.5,
                     py: 1.4,
@@ -528,7 +803,7 @@ export default function LandingPage() {
                     '&:hover': { borderColor: '#fff', background: 'rgba(255,255,255,0.08)' },
                   }}
                 >
-                  Ver comentarios y calificaciones
+                  Ver planes
                 </Button>
               </Stack>
 
@@ -626,43 +901,45 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      <Box component="section" ref={aboutRef} sx={{ mt: -5, position: 'relative', zIndex: 3 }}>
+      {plansSection}
+
+      <Box sx={{ py: { xs: 5, md: 6 }, bgcolor: '#F0F7FD' }}>
         <Container maxWidth="lg">
-          <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: '28px', boxShadow: '0 20px 50px rgba(4,33,62,0.08)' }}>
-            <Grid container spacing={3}>
-              {quickStats.map((stat) => (
-                <Grid item xs={12} sm={6} md={3} key={stat.label}>
-                  <Box sx={{ p: 2 }}>
-                    <AnimatedNumber value={stat.value} />
-                    <Typography sx={{ mt: 1, fontWeight: 800, color: '#12324A' }}>{stat.label}</Typography>
-                    <Typography sx={{ mt: 0.5, color: '#5B7488', lineHeight: 1.7 }}>{stat.helper}</Typography>
-                  </Box>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
+          <Grid container spacing={2}>
+            {quickStats.map((stat) => (
+              <Grid item xs={12} sm={6} md={3} key={stat.label}>
+                <Paper sx={{ p: 2.25, borderRadius: '18px', border: '1px solid rgba(2,136,209,0.1)', boxShadow: '0 10px 22px rgba(4,33,62,0.06)' }}>
+                  <Typography sx={{ fontSize: '1.5rem', fontWeight: 900, color: '#0C5EA7', lineHeight: 1.1 }}>
+                    {stat.value}
+                  </Typography>
+                  <Typography sx={{ mt: 0.7, fontWeight: 800, color: '#12324A' }}>{stat.label}</Typography>
+                  <Typography sx={{ mt: 0.4, color: '#5B7488', lineHeight: 1.6, fontSize: '0.9rem' }}>{stat.helper}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
         </Container>
       </Box>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 8, md: 10 } }}>
+      <Container component="section" ref={aboutRef} maxWidth="lg" sx={{ py: { xs: 8, md: 10 } }}>
         <Grid container spacing={4} alignItems="stretch">
           <Grid item xs={12} md={5}>
             <Typography sx={{ color: '#0288D1', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
-              Sobre la logística
+              Sobre la plataforma
             </Typography>
             <Typography variant="h3" sx={{ mt: 1.2, fontWeight: 900, color: '#0B1F33', lineHeight: 1.1 }}>
-              Una experiencia digital pensada para explicar y vender mejor el servicio
+              Un sistema para Empresas que buscan gestionar sus envíos
             </Typography>
             <Typography sx={{ mt: 2.5, color: '#5B7488', lineHeight: 1.9 }}>
-              La logística ya no es solo mover paquetes: también es comunicar estado, transmitir confianza y facilitar decisiones.
-              Por eso esta landing combina storytelling, métricas, movimiento visual, reseñas y accesos claros para quienes operan y para quienes consultan.
+              LogiTrack permite centralizar la operación de envíos de tu negocio sin depender de herramientas dispersas.
+              Tu empresa administra usuarios, pedidos, estados y trazabilidad en un entorno claro y escalable.
             </Typography>
             <Stack spacing={1.5} sx={{ mt: 3.5 }}>
               {[
-                'Visual moderno con secciones claras y llamadas a la acción.',
-                'Comentarios y calificaciones para generar confianza social.',
-                'Ingreso rápido con cuentas demo para mostrar la plataforma.',
-                'Formulario para reseñas sobre tiempo de entrega y vehículos.',
+                'Cuenta Administrador inicial para gobernar toda la operación.',
+                'Gestión de roles internos: Supervisor, Operador y Repartidor.',
+                'Seguimiento con estado y trazabilidad para destinatarios variables.',
+                'Escalabilidad por planes según crecimiento y volumen de cuentas.',
               ].map((item) => (
                 <Stack key={item} direction="row" spacing={1.5} alignItems="center">
                   <CheckCircleRoundedIcon sx={{ color: '#0288D1' }} />
@@ -706,24 +983,35 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Box sx={{ textAlign: 'center', mb: 5 }}>
             <Typography sx={{ color: '#0288D1', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
-              Cómo funciona
+              Implementación SaaS
             </Typography>
             <Typography variant="h3" sx={{ mt: 1.2, fontWeight: 900, color: '#0B1F33' }}>
-              Simple para mostrar, simple para entender
+              De interés comercial a operación activa
             </Typography>
           </Box>
 
-          <Grid container spacing={3}>
+          <Grid container spacing={3} justifyContent="center">
             {steps.map((step, index) => (
-              <Grid item xs={12} md={4} key={step.title}>
-                <Card sx={{ height: '100%', borderRadius: '24px', p: 3, position: 'relative', overflow: 'hidden' }}>
-                  <Chip label={`0${index + 1}`} sx={{ mb: 2, bgcolor: '#E1F5FE', color: '#0288D1', fontWeight: 800 }} />
-                  <Box sx={{ width: 60, height: 60, borderRadius: '18px', display: 'grid', placeItems: 'center', bgcolor: '#0B1F33', color: '#fff', mb: 2.2 }}>
+              <Grid item xs={12} sm={6} md={4} key={step.title}>
+                <Card sx={{ height: '100%', borderRadius: '24px', p: 3, position: 'relative', overflow: 'hidden', borderTop: `4px solid ${step.accentFrom}` }}>
+                  <Chip label={`Paso 0${index + 1}`} sx={{ mb: 2, bgcolor: '#E1F5FE', color: step.accentFrom, fontWeight: 800 }} />
+                  <Box
+                    sx={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: '18px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: `linear-gradient(135deg, ${step.accentFrom}, ${step.accentTo})`,
+                      color: '#fff',
+                      mb: 2.2,
+                    }}
+                  >
                     {step.icon}
                   </Box>
                   <Typography sx={{ fontWeight: 800, color: '#0B1F33', fontSize: '1.15rem' }}>{step.title}</Typography>
                   <Typography sx={{ mt: 1.2, color: '#5B7488', lineHeight: 1.8 }}>{step.text}</Typography>
-                  <Box sx={{ position: 'absolute', right: -35, bottom: -35, width: 120, height: 120, borderRadius: '50%', bgcolor: 'rgba(2,136,209,0.06)' }} />
+                  <Box sx={{ position: 'absolute', right: -35, bottom: -35, width: 120, height: 120, borderRadius: '50%', bgcolor: `${step.accentTo}20` }} />
                 </Card>
               </Grid>
             ))}
@@ -859,62 +1147,13 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      <Box component="section" ref={loginRef} sx={{ py: { xs: 8, md: 10 }, bgcolor: '#071D31' }}>
-        <Container maxWidth="lg">
-          <Grid container spacing={4} alignItems="center">
-            <Grid item xs={12} md={7}>
-              <Typography sx={{ color: '#4FC3F7', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
-                Acceso a la plataforma
-              </Typography>
-              <Typography variant="h3" sx={{ mt: 1.2, color: '#fff', fontWeight: 900, lineHeight: 1.1 }}>
-                Ingresá desde la pantalla de login que ya tenías
-              </Typography>
-              
-
-              <Stack spacing={1.5} sx={{ mt: 3.5 }}>
-                {[
-                  'Orientada a mostrar la propuesta logística.',
-        
-                 'El registro puede realizarse desde su sección específica dentro de la plataforma.',
-                ].map((item) => (
-                  <Stack key={item} direction="row" spacing={1.5} alignItems="center">
-                    <CheckCircleRoundedIcon sx={{ color: '#4FC3F7' }} />
-                    <Typography sx={{ color: 'rgba(255,255,255,0.84)', fontWeight: 600 }}>{item}</Typography>
-                  </Stack>
-                ))}
-              </Stack>
-            </Grid>
-
-            <Grid item xs={12} md={5}>
-              <Card sx={{ borderRadius: '28px', p: { xs: 3, md: 4 }, boxShadow: '0 24px 55px rgba(0,0,0,0.28)' }}>
-                <Typography variant="h5" sx={{ fontWeight: 900, color: '#0B1F33' }}>
-                  Accedé o creá tu cuenta
-                </Typography>
-                <Typography sx={{ mt: 1, color: '#5B7488', lineHeight: 1.8 }}>
-                  Entrá desde la página de login del sistema o registrate para usar la plataforma.
-                </Typography>
-
-                <Stack spacing={2} sx={{ mt: 3 }}>
-                  <Button variant="contained" size="large" onClick={() => navigate('/login')} sx={{ py: 1.35, borderRadius: '16px', fontWeight: 800 }}>
-                    Ir a iniciar sesión
-                  </Button>
-                  <Button variant="outlined" size="large" onClick={() => navigate('/register')} sx={{ py: 1.35, borderRadius: '16px', fontWeight: 800 }}>
-                    Crear cuenta nueva
-                  </Button>
-                </Stack>
-              </Card>
-            </Grid>
-          </Grid>
-        </Container>
-      </Box>
-
       <Box sx={{ py: 4, bgcolor: '#04111D' }}>
         <Container maxWidth="lg">
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
               <Typography sx={{ color: '#fff', fontWeight: 800 }}>LogiTrack</Typography>
               <Typography sx={{ mt: 0.8, color: 'rgba(255,255,255,0.62)' }}>
-                Landing de logística con foco en seguimiento, vehículos, reseñas e inicio de sesión integrado.
+                Plataforma SaaS para empresas que gestionan sus propios envíos con control operativo, trazabilidad y escalabilidad.
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -940,6 +1179,95 @@ export default function LandingPage() {
       <Snackbar open={reviewSent} autoHideDuration={2500} onClose={closeReviewToast}>
         <Alert severity="success" variant="filled" onClose={closeReviewToast}>
           ¡Gracias! Tu reseña ya quedó visible en la página.
+        </Alert>
+      </Snackbar>
+
+      <Dialog open={leadDialogOpen} onClose={closeLeadDialog} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontWeight: 800 }}>Formulario de contacto comercial</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.3 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="Nombre de la empresa"
+                fullWidth
+                value={leadForm.companyName}
+                onChange={(event) => handleLeadChange('companyName', event.target.value)}
+                error={Boolean(leadFormErrors.companyName)}
+                helperText={leadFormErrors.companyName}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Nombre de contacto"
+                fullWidth
+                value={leadForm.contactName}
+                onChange={(event) => handleLeadChange('contactName', event.target.value)}
+                error={Boolean(leadFormErrors.contactName)}
+                helperText={leadFormErrors.contactName}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Email"
+                fullWidth
+                value={leadForm.email}
+                onChange={(event) => handleLeadChange('email', event.target.value)}
+                error={Boolean(leadFormErrors.email)}
+                helperText={leadFormErrors.email}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Teléfono"
+                fullWidth
+                value={leadForm.phone}
+                onChange={(event) => handleLeadChange('phone', event.target.value)}
+                error={Boolean(leadFormErrors.phone)}
+                helperText={leadFormErrors.phone}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                select
+                label="Plan de interés"
+                fullWidth
+                value={leadForm.plan}
+                onChange={(event) => handleLeadChange('plan', event.target.value)}
+                error={Boolean(leadFormErrors.plan)}
+                helperText={leadFormErrors.plan}
+              >
+                <MenuItem value="Basico">Básico</MenuItem>
+                <MenuItem value="Premium">Premium</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Comentarios (opcional)"
+                fullWidth
+                multiline
+                minRows={3}
+                value={leadForm.comments}
+                onChange={(event) => handleLeadChange('comments', event.target.value)}
+              />
+            </Grid>
+            {leadError && (
+              <Grid item xs={12}>
+                <Alert severity="error">{leadError}</Alert>
+              </Grid>
+            )}
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={closeLeadDialog} disabled={leadSubmitting}>Cancelar</Button>
+          <Button variant="contained" onClick={handleLeadSubmit} disabled={leadSubmitting}>
+            {leadSubmitting ? 'Enviando...' : 'Enviar solicitud'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={leadSent} autoHideDuration={3800} onClose={closeLeadToast}>
+        <Alert severity="success" variant="filled" onClose={closeLeadToast}>
+          Recibimos tu solicitud. Te contactaremos a la brevedad
         </Alert>
       </Snackbar>
 
