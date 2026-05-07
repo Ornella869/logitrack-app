@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Box, CircularProgress } from '@mui/material'
 import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
 import Dashboard from './pages/Dashboard'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
@@ -146,9 +145,7 @@ function App() {
         />
         <Route
           path="/register"
-          element={
-            user ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : '/app'} /> : <RegisterPage />
-          }
+          element={<Navigate to="/login" replace state={{ registrationDisabled: true }} />}
         />
 
         {/* Rutas autenticadas (cualquier rol) */}

@@ -13,6 +13,7 @@ namespace Back.Infrastructure.Database
         public DbSet<Paquete> Paquetes { get; set; }
         public DbSet<Direccion> Direcciones { get; set; }
         public DbSet<HistorialEstadoEnvio> HistorialEstadosEnvio { get; set; }
+        public DbSet<SolicitudComercial> SolicitudesComerciales { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -69,6 +70,20 @@ namespace Back.Infrastructure.Database
                 h.HasKey(x => x.Id);
                 h.HasIndex(x => x.PaqueteId);
                 h.HasIndex(x => x.FechaHora);
+            });
+
+            modelBuilder.Entity<SolicitudComercial>(s =>
+            {
+                s.HasKey(x => x.Id);
+                s.Property(x => x.NombreEmpresa).HasMaxLength(160);
+                s.Property(x => x.NombreContacto).HasMaxLength(160);
+                s.Property(x => x.Email).HasMaxLength(160);
+                s.Property(x => x.Telefono).HasMaxLength(50);
+                s.Property(x => x.PlanInteres).HasMaxLength(80);
+                s.Property(x => x.Comentarios).HasMaxLength(2000);
+                s.Property(x => x.CreadoEn);
+                s.HasIndex(x => x.CreadoEn);
+                s.HasIndex(x => x.Email);
             });
         }
 
