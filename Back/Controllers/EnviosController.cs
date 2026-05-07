@@ -69,11 +69,33 @@ namespace Back.Controllers
 
         /// <summary>Vista pública de seguimiento por código.</summary>
         [HttpGet("seguimiento/{codigoSeguimiento}")]
-        public async Task<ActionResult<Paquete>> Seguimiento(string codigoSeguimiento)
+        public async Task<ActionResult<SeguimientoPublicoResponse>> Seguimiento(string codigoSeguimiento)
         {
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento);
             if (paquete is null) return NotFound();
-            return Ok(paquete);
+
+            return Ok(new SeguimientoPublicoResponse
+            {
+                Id = paquete.Id,
+                CodigoSeguimiento = paquete.CodigoSeguimiento,
+                Status = paquete.Status,
+                TipoEnvio = paquete.TipoEnvio,
+                TipoPaquete = paquete.TipoPaquete,
+                CreadoEn = paquete.CreadoEn,
+                Peso = paquete.Peso,
+                Descripcion = paquete.Descripcion,
+                RazonCancelacion = paquete.RazonCancelacion,
+                Remitente = new SeguimientoPublicoCliente
+                {
+                    Ciudad = paquete.Remitente.Direccion.Ciudad,
+                    CP = paquete.Remitente.Direccion.CP,
+                },
+                Destinatario = new SeguimientoPublicoCliente
+                {
+                    Ciudad = paquete.Destinatario.Direccion.Ciudad,
+                    CP = paquete.Destinatario.Direccion.CP,
+                }
+            });
         }
 
         // ============== G1L-39 + G1L-40: Listado, búsqueda y filtros ==============
@@ -473,6 +495,27 @@ namespace Back.Controllers
         public string Apellido { get; set; } = string.Empty;
         public string? Telefono { get; set; }
         public string Direccion { get; set; } = string.Empty;
+        public string Ciudad { get; set; } = string.Empty;
+        public string CP { get; set; } = string.Empty;
+    }
+
+    public class SeguimientoPublicoResponse
+    {
+        public Guid Id { get; set; }
+        public string CodigoSeguimiento { get; set; } = string.Empty;
+        public PaqueteStatus Status { get; set; }
+        public TipoEnvio TipoEnvio { get; set; }
+        public TipoPaquete TipoPaquete { get; set; }
+        public DateTime CreadoEn { get; set; }
+        public double Peso { get; set; }
+        public string? Descripcion { get; set; }
+        public string? RazonCancelacion { get; set; }
+        public SeguimientoPublicoCliente Remitente { get; set; } = new();
+        public SeguimientoPublicoCliente Destinatario { get; set; } = new();
+    }
+
+    public class SeguimientoPublicoCliente
+    {
         public string Ciudad { get; set; } = string.Empty;
         public string CP { get; set; } = string.Empty;
     }

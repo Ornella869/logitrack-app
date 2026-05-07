@@ -4,11 +4,19 @@ namespace Back.Application.Services
 {
     public class QrService
     {
-        public const string PublicTrackingBaseUrl = "https://logitrack.com/seguimiento";
+        private readonly string _publicTrackingBaseUrl;
+
+        public QrService(IConfiguration configuration)
+        {
+            _publicTrackingBaseUrl = configuration["PublicTrackingBaseUrl"]?.Trim()
+                ?? throw new InvalidOperationException("La configuración PublicTrackingBaseUrl es obligatoria.");
+        }
 
         public string BuildTrackingUrl(string codigoSeguimiento)
         {
-            return $"{PublicTrackingBaseUrl}/{codigoSeguimiento}";
+            var baseUrl = _publicTrackingBaseUrl.TrimEnd('/');
+            var trackingId = Uri.EscapeDataString(codigoSeguimiento.Trim());
+            return $"{baseUrl}/{trackingId}";
         }
 
         public byte[] GenerarPng(string codigoSeguimiento)
