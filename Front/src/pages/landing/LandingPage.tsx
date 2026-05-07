@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material'
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import ElectricBoltRoundedIcon from '@mui/icons-material/ElectricBoltRounded'
@@ -40,7 +41,6 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded'
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded'
 import StarRoundedIcon from '@mui/icons-material/StarRounded'
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded'
-import SupportAgentRoundedIcon from '@mui/icons-material/SupportAgentRounded'
 import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded'
 import DirectionsCarFilledRoundedIcon from '@mui/icons-material/DirectionsCarFilledRounded'
 import warehouseImage from '../../assets/warehouse.jpg'
@@ -237,6 +237,14 @@ const plans: Array<{
 
 export default function LandingPage() {
   const navigate = useNavigate()
+  const initialLeadForm = {
+    companyName: '',
+    contactName: '',
+    email: '',
+    phone: '',
+    plan: 'Basico' as PlanInteres,
+    comments: '',
+  }
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [showTop, setShowTop] = useState(false)
@@ -250,18 +258,12 @@ export default function LandingPage() {
     comment: '',
   })
   const [reviewError, setReviewError] = useState('')
+  const [showReviewForm, setShowReviewForm] = useState(false)
   const [leadDialogOpen, setLeadDialogOpen] = useState(false)
   const [leadSubmitting, setLeadSubmitting] = useState(false)
   const [leadSent, setLeadSent] = useState(false)
   const [leadError, setLeadError] = useState('')
-  const [leadForm, setLeadForm] = useState({
-    companyName: '',
-    contactName: '',
-    email: '',
-    phone: '',
-    plan: 'Basico' as PlanInteres,
-    comments: '',
-  })
+  const [leadForm, setLeadForm] = useState(initialLeadForm)
   const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
 
   const closeReviewToast = () => {
@@ -270,6 +272,12 @@ export default function LandingPage() {
 
   const closeLeadToast = () => {
     setLeadSent(false)
+  }
+
+  const resetLeadForm = () => {
+    setLeadForm(initialLeadForm)
+    setLeadFormErrors({})
+    setLeadError('')
   }
   const [reviewSent, setReviewSent] = useState(false)
 
@@ -340,12 +348,12 @@ export default function LandingPage() {
     })
     setReviewError('')
     setReviewSent(true)
+    setShowReviewForm(false)
   }
 
   const openLeadDialog = (plan: PlanInteres) => {
+    resetLeadForm()
     setLeadForm((current) => ({ ...current, plan }))
-    setLeadFormErrors({})
-    setLeadError('')
     setLeadDialogOpen(true)
   }
 
@@ -353,6 +361,7 @@ export default function LandingPage() {
     if (leadSubmitting) {
       return
     }
+    resetLeadForm()
     setLeadDialogOpen(false)
   }
 
@@ -409,16 +418,7 @@ export default function LandingPage() {
 
       setLeadDialogOpen(false)
       setLeadSent(true)
-      setLeadForm({
-        companyName: '',
-        contactName: '',
-        email: '',
-        phone: '',
-        plan: 'Basico',
-        comments: '',
-      })
-      setLeadFormErrors({})
-      setLeadError('')
+      resetLeadForm()
     } catch (error: any) {
       setLeadError(error?.response?.data?.message || error?.response?.data || 'No pudimos enviar tu solicitud. Probá nuevamente.')
     } finally {
@@ -429,7 +429,7 @@ export default function LandingPage() {
   const navItems: Array<{ label: string; ref: React.RefObject<HTMLElement | null> }> = [
     { label: 'Inicio', ref: heroRef },
     { label: 'Planes', ref: plansRef },
-    { label: 'Servicios', ref: aboutRef },
+    { label: 'Plataforma', ref: aboutRef },
     { label: 'Reseñas', ref: reviewsRef },
   ]
 
@@ -1089,90 +1089,133 @@ export default function LandingPage() {
             </Grid>
           </Grid>
 
-          <Card sx={{ mt: 5, borderRadius: '28px', p: { xs: 3, md: 4 }, boxShadow: '0 20px 50px rgba(4,33,62,0.06)' }}>
-            <Typography variant="h5" sx={{ fontWeight: 900, color: '#0B1F33' }}>
-              Dejá tu reseña sobre entregas y vehículos
-            </Typography>
-            <Typography sx={{ mt: 1, color: '#5B7488', lineHeight: 1.8 }}>
-              Sumá una opinión sobre tiempos de entrega, calidad del vehículo o la experiencia general de la página.
-            </Typography>
+          <Card sx={{ mt: 5, borderRadius: '28px', p: { xs: 2.5, md: 3 }, boxShadow: '0 20px 50px rgba(4,33,62,0.06)' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ sm: 'center' }}>
+              <Box>
+                <Typography variant="h5" sx={{ fontWeight: 900, color: '#0B1F33' }}>
+                  Dejá tu reseña
+                </Typography>
+                <Typography sx={{ mt: 0.8, color: '#5B7488', lineHeight: 1.7 }}>
+                  Compartí tu experiencia de forma opcional.
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                endIcon={<ExpandMoreRoundedIcon sx={{ transform: showReviewForm ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />}
+                onClick={() => setShowReviewForm((current) => !current)}
+                sx={{ borderRadius: '12px', fontWeight: 700, px: 2.2, whiteSpace: 'nowrap' }}
+              >
+                {showReviewForm ? 'Ocultar formulario' : 'Escribir reseña'}
+              </Button>
+            </Stack>
 
-            {reviewError && (
-              <Alert severity="error" sx={{ mt: 3 }} onClose={() => setReviewError('')}>
-                {reviewError}
-              </Alert>
+            {showReviewForm && (
+              <>
+                {reviewError && (
+                  <Alert severity="error" sx={{ mt: 3 }} onClose={() => setReviewError('')}>
+                    {reviewError}
+                  </Alert>
+                )}
+
+                <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+                  <Grid item xs={12} md={4}>
+                    <TextField label="Nombre" fullWidth value={reviewForm.name} onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField label="Rol" fullWidth value={reviewForm.role} onChange={(event) => setReviewForm((current) => ({ ...current, role: event.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField label="Empresa o referencia" fullWidth value={reviewForm.company} onChange={(event) => setReviewForm((current) => ({ ...current, company: event.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField select label="Categoría" fullWidth value={reviewForm.category} onChange={(event) => setReviewForm((current) => ({ ...current, category: event.target.value as ReviewCategory }))}>
+                      <MenuItem value="entrega">Tiempo de entrega</MenuItem>
+                      <MenuItem value="vehiculo">Vehículos</MenuItem>
+                      <MenuItem value="general">General</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Stack spacing={0.75}>
+                      <Typography sx={{ color: '#234158', fontWeight: 700 }}>Calificación</Typography>
+                      <Rating value={reviewForm.rating} onChange={(_, value) => setReviewForm((current) => ({ ...current, rating: value ?? 5 }))} sx={{ '& .MuiRating-iconFilled': { color: '#FFB300' } }} />
+                    </Stack>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Comentario"
+                      fullWidth
+                      multiline
+                      minRows={4}
+                      value={reviewForm.comment}
+                      onChange={(event) => setReviewForm((current) => ({ ...current, comment: event.target.value }))}
+                      placeholder="Contanos cómo fue la entrega, qué te pareció la presentación del servicio o cómo viste los vehículos."
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button variant="contained" endIcon={<SendRoundedIcon />} onClick={handleReviewSubmit} sx={{ borderRadius: '14px', px: 3, py: 1.2 }}>
+                      Publicar reseña
+                    </Button>
+                  </Grid>
+                </Grid>
+              </>
             )}
-
-            <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
-              <Grid item xs={12} md={4}>
-                <TextField label="Nombre" fullWidth value={reviewForm.name} onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))} />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField label="Rol" fullWidth value={reviewForm.role} onChange={(event) => setReviewForm((current) => ({ ...current, role: event.target.value }))} />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField label="Empresa o referencia" fullWidth value={reviewForm.company} onChange={(event) => setReviewForm((current) => ({ ...current, company: event.target.value }))} />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField select label="Categoría" fullWidth value={reviewForm.category} onChange={(event) => setReviewForm((current) => ({ ...current, category: event.target.value as ReviewCategory }))}>
-                  <MenuItem value="entrega">Tiempo de entrega</MenuItem>
-                  <MenuItem value="vehiculo">Vehículos</MenuItem>
-                  <MenuItem value="general">General</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Stack spacing={0.75}>
-                  <Typography sx={{ color: '#234158', fontWeight: 700 }}>Calificación</Typography>
-                  <Rating value={reviewForm.rating} onChange={(_, value) => setReviewForm((current) => ({ ...current, rating: value ?? 5 }))} sx={{ '& .MuiRating-iconFilled': { color: '#FFB300' } }} />
-                </Stack>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Comentario"
-                  fullWidth
-                  multiline
-                  minRows={4}
-                  value={reviewForm.comment}
-                  onChange={(event) => setReviewForm((current) => ({ ...current, comment: event.target.value }))}
-                  placeholder="Contanos cómo fue la entrega, qué te pareció la presentación del servicio o cómo viste los vehículos."
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button variant="contained" endIcon={<SendRoundedIcon />} onClick={handleReviewSubmit} sx={{ borderRadius: '14px', px: 3, py: 1.2 }}>
-                  Publicar reseña
-                </Button>
-              </Grid>
-            </Grid>
           </Card>
         </Container>
       </Box>
 
       <Box sx={{ py: 4, bgcolor: '#04111D' }}>
         <Container maxWidth="lg">
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
+          <Grid container spacing={3} alignItems="flex-start">
+            <Grid item xs={12} md={4}>
               <Typography sx={{ color: '#fff', fontWeight: 800 }}>LogiTrack</Typography>
               <Typography sx={{ mt: 0.8, color: 'rgba(255,255,255,0.62)' }}>
                 Plataforma SaaS para empresas que gestionan sus propios envíos con control operativo, trazabilidad y escalabilidad.
               </Typography>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent={{ md: 'flex-end' }}>
-                {[
-                  { icon: <InsightsRoundedIcon />, text: 'Indicadores visibles' },
-                  { icon: <SupportAgentRoundedIcon />, text: 'Experiencia clara' },
-                  { icon: <ScheduleRoundedIcon />, text: 'Entregas y tiempos' },
-                ].map((item) => (
-                  <Chip
-                    key={item.text}
-                    icon={item.icon}
-                    label={item.text}
-                    sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: '#D3E9F8' }}
-                  />
+            <Grid item xs={12} sm={6} md={4}>
+              <Typography sx={{ color: '#9DE7FF', fontWeight: 800, fontSize: '0.92rem' }}>Nuestro Producto</Typography>
+              <Stack spacing={0.9} sx={{ mt: 1.2 }}>
+                {['Gestión por roles', 'Trazabilidad de envíos', 'Escalabilidad por planes'].map((item) => (
+                  <Typography key={item} sx={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.92rem' }}>{item}</Typography>
                 ))}
               </Stack>
             </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <Typography sx={{ color: '#9DE7FF', fontWeight: 800, fontSize: '0.92rem' }}>Acciones rápidas</Typography>
+              <Stack spacing={1.2} sx={{ mt: 1.2 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => openLeadDialog('Basico')}
+                  sx={{
+                    justifyContent: 'flex-start',
+                    width: 'fit-content',
+                    color: '#D3E9F8',
+                    borderColor: 'rgba(157,231,255,0.35)',
+                    '&:hover': { borderColor: '#9DE7FF', bgcolor: 'rgba(157,231,255,0.08)' },
+                  }}
+                >
+                  Solicitar contacto comercial
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => navigate('/login')}
+                  sx={{
+                    justifyContent: 'flex-start',
+                    width: 'fit-content',
+                    bgcolor: '#0288D1',
+                    '&:hover': { bgcolor: '#0277BD' },
+                  }}
+                >
+                  Iniciar sesión
+                </Button>
+              </Stack>
+            </Grid>
           </Grid>
+          <Typography sx={{ mt: 3, textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: '0.82rem' }}>
+            © 2026 LogiTrack. Todos los derechos reservados.
+          </Typography>
         </Container>
       </Box>
 
@@ -1183,7 +1226,7 @@ export default function LandingPage() {
       </Snackbar>
 
       <Dialog open={leadDialogOpen} onClose={closeLeadDialog} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 800 }}>Formulario de contacto comercial</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>Formulario de Contacto</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.3 }}>
             <Grid item xs={12}>
