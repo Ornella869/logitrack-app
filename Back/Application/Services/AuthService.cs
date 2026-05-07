@@ -23,10 +23,12 @@ namespace Back.Application.Services
     {
 
         private readonly IUserRepository _userRepository;
+        private readonly EmpresaService _empresaService;
 
-        public AuthService(IUserRepository userRepository)
+        public AuthService(IUserRepository userRepository, EmpresaService empresaService)
         {
             _userRepository = userRepository;
+            _empresaService = empresaService;
         }
 
         public async Task<dynamic> Login(LoginRequest request)
@@ -42,6 +44,13 @@ namespace Back.Application.Services
             if (!user.Activo)
             {
                 throw new InvalidOperationException("Usuario inactivo. Contactá a un administrador.");
+            }
+
+            // G1L-64: Si la empresa está suspendida, sólo el Administrador puede ingresar (para reactivar).
+            var empresa = await _empresaService.GetOrCreateSingletonAsync();
+            if (empresa.Estado == Domain.Models.EstadoEmpresa.Suspendida && user.GetType().Name != "Administrador")
+            {
+                throw new InvalidOperationException("Servicio suspendido. Contactá al equipo de LogiTrack para regularizar el pago.");
             }
 
             var token = JWTservice.GenerateToken(user);
@@ -96,6 +105,9 @@ namespace Back.Application.Services
 
         public async Task<RegistrarRepartidorResult> RegistrarRepartidor(RegistrarRepartidorRequest request)
         {
+            // G1L-53: validación de límite por plan
+            await _empresaService.ValidarPuedeCrearUsuarioAsync();
+
             if (string.IsNullOrWhiteSpace(request.Nombre) || string.IsNullOrWhiteSpace(request.Apellido))
                 throw new InvalidOperationException("Nombre y apellido son obligatorios.");
 
@@ -136,9 +148,11 @@ namespace Back.Application.Services
             };
         }
 
-        // G1L-30: alta de usuario por Administrador.
+        // G1L-30: alta de usuario por Administrador. G1L-53: respeta el límite del plan.
         public async Task<CrearUsuarioResult> CrearUsuario(CrearUsuarioRequest request)
         {
+            await _empresaService.ValidarPuedeCrearUsuarioAsync();
+
             if (string.IsNullOrWhiteSpace(request.Nombre) || string.IsNullOrWhiteSpace(request.Apellido))
                 throw new InvalidOperationException("Nombre y apellido son obligatorios.");
 

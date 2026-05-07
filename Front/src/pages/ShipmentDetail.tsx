@@ -30,10 +30,13 @@ import EditIcon from '@mui/icons-material/Edit'
 import CancelIcon from '@mui/icons-material/Cancel'
 import HistoryIcon from '@mui/icons-material/History'
 import QrCode2Icon from '@mui/icons-material/QrCode2'
+import PersonIcon from '@mui/icons-material/Person'
+import MapIcon from '@mui/icons-material/Map'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
+import ShipmentMap from '../components/ShipmentMap'
 
 // Motivos predefinidos de cancelación según G1L-13 AC3
 const CANCEL_REASONS = [
@@ -75,7 +78,16 @@ function ShipmentDetail() {
   // Permisos por rol según UH del Sprint 1
   const isOperador = user?.role === 'operador'
   const isSupervisor = user?.role === 'supervisor'
+  const isAdmin = user?.role === 'administrador'
   const isRepartidor = user?.role === 'repartidor'
+
+  // G1L-42: repartidor asignado al envío (Supervisor / Admin)
+  const [repartidorAsignado, setRepartidorAsignado] = useState<{
+    id: string; nombre: string; apellido: string; email: string; estado: string
+  } | null>(null)
+  // Posición en mapa para edición pendiente
+  const [draftPos, setDraftPos] = useState<{ latitud: number; longitud: number } | null>(null)
+  const [savingUbicacion, setSavingUbicacion] = useState(false)
 
   // G1L-9: Repartidor cambia estados (Listo→Tránsito, Tránsito→Entregado/Cancelado)
   // G1L-13: Operador/Supervisor cancelan Pendiente o Listo para Salir.
@@ -103,6 +115,11 @@ function ShipmentDetail() {
       if (data) {
         setShipment(data)
         setNewStatus(data.status)
+        // G1L-42: cargar repartidor asignado para Supervisor / Admin
+        if ((isSupervisor || isAdmin) && data.id) {
+          const rep = await shipmentService.getRepartidorDePaquete(data.id)
+          setRepartidorAsignado(rep)
+        }
       } else {
         setError('Envío no encontrado')
       }
@@ -110,6 +127,20 @@ function ShipmentDetail() {
       setError('Error al cargar el envío')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const confirmarUbicacion = async () => {
+    if (!shipment || !draftPos) return
+    setSavingUbicacion(true)
+    const r = await shipmentService.actualizarUbicacion(shipment.id, draftPos.latitud, draftPos.longitud)
+    setSavingUbicacion(false)
+    if (r.success) {
+      showActionToast('Ubicación actualizada', 'success')
+      setDraftPos(null)
+      void loadShipment()
+    } else {
+      showActionToast(r.error ?? 'Error', 'error')
     }
   }
 
@@ -417,6 +448,84 @@ function ShipmentDetail() {
                   <Typography variant="h6">Historial de estados</Typography>
                 </Stack>
                 <ShipmentTimeline paqueteId={shipment.id} />
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* G1L-42: Repartidor asignado (Supervisor / Admin, solo lectura) */}
+        {(isSupervisor || isAdmin) && repartidorAsignado && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <PersonIcon color="primary" />
+                  <Typography variant="h6">Repartidor asignado</Typography>
+                </Stack>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box sx={{ width: 48, height: 48, borderRadius: '50%', bgcolor: '#1976d2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700 }}>
+                    {(repartidorAsignado.nombre[0] ?? '').toUpperCase()}{(repartidorAsignado.apellido[0] ?? '').toUpperCase()}
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography
+                      variant="body1"
+                      fontWeight={600}
+                      sx={{ color: '#1976d2', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                      onClick={() => navigate(`/repartidor/${repartidorAsignado.id}/rendimiento`)}
+                    >
+                      {repartidorAsignado.nombre} {repartidorAsignado.apellido}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                      {repartidorAsignado.email}
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label={repartidorAsignado.estado} color={repartidorAsignado.estado === 'Activo' ? 'success' : 'warning'} />
+                </Stack>
+                <Button
+                  size="small"
+                  sx={{ mt: 2 }}
+                  onClick={() => navigate(`/repartidor/${repartidorAsignado.id}/rendimiento`)}
+                >
+                  Ver perfil de rendimiento
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* G1L-18 + G1L-17 GPS: Mapa con ubicación actual.
+            Admin puede actualizar haciendo click; resto solo lectura. */}
+        {(shipment.status === 'En tránsito' || shipment.ubicacionActual) && (isAdmin || isSupervisor) && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <MapIcon color="primary" />
+                  <Typography variant="h6">Ubicación del envío</Typography>
+                  {isAdmin && shipment.status === 'En tránsito' && (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                      (Hacé click en el mapa para actualizar la ubicación)
+                    </Typography>
+                  )}
+                </Stack>
+                <ShipmentMap
+                  position={draftPos ?? shipment.ubicacionActual}
+                  editable={isAdmin && shipment.status === 'En tránsito'}
+                  onChange={(lat, lng) => setDraftPos({ latitud: lat, longitud: lng })}
+                />
+                {isAdmin && draftPos && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                    <Button variant="contained" onClick={confirmarUbicacion} disabled={savingUbicacion}>
+                      {savingUbicacion ? 'Guardando...' : `Confirmar nueva ubicación (${draftPos.latitud.toFixed(5)}, ${draftPos.longitud.toFixed(5)})`}
+                    </Button>
+                    <Button onClick={() => setDraftPos(null)} disabled={savingUbicacion}>Cancelar</Button>
+                  </Stack>
+                )}
+                {isAdmin && shipment.status !== 'En tránsito' && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    La simulación de movimiento solo está disponible para envíos en tránsito.
+                  </Alert>
+                )}
               </CardContent>
             </Card>
           </Grid>

@@ -14,6 +14,8 @@ namespace Back.Infrastructure.Database
         public DbSet<Direccion> Direcciones { get; set; }
         public DbSet<HistorialEstadoEnvio> HistorialEstadosEnvio { get; set; }
         public DbSet<SolicitudComercial> SolicitudesComerciales { get; set; }
+        public DbSet<LogAuditoria> LogsAuditoria { get; set; }
+        public DbSet<Empresa> Empresas { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -70,6 +72,26 @@ namespace Back.Infrastructure.Database
                 h.HasKey(x => x.Id);
                 h.HasIndex(x => x.PaqueteId);
                 h.HasIndex(x => x.FechaHora);
+            });
+
+            modelBuilder.Entity<Empresa>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Nombre).HasMaxLength(160).IsRequired();
+                e.Property(x => x.CodigoCambioPendiente).HasMaxLength(10);
+            });
+
+            modelBuilder.Entity<LogAuditoria>(l =>
+            {
+                l.HasKey(x => x.Id);
+                l.Property(x => x.UsuarioNombre).HasMaxLength(160);
+                l.Property(x => x.UsuarioRol).HasMaxLength(40);
+                l.Property(x => x.RecursoId).HasMaxLength(100);
+                l.Property(x => x.Descripcion).HasMaxLength(500);
+                l.Property(x => x.Contexto).HasMaxLength(2000);
+                l.HasIndex(x => x.Timestamp);
+                l.HasIndex(x => x.UsuarioId);
+                l.HasIndex(x => x.Accion);
             });
 
             modelBuilder.Entity<SolicitudComercial>(s =>

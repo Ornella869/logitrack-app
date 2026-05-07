@@ -33,6 +33,8 @@ const mapStatus = (status: string): Shipment['status'] => {
     case 'EnTransito': return 'En tránsito'
     case 'Entregado': return 'Entregado'
     case 'Cancelado': return 'Cancelado'
+    case 'AsignadoAVehiculo': return 'Asignado a vehículo'
+    case 'CargadoEnVehiculo': return 'Cargado en vehículo'
     default: return 'Pendiente de calendarización'
   }
 }
@@ -48,6 +50,8 @@ const mapStatusToBackend = (status: string): string => {
     case 'Entregado': return 'Entregado'
     case 'Cancelado':
       return 'Cancelado'
+    case 'Asignado a vehículo': return 'AsignadoAVehiculo'
+    case 'Cargado en vehículo': return 'CargadoEnVehiculo'
     default:
       return 'PendienteDeCalendarizacion'
   }
@@ -83,7 +87,11 @@ const mapToShipment = (paquete: any): Shipment => ({
   weight: paquete.peso,
   description: paquete.descripcion || '',
   routeId: undefined,
-  cancellationReason: paquete.razonCancelacion
+  cancellationReason: paquete.razonCancelacion,
+  fechaCalendarizada: paquete.fechaCalendarizada ?? null,
+  ubicacionActual: paquete.ubicacionActual
+    ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
+    : null,
 })
 
 // Helper para separar nombre y apellido (si no hay apellido, usa "-")
@@ -348,6 +356,107 @@ export const shipmentService = {
     } catch (error: any) {
       const errorMessage = error.response?.data || 'Error al escanear el QR'
       return { success: false, error: errorMessage }
+    }
+  },
+
+  // G1L-23: Ruta del día del repartidor logueado, ordenada por CP.
+  // Si no se pasa fecha y no hay paradas hoy, devuelve la próxima fecha futura con asignaciones.
+  getMiRutaDelDia: async (fecha?: string): Promise<{ fecha: string | null; paradas: Shipment[] }> => {
+    try {
+      const response = await api.get('/envios/mi-ruta-del-dia', { params: fecha ? { fecha } : undefined })
+      return {
+        fecha: response.data?.fecha ?? null,
+        paradas: (response.data?.paradas ?? []).map(mapToShipment),
+      }
+    } catch (error) {
+      console.error('Get mi-ruta-del-dia error:', error)
+      return { fecha: null, paradas: [] }
+    }
+  },
+
+  // G1L-18: Admin actualiza ubicación GPS del envío en tránsito.
+  actualizarUbicacion: async (paqueteId: string, lat: number, lng: number): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post(`/envios/paquete/${paqueteId}/ubicacion`, { latitud: lat, longitud: lng })
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.response?.data ?? 'No se pudo actualizar la ubicación' }
+    }
+  },
+
+  // G1L-42: Repartidor asignado a un paquete (Supervisor / Admin)
+  getRepartidorDePaquete: async (paqueteId: string): Promise<{ id: string; nombre: string; apellido: string; email: string; estado: string } | null> => {
+    try {
+      const r = await api.get(`/envios/paquete/${paqueteId}/repartidor-asignado`)
+      if (r.status === 204 || !r.data) return null
+      return r.data
+    } catch {
+      return null
+    }
+  },
+
+  // Lista de fechas con asignaciones del repartidor logueado.
+  getMisFechasDeRuta: async (): Promise<string[]> => {
+    try {
+      const response = await api.get('/envios/mis-fechas-ruta')
+      return response.data ?? []
+    } catch (error) {
+      console.error('Get mis-fechas-ruta error:', error)
+      return []
+    }
+  },
+}
+
+// G1L-54: Calendarización Automática
+export interface RepartidorResumen {
+  repartidorId: string
+  nombre: string
+  email: string
+  cantidad: number
+  pesoTotal: number
+}
+
+export interface DiaResumen {
+  fecha: string
+  cantidad: number
+  repartidores: RepartidorResumen[]
+}
+
+export interface CalendarizacionResultado {
+  totalPendientes: number
+  totalCalendarizados: number
+  totalSinAsignar: number
+  resumenPorDia: DiaResumen[]
+}
+
+export const calendarizacionService = {
+  contarPendientes: async (): Promise<number> => {
+    try {
+      const response = await api.get('/calendarizacion/pendientes')
+      return response.data?.total ?? 0
+    } catch (error) {
+      console.error('Contar pendientes error:', error)
+      return 0
+    }
+  },
+
+  ejecutar: async (): Promise<{ success: boolean; data?: CalendarizacionResultado; error?: string }> => {
+    try {
+      const response = await api.post('/calendarizacion/ejecutar')
+      return { success: true, data: response.data }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message ?? error.response?.data ?? 'No se pudo ejecutar la calendarización'
+      return { success: false, error: typeof errorMessage === 'string' ? errorMessage : 'Error desconocido' }
+    }
+  },
+
+  getEstadoActual: async (): Promise<DiaResumen[]> => {
+    try {
+      const response = await api.get('/calendarizacion/estado-actual')
+      return response.data ?? []
+    } catch (error) {
+      console.error('Estado actual error:', error)
+      return []
     }
   },
 }

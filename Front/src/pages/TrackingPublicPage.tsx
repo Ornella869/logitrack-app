@@ -17,7 +17,9 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
+import MapIcon from '@mui/icons-material/Map'
 import { shipmentService } from '../services/shipmentService'
+import ShipmentMap from '../components/ShipmentMap'
 import type { Shipment } from '../types'
 
 type TimelineStep = {
@@ -44,6 +46,22 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
         description: 'Recibimos tu solicitud y el paquete esta esperando la planificacion de despacho.',
         badgeColor: '#7B5E00',
         badgeBg: '#FFF3CD',
+      }
+    case 'Asignado a vehículo':
+      return {
+        badge: 'Programado',
+        title: 'Tu envio fue programado',
+        description: 'Asignamos tu paquete a un repartidor y a una fecha de salida.',
+        badgeColor: '#4527A0',
+        badgeBg: '#EDE7F6',
+      }
+    case 'Cargado en vehículo':
+      return {
+        badge: 'Cargado',
+        title: 'Tu paquete fue cargado al vehículo',
+        description: 'El repartidor ya tiene tu paquete a bordo, listo para iniciar la ruta.',
+        badgeColor: '#311B92',
+        badgeBg: '#D1C4E9',
       }
     case 'Listo para salir':
       return {
@@ -83,6 +101,8 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
 const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
   const currentIndexByStatus: Record<Shipment['status'], number> = {
     'Pendiente de calendarización': 0,
+    'Asignado a vehículo': 1,
+    'Cargado en vehículo': 1,
     'Listo para salir': 1,
     'En tránsito': 2,
     Entregado: 3,
@@ -303,6 +323,19 @@ export default function TrackingPublicPage() {
                   </Stack>
                 </CardContent>
               </Card>
+
+              {/* G1L-17 GPS: mapa cuando el envío está en tránsito y tiene ubicación */}
+              {shipment.status === 'En tránsito' && shipment.ubicacionActual && (
+                <Card sx={{ borderRadius: 4, boxShadow: '0 20px 45px rgba(15, 23, 42, 0.06)' }}>
+                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                      <MapIcon color="primary" />
+                      <Typography variant="h6" fontWeight={700}>Tu paquete está acá</Typography>
+                    </Stack>
+                    <ShipmentMap position={shipment.ubicacionActual} height={320} />
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </Stack>

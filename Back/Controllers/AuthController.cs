@@ -42,16 +42,17 @@ namespace Back.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
         {
-            var remoteIp = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var captchaIsValid = await _recaptchaValidationService.ValidateAsync(
-                request.RecaptchaToken,
-                remoteIp,
-                HttpContext.RequestAborted);
-
-            if (!captchaIsValid)
-            {
-                return BadRequest("Captcha inválido o vencido. Reintentá nuevamente.");
-            }
+            // Captcha temporalmente deshabilitado para testing
+            // var remoteIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+            // var captchaIsValid = await _recaptchaValidationService.ValidateAsync(
+            //     request.RecaptchaToken,
+            //     remoteIp,
+            //     HttpContext.RequestAborted);
+            //
+            // if (!captchaIsValid)
+            // {
+            //     return BadRequest("Captcha inválido o vencido. Reintentá nuevamente.");
+            // }
 
             try
             {
@@ -407,7 +408,8 @@ namespace Back.Controllers
         public string Email { get; set; } = string.Empty;
         [Required][MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
         public string Password { get; set; } = string.Empty;
-        [Required(ErrorMessage = "El captcha es obligatorio.")]
+        // Captcha temporalmente deshabilitado para testing
+        // [Required(ErrorMessage = "El captcha es obligatorio.")]
         public string RecaptchaToken { get; set; } = string.Empty;
     }
 

@@ -16,6 +16,8 @@ import ClearAllIcon from '@mui/icons-material/ClearAll'
 
 const STATUS_OPTIONS: { backendValue: string; label: string }[] = [
   { backendValue: 'PendienteDeCalendarizacion', label: 'Pendiente de calendarización' },
+  { backendValue: 'AsignadoAVehiculo', label: 'Asignado a vehículo' },
+  { backendValue: 'CargadoEnVehiculo', label: 'Cargado en vehículo' },
   { backendValue: 'ListoParaSalir', label: 'Listo para salir' },
   { backendValue: 'EnTransito', label: 'En tránsito' },
   { backendValue: 'Entregado', label: 'Entregado' },

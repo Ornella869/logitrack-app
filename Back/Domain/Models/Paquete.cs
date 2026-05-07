@@ -12,6 +12,8 @@ namespace Back.Domain.Models
         Entregado = 2,
         Cancelado = 3,
         ListoParaSalir = 4,
+        AsignadoAVehiculo = 5,
+        CargadoEnVehiculo = 6,
     }
 
     public enum TipoEnvio
@@ -46,6 +48,9 @@ namespace Back.Domain.Models
         public string? Descripcion { get; set; } = string.Empty;
         public string? RazonCancelacion { get; private set; }
         public float Distancia { get; set; } = 0;
+        public DateTime? FechaCalendarizada { get; private set; }
+        public Guid? RepartidorAsignadoId { get; private set; }
+        public Ubicacion? UbicacionActual { get; set; }
 
 
         [JsonPropertyName("prioridad")]
@@ -140,6 +145,24 @@ namespace Back.Domain.Models
         public void CambiarEstado(PaqueteStatus status)
         {
             Status = status;
+        }
+
+        public void AsignarParaCalendarizacion(Guid repartidorId, DateTime fecha)
+        {
+            if (Status != PaqueteStatus.PendienteDeCalendarizacion)
+                throw new InvalidOperationException("Solo se pueden calendarizar paquetes pendientes.");
+
+            RepartidorAsignadoId = repartidorId;
+            FechaCalendarizada = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
+            Status = PaqueteStatus.AsignadoAVehiculo;
+        }
+
+        public void LiberarAsignacion()
+        {
+            RepartidorAsignadoId = null;
+            FechaCalendarizada = null;
+            if (Status == PaqueteStatus.AsignadoAVehiculo || Status == PaqueteStatus.CargadoEnVehiculo)
+                Status = PaqueteStatus.PendienteDeCalendarizacion;
         }
 
         public void ActualizarDatos(

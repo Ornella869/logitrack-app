@@ -84,6 +84,66 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Paquetes.Where(p => p.Status == PaqueteStatus.PendienteDeCalendarizacion).ToListAsync();
         }
 
+        public async Task<List<Paquete>> GetPaquetesConAsignacionActiva()
+        {
+            var estadosActivos = new[]
+            {
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.CargadoEnVehiculo,
+                PaqueteStatus.ListoParaSalir,
+                PaqueteStatus.EnTransito,
+            };
+            return await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId != null
+                            && p.FechaCalendarizada != null
+                            && estadosActivos.Contains(p.Status))
+                .ToListAsync();
+        }
+
+        public async Task<DateTime?> GetProximaFechaConAsignacionDeRepartidor(Guid repartidorId, DateTime desde)
+        {
+            var desdeUtc = DateTime.SpecifyKind(desde.Date, DateTimeKind.Utc);
+            var estadosActivos = new[]
+            {
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.CargadoEnVehiculo,
+                PaqueteStatus.ListoParaSalir,
+                PaqueteStatus.EnTransito,
+            };
+            var fecha = await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidorId
+                            && p.FechaCalendarizada != null
+                            && p.FechaCalendarizada >= desdeUtc
+                            && estadosActivos.Contains(p.Status))
+                .OrderBy(p => p.FechaCalendarizada)
+                .Select(p => p.FechaCalendarizada)
+                .FirstOrDefaultAsync();
+            return fecha;
+        }
+
+        public async Task<List<Paquete>> GetPaquetesAsignadosARepartidor(Guid repartidorId)
+        {
+            return await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidorId
+                            && p.FechaCalendarizada != null)
+                .OrderBy(p => p.FechaCalendarizada)
+                .ThenBy(p => p.Destinatario.Direccion.CP)
+                .ToListAsync();
+        }
+
+        public async Task<List<Paquete>> GetPaquetesAsignadosARepartidorEnFecha(Guid repartidorId, DateTime fecha)
+        {
+            var dia = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
+            var diaSiguiente = dia.AddDays(1);
+            return await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidorId
+                            && p.FechaCalendarizada >= dia
+                            && p.FechaCalendarizada < diaSiguiente)
+                .OrderBy(p => p.Destinatario.Direccion.CP)
+                .ThenBy(p => p.CreadoEn)
+                .ToListAsync();
+        }
+
         public async Task<List<Sucursal>> GetSucursales()
         {
             return await _context.Sucursales.ToListAsync();

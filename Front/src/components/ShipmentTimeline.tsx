@@ -20,6 +20,8 @@ interface Props {
 
 const STATUS_COLOR: Record<string, string> = {
   PendienteDeCalendarizacion: '#9E9E9E',
+  AsignadoAVehiculo: '#7E57C2',
+  CargadoEnVehiculo: '#5E35B1',
   ListoParaSalir: '#FFA000',
   EnTransito: '#1976D2',
   Entregado: '#2E7D32',
@@ -28,6 +30,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   PendienteDeCalendarizacion: 'Pendiente de calendarización',
+  AsignadoAVehiculo: 'Asignado a vehículo',
+  CargadoEnVehiculo: 'Cargado en vehículo',
   ListoParaSalir: 'Listo para salir',
   EnTransito: 'En tránsito',
   Entregado: 'Entregado',

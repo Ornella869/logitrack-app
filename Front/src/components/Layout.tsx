@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppBar,
   Toolbar,
@@ -14,7 +14,15 @@ import {
   IconButton,
   Tooltip,
   Divider,
+  Tabs,
+  Tab,
 } from '@mui/material'
+import Inventory2Icon from '@mui/icons-material/Inventory2'
+import BoltIcon from '@mui/icons-material/Bolt'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import RouteIcon from '@mui/icons-material/Route'
+import HistoryIcon from '@mui/icons-material/History'
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
@@ -29,6 +37,7 @@ interface LayoutProps {
 
 function Layout({ user, onLogout }: LayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -184,6 +193,39 @@ function Layout({ user, onLogout }: LayoutProps) {
           </Box>
         </Toolbar>
       </AppBar>
+
+      {/* Tabs nav (Supervisor / Admin) */}
+      {(user.role === 'supervisor' || user.role === 'administrador') && (
+        <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #e0e0e0', px: { xs: 1, sm: 4 }, position: 'sticky', top: 64, zIndex: 90 }}>
+          <Tabs
+            value={(() => {
+              const p = location.pathname
+              if (p.startsWith('/calendario')) return '/calendario'
+              if (p.startsWith('/calendarizar')) return '/calendarizar'
+              if (p.startsWith('/rutas-activas')) return '/rutas-activas'
+              if (p.startsWith('/auditoria')) return '/auditoria'
+              if (p.startsWith('/mi-plan')) return '/mi-plan'
+              return '/app'
+            })()}
+            onChange={(_, v) => navigate(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
+            {user.role === 'supervisor' && (
+              <Tab icon={<BoltIcon fontSize="small" />} iconPosition="start" label="Calendarizar" value="/calendarizar" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start" label="Calendario Operativo" value="/calendario" sx={{ minHeight: 48, textTransform: 'none' }} />
+            <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
+            {user.role === 'administrador' && (
+              <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'administrador' && (
+              <Tab icon={<WorkspacePremiumIcon fontSize="small" />} iconPosition="start" label="Mi Plan" value="/mi-plan" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+          </Tabs>
+        </Box>
+      )}
 
       {/* Dialog para cambiar contraseña */}
       <ChangePasswordDialog open={openChangePassword} onClose={() => setOpenChangePassword(false)} />

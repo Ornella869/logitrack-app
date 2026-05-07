@@ -37,6 +37,7 @@ namespace Back.Application.Services
         private readonly IMLPrioridadPrediction _mlPrioridadPrediction;
         private readonly HistorialEstadoEnvioService _historial;
         private readonly QrService _qrService;
+        private readonly AuditoriaService _auditoria;
 
         public EnviosService(
             IEnviosRepository enviosRepository,
@@ -44,7 +45,8 @@ namespace Back.Application.Services
             IRutasRepository rutasRepository,
             IMLPrioridadPrediction mlPrioridadPrediction,
             HistorialEstadoEnvioService historial,
-            QrService qrService)
+            QrService qrService,
+            AuditoriaService auditoria)
         {
             _rutasRepository = rutasRepository;
             _enviosRepository = enviosRepository;
@@ -52,6 +54,7 @@ namespace Back.Application.Services
             _mlPrioridadPrediction = mlPrioridadPrediction;
             _historial = historial;
             _qrService = qrService;
+            _auditoria = auditoria;
         }
 
         // G1L-10
@@ -85,6 +88,11 @@ namespace Back.Application.Services
                 usuarioId,
                 OrigenCambioEstado.Sistema,
                 "Alta del envío");
+
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CreacionEnvio,
+                $"Creó envío {paquete.CodigoSeguimiento} (Pendiente de Calendarización)",
+                recursoId: paquete.CodigoSeguimiento);
 
             return new RegistrarPaqueteResult
             {
@@ -125,6 +133,11 @@ namespace Back.Application.Services
                 usuarioId,
                 OrigenCambioEstado.Manual,
                 "Datos del envío editados");
+
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.EdicionEnvio,
+                $"Editó envío {paquete.CodigoSeguimiento}",
+                recursoId: paquete.CodigoSeguimiento);
         }
 
         // G1L-13 + G1L-9. Reglas cruzadas rol/estado:
@@ -147,20 +160,33 @@ namespace Back.Application.Services
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     break;
 
+                case PaqueteStatus.AsignadoAVehiculo:
+                case PaqueteStatus.CargadoEnVehiculo:
                 case PaqueteStatus.ListoParaSalir:
                     if (esRepartidor)
                         throw new InvalidOperationException("El repartidor solo puede cancelar envíos En Tránsito.");
                     if (mode == CancelarEnvioMode.Reagendar)
                     {
-                        paquete.CambiarEstado(PaqueteStatus.PendienteDeCalendarizacion);
+                        // G1L-68: Volver a calendarizar — limpia repartidor y fecha, vuelve a Pendiente
+                        paquete.LiberarAsignacion();
                         await DesvincularDeRutasPendientes(paquete.Id);
                         await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.PendienteDeCalendarizacion, usuarioId, OrigenCambioEstado.Manual, motivo);
+                        await _auditoria.RegistrarAsync(
+                            Domain.Models.TipoAccion.Recalendarizacion,
+                            $"Devolvió {paquete.CodigoSeguimiento} a Pendiente de Calendarización",
+                            recursoId: paquete.CodigoSeguimiento,
+                            contexto: $"Motivo: {motivo}");
                     }
                     else
                     {
                         paquete.Cancelar(motivo);
                         await DesvincularDeRutasPendientes(paquete.Id);
                         await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
+                        await _auditoria.RegistrarAsync(
+                            Domain.Models.TipoAccion.CancelacionEnvio,
+                            $"Canceló {paquete.CodigoSeguimiento} (definitivo)",
+                            recursoId: paquete.CodigoSeguimiento,
+                            contexto: $"Motivo: {motivo}");
                     }
                     break;
 
@@ -209,7 +235,7 @@ namespace Back.Application.Services
             }
         }
 
-        // G1L-43
+        // G1L-43: Escaneo QR con estados intermedios
         public async Task<EscaneoResultado> EscanearQr(string codigoSeguimiento, Guid? usuarioId)
         {
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento)
@@ -217,9 +243,32 @@ namespace Back.Application.Services
 
             switch (paquete.Status)
             {
+                case PaqueteStatus.AsignadoAVehiculo:
+                    paquete.CambiarEstado(PaqueteStatus.CargadoEnVehiculo);
+                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.CargadoEnVehiculo, usuarioId, OrigenCambioEstado.QR);
+                    await _auditoria.RegistrarAsync(
+                        Domain.Models.TipoAccion.CambioEstadoEnvio,
+                        $"Cargó {paquete.CodigoSeguimiento} en vehículo (escaneo QR)",
+                        recursoId: paquete.CodigoSeguimiento);
+                    await TalvezMarcarTodosListosParaSalirAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada, usuarioId);
+                    return new EscaneoResultado
+                    {
+                        Status = paquete.Status,
+                        Accion = "Cargado",
+                        CodigoSeguimiento = paquete.CodigoSeguimiento,
+                        PaqueteId = paquete.Id,
+                    };
+
+                case PaqueteStatus.CargadoEnVehiculo:
+                    throw new InvalidOperationException("El paquete ya está cargado en el vehículo. Esperá a que todos los del día estén cargados para que pase a 'Listo para Salir'.");
+
                 case PaqueteStatus.ListoParaSalir:
                     paquete.IniciarTransito();
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.QR);
+                    await _auditoria.RegistrarAsync(
+                        Domain.Models.TipoAccion.CambioEstadoEnvio,
+                        $"Inició tránsito de {paquete.CodigoSeguimiento} (escaneo QR)",
+                        recursoId: paquete.CodigoSeguimiento);
                     return new EscaneoResultado
                     {
                         Status = paquete.Status,
@@ -238,11 +287,33 @@ namespace Back.Application.Services
                     };
 
                 case PaqueteStatus.PendienteDeCalendarizacion:
-                    throw new InvalidOperationException("El paquete aún no está listo para salir.");
+                    throw new InvalidOperationException("El paquete aún no está listo para ser cargado.");
 
                 default:
                     throw new InvalidOperationException($"El paquete está en estado {paquete.Status} y no puede escanearse.");
             }
+        }
+
+        // Cuando todos los paquetes del repartidor para esa fecha están "Cargados", pasa todos a "Listo para Salir".
+        private async Task TalvezMarcarTodosListosParaSalirAsync(Guid? repartidorId, DateTime? fecha, Guid? usuarioId)
+        {
+            if (!repartidorId.HasValue || !fecha.HasValue) return;
+            var paquetesDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId.Value, fecha.Value);
+            // Si quedan asignados sin cargar todavía, no avanzamos
+            if (paquetesDia.Any(p => p.Status == PaqueteStatus.AsignadoAVehiculo)) return;
+
+            var aListos = paquetesDia.Where(p => p.Status == PaqueteStatus.CargadoEnVehiculo).ToList();
+            if (aListos.Count == 0) return;
+
+            foreach (var p in aListos)
+            {
+                p.CambiarEstado(PaqueteStatus.ListoParaSalir);
+                await _historial.RegistrarCambioAsync(p.Id, PaqueteStatus.ListoParaSalir, usuarioId, OrigenCambioEstado.Sistema, "Avance automático tras cargar el último");
+            }
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CambioEstadoEnvio,
+                $"Avance automático: {aListos.Count} envíos pasaron a 'Listo para Salir'",
+                contexto: $"Repartidor {repartidorId.Value} fecha {fecha.Value:yyyy-MM-dd}");
         }
 
         public async Task ReasignarRuta(Guid rutaId, Guid repartidorId)

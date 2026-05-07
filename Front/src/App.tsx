@@ -3,6 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Box, CircularProgress } from '@mui/material'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
+import CalendarizarPage from './pages/CalendarizarPage'
+import CalendarioOperativoPage from './pages/CalendarioOperativoPage'
+import RutasActivasPage from './pages/RutasActivasPage'
+import DetalleRutaPage from './pages/DetalleRutaPage'
+import AuditoriaPage from './pages/AuditoriaPage'
+import MiPlanPage from './pages/MiPlanPage'
+import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
 import TrackingPublicPage from './pages/TrackingPublicPage'
@@ -178,6 +185,84 @@ function App() {
             element={
               user && !isRepartidorRole(user.role) ? (
                 <Dashboard />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+
+          {/* Supervisor: página dedicada de calendarización */}
+          <Route
+            path="/calendarizar"
+            element={
+              user && user.role === 'supervisor' ? (
+                <CalendarizarPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+
+          {/* Supervisor / Admin: calendario operativo y rutas activas */}
+          <Route
+            path="/calendario"
+            element={
+              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+                <CalendarioOperativoPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+          <Route
+            path="/rutas-activas"
+            element={
+              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+                <RutasActivasPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+          <Route
+            path="/rutas-activas/:repartidorId"
+            element={
+              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+                <DetalleRutaPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+
+          {/* Admin: auditoría y plan */}
+          <Route
+            path="/auditoria"
+            element={
+              user && user.role === 'administrador' ? (
+                <AuditoriaPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+          <Route
+            path="/mi-plan"
+            element={
+              user && user.role === 'administrador' ? (
+                <MiPlanPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+
+          {/* Supervisor / Admin: perfil de rendimiento de un repartidor */}
+          <Route
+            path="/repartidor/:repartidorId/rendimiento"
+            element={
+              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+                <PerfilRendimientoPage />
               ) : (
                 <AccessDenied user={user as User} />
               )

@@ -90,7 +90,9 @@ export interface Shipment {
     postalCode: string
     phone?: string
   }
-  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir'
+  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo'
+  fechaCalendarizada?: string | null
+  ubicacionActual?: { latitud: number; longitud: number } | null
   tipoEnvio?: TipoEnvio
   tipoPaquete?: TipoPaquete
   isEditable?: boolean

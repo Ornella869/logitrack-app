@@ -3,6 +3,7 @@ using System;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Back.Infrastructure.Database
 {
     [DbContext(typeof(LogiTrackDbContext))]
-    partial class LogiTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260507223334_Sprint2A1Calendarizacion")]
+    partial class Sprint2A1Calendarizacion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,53 +24,6 @@ namespace Back.Infrastructure.Database
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("Back.Domain.Models.Empresa", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ActualizadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CodigoCambioPendiente")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<DateTime?>("CodigoEmitidoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Estado")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("IntentosCodigoFallidos")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LimiteCuentas")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("LimiteDestinoPendiente")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Nombre")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<int>("Plan")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("PlanDestinoPendiente")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Empresas");
-                });
 
             modelBuilder.Entity("Back.Domain.Models.HistorialEstadoEnvio", b =>
                 {
@@ -100,55 +56,6 @@ namespace Back.Infrastructure.Database
                     b.HasIndex("PaqueteId");
 
                     b.ToTable("HistorialEstadosEnvio");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.LogAuditoria", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Accion")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Contexto")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Descripcion")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("RecursoId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UsuarioId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("UsuarioNombre")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("UsuarioRol")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Accion");
-
-                    b.HasIndex("Timestamp");
-
-                    b.HasIndex("UsuarioId");
-
-                    b.ToTable("LogsAuditoria");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Paquete", b =>

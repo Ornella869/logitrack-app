@@ -122,6 +122,86 @@ namespace Back.Controllers
             return Ok(paquetes);
         }
 
+        // ============== G1L-23: Ruta del día (Repartidor) ==============
+
+        /// <summary>Paquetes asignados al repartidor logueado. Si no se pasa fecha y no hay paradas hoy,
+        /// devuelve la próxima fecha futura con asignaciones. Ordenados por CP.</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpGet("mi-ruta-del-dia")]
+        public async Task<ActionResult<object>> GetMiRutaDelDia([FromQuery] DateTime? fecha)
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+
+            DateTime dia;
+            if (fecha.HasValue)
+            {
+                dia = fecha.Value.Date;
+            }
+            else
+            {
+                var hoy = DateTime.UtcNow.Date;
+                var paquetesHoy = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, hoy);
+                if (paquetesHoy.Count > 0)
+                {
+                    return Ok(new { fecha = DateTime.SpecifyKind(hoy, DateTimeKind.Utc), paradas = paquetesHoy });
+                }
+                var proxima = await _enviosRepository.GetProximaFechaConAsignacionDeRepartidor(userId.Value, hoy);
+                if (proxima is null)
+                {
+                    return Ok(new { fecha = (DateTime?)null, paradas = new List<Paquete>() });
+                }
+                dia = proxima.Value.Date;
+            }
+
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, dia);
+            return Ok(new { fecha = DateTime.SpecifyKind(dia, DateTimeKind.Utc), paradas = paquetes });
+        }
+
+        /// <summary>G1L-42: Repartidor asignado al paquete (vista Supervisor).</summary>
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [HttpGet("paquete/{paqueteId:guid}/repartidor-asignado")]
+        public async Task<ActionResult<object>> GetRepartidorAsignado(
+            Guid paqueteId,
+            [FromServices] RepartidoresMetricsService metrics)
+        {
+            var info = await metrics.GetRepartidorDePaqueteAsync(paqueteId);
+            if (info is null) return NoContent();
+            return Ok(info);
+        }
+
+        /// <summary>G1L-18: Actualizar ubicación GPS de un envío en tránsito (Admin).</summary>
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpPost("paquete/{paqueteId:guid}/ubicacion")]
+        public async Task<ActionResult> ActualizarUbicacion(Guid paqueteId, [FromBody] ActualizarUbicacionRequest request)
+        {
+            var paquete = await _enviosRepository.GetPaquete(paqueteId);
+            if (paquete is null) return NotFound();
+            if (paquete.Status != PaqueteStatus.EnTransito)
+                return BadRequest("La simulación de movimiento solo está disponible para envíos en tránsito.");
+
+            paquete.UbicacionActual = new Ubicacion(request.Latitud, request.Longitud);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        /// <summary>Todas las fechas con asignaciones del repartidor logueado (para selector de día).</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpGet("mis-fechas-ruta")]
+        public async Task<ActionResult<List<DateTime>>> GetMisFechasDeRuta()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidor(userId.Value);
+            var fechas = paquetes
+                .Where(p => p.FechaCalendarizada.HasValue)
+                .Select(p => DateTime.SpecifyKind(p.FechaCalendarizada!.Value.Date, DateTimeKind.Utc))
+                .Distinct()
+                .OrderBy(f => f)
+                .ToList();
+            return Ok(fechas);
+        }
+
         // ============== G1L-41: Detalle de envío ==============
 
         /// <summary>Detalle del paquete por ID (incluye flag isEditable).</summary>
@@ -439,6 +519,12 @@ namespace Back.Controllers
     public class CambiarEstadoRequest
     {
         public string? Motivo { get; set; }
+    }
+
+    public class ActualizarUbicacionRequest
+    {
+        [Required] public double Latitud { get; set; }
+        [Required] public double Longitud { get; set; }
     }
 
     public class RegistrarPaqueteRequest

@@ -29,6 +29,10 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
     switch (status) {
       case 'PendienteDeCalendarizacion':
         return 'Pendiente de calendarización'
+      case 'AsignadoAVehiculo':
+        return 'Asignado a vehículo'
+      case 'CargadoEnVehiculo':
+        return 'Cargado en vehículo'
       case 'ListoParaSalir':
         return 'Listo para salir'
       case 'EnTransito':

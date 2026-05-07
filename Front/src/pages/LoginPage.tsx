@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Box,
@@ -15,7 +15,7 @@ import {
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
-import ReCAPTCHA from 'react-google-recaptcha'
+// import ReCAPTCHA from 'react-google-recaptcha'
 import { authService } from '../services/authService'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import type { User, LoginCredentials } from '../types'
@@ -32,13 +32,14 @@ interface LoginLocationState {
 }
 
 const DEMO_PASSWORD = 'kjkszpj1234'
-const DEFAULT_RECAPTCHA_SITE_KEY = '6LdRraUsAAAAABDom6H8iyjAqSoigIn5qPgQXqfR'
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY
-const RecaptchaWidget = ReCAPTCHA as unknown as ComponentType<{
-  sitekey: string
-  onChange: (token: string | null) => void
-  onExpired: () => void
-}>
+// Captcha temporalmente deshabilitado para testing
+// const DEFAULT_RECAPTCHA_SITE_KEY = '6LdRraUsAAAAABDom6H8iyjAqSoigIn5qPgQXqfR'
+// const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY
+// const RecaptchaWidget = ReCAPTCHA as unknown as ComponentType<{
+//   sitekey: string
+//   onChange: (token: string | null) => void
+//   onExpired: () => void
+// }>
 const demoUsers = [
   { label: 'Supervisor · Carlos', email: 'carlos.rodriguez@logitrack.com', color: 'error' as const },
   { label: 'Supervisor · Ana', email: 'ana.martinez@logitrack.com', color: 'error' as const },
@@ -58,7 +59,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
     email: '',
     password: '',
   })
-  const [captchaToken, setCaptchaToken] = useState('')
+  const [captchaToken] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
@@ -86,11 +87,12 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
       return
     }
 
-    if (!captchaToken) {
-      setError('Completá el captcha para continuar')
-      setLoading(false)
-      return
-    }
+    // Captcha temporalmente deshabilitado para testing
+    // if (!captchaToken) {
+    //   setError('Completá el captcha para continuar')
+    //   setLoading(false)
+    //   return
+    // }
 
     try {
       const user = await authService.login({
@@ -112,10 +114,11 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
     }
   }
 
-  const handleCaptchaChange = (token: string | null) => {
-    setCaptchaToken(token ?? '')
-    setError('')
-  }
+  // Captcha temporalmente deshabilitado para testing
+  // const handleCaptchaChange = (token: string | null) => {
+  //   setCaptchaToken(token ?? '')
+  //   setError('')
+  // }
 
   const fillDemo = (email: string) => {
     setCredentials({ email, password: DEMO_PASSWORD })
@@ -221,6 +224,8 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
                 fullWidth
               />
 
+              {/* Captcha temporalmente deshabilitado para testing */}
+              {/*
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 <Box
                   sx={{
@@ -236,6 +241,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
                   />
                 </Box>
               </Box>
+              */}
 
               <Button
                 type="submit"

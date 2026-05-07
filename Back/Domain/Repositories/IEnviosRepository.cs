@@ -15,5 +15,9 @@ namespace Back.Domain.Repositories
         Task<List<Paquete>> GetPaquetesByIds(List<Guid> paqueteIds);
         Task<List<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to);
         Task<List<Paquete>> GetAll();
+        Task<List<Paquete>> GetPaquetesAsignadosARepartidorEnFecha(Guid repartidorId, DateTime fecha);
+        Task<List<Paquete>> GetPaquetesConAsignacionActiva();
+        Task<DateTime?> GetProximaFechaConAsignacionDeRepartidor(Guid repartidorId, DateTime desde);
+        Task<List<Paquete>> GetPaquetesAsignadosARepartidor(Guid repartidorId);
     }
 }

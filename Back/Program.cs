@@ -57,6 +57,12 @@ builder.Services.AddDbContext<LogiTrackDbContext>(options =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EnviosService>();
 builder.Services.AddScoped<RutasService>();
+builder.Services.AddScoped<CalendarizacionService>();
+builder.Services.AddScoped<RutasActivasService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<AuditoriaService>();
+builder.Services.AddScoped<RepartidoresMetricsService>();
+builder.Services.AddScoped<EmpresaService>();
 builder.Services.AddScoped<HistorialEstadoEnvioService>();
 builder.Services.AddSingleton<QrService>();
 builder.Services.AddScoped<DatabaseSeeder>();
@@ -137,6 +143,10 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<LogiTrackDbContext>();
         await context.Database.MigrateAsync();
+
+        // Garantizar Empresa singleton (G1L-52..64)
+        var empresaService = services.GetRequiredService<EmpresaService>();
+        await empresaService.GetOrCreateSingletonAsync();
 
         var configuration = services.GetRequiredService<IConfiguration>();
         if (configuration.GetValue<bool>("EnableDatabaseSeeder"))
