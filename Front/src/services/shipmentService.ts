@@ -92,6 +92,9 @@ const mapToShipment = (paquete: any): Shipment => ({
   ubicacionActual: paquete.ubicacionActual
     ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
     : null,
+  receiverUbicacion: paquete.destinatario?.direccion?.ubicacion
+    ? { latitud: paquete.destinatario.direccion.ubicacion.latitud, longitud: paquete.destinatario.direccion.ubicacion.longitud }
+    : null,
 })
 
 // Helper para separar nombre y apellido (si no hay apellido, usa "-")

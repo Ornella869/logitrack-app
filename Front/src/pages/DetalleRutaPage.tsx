@@ -18,6 +18,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import RouteIcon from '@mui/icons-material/Route'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
+import RouteMap from '../components/RouteMap'
 import type { User } from '../types'
 
 type DetalleParada = {
@@ -34,6 +35,8 @@ type DetalleParada = {
   status: string
   esPrioritario: boolean
   observaciones?: string | null
+  latitud?: number | null
+  longitud?: number | null
 }
 
 type DetalleRuta = {
@@ -126,9 +129,11 @@ export default function DetalleRutaPage() {
         <Grid item xs={12} md={8}>
           <Card variant="outlined" sx={{ overflow: 'hidden', mb: 2 }}>
             <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee' }}>
-              <Typography variant="subtitle1" fontWeight={600}>📍 Ubicación simulada del repartidor</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>📍 Mapa de seguimiento</Typography>
             </Box>
-            <MapMock paradas={detalle.paradas} proximaIdx={proximaIdx} />
+            <Box sx={{ p: 0 }}>
+              <RouteMap paradas={detalle.paradas} proximaIdx={proximaIdx} height={340} />
+            </Box>
           </Card>
 
           <Card variant="outlined">
@@ -239,48 +244,3 @@ function Row({ label, value, color }: { label: string; value: string | number; c
   )
 }
 
-function MapMock({ paradas, proximaIdx }: { paradas: DetalleParada[]; proximaIdx: number }) {
-  const positions = paradas.slice(0, 5).map((_, i) => {
-    const xs = [22, 38, 55, 70, 82]
-    const ys = [50, 32, 42, 60, 38]
-    return { x: xs[i] ?? 50, y: ys[i] ?? 50 }
-  })
-  return (
-    <Box
-      sx={{
-        position: 'relative', height: 300,
-        background: 'linear-gradient(135deg, #e8f4f8 0%, #d4e8ec 100%)',
-        backgroundImage: 'linear-gradient(rgba(0,0,0,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.04) 1px, transparent 1px)',
-        backgroundSize: '32px 32px',
-      }}
-    >
-      <Box sx={{ position: 'absolute', left: '5%', top: '55%', width: '90%', height: 6, bgcolor: 'rgba(255,255,255,.7)' }} />
-      <Box sx={{ position: 'absolute', left: '25%', top: '10%', width: 6, height: '80%', bgcolor: 'rgba(255,255,255,.7)' }} />
-      <Box sx={{ position: 'absolute', left: '65%', top: '15%', width: 6, height: '75%', bgcolor: 'rgba(255,255,255,.7)' }} />
-      {positions.map((pos, i) => {
-        const p = paradas[i]
-        const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
-        const isCurrent = i === proximaIdx
-        const bg = isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#9e9e9e'
-        return (
-          <Box
-            key={p.paqueteId}
-            sx={{
-              position: 'absolute', left: `${pos.x}%`, top: `${pos.y}%`,
-              width: 30, height: 30, bgcolor: bg, borderRadius: '50% 50% 50% 0',
-              transform: 'rotate(-45deg)', boxShadow: 2,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Typography variant="caption" sx={{ transform: 'rotate(45deg)', color: 'white', fontWeight: 700, fontSize: 11 }}>
-              {p.orden}
-            </Typography>
-          </Box>
-        )
-      })}
-      <Box sx={{ position: 'absolute', top: 12, right: 12, bgcolor: 'rgba(255,255,255,.92)', border: '1px dashed #999', borderRadius: 1, px: 1, py: 0.5, fontSize: 10, color: 'text.secondary' }}>
-        🗺️ Mapa simulado
-      </Box>
-    </Box>
-  )
-}

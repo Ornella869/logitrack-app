@@ -42,6 +42,8 @@ namespace Back.Application.Services
         public required string Status { get; init; }
         public required bool EsPrioritario { get; init; }
         public required string? Observaciones { get; init; }
+        public double? Latitud { get; init; }
+        public double? Longitud { get; init; }
     }
 
     public class RutasActivasService
@@ -150,6 +152,8 @@ namespace Back.Application.Services
                     Status = p.Status.ToString(),
                     EsPrioritario = p.TipoEnvio == TipoEnvio.Prioritario,
                     Observaciones = p.Descripcion,
+                    Latitud = p.Destinatario.Direccion.Ubicacion?.Latitud,
+                    Longitud = p.Destinatario.Direccion.Ubicacion?.Longitud,
                 }).ToList(),
             };
         }

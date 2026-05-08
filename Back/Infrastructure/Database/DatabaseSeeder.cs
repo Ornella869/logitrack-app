@@ -108,7 +108,8 @@ namespace Back.Infrastructure.Database
             {
                 var rutaEspecifica = new Ruta(repartidorLuis, vehiculoEspecifico);
                 var paquetesPendientes = paquetesEspecificos.Where(p => p.EstaPendienteDeCalendarizacion).ToList();
-                paquetesPendientes.ForEach(p => p.MarcarListoParaSalir());
+                var fechaRuta = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+                paquetesPendientes.ForEach(p => p.AsignarParaCalendarizacion(repartidorLuis.Id, fechaRuta));
                 rutaEspecifica.AgregarPaquetes(paquetesPendientes);
                 rutas.Add(rutaEspecifica);
             }
@@ -306,38 +307,50 @@ namespace Back.Infrastructure.Database
         {
             var result = new List<Paquete>();
 
+            // Destinatarios con coordenadas reales (Gran Buenos Aires)
+            var destinatarios = new List<Cliente>
+            {
+                new Cliente("Camila",    "Ramos",    new Direccion("Urquiza 450",      "San Vicente",       "2087", null, new Ubicacion(-35.0158, -58.4115))),
+                new Cliente("Sebastián", "Flores",   new Direccion("Belgrano 789",     "Quilmes",           "1878", null, new Ubicacion(-34.7224, -58.2526))),
+                new Cliente("Valentina", "Cruz",     new Direccion("San Martín 1234",  "Lomas de Zamora",   "1832", null, new Ubicacion(-34.7592, -58.4021))),
+                new Cliente("Diego",     "Méndez",   new Direccion("Mitre 567",        "Avellaneda",        "1870", null, new Ubicacion(-34.6641, -58.3617))),
+                new Cliente("Lucía",     "Herrera",  new Direccion("Rivadavia 2340",   "Lanús",             "1824", null, new Ubicacion(-34.7046, -58.3974))),
+                new Cliente("Facundo",   "Torres",   new Direccion("Corrientes 890",   "Florencio Varela",  "1888", null, new Ubicacion(-34.8074, -58.2771))),
+                new Cliente("Gabriela",  "Sánchez",  new Direccion("Moreno 456",       "Berazategui",       "1880", null, new Ubicacion(-34.7600, -58.2109))),
+            };
+
             var paquetesData = new List<(string codigo, string estado, string descripcion)>
             {
                 ("LOG-2024-001", "PendienteDeCalendarizacion", "En espera de ser enviado"),
-                ("LOG-2024-002", "EnTransito", "En ruta de entrega"),
-                ("LOG-2024-003", "Entregado", "Ya fue entregado"),
-                ("LOG-2024-004", "Cancelado", "Cancelado por cliente"),
+                ("LOG-2024-002", "EnTransito",                 "En ruta de entrega"),
+                ("LOG-2024-003", "Entregado",                  "Ya fue entregado"),
+                ("LOG-2024-004", "Cancelado",                  "Cancelado por cliente"),
                 ("LOG-2024-005", "PendienteDeCalendarizacion", "Pequeño documento"),
-                ("LOG-2024-006", "EnTransito", "Carga grande"),
-                ("LOG-2024-007", "Entregado", "Histórico")
+                ("LOG-2024-006", "EnTransito",                 "Carga grande"),
+                ("LOG-2024-007", "Entregado",                  "Histórico"),
             };
 
-            foreach (var (codigo, estado, descripcion) in paquetesData)
+            for (int i = 0; i < paquetesData.Count; i++)
             {
-
+                var (codigo, estado, descripcion) = paquetesData[i];
                 double peso = PesoGenerator.GenerarPeso();
+                var destinatario = destinatarios[i];
+
                 Paquete paquete = new Paquete(
                     codigo,
                     peso,
                     _random.Next(10, 100),
                     _random.Next(10, 100),
                     GenerarCliente(),
-                    GenerarCliente(),
-                    PrioridadCalculator.CalcularPrioridad(peso, DistanciasService.CalcularDistancia(GenerarCliente().Direccion.Ciudad)),
-                    DistanciasService.CalcularDistancia(GenerarCliente().Direccion.Ciudad),
+                    destinatario,
+                    PrioridadCalculator.CalcularPrioridad(peso, DistanciasService.CalcularDistancia(destinatario.Direccion.Ciudad)),
+                    DistanciasService.CalcularDistancia(destinatario.Direccion.Ciudad),
                     descripcion
                 );
 
-                // Establecer el estado del paquete
                 switch (estado)
                 {
                     case "PendienteDeCalendarizacion":
-                        // Estado por defecto
                         break;
                     case "EnTransito":
                         paquete.MarcarListoParaSalir();

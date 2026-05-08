@@ -38,6 +38,7 @@ namespace Back.Application.Services
         private readonly HistorialEstadoEnvioService _historial;
         private readonly QrService _qrService;
         private readonly AuditoriaService _auditoria;
+        private readonly GeocodingService _geocoding;
 
         public EnviosService(
             IEnviosRepository enviosRepository,
@@ -46,7 +47,8 @@ namespace Back.Application.Services
             IMLPrioridadPrediction mlPrioridadPrediction,
             HistorialEstadoEnvioService historial,
             QrService qrService,
-            AuditoriaService auditoria)
+            AuditoriaService auditoria,
+            GeocodingService geocoding)
         {
             _rutasRepository = rutasRepository;
             _enviosRepository = enviosRepository;
@@ -55,12 +57,19 @@ namespace Back.Application.Services
             _historial = historial;
             _qrService = qrService;
             _auditoria = auditoria;
+            _geocoding = geocoding;
         }
 
         // G1L-10
         public async Task<RegistrarPaqueteResult> RegistrarPaquete(RegistrarPaqueteRequest request, Guid? usuarioId)
         {
             ValidarPaqueteData(request);
+
+            var ubicacionDestinatario = await _geocoding.GeocodeAsync(request.Destinatario.Direccion, request.Destinatario.Localidad);
+            if (ubicacionDestinatario is null)
+                throw new InvalidOperationException(
+                    $"No se pudo geocodificar la dirección del destinatario: \"{request.Destinatario.Direccion}, {request.Destinatario.Localidad}\". " +
+                    "Por favor, verificá que la dirección sea correcta e intentá nuevamente.");
 
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
@@ -70,7 +79,7 @@ namespace Back.Application.Services
                 0,
                 0,
                 new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono),
-                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP), request.Destinatario.Telefono),
+                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono),
                 prioridad,
                 distancia,
                 request.Comentarios
@@ -114,12 +123,18 @@ namespace Back.Application.Services
             if (paquete.Status != PaqueteStatus.PendienteDeCalendarizacion)
                 throw new InvalidOperationException("El envío ya fue calendarizado y no puede modificarse.");
 
+            var ubicacionDestinatario = await _geocoding.GeocodeAsync(request.Destinatario.Direccion, request.Destinatario.Localidad);
+            if (ubicacionDestinatario is null)
+                throw new InvalidOperationException(
+                    $"No se pudo geocodificar la dirección del destinatario: \"{request.Destinatario.Direccion}, {request.Destinatario.Localidad}\". " +
+                    "Por favor, verificá que la dirección sea correcta e intentá nuevamente.");
+
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
 
             paquete.ActualizarDatos(
                 new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono),
-                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP), request.Destinatario.Telefono),
+                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono),
                 request.Peso,
                 request.TipoEnvio,
                 request.TipoPaquete,

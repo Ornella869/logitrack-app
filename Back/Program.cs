@@ -67,6 +67,11 @@ builder.Services.AddScoped<HistorialEstadoEnvioService>();
 builder.Services.AddSingleton<QrService>();
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddHttpClient<IRecaptchaValidationService, GoogleRecaptchaValidationService>();
+builder.Services.AddHttpClient<GeocodingService>(c =>
+{
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("LogiTrack/1.0 (laboratorio-universitario)");
+    c.Timeout = TimeSpan.FromSeconds(10);
+});
 // Registrar el HttpClient
 builder.Services.AddHttpClient();
 builder.Services.AddHealthChecks();

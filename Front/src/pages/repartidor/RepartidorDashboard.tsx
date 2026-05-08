@@ -24,6 +24,7 @@ import MapIcon from '@mui/icons-material/Map'
 import NavigationIcon from '@mui/icons-material/Navigation'
 import { shipmentService } from '../../services/shipmentService'
 import StatusBadge from '../../components/StatusBadge'
+import RouteMap from '../../components/RouteMap'
 import type { Shipment } from '../../types'
 
 // G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy,
@@ -182,7 +183,21 @@ export default function RepartidorDashboard() {
                 </Button>
               </Stack>
             </Box>
-            <MapMock paradas={paradas} proximaIdx={metrics.proximaIdx} />
+            <RouteMap
+              paradas={paradas.map((p, idx) => ({
+                paqueteId: p.id,
+                codigoSeguimiento: p.trackingId,
+                orden: idx + 1,
+                direccion: p.receiver.address,
+                localidad: p.receiver.city,
+                destinatario: p.receiver.name,
+                status: p.status,
+                latitud: p.receiverUbicacion?.latitud ?? null,
+                longitud: p.receiverUbicacion?.longitud ?? null,
+              }))}
+              proximaIdx={metrics.proximaIdx}
+              height={320}
+            />
             {proxima && (
               <Box sx={{ p: 2, bgcolor: '#f8fdf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2">
@@ -318,106 +333,3 @@ function KpiCard({
   )
 }
 
-// Mapa mock visual (placeholder hasta integrar Leaflet en Fase B)
-function MapMock({ paradas, proximaIdx }: { paradas: Shipment[]; proximaIdx: number }) {
-  const pinPositions = paradas.slice(0, 5).map((_, i) => {
-    const xs = [22, 38, 55, 70, 82]
-    const ys = [50, 32, 42, 60, 38]
-    return { x: xs[i] ?? 50, y: ys[i] ?? 50 }
-  })
-  return (
-    <Box
-      sx={{
-        position: 'relative',
-        height: 320,
-        background: 'linear-gradient(135deg, #e8f4f8 0%, #d4e8ec 100%)',
-        backgroundImage: 'linear-gradient(rgba(0,0,0,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.04) 1px, transparent 1px)',
-        backgroundSize: '32px 32px',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Calles simuladas */}
-      <Box sx={{ position: 'absolute', left: '5%', top: '55%', width: '90%', height: 6, bgcolor: 'rgba(255,255,255,.7)', borderRadius: 0.5 }} />
-      <Box sx={{ position: 'absolute', left: '25%', top: '10%', width: 6, height: '80%', bgcolor: 'rgba(255,255,255,.7)', borderRadius: 0.5 }} />
-      <Box sx={{ position: 'absolute', left: '55%', top: '15%', width: 6, height: '75%', bgcolor: 'rgba(255,255,255,.7)', borderRadius: 0.5 }} />
-      <Box sx={{ position: 'absolute', left: '75%', top: '30%', width: 6, height: '60%', bgcolor: 'rgba(255,255,255,.7)', borderRadius: 0.5 }} />
-
-      {/* Sucursal */}
-      <Box
-        sx={{
-          position: 'absolute', left: '8%', top: '48%',
-          bgcolor: 'white', border: '2px solid #555', borderRadius: 0.5,
-          px: 1, py: 0.5, fontSize: 11, fontWeight: 600, boxShadow: 1,
-        }}
-      >
-        🏢 Sucursal
-      </Box>
-
-      {/* Pines de paradas */}
-      {pinPositions.map((pos, i) => {
-        const p = paradas[i]
-        const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
-        const isCurrent = i === proximaIdx
-        const bg = isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#9e9e9e'
-        return (
-          <Box
-            key={p.id}
-            sx={{
-              position: 'absolute',
-              left: `${pos.x}%`, top: `${pos.y}%`,
-              width: 32, height: 32,
-              bgcolor: bg, borderRadius: '50% 50% 50% 0',
-              transform: 'rotate(-45deg)',
-              boxShadow: '0 3px 6px rgba(0,0,0,.25)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              animation: isCurrent ? 'pulse 1.5s infinite' : 'none',
-              '@keyframes pulse': {
-                '0%, 100%': { boxShadow: '0 3px 6px rgba(0,0,0,.25), 0 0 0 0 rgba(237,108,2,.6)' },
-                '50%': { boxShadow: '0 3px 6px rgba(0,0,0,.25), 0 0 0 14px rgba(237,108,2,0)' },
-              },
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{ transform: 'rotate(45deg)', color: 'white', fontWeight: 700, fontSize: 12 }}
-            >
-              {i + 1}
-            </Typography>
-          </Box>
-        )
-      })}
-
-      {/* Leyenda */}
-      <Box
-        sx={{
-          position: 'absolute', bottom: 12, left: 12,
-          bgcolor: 'white', px: 1.5, py: 1, borderRadius: 1, boxShadow: 1, fontSize: 11,
-        }}
-      >
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-          <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#2e7d32' }} />
-          <Typography variant="caption">Entregado</Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-          <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ed6c02' }} />
-          <Typography variant="caption">Próxima parada</Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#9e9e9e' }} />
-          <Typography variant="caption">Pendiente</Typography>
-        </Stack>
-      </Box>
-
-      {/* Aviso mock */}
-      <Box
-        sx={{
-          position: 'absolute', top: 12, right: 12,
-          bgcolor: 'rgba(255,255,255,.92)', border: '1px dashed #999', borderRadius: 1,
-          px: 1.5, py: 0.5, fontSize: 10, color: 'text.secondary',
-        }}
-      >
-        🗺️ Mapa simulado (Fase B agregará GPS real con Leaflet)
-      </Box>
-    </Box>
-  )
-}
