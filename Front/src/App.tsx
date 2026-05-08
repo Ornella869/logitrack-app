@@ -9,6 +9,7 @@ import RutasActivasPage from './pages/RutasActivasPage'
 import DetalleRutaPage from './pages/DetalleRutaPage'
 import AuditoriaPage from './pages/AuditoriaPage'
 import MiPlanPage from './pages/MiPlanPage'
+import SucursalesPage from './pages/SucursalesPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
@@ -251,6 +252,16 @@ function App() {
             element={
               user && user.role === 'administrador' ? (
                 <MiPlanPage />
+              ) : (
+                <AccessDenied user={user as User} />
+              )
+            }
+          />
+          <Route
+            path="/sucursales"
+            element={
+              user && user.role === 'administrador' ? (
+                <SucursalesPage />
               ) : (
                 <AccessDenied user={user as User} />
               )

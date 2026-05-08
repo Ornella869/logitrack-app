@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -12,6 +12,8 @@ import {
   MenuItem,
   Select,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -25,18 +27,44 @@ import NavigationIcon from '@mui/icons-material/Navigation'
 import { shipmentService } from '../../services/shipmentService'
 import StatusBadge from '../../components/StatusBadge'
 import RouteMap from '../../components/RouteMap'
-import type { Shipment } from '../../types'
+import type { Shipment, User } from '../../types'
 
 // G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy,
 // ordenados por CP. Mapa mock por ahora — Leaflet llega en Fase B (G1L-18).
 
+function getGreeting(name: string) {
+  const h = new Date().getHours()
+  if (h >= 6 && h < 12) return `Buenos días, ${name}!`
+  if (h >= 12 && h < 20) return `Buenas tardes, ${name}!`
+  return `Buenas noches, ${name}!`
+}
+
+function buildMapsUrl(paradas: Shipment[]): string | null {
+  if (paradas.length === 0) return null
+  const pending = paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+  const active = pending.length > 0 ? pending : paradas
+  const addr = (p: Shipment) =>
+    p.receiverUbicacion?.latitud != null
+      ? `${p.receiverUbicacion.latitud},${p.receiverUbicacion.longitud}`
+      : `${p.receiver.address},${p.receiver.city}`
+  const params = new URLSearchParams({ api: '1', destination: addr(active[active.length - 1]) })
+  if (active.length > 1) {
+    params.set('origin', addr(active[0]))
+    const stops = active.slice(1, -1)
+    if (stops.length > 0) params.set('waypoints', stops.map(addr).join('|'))
+  }
+  return `https://www.google.com/maps/dir/?${params.toString()}`
+}
+
 export default function RepartidorDashboard() {
   const navigate = useNavigate()
+  const user = useOutletContext<User>()
   const [paradas, setParadas] = useState<Shipment[]>([])
   const [fechaRuta, setFechaRuta] = useState<string | null>(null)
   const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [tab, setTab] = useState(0)
 
   const load = async (fecha?: string) => {
     setLoading(true)
@@ -98,6 +126,11 @@ export default function RepartidorDashboard() {
           <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
             {fechaHoy} · {paradas.length} paradas{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
           </Typography>
+          {user && (
+            <Typography variant="caption" color="text.secondary">
+              {getGreeting(user.name)}
+            </Typography>
+          )}
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
           {fechasDisponibles.length > 1 && (
@@ -155,63 +188,77 @@ export default function RepartidorDashboard() {
             <KpiCard label="Paradas restantes" value={paradas.length - metrics.entregadas} color="#5e35b1" icon={<AccessTimeIcon />} />
           </Grid>
 
-          <Typography variant="h6" sx={{ mb: 2 }}>📍 Mi recorrido del día</Typography>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+              <Tab label="🗺️ Mapa" />
+              <Tab label="📋 Mis paradas" />
+            </Tabs>
+          </Box>
 
-          {/* MAPA MOCK (placeholder hasta Fase B con Leaflet) */}
-          <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden' }}>
-            <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-              <Box>
-                <Typography variant="body2" fontWeight={600}>
-                  Ruta optimizada{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Orden automático por código postal y FIFO · {paradas.length} paradas
-                </Typography>
+          {tab === 0 && (
+            <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden' }}>
+              <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    Ruta optimizada{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Orden automático por código postal y FIFO · {paradas.length} paradas
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<MapIcon />}
+                    disabled={paradas.length === 0}
+                    onClick={() => {
+                      const url = buildMapsUrl(paradas)
+                      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                    }}
+                  >
+                    Abrir en Maps
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<NavigationIcon />}
+                    disabled={!proxima}
+                    onClick={() => proxima && navigate(`/shipment/${proxima.id}`)}
+                  >
+                    Navegar a próxima parada
+                  </Button>
+                </Stack>
               </Box>
-              <Stack direction="row" spacing={1}>
-                <Button size="small" variant="outlined" startIcon={<MapIcon />} disabled>
-                  Abrir en Maps
-                </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={<NavigationIcon />}
-                  disabled={!proxima}
-                  onClick={() => proxima && navigate(`/shipment/${proxima.id}`)}
-                >
-                  Navegar a próxima parada
-                </Button>
-              </Stack>
-            </Box>
-            <RouteMap
-              paradas={paradas.map((p, idx) => ({
-                paqueteId: p.id,
-                codigoSeguimiento: p.trackingId,
-                orden: idx + 1,
-                direccion: p.receiver.address,
-                localidad: p.receiver.city,
-                destinatario: p.receiver.name,
-                status: p.status,
-                latitud: p.receiverUbicacion?.latitud ?? null,
-                longitud: p.receiverUbicacion?.longitud ?? null,
-              }))}
-              proximaIdx={metrics.proximaIdx}
-              height={320}
-            />
-            {proxima && (
-              <Box sx={{ p: 2, bgcolor: '#f8fdf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="body2">
-                  <strong>Próxima parada:</strong> {proxima.receiver.address}, {proxima.receiver.city} · {proxima.receiver.name} · {proxima.weight} kg
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  CP {proxima.receiver.postalCode}
-                </Typography>
-              </Box>
-            )}
-          </Card>
+              <RouteMap
+                paradas={paradas.map((p, idx) => ({
+                  paqueteId: p.id,
+                  codigoSeguimiento: p.trackingId,
+                  orden: idx + 1,
+                  direccion: p.receiver.address,
+                  localidad: p.receiver.city,
+                  destinatario: p.receiver.name,
+                  status: p.status,
+                  latitud: p.receiverUbicacion?.latitud ?? null,
+                  longitud: p.receiverUbicacion?.longitud ?? null,
+                }))}
+                proximaIdx={metrics.proximaIdx}
+                height={380}
+              />
+              {proxima && (
+                <Box sx={{ p: 2, bgcolor: '#f8fdf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Typography variant="body2">
+                    <strong>Próxima parada:</strong> {proxima.receiver.address}, {proxima.receiver.city} · {proxima.receiver.name} · {proxima.weight} kg
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    CP {proxima.receiver.postalCode}
+                  </Typography>
+                </Box>
+              )}
+            </Card>
+          )}
 
-          <Typography variant="h6" sx={{ mb: 2 }}>Mis paradas</Typography>
-
+          {tab === 1 && (
           <Stack spacing={1.5}>
             {paradas.map((p, idx) => {
               const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
@@ -299,6 +346,7 @@ export default function RepartidorDashboard() {
               )
             })}
           </Stack>
+          )}
         </>
       )}
     </Box>

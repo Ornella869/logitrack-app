@@ -19,6 +19,7 @@ import {
   LinearProgress,
   MenuItem,
   Paper,
+  Select,
   Rating,
   Snackbar,
   Stack,
@@ -235,6 +236,15 @@ const plans: Array<{
   },
 ]
 
+const COUNTRIES = [
+  { code: 'AR', dial: '+54', flag: '🇦🇷', name: 'Argentina', digits: 10 },
+  { code: 'UY', dial: '+598', flag: '🇺🇾', name: 'Uruguay', digits: 8 },
+  { code: 'CL', dial: '+56', flag: '🇨🇱', name: 'Chile', digits: 9 },
+  { code: 'BR', dial: '+55', flag: '🇧🇷', name: 'Brasil', digits: 11 },
+  { code: 'ES', dial: '+34', flag: '🇪🇸', name: 'España', digits: 9 },
+  { code: 'MX', dial: '+52', flag: '🇲🇽', name: 'México', digits: 10 },
+]
+
 export default function LandingPage() {
   const navigate = useNavigate()
   const initialLeadForm = {
@@ -265,6 +275,8 @@ export default function LandingPage() {
   const [leadError, setLeadError] = useState('')
   const [leadForm, setLeadForm] = useState(initialLeadForm)
   const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
+  const [leadCountry, setLeadCountry] = useState('AR')
+  const selectedCountry = COUNTRIES.find((c) => c.code === leadCountry) ?? COUNTRIES[0]
 
   const closeReviewToast = () => {
     setReviewSent(false)
@@ -366,6 +378,9 @@ export default function LandingPage() {
   }
 
   const handleLeadChange = (field: keyof typeof leadForm, value: string) => {
+    if (field === 'companyName') value = value.replace(/[0-9]/g, '').slice(0, 30)
+    if (field === 'contactName') value = value.replace(/[^A-Za-zÀ-ÿ\s'-]/g, '').slice(0, 30)
+    if (field === 'phone') value = value.replace(/\D/g, '')
     setLeadForm((current) => ({
       ...current,
       [field]: field === 'plan' ? (value as PlanInteres) : value,
@@ -377,8 +392,16 @@ export default function LandingPage() {
   const validateLeadForm = () => {
     const errors: Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>> = {}
 
-    if (!leadForm.companyName.trim()) errors.companyName = 'Completá el nombre de la empresa.'
-    if (!leadForm.contactName.trim()) errors.contactName = 'Completá el nombre de contacto.'
+    if (!leadForm.companyName.trim()) {
+      errors.companyName = 'Completá el nombre de la empresa.'
+    } else if (leadForm.companyName.trim().length > 30) {
+      errors.companyName = 'Máximo 30 caracteres.'
+    }
+    if (!leadForm.contactName.trim()) {
+      errors.contactName = 'Completá el nombre de contacto.'
+    } else if (!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]*$/.test(leadForm.contactName.trim()) || leadForm.contactName.trim().length < 2) {
+      errors.contactName = 'Solo letras, mínimo 2 caracteres.'
+    }
     if (!leadForm.email.trim()) {
       errors.email = 'Completá el email de contacto.'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadForm.email.trim())) {
@@ -388,8 +411,8 @@ export default function LandingPage() {
     const digits = leadForm.phone.replace(/\D/g, '')
     if (!leadForm.phone.trim()) {
       errors.phone = 'Completá el teléfono de contacto.'
-    } else if (digits.length < 8) {
-      errors.phone = 'Ingresá un teléfono válido.'
+    } else if (digits.length !== selectedCountry.digits) {
+      errors.phone = `Ingresá ${selectedCountry.digits} dígitos (${selectedCountry.name}).`
     }
 
     if (!leadForm.plan) {
@@ -411,7 +434,7 @@ export default function LandingPage() {
         companyName: leadForm.companyName,
         contactName: leadForm.contactName,
         email: leadForm.email,
-        phone: leadForm.phone,
+        phone: `${selectedCountry.dial}${leadForm.phone}`,
         plan: leadForm.plan,
         comments: leadForm.comments,
       })
@@ -1236,7 +1259,8 @@ export default function LandingPage() {
                 value={leadForm.companyName}
                 onChange={(event) => handleLeadChange('companyName', event.target.value)}
                 error={Boolean(leadFormErrors.companyName)}
-                helperText={leadFormErrors.companyName}
+                helperText={leadFormErrors.companyName ?? 'Máx. 30 caracteres, sin números'}
+                inputProps={{ maxLength: 30 }}
               />
             </Grid>
             <Grid item xs={12}>
@@ -1246,7 +1270,8 @@ export default function LandingPage() {
                 value={leadForm.contactName}
                 onChange={(event) => handleLeadChange('contactName', event.target.value)}
                 error={Boolean(leadFormErrors.contactName)}
-                helperText={leadFormErrors.contactName}
+                helperText={leadFormErrors.contactName ?? 'Solo letras, máx. 30 caracteres'}
+                inputProps={{ maxLength: 30 }}
               />
             </Grid>
             <Grid item xs={12} md={6}>
@@ -1260,14 +1285,26 @@ export default function LandingPage() {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField
-                label="Teléfono"
-                fullWidth
-                value={leadForm.phone}
-                onChange={(event) => handleLeadChange('phone', event.target.value)}
-                error={Boolean(leadFormErrors.phone)}
-                helperText={leadFormErrors.phone}
-              />
+              <Stack direction="row" spacing={1} alignItems="flex-start">
+                <Select
+                  value={leadCountry}
+                  onChange={(e) => setLeadCountry(e.target.value as string)}
+                  sx={{ minWidth: 95 }}
+                >
+                  {COUNTRIES.map((c) => (
+                    <MenuItem key={c.code} value={c.code}>{c.flag} {c.dial}</MenuItem>
+                  ))}
+                </Select>
+                <TextField
+                  label="Teléfono"
+                  fullWidth
+                  value={leadForm.phone}
+                  onChange={(event) => handleLeadChange('phone', event.target.value)}
+                  error={Boolean(leadFormErrors.phone)}
+                  helperText={leadFormErrors.phone ?? `${selectedCountry.digits} dígitos`}
+                  inputProps={{ maxLength: selectedCountry.digits, inputMode: 'numeric' }}
+                />
+              </Stack>
             </Grid>
             <Grid item xs={12}>
               <TextField

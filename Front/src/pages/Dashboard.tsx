@@ -25,13 +25,19 @@ import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
 import ShipmentForm from '../components/ShipmentForm'
 import UsersManagement from '../components/UsersManagement'
-import BranchManagement from '../components/BranchManagement'
 import SearchBar from '../components/SearchBar'
 import ShipmentFilters, { type ShipmentFiltersValue } from '../components/ShipmentFilters'
 
 const EMPTY_FILTERS: ShipmentFiltersValue = { status: [], from: '', to: '' }
 
 type Severity = 'success' | 'info' | 'warning' | 'error'
+
+function getGreeting(name: string) {
+  const h = new Date().getHours()
+  if (h >= 6 && h < 12) return `Buenos días, ${name}!`
+  if (h >= 12 && h < 20) return `Buenas tardes, ${name}!`
+  return `Buenas noches, ${name}!`
+}
 
 function Dashboard() {
   const user = useOutletContext<User>()
@@ -167,7 +173,7 @@ function Dashboard() {
             Dashboard - Supervisor
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Bienvenido, {user.name}
+            {getGreeting(user.name)}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -207,22 +213,45 @@ function Dashboard() {
         </Alert>
       )}
 
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Envíos Pendientes de Calendarización
-      </Typography>
+      <SearchBar onSearch={handleSearch} loading={loading} />
+      <ShipmentFilters value={filters} onChange={setFilters} onClear={handleClearFilters} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
-      ) : supervisorMetrics.pendientes.length === 0 ? (
-        <Alert severity="success">No hay envíos pendientes. Todo calendarizado.</Alert>
-      ) : (
-        <Grid container spacing={2}>
-          {supervisorMetrics.pendientes.map((s) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={s.id}>
-              <PendienteCard shipment={s} onClick={() => navigate(`/shipment/${s.id}`)} />
+      ) : hasQuery ? (
+        <>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Resultados de búsqueda ({shipments.length})
+          </Typography>
+          {shipments.length === 0 ? (
+            <Alert severity="info">No se encontraron envíos para los filtros aplicados.</Alert>
+          ) : (
+            <Grid container spacing={2}>
+              {shipments.map((s) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={s.id}>
+                  <ShipmentCard shipment={s} />
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
+          )}
+        </>
+      ) : (
+        <>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Envíos Pendientes de Calendarización
+          </Typography>
+          {supervisorMetrics.pendientes.length === 0 ? (
+            <Alert severity="success">No hay envíos pendientes. Todo calendarizado.</Alert>
+          ) : (
+            <Grid container spacing={2}>
+              {supervisorMetrics.pendientes.map((s) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={s.id}>
+                  <PendienteCard shipment={s} onClick={() => navigate(`/shipment/${s.id}`)} />
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </>
       )}
     </Box>
   )
@@ -235,7 +264,7 @@ function Dashboard() {
           Dashboard - {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
         </Typography>
         <Typography variant="body2" color="textSecondary">
-          Bienvenido, {user.name}
+          {getGreeting(user.name)}
         </Typography>
       </Box>
 
@@ -284,10 +313,9 @@ function Dashboard() {
         <>
           <Box sx={{ mb: 3 }}>
             <Typography variant="h4" gutterBottom>Dashboard - Administrador</Typography>
-            <Typography variant="body2" color="textSecondary">Bienvenido, {user.name}</Typography>
+            <Typography variant="body2" color="textSecondary">{getGreeting(user.name)}</Typography>
           </Box>
           <UsersManagement currentUserId={user.id} />
-          <BranchManagement />
         </>
       )}
 

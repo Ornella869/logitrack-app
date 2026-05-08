@@ -14,14 +14,14 @@ import ClearAllIcon from '@mui/icons-material/ClearAll'
 
 // G1L-40: Filtrado de Envíos por estado y rango de fechas
 
-const STATUS_OPTIONS: { backendValue: string; label: string }[] = [
-  { backendValue: 'PendienteDeCalendarizacion', label: 'Pendiente de calendarización' },
-  { backendValue: 'AsignadoAVehiculo', label: 'Asignado a vehículo' },
-  { backendValue: 'CargadoEnVehiculo', label: 'Cargado en vehículo' },
-  { backendValue: 'ListoParaSalir', label: 'Listo para salir' },
-  { backendValue: 'EnTransito', label: 'En tránsito' },
-  { backendValue: 'Entregado', label: 'Entregado' },
-  { backendValue: 'Cancelado', label: 'Cancelado' },
+const STATUS_OPTIONS: { backendValue: string; label: string; color: string; bg: string }[] = [
+  { backendValue: 'PendienteDeCalendarizacion', label: 'Pendiente de calendarización', color: '#e65100', bg: '#fff3e0' },
+  { backendValue: 'AsignadoAVehiculo', label: 'Asignado a vehículo', color: '#1565c0', bg: '#e3f2fd' },
+  { backendValue: 'CargadoEnVehiculo', label: 'Cargado en vehículo', color: '#1976d2', bg: '#e8f0fe' },
+  { backendValue: 'ListoParaSalir', label: 'Listo para salir', color: '#00695c', bg: '#e0f2f1' },
+  { backendValue: 'EnTransito', label: 'En tránsito', color: '#2e7d32', bg: '#e8f5e9' },
+  { backendValue: 'Entregado', label: 'Entregado', color: '#1b5e20', bg: '#c8e6c9' },
+  { backendValue: 'Cancelado', label: 'Cancelado', color: '#b71c1c', bg: '#fce4ec' },
 ]
 
 export interface ShipmentFiltersValue {
@@ -77,13 +77,32 @@ export default function ShipmentFilters({ value, onChange, onClear }: Props) {
             value={value.status}
             onChange={handleStatusToggle}
             size="small"
-            sx={{ flexWrap: 'wrap', mb: 2 }}
+            sx={{ flexWrap: 'wrap', mb: 2, gap: 0.5, '& .MuiToggleButtonGroup-grouped': { borderRadius: '16px !important', border: '1px solid !important', mx: 0 } }}
           >
-            {STATUS_OPTIONS.map((opt) => (
-              <ToggleButton key={opt.backendValue} value={opt.backendValue} sx={{ textTransform: 'none' }}>
-                {opt.label}
-              </ToggleButton>
-            ))}
+            {STATUS_OPTIONS.map((opt) => {
+              const selected = value.status.includes(opt.backendValue)
+              return (
+                <ToggleButton
+                  key={opt.backendValue}
+                  value={opt.backendValue}
+                  sx={{
+                    textTransform: 'none',
+                    px: 1.5,
+                    py: 0.5,
+                    fontSize: 12,
+                    fontWeight: selected ? 700 : 400,
+                    color: selected ? opt.color : 'text.secondary',
+                    bgcolor: selected ? opt.bg : 'transparent',
+                    borderColor: selected ? `${opt.color} !important` : 'divider !important',
+                    '&:hover': { bgcolor: opt.bg, color: opt.color },
+                    '&.Mui-selected': { bgcolor: opt.bg, color: opt.color },
+                    '&.Mui-selected:hover': { bgcolor: opt.bg },
+                  }}
+                >
+                  {opt.label}
+                </ToggleButton>
+              )
+            })}
           </ToggleButtonGroup>
 
           <Typography variant="subtitle2" gutterBottom>
@@ -120,6 +139,7 @@ export default function ShipmentFilters({ value, onChange, onClear }: Props) {
                     onDelete={() =>
                       onChange({ ...value, status: value.status.filter((x) => x !== s) })
                     }
+                    sx={opt ? { bgcolor: opt.bg, color: opt.color, borderColor: opt.color, border: '1px solid', fontWeight: 600 } : {}}
                   />
                 )
               })}

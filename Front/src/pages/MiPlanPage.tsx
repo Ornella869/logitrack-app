@@ -44,6 +44,7 @@ export default function MiPlanPage() {
 
   // Suspensión
   const [openSuspendDialog, setOpenSuspendDialog] = useState(false)
+  const [openBajaDialog, setOpenBajaDialog] = useState(false)
   const [snack, setSnack] = useState<{ open: boolean; msg: string; sev: 'success' | 'info' | 'error' | 'warning' }>({ open: false, msg: '', sev: 'success' })
 
   useEffect(() => {
@@ -241,6 +242,21 @@ export default function MiPlanPage() {
         })}
       </Grid>
 
+      {/* Dar de baja */}
+      <Card variant="outlined" sx={{ borderColor: '#c62828', bgcolor: '#fff5f5', mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1, color: '#c62828' }}>
+            Dar de baja el plan
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Al dar de baja tu plan, los usuarios no podrán operar hasta que contrates un nuevo servicio.
+          </Typography>
+          <Button color="error" variant="outlined" onClick={() => setOpenBajaDialog(true)} disabled={plan.estado === 'Suspendida'}>
+            Solicitar baja del plan
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Sección de simulación */}
       <Card variant="outlined" sx={{ borderColor: '#ed6c02', bgcolor: '#fff8f0' }}>
         <CardContent>
@@ -291,6 +307,28 @@ export default function MiPlanPage() {
           </Button>
           <Button variant="contained" onClick={confirmarCodigo} disabled={cambiando || codigoInput.length !== 6}>
             {cambiando ? 'Confirmando...' : 'Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={openBajaDialog} onClose={() => setOpenBajaDialog(false)}>
+        <DialogTitle>Solicitar baja del plan</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Vas a solicitar la baja de tu plan. El equipo de LogiTrack procesará tu solicitud en las próximas 48 horas hábiles. ¿Confirmás?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenBajaDialog(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              setOpenBajaDialog(false)
+              setSnack({ open: true, msg: 'Solicitud de baja enviada. Te contactaremos en 48 hs hábiles.', sev: 'info' })
+            }}
+          >
+            Confirmar baja
           </Button>
         </DialogActions>
       </Dialog>

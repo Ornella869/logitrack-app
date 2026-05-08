@@ -6,45 +6,33 @@ interface ShipmentCardProps {
   shipment: Shipment
 }
 
+const STATUS_STYLES: Record<string, { color: string; bg: string }> = {
+  'Pendiente de calendarización': { color: '#e65100', bg: '#fff3e0' },
+  'Asignado a vehículo': { color: '#1565c0', bg: '#e3f2fd' },
+  'Cargado en vehículo': { color: '#1976d2', bg: '#e8f0fe' },
+  'Listo para salir': { color: '#00695c', bg: '#e0f2f1' },
+  'En tránsito': { color: '#2e7d32', bg: '#e8f5e9' },
+  Entregado: { color: '#1b5e20', bg: '#c8e6c9' },
+  Cancelado: { color: '#b71c1c', bg: '#fce4ec' },
+}
+
+function getStatusLabel(status: string): string {
+  switch (status) {
+    case 'PendienteDeCalendarizacion': return 'Pendiente de calendarización'
+    case 'AsignadoAVehiculo': return 'Asignado a vehículo'
+    case 'CargadoEnVehiculo': return 'Cargado en vehículo'
+    case 'ListoParaSalir': return 'Listo para salir'
+    case 'EnTransito': return 'En tránsito'
+    case 'Entregado': return 'Entregado'
+    case 'Cancelado': return 'Cancelado'
+    default: return status
+  }
+}
+
 function ShipmentCard({ shipment }: ShipmentCardProps) {
   const navigate = useNavigate()
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pendiente de calendarización':
-      case 'Listo para salir':
-        return 'default'
-      case 'En tránsito':
-        return 'info'
-      case 'Entregado':
-        return 'success'
-      case 'Cancelado':
-        return 'error'
-      default:
-        return 'default'
-    }
-  }
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'PendienteDeCalendarizacion':
-        return 'Pendiente de calendarización'
-      case 'AsignadoAVehiculo':
-        return 'Asignado a vehículo'
-      case 'CargadoEnVehiculo':
-        return 'Cargado en vehículo'
-      case 'ListoParaSalir':
-        return 'Listo para salir'
-      case 'EnTransito':
-        return 'En tránsito'
-      case 'Entregado':
-        return 'Entregado'
-      case 'Cancelado':
-        return 'Cancelado'
-      default:
-        return status
-    }
-  }
+  const statusLabel = getStatusLabel(shipment.status)
+  const statusStyle = STATUS_STYLES[statusLabel] ?? { color: '#555', bg: '#eee' }
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -81,9 +69,9 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
               Estado
             </Typography>
             <Chip
-              label={getStatusLabel(shipment.status)}
-              color={getStatusColor(shipment.status) as any}
+              label={statusLabel}
               size="small"
+              sx={{ color: statusStyle.color, bgcolor: statusStyle.bg, border: `1px solid ${statusStyle.color}33`, fontWeight: 600, borderRadius: 1 }}
             />
           </Box>
           {shipment.createdDate && (

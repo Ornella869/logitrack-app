@@ -23,6 +23,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
 import HistoryIcon from '@mui/icons-material/History'
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
+import StoreIcon from '@mui/icons-material/Store'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
@@ -205,6 +206,7 @@ function Layout({ user, onLogout }: LayoutProps) {
               if (p.startsWith('/rutas-activas')) return '/rutas-activas'
               if (p.startsWith('/auditoria')) return '/auditoria'
               if (p.startsWith('/mi-plan')) return '/mi-plan'
+              if (p.startsWith('/sucursales')) return '/sucursales'
               return '/app'
             })()}
             onChange={(_, v) => navigate(v)}
@@ -219,6 +221,9 @@ function Layout({ user, onLogout }: LayoutProps) {
             <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
             {user.role === 'administrador' && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'administrador' && (
+              <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Sucursales" value="/sucursales" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (
               <Tab icon={<WorkspacePremiumIcon fontSize="small" />} iconPosition="start" label="Mi Plan" value="/mi-plan" sx={{ minHeight: 48, textTransform: 'none' }} />

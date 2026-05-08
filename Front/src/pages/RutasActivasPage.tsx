@@ -10,6 +10,7 @@ import {
   Chip,
   CircularProgress,
   Grid,
+  InputAdornment,
   LinearProgress,
   Stack,
   Table,
@@ -17,8 +18,10 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material'
+import SearchIcon from '@mui/icons-material/Search'
 import RouteIcon from '@mui/icons-material/Route'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -49,6 +52,7 @@ export default function RutasActivasPage() {
   const [rutas, setRutas] = useState<RutaActiva[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
@@ -67,6 +71,16 @@ export default function RutasActivasPage() {
       setLoading(false)
     }
   }
+
+  const rutasFiltradas = useMemo(() => {
+    if (!search.trim()) return rutas
+    const q = search.toLowerCase()
+    return rutas.filter((r) =>
+      r.repartidorNombre.toLowerCase().includes(q) ||
+      r.repartidorEmail.toLowerCase().includes(q) ||
+      r.cpZona.toLowerCase().includes(q),
+    )
+  }, [rutas, search])
 
   const kpis = useMemo(() => {
     const enCurso = rutas.filter((r) => r.estado === 'EnTransito').length
@@ -94,9 +108,19 @@ export default function RutasActivasPage() {
             {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })} — Monitoreo en tiempo real
           </Typography>
         </Box>
-        <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
-          Actualizar
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Buscar repartidor o CP..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+            sx={{ width: 220 }}
+          />
+          <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
+            Actualizar
+          </Button>
+        </Stack>
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -113,8 +137,11 @@ export default function RutasActivasPage() {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
       ) : rutas.length === 0 ? (
         <Alert severity="info">No hay rutas asignadas para hoy. Probá ejecutar la calendarización si hay envíos pendientes.</Alert>
+      ) : rutasFiltradas.length === 0 ? (
+        <Alert severity="info">No hay rutas que coincidan con "{search}".</Alert>
       ) : (
         <Card variant="outlined">
+          <Box sx={{ overflowX: 'auto' }}>
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: '#e3f2fd' }}>
@@ -127,7 +154,7 @@ export default function RutasActivasPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {rutas.map((r, idx) => {
+              {rutasFiltradas.map((r, idx) => {
                 const initials = r.repartidorNombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
                 const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                 const completas = r.entregadas + r.canceladas
@@ -185,6 +212,7 @@ export default function RutasActivasPage() {
               })}
             </TableBody>
           </Table>
+          </Box>
         </Card>
       )}
 

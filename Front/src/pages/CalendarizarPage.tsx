@@ -464,8 +464,8 @@ export default function CalendarizarPage() {
             <>
               <Button onClick={cerrarModal}>Cerrar</Button>
               {exec.ok && (
-                <Button variant="contained" onClick={() => { cerrarModal(); navigate('/app') }}>
-                  Volver al Dashboard
+                <Button variant="contained" onClick={() => { cerrarModal(); navigate('/rutas-activas') }}>
+                  Ver rutas activas
                 </Button>
               )}
             </>
