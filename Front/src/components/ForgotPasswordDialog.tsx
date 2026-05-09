@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import LockResetIcon from '@mui/icons-material/LockReset'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import { authService } from '../services/authService'
 
 interface ForgotPasswordDialogProps {
   open: boolean
@@ -42,7 +43,7 @@ function ForgotPasswordDialog({ open, onClose }: ForgotPasswordDialogProps) {
     onClose()
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email.trim()) {
       setEmailError('El email es obligatorio')
       return
@@ -54,7 +55,13 @@ function ForgotPasswordDialog({ open, onClose }: ForgotPasswordDialogProps) {
 
     setLoading(true)
 
-    // Guardar la solicitud en localStorage para que el administrador la vea
+    const foundUser = await authService.findUsuarioByEmail(email.trim())
+    if (!foundUser) {
+      setLoading(false)
+      setEmailError('No encontramos ningún usuario con ese email en el sistema.')
+      return
+    }
+
     const existing: PasswordResetRequest[] = JSON.parse(
       localStorage.getItem('passwordResetRequests') || '[]'
     )
@@ -75,11 +82,8 @@ function ForgotPasswordDialog({ open, onClose }: ForgotPasswordDialogProps) {
       )
     }
 
-    // Simulamos un pequeño delay para dar sensación de proceso
-    setTimeout(() => {
-      setLoading(false)
-      setSubmitted(true)
-    }, 800)
+    setLoading(false)
+    setSubmitted(true)
   }
 
   return (
@@ -157,14 +161,14 @@ function ForgotPasswordDialog({ open, onClose }: ForgotPasswordDialogProps) {
               Cancelar
             </Button>
             <Button
-              onClick={handleSubmit}
+              onClick={() => void handleSubmit()}
               variant="contained"
               disabled={loading}
               startIcon={
                 loading ? <CircularProgress size={16} color="inherit" /> : undefined
               }
             >
-              {loading ? 'Enviando...' : 'Notificar al administrador'}
+              {loading ? 'Verificando...' : 'Notificar al administrador'}
             </Button>
           </>
         ) : (

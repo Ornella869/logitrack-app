@@ -740,7 +740,6 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 value={formData.role}
                 onChange={(e) => setFormData((p) => ({ ...p, role: e.target.value as UserRole }))}
               >
-                <MenuItem value="administrador">Administrador</MenuItem>
                 <MenuItem value="supervisor">Supervisor</MenuItem>
                 <MenuItem value="operador">Operador</MenuItem>
                 <MenuItem value="repartidor">Repartidor</MenuItem>

@@ -17,6 +17,7 @@ import {
   Tabs,
   Tab,
 } from '@mui/material'
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import BoltIcon from '@mui/icons-material/Bolt'
@@ -29,7 +30,7 @@ import StoreIcon from '@mui/icons-material/Store'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { User } from '../types'
 import ChangePasswordDialog from './ChangePasswordDialog'
 
@@ -45,6 +46,13 @@ function Layout({ user, onLogout }: LayoutProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [openChangePassword, setOpenChangePassword] = useState(false)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -256,6 +264,24 @@ function Layout({ user, onLogout }: LayoutProps) {
 
       {/* Dialog para cambiar contraseña */}
       <ChangePasswordDialog open={openChangePassword} onClose={() => setOpenChangePassword(false)} />
+
+      {showScrollTop && (
+        <IconButton
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          sx={{
+            position: 'fixed',
+            right: 24,
+            bottom: 24,
+            zIndex: 30,
+            bgcolor: '#0288D1',
+            color: '#fff',
+            boxShadow: '0 8px 20px rgba(2,136,209,0.3)',
+            '&:hover': { bgcolor: '#0277BD' },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </IconButton>
+      )}
 
       {isAccessDeniedPage ? (
         <Outlet context={user} />

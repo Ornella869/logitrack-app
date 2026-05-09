@@ -335,6 +335,10 @@ export default function LandingPage() {
       setReviewError('Completá tu nombre y comentario para dejar la reseña.')
       return
     }
+    if (!/^[A-Za-zÀ-ÿ\s'-]+$/.test(reviewForm.name.trim())) {
+      setReviewError('El nombre solo puede contener letras.')
+      return
+    }
 
     setReviews((current) => [
       {
@@ -413,6 +417,8 @@ export default function LandingPage() {
       errors.phone = 'Completá el teléfono de contacto.'
     } else if (digits.length !== selectedCountry.digits) {
       errors.phone = `Ingresá ${selectedCountry.digits} dígitos (${selectedCountry.name}).`
+    } else if (leadCountry === 'AR' && (digits.startsWith('0') || digits.startsWith('15'))) {
+      errors.phone = 'Para Argentina, el número no debe comenzar con 0 ni con 15.'
     }
 
     if (!leadForm.plan) {
@@ -1142,10 +1148,10 @@ export default function LandingPage() {
 
                 <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
                   <Grid item xs={12} md={4}>
-                    <TextField label="Nombre" fullWidth value={reviewForm.name} onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))} />
+                    <TextField label="Nombre" fullWidth value={reviewForm.name} onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value.replace(/[0-9]/g, '') }))} />
                   </Grid>
                   <Grid item xs={12} md={4}>
-                    <TextField label="Rol" fullWidth value={reviewForm.role} onChange={(event) => setReviewForm((current) => ({ ...current, role: event.target.value }))} />
+                    <TextField label="Rol" fullWidth value={reviewForm.role} onChange={(event) => setReviewForm((current) => ({ ...current, role: event.target.value.replace(/[0-9]/g, '') }))} />
                   </Grid>
                   <Grid item xs={12} md={4}>
                     <TextField label="Empresa o referencia" fullWidth value={reviewForm.company} onChange={(event) => setReviewForm((current) => ({ ...current, company: event.target.value }))} />
@@ -1259,7 +1265,7 @@ export default function LandingPage() {
                 value={leadForm.companyName}
                 onChange={(event) => handleLeadChange('companyName', event.target.value)}
                 error={Boolean(leadFormErrors.companyName)}
-                helperText={leadFormErrors.companyName ?? 'Máx. 30 caracteres, sin números'}
+                helperText={leadFormErrors.companyName}
                 inputProps={{ maxLength: 30 }}
               />
             </Grid>
@@ -1270,7 +1276,7 @@ export default function LandingPage() {
                 value={leadForm.contactName}
                 onChange={(event) => handleLeadChange('contactName', event.target.value)}
                 error={Boolean(leadFormErrors.contactName)}
-                helperText={leadFormErrors.contactName ?? 'Solo letras, máx. 30 caracteres'}
+                helperText={leadFormErrors.contactName}
                 inputProps={{ maxLength: 30 }}
               />
             </Grid>
@@ -1301,7 +1307,7 @@ export default function LandingPage() {
                   value={leadForm.phone}
                   onChange={(event) => handleLeadChange('phone', event.target.value)}
                   error={Boolean(leadFormErrors.phone)}
-                  helperText={leadFormErrors.phone ?? `${selectedCountry.digits} dígitos`}
+                  helperText={leadFormErrors.phone}
                   inputProps={{ maxLength: selectedCountry.digits, inputMode: 'numeric' }}
                 />
               </Stack>
@@ -1345,11 +1351,72 @@ export default function LandingPage() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={leadSent} autoHideDuration={3800} onClose={closeLeadToast}>
-        <Alert severity="success" variant="filled" onClose={closeLeadToast}>
-          Recibimos tu solicitud. Te contactaremos a la brevedad
-        </Alert>
-      </Snackbar>
+      <Dialog
+        open={leadSent}
+        onClose={closeLeadToast}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '24px',
+            overflow: 'hidden',
+            background: 'linear-gradient(160deg,#04213E 0%,#0C5EA7 60%,#19A5F2 100%)',
+          },
+        }}
+      >
+        <DialogContent sx={{ p: 0, position: 'relative', overflow: 'hidden', minHeight: 320 }}>
+          {[
+            { delay: '0s', dur: '6s', top: '70%', size: 80 },
+            { delay: '2.5s', dur: '9s', top: '30%', size: 52 },
+            { delay: '4.5s', dur: '7s', top: '5%', size: 42 },
+          ].map((t, i) => (
+            <Box
+              key={i}
+              sx={{
+                position: 'absolute',
+                top: t.top,
+                left: '-120px',
+                animation: `truckCelebrate ${t.dur} linear infinite`,
+                animationDelay: t.delay,
+                '@keyframes truckCelebrate': {
+                  '0%': { transform: 'translateX(0)', opacity: 0 },
+                  '8%': { opacity: 0.55 },
+                  '90%': { opacity: 0.55 },
+                  '100%': { transform: 'translateX(800px)', opacity: 0 },
+                },
+              }}
+            >
+              <LocalShippingRoundedIcon sx={{ color: '#fff', fontSize: t.size }} />
+            </Box>
+          ))}
+          <Box sx={{ py: 7, px: 4, textAlign: 'center', position: 'relative', zIndex: 2 }}>
+            <CheckCircleRoundedIcon sx={{ color: '#4FC3F7', fontSize: 72, mb: 2 }} />
+            <Typography variant="h4" sx={{ fontWeight: 900, color: '#fff', mb: 1.5 }}>
+              ¡Solicitud enviada!
+            </Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,0.82)', lineHeight: 1.75, maxWidth: 400, mx: 'auto' }}>
+              Recibimos tu solicitud. Te contactaremos a la brevedad para brindarte todos los detalles de tu plan.
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={closeLeadToast}
+              sx={{
+                mt: 4,
+                borderRadius: '14px',
+                px: 4,
+                py: 1.4,
+                bgcolor: '#0288D1',
+                fontWeight: 800,
+                fontSize: '1rem',
+                boxShadow: '0 8px 24px rgba(2,136,209,0.45)',
+                '&:hover': { bgcolor: '#0277BD' },
+              }}
+            >
+              Seguir navegando por la página
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       {showTop && (
         <IconButton
