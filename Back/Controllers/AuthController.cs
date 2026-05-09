@@ -20,17 +20,20 @@ namespace Back.Controllers
 
         private readonly AuthService _authService;
         private readonly IUserRepository _userRepository;
+        private readonly IRutasRepository _rutasRepository;
         private readonly LogiTrackDbContext _context;
         private readonly IRecaptchaValidationService _recaptchaValidationService;
 
         public AuthController(
             AuthService authService,
             IUserRepository userRepository,
+            IRutasRepository rutasRepository,
             LogiTrackDbContext context,
             IRecaptchaValidationService recaptchaValidationService)
         {
             _authService = authService;
             _userRepository = userRepository;
+            _rutasRepository = rutasRepository;
             _context = context;
             _recaptchaValidationService = recaptchaValidationService;
         }
@@ -97,23 +100,99 @@ namespace Back.Controllers
         /// <summary>Listado de repartidores (Admin / Supervisor).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
         [HttpGet("repartidores")]
-        public async Task<ActionResult<List<UserInfoResponse>>> GetRepartidores()
+        public async Task<ActionResult<PagedResponse<RepartidorListadoResponse>>> GetRepartidores(
+            [FromQuery] string? search,
+            [FromQuery] string? accountStatus,
+            [FromQuery] string? routeStatus,
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize)
         {
-            var usuarios = await _userRepository.GetAll();
-            var repartidoresList = usuarios.OfType<Repartidor>().Select(t => new UserInfoResponse
-            {
-                Id = t.Id.ToString(),
-                Nombre = t.Nombre,
-                Apellido = t.Apellido,
-                Email = t.Email,
-                DNI = t.DNI,
-                Activo = t.Activo,
-                Role = Roles.Repartidor,
-                Licencia = t.Licencia,
-                Estado = t.EstadoLabel
-            }).ToList();
+            var normalizedPage = PaginationDefaults.NormalizePage(page);
+            var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
 
-            return Ok(repartidoresList);
+            var repartidores = await _userRepository.GetRepartidores();
+            var rutas = await _rutasRepository.GetRutas();
+            var rutasPorRepartidor = rutas
+                .GroupBy(r => r.Repartidor.Id)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var query = repartidores.Select(t =>
+            {
+                rutasPorRepartidor.TryGetValue(t.Id, out var asignadas);
+                asignadas ??= new List<Ruta>();
+
+                var routeStatusKey = asignadas.Any(r => r.Estado == RutaStatus.EnCurso)
+                    ? "en-viaje"
+                    : asignadas.Any(r => r.Estado == RutaStatus.Pendiente)
+                        ? "con-ruta-asignada"
+                        : asignadas.Count == 0
+                            ? "sin-asignacion"
+                            : "disponible";
+
+                var routeStatusLabel = routeStatusKey switch
+                {
+                    "en-viaje" => "En viaje",
+                    "con-ruta-asignada" => "Con ruta asignada",
+                    "sin-asignacion" => "Sin asignacion",
+                    _ => "Disponible"
+                };
+
+                return new RepartidorListadoResponse
+                {
+                    Id = t.Id.ToString(),
+                    Nombre = t.Nombre,
+                    Apellido = t.Apellido,
+                    Email = t.Email,
+                    DNI = t.DNI,
+                    Activo = t.Activo,
+                    Role = Roles.Repartidor,
+                    Licencia = t.Licencia,
+                    Estado = t.EstadoLabel,
+                    AssignedRoutesCount = asignadas.Count,
+                    RouteStatusKey = routeStatusKey,
+                    RouteStatusLabel = routeStatusLabel,
+                };
+            });
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLowerInvariant();
+                query = query.Where(r =>
+                    $"{r.Nombre} {r.Apellido}".ToLowerInvariant().Contains(s)
+                    || r.Email.ToLowerInvariant().Contains(s)
+                    || r.DNI.Contains(s)
+                    || (r.Licencia ?? string.Empty).ToLowerInvariant().Contains(s));
+            }
+
+            if (!string.IsNullOrWhiteSpace(accountStatus))
+            {
+                var normalized = accountStatus.Trim().ToLowerInvariant();
+                query = normalized switch
+                {
+                    "activo" => query.Where(r => string.Equals(r.Estado, "Activo", StringComparison.OrdinalIgnoreCase)),
+                    "inactivo" => query.Where(r => !string.Equals(r.Estado, "Activo", StringComparison.OrdinalIgnoreCase)),
+                    _ => query,
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(routeStatus))
+            {
+                var normalized = routeStatus.Trim().ToLowerInvariant();
+                query = query.Where(r => r.RouteStatusKey == normalized);
+            }
+
+            var filtered = query
+                .OrderBy(r => r.Nombre)
+                .ThenBy(r => r.Apellido)
+                .ToList();
+
+            var totalItems = filtered.Count;
+            var items = filtered
+                .Skip((normalizedPage - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .ToList();
+
+            return Ok(PagedResponse<RepartidorListadoResponse>.Create(items, normalizedPage, normalizedPageSize, totalItems));
         }
 
         /// <summary>Alta de Repartidor (genera contraseña temporal).</summary>
@@ -185,22 +264,21 @@ namespace Back.Controllers
         /// <summary>Listado de usuarios con búsqueda parcial por nombre, apellido, email o DNI.</summary>
         [Authorize(Roles = Roles.Administrador)]
         [HttpGet("usuarios")]
-        public async Task<ActionResult<List<UserInfoResponse>>> GetUsuarios([FromQuery] string? search)
+        public async Task<ActionResult<PagedResponse<UserInfoResponse>>> GetUsuarios(
+            [FromQuery] string? search,
+            [FromQuery] string? role,
+            [FromQuery] bool? active,
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize)
         {
-            var usuarios = await _userRepository.GetAll();
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var s = search.Trim().ToLowerInvariant();
-                usuarios = usuarios.Where(u =>
-                    u.Nombre.ToLowerInvariant().Contains(s)
-                    || u.Apellido.ToLowerInvariant().Contains(s)
-                    || u.Email.ToLowerInvariant().Contains(s)
-                    || u.DNI.Contains(s)).ToList();
-            }
-
-            var usuariosList = usuarios.Select(MapUsuario).ToList();
-            return Ok(usuariosList);
+            var normalizedPage = PaginationDefaults.NormalizePage(page);
+            var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
+            var usuarios = await _userRepository.GetPaged(search, role, active, normalizedPage, normalizedPageSize);
+            return Ok(PagedResponse<UserInfoResponse>.Create(
+                usuarios.Items.Select(MapUsuario).ToList(),
+                usuarios.Page,
+                usuarios.PageSize,
+                usuarios.TotalItems));
         }
 
         /// <summary>Alta de usuario por Administrador con contraseña temporal manual.</summary>
@@ -337,6 +415,13 @@ namespace Back.Controllers
         public string? Licencia { get; set; }
         public string? Estado { get; set; }
         public string? TemporaryPassword { get; set; }
+    }
+
+    public class RepartidorListadoResponse : UserInfoResponse
+    {
+        public int AssignedRoutesCount { get; set; }
+        public string RouteStatusKey { get; set; } = string.Empty;
+        public string RouteStatusLabel { get; set; } = string.Empty;
     }
 
     public class RegistrarRepartidorRequest

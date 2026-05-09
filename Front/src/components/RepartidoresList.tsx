@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   Grid,
   InputAdornment,
   Stack,
+  TablePagination,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -20,9 +21,8 @@ import SearchIcon from '@mui/icons-material/Search'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 
-import type { User, Route, RepartidorEstado } from '../types'
-import { authService } from '../services/authService'
-import { routeService } from '../services/routeService'
+import type { RepartidorEstado } from '../types'
+import { authService, type RepartidorListItem } from '../services/authService'
 
 interface RepartidoresListProps {
   userRole?: string
@@ -46,69 +46,46 @@ type FilterValue = typeof FILTER_OPTIONS[number]['value']
 
 function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const navigate = useNavigate()
-  const [repartidores, setRepartidores] = useState<User[]>([])
-  const [routes, setRoutes] = useState<Route[]>([])
+  const [repartidores, setRepartidores] = useState<RepartidorListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [estadoFilters, setEstadoFilters] = useState<FilterValue[]>([])
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(8)
+  const [totalItems, setTotalItems] = useState(0)
 
   useEffect(() => {
     void loadRepartidores()
-  }, [])
-
-  const routesByRepartidor = useMemo(() => {
-    return routes.reduce<Record<string, Route[]>>((acc, route) => {
-      acc[route.repartidorId] = [...(acc[route.repartidorId] ?? []), route]
-      return acc
-    }, {})
-  }, [routes])
-
-  const getRouteStatus = (repartidorId: string) => {
-    const assignedRoutes = routesByRepartidor[repartidorId] ?? []
-    if (assignedRoutes.some((route) => route.status === 'En Curso')) {
-      return { label: 'En viaje', color: 'warning' as const, filterValue: 'en-viaje' as const }
-    }
-    if (assignedRoutes.some((route) => route.status === 'Creada')) {
-      return { label: 'Con ruta asignada', color: 'info' as const, filterValue: 'con-ruta-asignada' as const }
-    }
-    if (assignedRoutes.length > 0) {
-      return { label: 'Disponible', color: 'success' as const, filterValue: null }
-    }
-    return { label: 'Sin asignacion', color: 'default' as const, filterValue: 'sin-asignacion' as const }
-  }
-
-  const repartidoresFiltrados = useMemo(() => {
-    const q = search.trim().toLowerCase()
-
-    return repartidores.filter((repartidor) => {
-      const accountState: FilterValue = (repartidor.estado ?? 'Activo') === 'Activo' ? 'activo' : 'inactivo'
-      const routeStatus = getRouteStatus(repartidor.id).filterValue
-
-      if (estadoFilters.length > 0 && !estadoFilters.some((filter) => filter === accountState || filter === routeStatus)) {
-        return false
-      }
-      if (!q) return true
-
-      return (
-        `${repartidor.name} ${repartidor.lastname}`.toLowerCase().includes(q) ||
-        repartidor.email.toLowerCase().includes(q) ||
-        repartidor.dni.toLowerCase().includes(q) ||
-        (repartidor.licencia ?? '').toLowerCase().includes(q)
-      )
-    })
-  }, [repartidores, search, estadoFilters, routesByRepartidor])
+  }, [page, rowsPerPage, search, estadoFilters])
 
   const loadRepartidores = async () => {
     setLoading(true)
     setError('')
     try {
-      const [repartidoresData, routesData] = await Promise.all([
-        authService.getRepartidores(),
-        routeService.getAllRoutes(),
-      ])
-      setRepartidores(repartidoresData)
-      setRoutes(routesData)
+      const accountStatus = estadoFilters.includes('activo') && !estadoFilters.includes('inactivo')
+        ? 'activo'
+        : estadoFilters.includes('inactivo') && !estadoFilters.includes('activo')
+          ? 'inactivo'
+          : undefined
+
+      const routeStatus = estadoFilters.includes('en-viaje')
+        ? 'en-viaje'
+        : estadoFilters.includes('con-ruta-asignada')
+          ? 'con-ruta-asignada'
+          : estadoFilters.includes('sin-asignacion')
+            ? 'sin-asignacion'
+            : undefined
+
+      const result = await authService.getRepartidoresPage({
+        page: page + 1,
+        pageSize: rowsPerPage,
+        search: search.trim() || undefined,
+        accountStatus,
+        routeStatus,
+      })
+      setRepartidores(result.items)
+      setTotalItems(result.totalItems)
     } catch {
       setError('Error al cargar los Repartidores')
     } finally {
@@ -117,9 +94,29 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   }
 
   const activeCount = estadoFilters.length + (search.trim() ? 1 : 0)
+  const hasActiveFilters = activeCount > 0
+
+  const getRouteStatus = (repartidor: RepartidorListItem) => {
+    switch (repartidor.routeStatusKey) {
+      case 'en-viaje':
+        return { label: repartidor.routeStatusLabel, color: 'warning' as const }
+      case 'con-ruta-asignada':
+        return { label: repartidor.routeStatusLabel, color: 'info' as const }
+      case 'sin-asignacion':
+        return { label: repartidor.routeStatusLabel, color: 'default' as const }
+      default:
+        return { label: repartidor.routeStatusLabel, color: 'success' as const }
+    }
+  }
 
   const handleEstadoToggle = (_event: unknown, newFilters: FilterValue[]) => {
+    setPage(0)
     setEstadoFilters(newFilters)
+  }
+
+  const handleSearchChange = (value: string) => {
+    setPage(0)
+    setSearch(value)
   }
 
   if (loading) {
@@ -138,7 +135,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
             size="small"
             placeholder="Buscar por nombre, email, DNI o licencia..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -199,6 +196,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                   size="small"
                   startIcon={<ClearAllIcon />}
                   onClick={() => {
+                    setPage(0)
                     setSearch('')
                     setEstadoFilters([])
                   }}
@@ -225,7 +223,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
             </Box>
 
             <Typography variant="h6" sx={{ whiteSpace: 'nowrap', pt: 0.5 }}>
-              Total: {repartidoresFiltrados.length}
+              Total: {totalItems}
             </Typography>
           </Box>
         </Box>
@@ -233,14 +231,13 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
         {error && <Alert severity="error">{error}</Alert>}
 
         {repartidores.length === 0 ? (
-          <Alert severity="info">No hay repartidores registrados</Alert>
-        ) : repartidoresFiltrados.length === 0 ? (
-          <Alert severity="info">No se encontraron repartidores para los filtros aplicados</Alert>
+          <Alert severity="info">
+            {hasActiveFilters ? 'No se encontraron repartidores para los filtros aplicados' : 'No hay repartidores registrados'}
+          </Alert>
         ) : (
           <Grid container spacing={3}>
-            {repartidoresFiltrados.map((repartidor) => {
-              const routeStatus = getRouteStatus(repartidor.id)
-              const assignedRoutes = routesByRepartidor[repartidor.id] ?? []
+            {repartidores.map((repartidor) => {
+              const routeStatus = getRouteStatus(repartidor)
               const estadoCuenta = (repartidor.estado ?? 'Activo') as RepartidorEstado
 
               return (
@@ -290,7 +287,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                           <Typography variant="body2" color="textSecondary">
                             Rutas asignadas
                           </Typography>
-                          <Typography variant="body2">{assignedRoutes.length}</Typography>
+                          <Typography variant="body2">{repartidor.assignedRoutesCount}</Typography>
                         </Box>
                         <Box sx={{ pt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                           <Chip
@@ -314,6 +311,21 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
               )
             })}
           </Grid>
+        )}
+        {totalItems > 0 && (
+          <TablePagination
+            component="div"
+            count={totalItems}
+            page={page}
+            onPageChange={(_event, nextPage) => setPage(nextPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(event) => {
+              setRowsPerPage(Number(event.target.value))
+              setPage(0)
+            }}
+            rowsPerPageOptions={[8, 16, 24]}
+            labelRowsPerPage="Tarjetas por página"
+          />
         )}
       </Box>
     </Box>

@@ -20,15 +20,18 @@ namespace Back.Controllers
         /// <summary>G1L-11 + G1L-16: Listado de auditoría con filtros (Admin only).</summary>
         [Authorize(Roles = Roles.Administrador)]
         [HttpGet]
-        public async Task<ActionResult<List<LogAuditoria>>> Listar(
+        public async Task<ActionResult<PagedResponse<LogAuditoria>>> Listar(
             [FromQuery] Guid? usuarioId,
             [FromQuery] TipoAccion? accion,
             [FromQuery] DateTime? from,
             [FromQuery] DateTime? to,
             [FromQuery] string? search,
-            [FromQuery] int take = 200)
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize)
         {
-            var logs = await _service.ListarAsync(usuarioId, accion, from, to, search, take);
+            var normalizedPage = PaginationDefaults.NormalizePage(page);
+            var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
+            var logs = await _service.ListarAsync(usuarioId, accion, from, to, search, normalizedPage, normalizedPageSize);
             return Ok(logs);
         }
     }

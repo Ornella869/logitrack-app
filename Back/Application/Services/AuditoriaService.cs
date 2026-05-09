@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
 using Back.Infrastructure.Database;
@@ -59,13 +60,14 @@ namespace Back.Application.Services
             return (null, "(anonimo)", rol);
         }
 
-        public async Task<List<LogAuditoria>> ListarAsync(
+        public async Task<PagedResponse<LogAuditoria>> ListarAsync(
             Guid? usuarioId,
             TipoAccion? accion,
             DateTime? from,
             DateTime? to,
             string? search,
-            int take = 200)
+            int page,
+            int pageSize)
         {
             var query = _context.LogsAuditoria.AsQueryable();
             if (usuarioId.HasValue) query = query.Where(l => l.UsuarioId == usuarioId);
@@ -88,7 +90,13 @@ namespace Back.Application.Services
                     || (l.RecursoId != null && EF.Functions.ILike(l.RecursoId, $"%{s}%"))
                     || EF.Functions.ILike(l.Descripcion, $"%{s}%"));
             }
-            return await query.OrderByDescending(l => l.Timestamp).Take(take).ToListAsync();
+            var totalItems = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(l => l.Timestamp)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+            return PagedResponse<LogAuditoria>.Create(items, page, pageSize, totalItems);
         }
     }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Alert,
   Avatar,
@@ -25,6 +25,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   ToggleButton,
@@ -68,10 +69,6 @@ interface PendingReset {
   email: string
   requestedAt: string
   status: 'pending'
-}
-
-function normalize(str: string): string {
-  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
 // Prioriza `activo` (soft-delete flag del back). Si no viene, usa `estado` como fallback.
@@ -138,6 +135,9 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('all')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalItems, setTotalItems] = useState(0)
 
   const [openCreate, setOpenCreate] = useState(false)
   const [openEdit, setOpenEdit] = useState(false)
@@ -178,38 +178,29 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   }
 
   useEffect(() => {
-    loadUsers()
+    void loadUsers()
     loadPendingResets()
-  }, [])
+  }, [page, pageSize, search, roleFilter, estadoFilter])
 
   const loadUsers = async () => {
     setLoading(true)
     setError('')
     try {
-      const data = await authService.getUsuarios()
-      setUsers(data)
+      const result = await authService.getUsuariosPage({
+        page,
+        pageSize,
+        search: search.trim() || undefined,
+        role: roleFilter === 'all' ? undefined : roleFilter,
+        active: estadoFilter === 'all' ? undefined : estadoFilter === 'active',
+      })
+      setUsers(result.items)
+      setTotalItems(result.totalItems)
     } catch {
       setError('Error al cargar los usuarios')
     } finally {
       setLoading(false)
     }
   }
-
-  const filtered = useMemo(() => {
-    const q = normalize(search.trim())
-    return users.filter((u) => {
-      if (roleFilter !== 'all' && u.role !== roleFilter) return false
-      if (estadoFilter === 'active' && !isActive(u)) return false
-      if (estadoFilter === 'inactive' && isActive(u)) return false
-      if (!q) return true
-      return (
-        normalize(`${u.name} ${u.lastname}`).includes(q) ||
-        normalize(u.email).includes(q) ||
-        normalize(u.dni).includes(q) ||
-        normalize(ROLE_LABELS[u.role] ?? u.role).includes(q)
-      )
-    })
-  }, [users, search, roleFilter, estadoFilter])
 
   // ── Create ──────────────────────────────────────────────────────────────────
 
@@ -278,7 +269,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         dni: formData.dni.trim(),
       })
       if (updated) {
-        setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)))
+        await loadUsers()
       }
       setOpenEdit(false)
       showToast('Usuario actualizado correctamente', 'success')
@@ -363,7 +354,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       showToast('Ingresá una contraseña temporal.', 'warning')
       return
     }
-    const foundUser = users.find((u) => u.email.toLowerCase() === pendingResetEmail.toLowerCase())
+    const foundUser = await authService.findUsuarioByEmail(pendingResetEmail)
     if (!foundUser) {
       showToast('No se encontró un usuario con ese email en el sistema.', 'error')
       return
@@ -427,8 +418,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const activeCount = users.filter((u) => isActive(u)).length
-  const inactiveCount = users.length - activeCount
+  const filtersApplied = Boolean(search.trim() || roleFilter !== 'all' || estadoFilter !== 'all')
 
   return (
     <Box>
@@ -437,9 +427,9 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         <Box>
           <Typography variant="h6" component="span">Equipo</Typography>
           <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-            {filtered.length !== users.length
-              ? `${filtered.length} de ${users.length} integrantes`
-              : `${users.length} ${users.length === 1 ? 'integrante' : 'integrantes'}`}
+            {filtersApplied
+              ? `${users.length} de ${totalItems} integrantes`
+              : `${totalItems} ${totalItems === 1 ? 'integrante' : 'integrantes'}`}
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
@@ -457,7 +447,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1.5, bgcolor: '#FFF3E0' }}>
             <NotificationsActiveIcon sx={{ color: '#F57C00', fontSize: 20 }} />
-            <Typography variant="subtitle2" sx={{ color: '#E65100', fontWeight: 700 }}>
+                <Typography variant="subtitle2" sx={{ color: '#E65100', fontWeight: 700 }}>
               Solicitudes de restablecimiento de contraseña ({pendingResets.length})
             </Typography>
           </Box>
@@ -501,12 +491,15 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
 
       {/* Search + filters */}
       <Stack spacing={1.5} sx={{ mb: 2.5 }}>
-        <TextField
-          placeholder="Buscar por nombre, email, DNI o rol…"
-          size="small"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ width: { xs: '100%', sm: 380 } }}
+          <TextField
+            placeholder="Buscar por nombre, email o DNI…"
+            size="small"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            sx={{ width: { xs: '100%', sm: 380 } }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -520,7 +513,12 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
           <ToggleButtonGroup
             value={roleFilter}
             exclusive
-            onChange={(_e, v: RoleFilter | null) => { if (v !== null) setRoleFilter(v) }}
+            onChange={(_e, v: RoleFilter | null) => {
+              if (v !== null) {
+                setRoleFilter(v)
+                setPage(1)
+              }
+            }}
             size="small"
             sx={{ '& .MuiToggleButton-root': { px: 1.5, py: 0.5, fontSize: '0.75rem', textTransform: 'none', fontWeight: 600 } }}
           >
@@ -548,7 +546,12 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
           <ToggleButtonGroup
             value={estadoFilter}
             exclusive
-            onChange={(_e, v: EstadoFilter | null) => { if (v !== null) setEstadoFilter(v) }}
+            onChange={(_e, v: EstadoFilter | null) => {
+              if (v !== null) {
+                setEstadoFilter(v)
+                setPage(1)
+              }
+            }}
             size="small"
             sx={{ '& .MuiToggleButton-root': { px: 1.5, py: 0.5, fontSize: '0.75rem', textTransform: 'none', fontWeight: 600 } }}
           >
@@ -557,13 +560,13 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               value="active"
               sx={{ '&.Mui-selected': { color: '#1B5E20', bgcolor: '#E8F5E9', '&:hover': { bgcolor: '#C8E6C9' } } }}
             >
-              Activos ({activeCount})
+              Activos
             </ToggleButton>
             <ToggleButton
               value="inactive"
               sx={{ '&.Mui-selected': { color: '#B71C1C', bgcolor: '#FFEBEE', '&:hover': { bgcolor: '#FFCDD2' } } }}
             >
-              Inactivos ({inactiveCount})
+              Inactivos
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
@@ -573,7 +576,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
-      ) : filtered.length === 0 ? (
+      ) : users.length === 0 ? (
         <Alert severity="info">
           {search || roleFilter !== 'all' || estadoFilter !== 'all'
             ? 'No se encontraron usuarios con los filtros aplicados.'
@@ -593,7 +596,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map((user) => {
+              {users.map((user) => {
                 const initials = `${user.name.charAt(0)}${user.lastname.charAt(0)}`.toUpperCase()
                 const active = isActive(user)
                 const roleColor = ROLE_COLORS[user.role] ?? { color: '#555' }
@@ -679,6 +682,19 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               })}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            count={totalItems}
+            page={page - 1}
+            onPageChange={(_event, nextPage) => setPage(nextPage + 1)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(event) => {
+              setPageSize(Number(event.target.value))
+              setPage(1)
+            }}
+            rowsPerPageOptions={[10, 20, 50]}
+            labelRowsPerPage="Usuarios por página"
+          />
         </TableContainer>
       )}
 

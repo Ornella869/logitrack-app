@@ -2,6 +2,14 @@ export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador
 export type UserEstado = 'Activo' | 'Inactivo'
 export type RepartidorEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
 
+export interface PagedResult<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+}
+
 export interface User {
   id: string
   name: string

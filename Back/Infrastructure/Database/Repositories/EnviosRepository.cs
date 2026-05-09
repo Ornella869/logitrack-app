@@ -1,5 +1,6 @@
 using Back.Domain.Models;
 using Back.Domain.Repositories;
+using Back.Application.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Back.Infrastructure.Database.Repositories
@@ -39,7 +40,7 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Paquetes.FirstOrDefaultAsync(p => p.CodigoSeguimiento == codigoSeguimiento);
         }
 
-        public async Task<List<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to)
+        public async Task<PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize)
         {
             var query = _context.Paquetes.AsQueryable();
 
@@ -71,7 +72,14 @@ namespace Back.Infrastructure.Database.Repositories
                 query = query.Where(p => p.CreadoEn <= toUtc);
             }
 
-            return await query.OrderByDescending(p => p.CreadoEn).ToListAsync();
+            var totalItems = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(p => p.CreadoEn)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return PagedResponse<Paquete>.Create(items, page, pageSize, totalItems);
         }
 
         public async Task<List<Paquete>> GetPaquetesByIds(List<Guid> paqueteIds)

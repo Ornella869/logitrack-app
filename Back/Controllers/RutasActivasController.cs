@@ -19,9 +19,14 @@ namespace Back.Controllers
         /// <summary>G1L-70: Listado de rutas del día con progreso, capacidad y demoras.</summary>
         [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
         [HttpGet]
-        public async Task<ActionResult<List<RutaActivaItem>>> Listado()
+        public async Task<ActionResult<ListadoRutasActivasResponse>> Listado(
+            [FromQuery] string? search,
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize)
         {
-            var items = await _service.GetRutasDeHoyAsync();
+            var normalizedPage = PaginationDefaults.NormalizePage(page);
+            var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
+            var items = await _service.GetRutasDeHoyPaginadasAsync(search, normalizedPage, normalizedPageSize);
             return Ok(items);
         }
 

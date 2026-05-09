@@ -7,6 +7,7 @@ import type {
   RepartidorEstado,
   CreateRepartidorData,
   CreateUsuarioData,
+  PagedResult,
 } from '../types'
 import api from './api'
 import { normalizeUserRole } from '../utils/roleUtils'
@@ -14,6 +15,12 @@ import { normalizeUserRole } from '../utils/roleUtils'
 interface CreateRepartidorResult {
   user: User
   temporaryPassword: string
+}
+
+export interface RepartidorListItem extends User {
+  assignedRoutesCount: number
+  routeStatusKey: 'en-viaje' | 'con-ruta-asignada' | 'sin-asignacion' | 'disponible'
+  routeStatusLabel: string
 }
 
 const mapRepartidor = (t: any): User => ({
@@ -26,6 +33,53 @@ const mapRepartidor = (t: any): User => ({
   activo: t.activo ?? true,
   licencia: t.licencia,
   estado: (t.estado as RepartidorEstado) || 'Activo',
+})
+
+const mapRepartidorListItem = (t: any): RepartidorListItem => ({
+  ...mapRepartidor(t),
+  assignedRoutesCount: Number(t.assignedRoutesCount ?? 0),
+  routeStatusKey: (t.routeStatusKey ?? 'sin-asignacion') as RepartidorListItem['routeStatusKey'],
+  routeStatusLabel: t.routeStatusLabel ?? 'Sin asignacion',
+})
+
+const mapPagedRepartidores = (data: any): PagedResult<RepartidorListItem> => {
+  if (Array.isArray(data)) {
+    return {
+      items: data.map(mapRepartidorListItem),
+      page: 1,
+      pageSize: data.length,
+      totalItems: data.length,
+      totalPages: 1,
+    }
+  }
+
+  return {
+    items: Array.isArray(data?.items) ? data.items.map(mapRepartidorListItem) : [],
+    page: Number(data?.page ?? 1),
+    pageSize: Number(data?.pageSize ?? 10),
+    totalItems: Number(data?.totalItems ?? 0),
+    totalPages: Number(data?.totalPages ?? 1),
+  }
+}
+
+const mapUsuario = (usuario: any): User => ({
+  id: usuario.id,
+  name: usuario.nombre,
+  lastname: usuario.apellido,
+  email: usuario.email,
+  dni: usuario.dni,
+  role: normalizeUserRole(usuario.role ?? usuario.Role ?? ''),
+  activo: usuario.activo ?? true,
+  licencia: usuario.licencia,
+  estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
+})
+
+const mapPagedUsuarios = (data: any): PagedResult<User> => ({
+  items: Array.isArray(data?.items) ? data.items.map(mapUsuario) : [],
+  page: Number(data?.page ?? 1),
+  pageSize: Number(data?.pageSize ?? 10),
+  totalItems: Number(data?.totalItems ?? 0),
+  totalPages: Number(data?.totalPages ?? 1),
 })
 
 export const authService = {
@@ -152,11 +206,47 @@ export const authService = {
   // Obtener repartidores
   getRepartidores: async (): Promise<User[]> => {
     try {
-      const response = await api.get('/auth/repartidores')
-      return response.data.map(mapRepartidor)
+      const firstPage = await authService.getRepartidoresPage({ page: 1, pageSize: 100 })
+      if (firstPage.totalPages <= 1) return firstPage.items
+
+      const remainingPages = await Promise.all(
+        Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+          authService.getRepartidoresPage({ page: index + 2, pageSize: 100 }),
+        ),
+      )
+
+      return [firstPage, ...remainingPages].flatMap((result) => result.items)
     } catch (error) {
       console.error('Get repartidores error:', error)
       return []
+    }
+  },
+
+  getRepartidoresPage: async ({
+    page,
+    pageSize,
+    search,
+    accountStatus,
+    routeStatus,
+  }: {
+    page: number
+    pageSize: number
+    search?: string
+    accountStatus?: 'activo' | 'inactivo'
+    routeStatus?: 'en-viaje' | 'con-ruta-asignada' | 'sin-asignacion'
+  }): Promise<PagedResult<RepartidorListItem>> => {
+    try {
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('pageSize', String(pageSize))
+      if (search) params.set('search', search)
+      if (accountStatus) params.set('accountStatus', accountStatus)
+      if (routeStatus) params.set('routeStatus', routeStatus)
+      const response = await api.get(`/auth/repartidores?${params.toString()}`)
+      return mapPagedRepartidores(response.data)
+    } catch (error) {
+      console.error('Get repartidores page error:', error)
+      return { items: [], page, pageSize, totalItems: 0, totalPages: 1 }
     }
   },
 
@@ -208,22 +298,53 @@ export const authService = {
   // Obtener todos los usuarios
   getUsuarios: async (): Promise<User[]> => {
     try {
-      const response = await api.get('/auth/usuarios')
-      return response.data.map((usuario: any) => ({
-        id: usuario.id,
-        name: usuario.nombre,
-        lastname: usuario.apellido,
-        email: usuario.email,
-        dni: usuario.dni,
-        role: normalizeUserRole(usuario.role ?? usuario.Role ?? ''),
-        activo: usuario.activo ?? true,
-        licencia: usuario.licencia,
-        estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
-      }))
+      const firstPage = await authService.getUsuariosPage({ page: 1, pageSize: 100 })
+      if (firstPage.totalPages <= 1) return firstPage.items
+
+      const remainingPages = await Promise.all(
+        Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+          authService.getUsuariosPage({ page: index + 2, pageSize: 100 }),
+        ),
+      )
+
+      return [firstPage, ...remainingPages].flatMap((result) => result.items)
     } catch (error) {
       console.error('Get usuarios error:', error)
       return []
     }
+  },
+
+  getUsuariosPage: async ({
+    page,
+    pageSize,
+    search,
+    role,
+    active,
+  }: {
+    page: number
+    pageSize: number
+    search?: string
+    role?: UserRole
+    active?: boolean
+  }): Promise<PagedResult<User>> => {
+    try {
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('pageSize', String(pageSize))
+      if (search) params.set('search', search)
+      if (role) params.set('role', role)
+      if (typeof active === 'boolean') params.set('active', String(active))
+      const response = await api.get(`/auth/usuarios?${params.toString()}`)
+      return mapPagedUsuarios(response.data)
+    } catch (error) {
+      console.error('Get usuarios page error:', error)
+      return { items: [], page, pageSize, totalItems: 0, totalPages: 1 }
+    }
+  },
+
+  findUsuarioByEmail: async (email: string): Promise<User | null> => {
+    const result = await authService.getUsuariosPage({ page: 1, pageSize: 10, search: email })
+    return result.items.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? null
   },
 
   createUsuario: async (data: CreateUsuarioData): Promise<{ user: User; temporaryPassword: string }> => {

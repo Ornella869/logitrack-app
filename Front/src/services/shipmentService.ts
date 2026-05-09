@@ -1,4 +1,4 @@
-import type { Shipment, TipoEnvio, TipoPaquete } from '../types'
+import type { PagedResult, Shipment, TipoEnvio, TipoPaquete } from '../types'
 import api from './api'
 
 // Tipos para requests al backend
@@ -103,6 +103,26 @@ const splitName = (fullName: string): { nombre: string; apellido: string } => {
   const nombre = parts[0] || '-'
   const apellido = parts.slice(1).join(' ') || '-'
   return { nombre, apellido }
+}
+
+const mapPagedShipments = (data: any): PagedResult<Shipment> => {
+  if (Array.isArray(data)) {
+    return {
+      items: data.map(mapToShipment),
+      page: 1,
+      pageSize: data.length,
+      totalItems: data.length,
+      totalPages: 1,
+    }
+  }
+
+  return {
+    items: Array.isArray(data?.items) ? data.items.map(mapToShipment) : [],
+    page: Number(data?.page ?? 1),
+    pageSize: Number(data?.pageSize ?? 10),
+    totalItems: Number(data?.totalItems ?? 0),
+    totalPages: Number(data?.totalPages ?? 1),
+  }
 }
 
 export const shipmentService = {
@@ -256,6 +276,30 @@ export const shipmentService = {
     }
   },
 
+  getShipmentsPage: async (
+    page: number,
+    pageSize: number,
+    search?: string,
+    status?: string[],
+    from?: string,
+    to?: string,
+  ): Promise<PagedResult<Shipment>> => {
+    try {
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('pageSize', String(pageSize))
+      if (search) params.set('search', search)
+      if (status && status.length > 0) status.forEach((value) => params.append('status', value))
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
+      const response = await api.get(`/envios/paquetes?${params.toString()}`)
+      return mapPagedShipments(response.data)
+    } catch (error) {
+      console.error('Get shipments page error:', error)
+      return { items: [], page, pageSize, totalItems: 0, totalPages: 1 }
+    }
+  },
+
   // Obtener todos los envíos con búsqueda y filtros opcionales — G1L-39, G1L-40
   getAllShipments: async (
     search?: string,
@@ -264,13 +308,16 @@ export const shipmentService = {
     to?: string,
   ): Promise<Shipment[]> => {
     try {
-      const params = new URLSearchParams()
-      if (search) params.set('search', search)
-      if (status && status.length > 0) status.forEach(s => params.append('status', s))
-      if (from) params.set('from', from)
-      if (to) params.set('to', to)
-      const response = await api.get(`/envios/paquetes${params.toString() ? `?${params}` : ''}`)
-      return response.data.map(mapToShipment)
+      const firstPage = await shipmentService.getShipmentsPage(1, 100, search, status, from, to)
+      if (firstPage.totalPages <= 1) return firstPage.items
+
+      const remainingPages = await Promise.all(
+        Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+          shipmentService.getShipmentsPage(index + 2, 100, search, status, from, to),
+        ),
+      )
+
+      return [firstPage, ...remainingPages].flatMap((result) => result.items)
     } catch (error) {
       console.error('Get all shipments error:', error)
       return []

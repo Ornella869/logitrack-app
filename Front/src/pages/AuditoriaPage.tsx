@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -10,9 +10,11 @@ import {
   CircularProgress,
   MenuItem,
   Stack,
+  TablePagination,
   TextField,
   Typography,
 } from '@mui/material'
+import type { PagedResult } from '../types'
 import HistoryIcon from '@mui/icons-material/History'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import api from '../services/api'
@@ -75,15 +77,18 @@ export default function AuditoriaPage() {
   const [accion, setAccion] = useState<string>('Todas')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalItems, setTotalItems] = useState(0)
 
   const isAdmin = user.role === 'administrador'
 
   useEffect(() => {
     if (!isAdmin) return
-    void load()
-  }, [isAdmin])
+    void load(page, pageSize)
+  }, [isAdmin, page, pageSize])
 
-  const load = async () => {
+  const load = async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true)
     setError('')
     try {
@@ -92,8 +97,11 @@ export default function AuditoriaPage() {
       if (accion && accion !== 'Todas') params.accion = accion
       if (from) params.from = from
       if (to) params.to = to
-      const response = await api.get('/auditoria', { params })
-      setLogs(response.data ?? [])
+      params.page = nextPage
+      params.pageSize = nextPageSize
+      const response = await api.get<PagedResult<LogAuditoria>>('/auditoria', { params })
+      setLogs(response.data?.items ?? [])
+      setTotalItems(response.data?.totalItems ?? 0)
     } catch {
       setError('No se pudieron cargar los registros de auditoría')
     } finally {
@@ -106,7 +114,21 @@ export default function AuditoriaPage() {
     setAccion('Todas')
     setFrom('')
     setTo('')
-    setTimeout(load, 0)
+    setPage(1)
+  }
+
+  const buscar = () => {
+    setPage(1)
+    void load(1, pageSize)
+  }
+
+  const handlePageChange = (_event: unknown, nextPage: number) => {
+    setPage(nextPage + 1)
+  }
+
+  const handleRowsPerPageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setPageSize(Number(event.target.value))
+    setPage(1)
   }
 
   const grouped = useMemo(() => {
@@ -134,7 +156,7 @@ export default function AuditoriaPage() {
             Trazabilidad completa de acciones — registro inmutable.
           </Typography>
         </Box>
-        <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
+        <Button startIcon={<RefreshIcon />} onClick={() => void load()} disabled={loading}>
           Actualizar
         </Button>
       </Stack>
@@ -174,7 +196,7 @@ export default function AuditoriaPage() {
               size="small" type="date" label="Hasta" InputLabelProps={{ shrink: true }}
               value={to} onChange={(e) => setTo(e.target.value)}
             />
-            <Button variant="contained" onClick={load}>Buscar</Button>
+            <Button variant="contained" onClick={buscar}>Buscar</Button>
             <Button onClick={limpiar}>Limpiar</Button>
           </Stack>
         </CardContent>
@@ -238,6 +260,16 @@ export default function AuditoriaPage() {
               </Box>
             ))}
           </CardContent>
+          <TablePagination
+            component="div"
+            count={totalItems}
+            page={page - 1}
+            onPageChange={handlePageChange}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            rowsPerPageOptions={[10, 20, 50]}
+            labelRowsPerPage="Registros por página"
+          />
         </Card>
       )}
     </Box>

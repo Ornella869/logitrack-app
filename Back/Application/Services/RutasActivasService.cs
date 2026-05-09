@@ -1,5 +1,6 @@
 using Back.Domain.Models;
 using Back.Domain.Repositories;
+using Back.Application.Common;
 
 namespace Back.Application.Services
 {
@@ -124,6 +125,53 @@ namespace Back.Application.Services
             return items;
         }
 
+        public async Task<ListadoRutasActivasResponse> GetRutasDeHoyPaginadasAsync(string? search, int page, int pageSize)
+        {
+            var allItems = await GetRutasDeHoyAsync();
+
+            var totalParadas = allItems.Sum(r => r.TotalParadas);
+            var totalEntregadas = allItems.Sum(r => r.Entregadas);
+            var avancePct = totalParadas > 0 ? (int)Math.Round((double)totalEntregadas / totalParadas * 100) : 0;
+            var kpis = new RutasActivasKpis
+            {
+                EnCurso = allItems.Count(r => r.Estado == "EnTransito"),
+                Completadas = allItems.Count(r => r.Estado == "Completada"),
+                Demoradas = allItems.Count(r => r.EsDemorada),
+                TotalEntregadas = totalEntregadas,
+                TotalParadas = totalParadas,
+                AvancePct = avancePct,
+                TotalRutas = allItems.Count,
+            };
+
+            var items = allItems;
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var q = search.Trim().ToLowerInvariant();
+                items = items.Where(r =>
+                    r.RepartidorNombre.ToLowerInvariant().Contains(q)
+                    || r.RepartidorEmail.ToLowerInvariant().Contains(q)
+                    || r.CpZona.ToLowerInvariant().Contains(q))
+                    .ToList();
+            }
+
+            var paged = PagedResponse<RutaActivaItem>.Create(
+                items.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
+                page,
+                pageSize,
+                items.Count);
+
+            return new ListadoRutasActivasResponse
+            {
+                Items = paged.Items,
+                Page = paged.Page,
+                PageSize = paged.PageSize,
+                TotalItems = paged.TotalItems,
+                TotalPages = paged.TotalPages,
+                Kpis = kpis,
+            };
+        }
+
         public async Task<DetalleRutaResponse?> GetDetalleRutaAsync(Guid repartidorId, DateTime fecha)
         {
             var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
@@ -157,5 +205,21 @@ namespace Back.Application.Services
                 }).ToList(),
             };
         }
+    }
+
+    public class RutasActivasKpis
+    {
+        public int EnCurso { get; init; }
+        public int Completadas { get; init; }
+        public int Demoradas { get; init; }
+        public int TotalEntregadas { get; init; }
+        public int TotalParadas { get; init; }
+        public int AvancePct { get; init; }
+        public int TotalRutas { get; init; }
+    }
+
+    public class ListadoRutasActivasResponse : PagedResponse<RutaActivaItem>
+    {
+        public RutasActivasKpis Kpis { get; init; } = new();
     }
 }

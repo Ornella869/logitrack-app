@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -15,19 +15,22 @@ import {
   DialogTitle,
   Divider,
   Grid,
+  InputAdornment,
   LinearProgress,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material'
 import BoltIcon from '@mui/icons-material/Bolt'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
+import SearchIcon from '@mui/icons-material/Search'
 import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import type { Shipment, User } from '../types'
@@ -43,6 +46,15 @@ const PROCESS_STEPS = [
 ] as const
 
 type Repartidor = { id: string; nombre: string; apellido: string; email: string; activo: boolean; estado?: string }
+type AsignacionActualRow = {
+  key: string
+  repartidorId: string
+  nombre: string
+  email: string
+  fecha: string
+  cantidad: number
+  pesoTotal: number
+}
 
 export default function CalendarizarPage() {
   const user = useOutletContext<User>()
@@ -51,6 +63,10 @@ export default function CalendarizarPage() {
   const [repartidores, setRepartidores] = useState<Repartidor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [repartidorSearch, setRepartidorSearch] = useState('')
+  const [visibleRepartidores, setVisibleRepartidores] = useState(8)
+  const [asignacionesPage, setAsignacionesPage] = useState(0)
+  const [asignacionesRowsPerPage, setAsignacionesRowsPerPage] = useState(10)
 
   // Modal de proceso
   const [modalOpen, setModalOpen] = useState(false)
@@ -99,6 +115,64 @@ export default function CalendarizarPage() {
     [repartidores],
   )
 
+  const cargaActualPorRepartidor = useMemo(() => {
+    return estadoActual.reduce<Record<string, { cantidad: number; pesoTotal: number }>>((acc, dia) => {
+      dia.repartidores.forEach((repartidor) => {
+        const current = acc[repartidor.repartidorId] ?? { cantidad: 0, pesoTotal: 0 }
+        acc[repartidor.repartidorId] = {
+          cantidad: current.cantidad + repartidor.cantidad,
+          pesoTotal: current.pesoTotal + repartidor.pesoTotal,
+        }
+      })
+      return acc
+    }, {})
+  }, [estadoActual])
+
+  const repartidoresDisponibles = useMemo(() => {
+    const q = repartidorSearch.trim().toLowerCase()
+    return repartidoresActivos
+      .filter((repartidor) => {
+        if (!q) return true
+        const fullName = `${repartidor.nombre} ${repartidor.apellido}`.toLowerCase()
+        return fullName.includes(q) || repartidor.email.toLowerCase().includes(q)
+      })
+      .sort((a, b) => {
+        const cargaA = cargaActualPorRepartidor[a.id]?.pesoTotal ?? 0
+        const cargaB = cargaActualPorRepartidor[b.id]?.pesoTotal ?? 0
+        if (cargaA !== cargaB) return cargaA - cargaB
+
+        const cantidadA = cargaActualPorRepartidor[a.id]?.cantidad ?? 0
+        const cantidadB = cargaActualPorRepartidor[b.id]?.cantidad ?? 0
+        if (cantidadA !== cantidadB) return cantidadA - cantidadB
+
+        return `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`, 'es')
+      })
+  }, [cargaActualPorRepartidor, repartidorSearch, repartidoresActivos])
+
+  const repartidoresDisponiblesVisibles = useMemo(
+    () => repartidoresDisponibles.slice(0, visibleRepartidores),
+    [repartidoresDisponibles, visibleRepartidores],
+  )
+
+  const asignacionesActuales = useMemo<AsignacionActualRow[]>(() => {
+    return estadoActual.flatMap((dia) =>
+      dia.repartidores.map((repartidor) => ({
+        key: `${dia.fecha}-${repartidor.repartidorId}`,
+        repartidorId: repartidor.repartidorId,
+        nombre: repartidor.nombre,
+        email: repartidor.email,
+        fecha: dia.fecha,
+        cantidad: repartidor.cantidad,
+        pesoTotal: repartidor.pesoTotal,
+      })),
+    )
+  }, [estadoActual])
+
+  const asignacionesActualesPaginadas = useMemo(() => {
+    const from = asignacionesPage * asignacionesRowsPerPage
+    return asignacionesActuales.slice(from, from + asignacionesRowsPerPage)
+  }, [asignacionesActuales, asignacionesPage, asignacionesRowsPerPage])
+
   const summary = useMemo(() => {
     const prio = pendientes.filter((p) => p.tipoEnvio === 'Prioritario').length
     const comm = pendientes.length - prio
@@ -146,13 +220,22 @@ export default function CalendarizarPage() {
 
   const progressPct = Math.round((stepIdx / PROCESS_STEPS.length) * 100)
 
+  const handleRepartidorSearchChange = (value: string) => {
+    setRepartidorSearch(value)
+    setVisibleRepartidores(8)
+  }
+
+  const handleAsignacionesPageChange = (_event: unknown, nextPage: number) => {
+    setAsignacionesPage(nextPage)
+  }
+
+  const handleAsignacionesRowsPerPageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setAsignacionesRowsPerPage(Number(event.target.value))
+    setAsignacionesPage(0)
+  }
+
   return (
     <Box>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app')} size="small">
-          Volver
-        </Button>
-      </Stack>
       <Typography variant="h4" fontWeight={700}>
         <BoltIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
         Calendarización Automática
@@ -242,16 +325,40 @@ export default function CalendarizarPage() {
 
           {/* DERECHA: Repartidores disponibles */}
           <Grid item xs={12} md={4}>
-            <Card variant="outlined">
+              <Card variant="outlined">
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>Repartidores disponibles</Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mb: 2, gap: 1.5 }}>
+                  <Box>
+                    <Typography variant="h6">Repartidores disponibles</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Ordenados por menor carga asignada.
+                    </Typography>
+                  </Box>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar nombre o email..."
+                    value={repartidorSearch}
+                    onChange={(e) => handleRepartidorSearchChange(e.target.value)}
+                    sx={{ minWidth: { xs: '100%', sm: 220 } }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Stack>
                 {repartidoresActivos.length === 0 ? (
                   <Alert severity="warning">No hay repartidores activos en el sistema.</Alert>
+                ) : repartidoresDisponibles.length === 0 ? (
+                  <Alert severity="info">No hay repartidores que coincidan con la búsqueda.</Alert>
                 ) : (
                   <Stack divider={<Divider flexItem />}>
-                    {repartidoresActivos.map((r, idx) => {
+                    {repartidoresDisponiblesVisibles.map((r, idx) => {
                       const initials = `${r.nombre[0] ?? ''}${r.apellido[0] ?? ''}`.toUpperCase()
                       const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                      const carga = cargaActualPorRepartidor[r.id] ?? { cantidad: 0, pesoTotal: 0 }
                       return (
                         <Stack
                           key={r.id}
@@ -277,11 +384,25 @@ export default function CalendarizarPage() {
                             </Box>
                           </Stack>
                           <Typography variant="caption" color="text.secondary">
-                            0 / 500 kg
+                            {carga.pesoTotal.toFixed(0)} / 500 kg
                           </Typography>
                         </Stack>
                       )
                     })}
+                    {repartidoresDisponibles.length > visibleRepartidores && (
+                      <Box sx={{ pt: 2, textAlign: 'center' }}>
+                        <Button variant="text" size="small" onClick={() => setVisibleRepartidores((current) => current + 8)}>
+                          Ver más
+                        </Button>
+                      </Box>
+                    )}
+                    {repartidoresDisponibles.length > 8 && visibleRepartidores >= repartidoresDisponibles.length && (
+                      <Box sx={{ pt: 2, textAlign: 'center' }}>
+                        <Button variant="text" size="small" onClick={() => setVisibleRepartidores(8)}>
+                          Ver menos
+                        </Button>
+                      </Box>
+                    )}
                   </Stack>
                 )}
               </CardContent>
@@ -296,7 +417,7 @@ export default function CalendarizarPage() {
           <Typography variant="h6" sx={{ mb: 2 }}>
             Asignaciones actuales
           </Typography>
-          {estadoActual.length === 0 ? (
+          {asignacionesActuales.length === 0 ? (
             <Alert severity="info">
               No hay envíos asignados a repartidores todavía. Ejecutá la calendarización para asignarlos.
             </Alert>
@@ -314,29 +435,28 @@ export default function CalendarizarPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {estadoActual.flatMap((dia, di) =>
-                      dia.repartidores.map((r, ri) => {
-                        const initials = r.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
-                        const color = AVATAR_COLORS[(di + ri) % AVATAR_COLORS.length]
-                        const pesoPct = Math.min(100, (r.pesoTotal / 500) * 100)
+                    {asignacionesActualesPaginadas.map((asignacion, idx) => {
+                        const initials = asignacion.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+                        const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                        const pesoPct = Math.min(100, (asignacion.pesoTotal / 500) * 100)
                         const pesoColor = pesoPct >= 90 ? '#c62828' : pesoPct >= 70 ? '#ed6c02' : '#2e7d32'
                         return (
-                          <TableRow key={`${dia.fecha}-${r.repartidorId}`}>
+                          <TableRow key={asignacion.key}>
                             <TableCell>
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <Avatar sx={{ bgcolor: color, width: 28, height: 28, fontSize: 11 }}>{initials}</Avatar>
-                                <Typography variant="body2" fontWeight={600}>{r.nombre}</Typography>
+                                <Typography variant="body2" fontWeight={600}>{asignacion.nombre}</Typography>
                               </Stack>
                             </TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.email}</TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{asignacion.email}</TableCell>
                             <TableCell>
-                              {new Date(dia.fecha).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                              {new Date(asignacion.fecha).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
                             </TableCell>
-                            <TableCell align="right"><strong>{r.cantidad}</strong></TableCell>
+                            <TableCell align="right"><strong>{asignacion.cantidad}</strong></TableCell>
                             <TableCell align="right">
                               <Box sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 120 }}>
                                 <Typography variant="caption" sx={{ color: pesoColor, fontWeight: 600 }}>
-                                  {r.pesoTotal.toFixed(0)} / 500 kg
+                                  {asignacion.pesoTotal.toFixed(0)} / 500 kg
                                 </Typography>
                                 <LinearProgress
                                   variant="determinate"
@@ -350,11 +470,20 @@ export default function CalendarizarPage() {
                             </TableCell>
                           </TableRow>
                         )
-                      }),
-                    )}
+                      })}
                   </TableBody>
                 </Table>
               </CardContent>
+              <TablePagination
+                component="div"
+                count={asignacionesActuales.length}
+                page={asignacionesPage}
+                onPageChange={handleAsignacionesPageChange}
+                rowsPerPage={asignacionesRowsPerPage}
+                onRowsPerPageChange={handleAsignacionesRowsPerPageChange}
+                rowsPerPageOptions={[5, 10, 20]}
+                labelRowsPerPage="Filas por página"
+              />
             </Card>
           )}
         </Box>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -8,6 +8,7 @@ import {
   Grid,
   Snackbar,
   Stack,
+  TablePagination,
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -39,6 +40,9 @@ export default function EnviosPage() {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<ShipmentFiltersValue>(EMPTY_FILTERS)
   const [hasQuery, setHasQuery] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
+  const [totalItems, setTotalItems] = useState(0)
   const [actionToast, setActionToast] = useState<{ open: boolean; message: string; severity: Severity }>({
     open: false,
     message: '',
@@ -53,17 +57,20 @@ export default function EnviosPage() {
     setActionToast((prev) => ({ ...prev, open: false, message: '' }))
   }
 
-  const loadShipments = async (query: string, activeFilters: ShipmentFiltersValue) => {
+  const loadShipments = async (query: string, activeFilters: ShipmentFiltersValue, nextPage: number, nextPageSize: number) => {
     setLoading(true)
     setError('')
     try {
-      const data = await shipmentService.getAllShipments(
+      const result = await shipmentService.getShipmentsPage(
+        nextPage,
+        nextPageSize,
         query || undefined,
         activeFilters.status.length ? activeFilters.status : undefined,
         activeFilters.from || undefined,
         activeFilters.to || undefined,
       )
-      setShipments(data)
+      setShipments(result.items)
+      setTotalItems(result.totalItems)
       setHasQuery(Boolean(query || activeFilters.status.length || activeFilters.from || activeFilters.to))
     } catch {
       setError('Error al cargar los envíos')
@@ -73,25 +80,30 @@ export default function EnviosPage() {
   }
 
   useEffect(() => {
-    void loadShipments(search, filters)
+    void loadShipments(search, filters, page, pageSize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filters.status.join(','), filters.from, filters.to])
+  }, [search, filters.status.join(','), filters.from, filters.to, page, pageSize])
 
   useEffect(() => {
     if (location.pathname === '/envios' && location.state?.forceReload) {
-      void loadShipments(search, filters)
+      setPage(1)
+      void loadShipments(search, filters, 1, pageSize)
       navigate('/envios', { replace: true, state: {} })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.state])
 
-  const handleSearch = async (query: string) => setSearch(query.trim())
+  const handleSearch = async (query: string) => {
+    setPage(1)
+    setSearch(query.trim())
+  }
 
   const handleCreateShipment = async (shipment: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => {
     try {
       const newShipment = await shipmentService.registerShipment(shipment)
       if (newShipment) {
-        setShipments((prev) => [newShipment, ...prev])
+        setPage(1)
+        void loadShipments(search, filters, 1, pageSize)
         showActionToast(`Envío creado. Tracking ID: ${newShipment.trackingId}`, 'success')
         setOpenShipmentForm(false)
         return
@@ -103,14 +115,21 @@ export default function EnviosPage() {
     }
   }
 
-  const handleDownloadShipments = () => {
-    if (shipments.length === 0) {
+  const handleDownloadShipments = async () => {
+    const exportShipments = await shipmentService.getAllShipments(
+      search || undefined,
+      filters.status.length ? filters.status : undefined,
+      filters.from || undefined,
+      filters.to || undefined,
+    )
+
+    if (exportShipments.length === 0) {
       showActionToast('No hay envíos para descargar', 'warning')
       return
     }
 
     const headers = ['ID', 'Tracking ID', 'Estado', 'Origen', 'Destino', 'Remitente', 'Destinatario', 'Peso (kg)', 'Descripción', 'Fecha Creación']
-    const rows = shipments.map((shipment) => [
+    const rows = exportShipments.map((shipment) => [
       shipment.id,
       shipment.trackingId,
       shipment.status,
@@ -134,8 +153,18 @@ export default function EnviosPage() {
   }
 
   const handleClearFilters = () => {
+    setPage(1)
     setFilters(EMPTY_FILTERS)
     setSearch('')
+  }
+
+  const handlePageChange = (_event: unknown, nextPage: number) => {
+    setPage(nextPage + 1)
+  }
+
+  const handleRowsPerPageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setPageSize(Number(event.target.value))
+    setPage(1)
   }
 
   const showCreateButton = user.role === 'operador' || user.role === 'supervisor'
@@ -185,13 +214,26 @@ export default function EnviosPage() {
           {hasQuery ? 'No se encontraron envíos para los filtros aplicados.' : 'No hay envíos disponibles.'}
         </Alert>
       ) : (
-        <Grid container spacing={3}>
-          {shipments.map((shipment) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={shipment.id}>
-              <ShipmentCard shipment={shipment} />
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Grid container spacing={3}>
+            {shipments.map((shipment) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={shipment.id}>
+                <ShipmentCard shipment={shipment} />
+              </Grid>
+            ))}
+          </Grid>
+          <TablePagination
+            component="div"
+            count={totalItems}
+            page={page - 1}
+            onPageChange={handlePageChange}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            rowsPerPageOptions={[8, 12, 24]}
+            labelRowsPerPage="Tarjetas por página"
+            sx={{ mt: 2 }}
+          />
+        </>
       )}
 
       <ShipmentForm open={openShipmentForm} onClose={() => setOpenShipmentForm(false)} onSubmit={handleCreateShipment} />

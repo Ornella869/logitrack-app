@@ -103,13 +103,17 @@ namespace Back.Controllers
         /// <summary>Listado de paquetes con búsqueda parcial y filtros por estado y fecha.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("paquetes")]
-        public async Task<ActionResult<List<Paquete>>> BuscarYFiltrar(
+        public async Task<ActionResult<PagedResponse<Paquete>>> BuscarYFiltrar(
             [FromQuery] string? search,
             [FromQuery(Name = "status")] List<PaqueteStatus>? estados,
             [FromQuery] DateTime? from,
-            [FromQuery] DateTime? to)
+            [FromQuery] DateTime? to,
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize)
         {
-            var paquetes = await _enviosRepository.Buscar(search, estados, from, to);
+            var normalizedPage = PaginationDefaults.NormalizePage(page);
+            var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
+            var paquetes = await _enviosRepository.Buscar(search, estados, from, to, normalizedPage, normalizedPageSize);
             return Ok(paquetes);
         }
 

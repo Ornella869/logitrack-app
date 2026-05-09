@@ -13,7 +13,7 @@ namespace Back.Domain.Repositories
         Task<Sucursal?> GetSucursalById(Guid id);
         void DeleteSucursal(Sucursal sucursal);
         Task<List<Paquete>> GetPaquetesByIds(List<Guid> paqueteIds);
-        Task<List<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to);
+        Task<Back.Application.Common.PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize);
         Task<List<Paquete>> GetAll();
         Task<List<Paquete>> GetPaquetesAsignadosARepartidorEnFecha(Guid repartidorId, DateTime fecha);
         Task<List<Paquete>> GetPaquetesConAsignacionActiva();
