@@ -82,6 +82,7 @@ namespace Back.Controllers
                 TipoEnvio = paquete.TipoEnvio,
                 TipoPaquete = paquete.TipoPaquete,
                 CreadoEn = paquete.CreadoEn,
+                FechaCalendarizada = paquete.FechaCalendarizada,
                 Peso = paquete.Peso,
                 Descripcion = paquete.Descripcion,
                 RazonCancelacion = paquete.RazonCancelacion,
@@ -343,6 +344,27 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>G1L-43: Inicializa la ruta del día. Pasa todos los paquetes "Listo para Salir"
+        /// del repartidor logueado para la fecha indicada (o hoy) a "En Tránsito".</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("inicializar-ruta")]
+        public async Task<ActionResult<object>> InicializarRuta([FromQuery] DateTime? fecha)
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            try
+            {
+                var dia = (fecha ?? DateTime.UtcNow).Date;
+                var cantidad = await _enviosService.IniciarRutaDelDiaAsync(userId.Value, dia, userId);
+                await _context.SaveChangesAsync();
+                return Ok(new { cantidad });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         // ============== G1L-28: Etiqueta ==============
 
         /// <summary>Datos de la etiqueta imprimible (Operador o Supervisor).</summary>
@@ -485,7 +507,7 @@ namespace Back.Controllers
             Ubicacion? coords = null;
             try
             {
-                coords = await geocoding.GeocodeAsync(sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal);
+                coords = await geocoding.GeocodeAsync(sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal, sucursal.Provincia);
             }
             catch
             {
@@ -500,6 +522,7 @@ namespace Back.Controllers
                 direccion = sucursal.Direccion,
                 ciudad = sucursal.Ciudad,
                 codigoPostal = sucursal.CodigoPostal,
+                provincia = sucursal.Provincia,
                 telefono = sucursal.Telefono,
                 latitud = coords?.Latitud,
                 longitud = coords?.Longitud,
@@ -516,7 +539,7 @@ namespace Back.Controllers
             {
                 return BadRequest(new { error = "Ya existe una sucursal registrada. Eliminala antes de crear otra." });
             }
-            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono);
+            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
             await _enviosRepository.Add(sucursal);
             await _context.SaveChangesAsync();
             return Ok();
@@ -528,7 +551,7 @@ namespace Back.Controllers
         {
             var sucursal = await _enviosRepository.GetSucursalById(id);
             if (sucursal == null) return NotFound();
-            sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono);
+            sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
             await _context.SaveChangesAsync();
             return Ok();
         }
@@ -604,6 +627,8 @@ namespace Back.Controllers
         [Required] public string Ciudad { get; set; } = string.Empty;
         [Required] public string CodigoPostal { get; set; } = string.Empty;
         [Required] public string Telefono { get; set; } = string.Empty;
+        // Opcional para no romper integraciones viejas; el front lo manda obligatorio.
+        public string? Provincia { get; set; }
     }
 
     public class EtiquetaResponse
@@ -636,6 +661,9 @@ namespace Back.Controllers
         public TipoEnvio TipoEnvio { get; set; }
         public TipoPaquete TipoPaquete { get; set; }
         public DateTime CreadoEn { get; set; }
+        // G1L-17: fecha estimada de entrega (asignada por la calendarización).
+        // Si está definida, el front la muestra como hito en la línea de tiempo.
+        public DateTime? FechaCalendarizada { get; set; }
         public double Peso { get; set; }
         public string? Descripcion { get; set; }
         public string? RazonCancelacion { get; set; }

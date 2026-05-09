@@ -68,6 +68,9 @@ export default function CalendarizarPage() {
   const [asignacionesPage, setAsignacionesPage] = useState(0)
   const [asignacionesRowsPerPage, setAsignacionesRowsPerPage] = useState(10)
 
+  // Modal de confirmación previa (G1L-54 AC "Confirmación Previa")
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
   // Modal de proceso
   const [modalOpen, setModalOpen] = useState(false)
   const [stepIdx, setStepIdx] = useState(0) // 0..5 (5 = done)
@@ -187,6 +190,7 @@ export default function CalendarizarPage() {
   }
 
   const ejecutar = async () => {
+    setConfirmOpen(false)
     setModalOpen(true)
     setStepIdx(0)
     setResultado(null)
@@ -309,7 +313,7 @@ export default function CalendarizarPage() {
                     size="large"
                     variant="contained"
                     startIcon={<BoltIcon />}
-                    onClick={ejecutar}
+                    onClick={() => setConfirmOpen(true)}
                     disabled={pendientes.length === 0 || repartidoresActivos.length === 0}
                     sx={{ px: 4, py: 1.5, fontSize: 14 }}
                   >
@@ -488,6 +492,40 @@ export default function CalendarizarPage() {
           )}
         </Box>
       )}
+
+      {/* G1L-54 AC "Confirmación Previa": modal con la cantidad antes de disparar el proceso. */}
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <BoltIcon color="primary" /> <span>Confirmar calendarización</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Vas a calendarizar <strong>{pendientes.length} envío{pendientes.length === 1 ? '' : 's'}</strong> pendiente{pendientes.length === 1 ? '' : 's'}.
+          </Typography>
+          <Stack spacing={1} sx={{ pl: 1, borderLeft: '3px solid #1976d2', py: 0.5 }}>
+            <Typography variant="body2">
+              <strong>{summary.prio}</strong> prioritario{summary.prio === 1 ? '' : 's'} · <strong>{summary.comm}</strong> común{summary.comm === 1 ? '' : 'es'}
+            </Typography>
+            <Typography variant="body2">
+              Peso total: <strong>{summary.peso.toFixed(0)} kg</strong>
+            </Typography>
+            <Typography variant="body2">
+              Repartidores activos: <strong>{repartidoresActivos.length}</strong> (capacidad {summary.capacidad.toLocaleString('es-AR')} kg)
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+            El sistema asignará automáticamente repartidor y fecha siguiendo las reglas operativas. Esta acción no se puede deshacer.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={ejecutar} startIcon={<BoltIcon />}>
+            Sí, calendarizar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* MODAL: proceso de calendarización */}
       <Dialog open={modalOpen} onClose={exec ? cerrarModal : undefined} maxWidth="md" fullWidth>

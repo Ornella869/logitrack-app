@@ -415,6 +415,17 @@ export const shipmentService = {
     }
   },
 
+  // G1L-43: Inicializar Ruta — pasa todos los "Listo para Salir" del día a "En Tránsito".
+  inicializarRuta: async (fecha?: string): Promise<{ success: boolean; cantidad?: number; error?: string }> => {
+    try {
+      const response = await api.post('/envios/inicializar-ruta', null, { params: fecha ? { fecha } : undefined })
+      return { success: true, cantidad: response.data?.cantidad ?? 0 }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message ?? error.response?.data ?? 'No se pudo iniciar la ruta'
+      return { success: false, error: errorMessage }
+    }
+  },
+
   // G1L-23: Ruta del día del repartidor logueado, ordenada por CP.
   // Si no se pasa fecha y no hay paradas hoy, devuelve la próxima fecha futura con asignaciones.
   getMiRutaDelDia: async (fecha?: string): Promise<{ fecha: string | null; paradas: Shipment[] }> => {

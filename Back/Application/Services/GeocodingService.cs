@@ -129,6 +129,12 @@ namespace Back.Application.Services
         // ── Georef ──────────────────────────────────────────────────────────────
         // API: https://apis.datos.gob.ar/georef/api/direcciones
         // Docs: https://datosgobar.github.io/georef-ar-api/
+        //
+        // Comportamiento conocido: si la altura solicitada no existe en el padrón,
+        // Georef devuelve la calle con OTRA altura (la más próxima del nomenclátor)
+        // sin marcar el resultado como aproximado. Eso introduce coordenadas que
+        // caen en una cuadra distinta y rompe la apertura en Google Maps.
+        // Por eso pedimos varios candidatos y exigimos match EXACTO de altura.
         private async Task<Ubicacion?> TryGeoref(string direccion, string localidad, string? provincia)
         {
             if (string.IsNullOrEmpty(direccion) || string.IsNullOrEmpty(localidad)) return null;
@@ -138,7 +144,7 @@ namespace Back.Application.Services
                 {
                     ["direccion"] = direccion,
                     ["localidad"] = localidad,
-                    ["max"] = "1",
+                    ["max"] = "10",
                 };
                 if (!string.IsNullOrEmpty(provincia)) p["provincia"] = provincia;
 
@@ -151,10 +157,26 @@ namespace Back.Application.Services
 
                 var json = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<GeorefDireccionesResponse>(json);
-                var ubicacion = result?.Direcciones?.FirstOrDefault()?.Ubicacion;
-                if (ubicacion is null) return null;
+                var direcciones = result?.Direcciones;
+                if (direcciones is null || direcciones.Count == 0) return null;
 
-                return new Ubicacion(ubicacion.Lat, ubicacion.Lon);
+                var alturaPedida = ExtraerAltura(direccion);
+
+                // Si el operador puso altura, sólo aceptamos un resultado cuya altura
+                // coincida EXACTAMENTE. Si ningún candidato cumple, devolvemos null
+                // para que la siguiente capa (Nominatim) intente. Si tampoco, el
+                // envío se bloqueará y el operador deberá verificar la dirección.
+                if (alturaPedida.HasValue)
+                {
+                    var match = direcciones.FirstOrDefault(d =>
+                        d.Altura?.Valor.HasValue == true && d.Altura.Valor.Value == alturaPedida.Value);
+                    return match?.Ubicacion is null ? null : new Ubicacion(match.Ubicacion.Lat, match.Ubicacion.Lon);
+                }
+
+                // Sin altura pedida (caso raro: dirección sólo con calle): tomamos
+                // el primer candidato como mejor aproximación de la calle.
+                var ubicacion = direcciones.First().Ubicacion;
+                return ubicacion is null ? null : new Ubicacion(ubicacion.Lat, ubicacion.Lon);
             }
             catch
             {
@@ -186,28 +208,56 @@ namespace Back.Application.Services
                     .ToList();
                 if (enArgentina.Count == 0) return null;
 
-                // Scoring para elegir el mejor candidato:
-                //   1) match exacto de house_number con la altura pedida
-                //   2) match (incluso parcial) del CP solicitado
-                //   3) menor distancia |house_number - altura_pedida|
-                //   4) mayor "importance" como desempate
                 var expectedCp = expectedPostalCode?.Trim() ?? string.Empty;
+
+                // Si el operador puso altura, exigimos match EXACTO. Si ningún candidato
+                // de Nominatim tiene house_number == alturaPedida, devolvemos null para
+                // que el envío no quede con coordenadas de otra cuadra (problema que
+                // rompe la apertura en Google Maps y el render del marker en Leaflet).
+                if (alturaPedida.HasValue)
+                {
+                    var conAlturaExacta = enArgentina
+                        .Where(r =>
+                        {
+                            var hn = int.TryParse(r.Address?.HouseNumber, out var n) ? n : (int?)null;
+                            return hn.HasValue && hn.Value == alturaPedida.Value;
+                        })
+                        .ToList();
+                    if (conAlturaExacta.Count == 0) return null;
+
+                    // Entre los candidatos con altura exacta, preferimos el que matchea
+                    // el CP y el de mayor importance.
+                    var elegido = conAlturaExacta
+                        .Select(r => new
+                        {
+                            R = r,
+                            CpMatch = !string.IsNullOrEmpty(expectedCp)
+                                      && !string.IsNullOrEmpty(r.Address?.Postcode)
+                                      && string.Equals(r.Address.Postcode.Trim(), expectedCp, StringComparison.OrdinalIgnoreCase),
+                            Imp = r.Importance ?? 0,
+                        })
+                        .OrderByDescending(x => x.CpMatch)
+                        .ThenByDescending(x => x.Imp)
+                        .First()
+                        .R;
+
+                    if (!double.TryParse(elegido.Lat, NumberStyles.Float, CultureInfo.InvariantCulture, out var latE) ||
+                        !double.TryParse(elegido.Lon, NumberStyles.Float, CultureInfo.InvariantCulture, out var lonE))
+                        return null;
+                    return new Ubicacion(latE, lonE);
+                }
+
+                // Sin altura pedida (calle sin número, fallback de localidad/CP):
+                // tomamos el de mayor importance que matchee CP si lo hay.
                 NominatimResult chosen = enArgentina
                     .Select(r =>
                     {
-                        var hn = int.TryParse(r.Address?.HouseNumber, out var n) ? n : (int?)null;
-                        var hnMatch = alturaPedida.HasValue && hn.HasValue && hn.Value == alturaPedida.Value;
-                        var hnDist = alturaPedida.HasValue && hn.HasValue
-                            ? Math.Abs(hn.Value - alturaPedida.Value)
-                            : int.MaxValue;
                         var cpMatch = !string.IsNullOrEmpty(expectedCp)
                                       && !string.IsNullOrEmpty(r.Address?.Postcode)
                                       && string.Equals(r.Address.Postcode.Trim(), expectedCp, StringComparison.OrdinalIgnoreCase);
-                        return new { R = r, HnMatch = hnMatch ? 1 : 0, CpMatch = cpMatch ? 1 : 0, HnDist = hnDist, Imp = r.Importance ?? 0 };
+                        return new { R = r, CpMatch = cpMatch ? 1 : 0, Imp = r.Importance ?? 0 };
                     })
-                    .OrderByDescending(x => x.HnMatch)
-                    .ThenByDescending(x => x.CpMatch)
-                    .ThenBy(x => x.HnDist)
+                    .OrderByDescending(x => x.CpMatch)
                     .ThenByDescending(x => x.Imp)
                     .First()
                     .R;
@@ -233,6 +283,13 @@ namespace Back.Application.Services
         private sealed class GeorefDireccion
         {
             [JsonPropertyName("ubicacion")] public GeorefUbicacion? Ubicacion { get; set; }
+            [JsonPropertyName("altura")] public GeorefAltura? Altura { get; set; }
+        }
+
+        private sealed class GeorefAltura
+        {
+            // Georef puede devolver null cuando no encuentra altura exacta en el padrón.
+            [JsonPropertyName("valor")] public int? Valor { get; set; }
         }
 
         private sealed class GeorefUbicacion

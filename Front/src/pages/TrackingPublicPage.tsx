@@ -128,6 +128,15 @@ const formatDate = (date: string) => {
   }).format(new Date(date))
 }
 
+// G1L-17: copy de la fecha estimada según el estado del envío.
+// "En Preparación" mostramos "Fecha estimada"; en estados posteriores mostramos
+// "Fecha de entrega programada" (ya hay un repartidor y un día asignado).
+const fechaEstimadaLabel = (status: Shipment['status']): string => {
+  if (status === 'Pendiente de calendarización') return 'Fecha estimada de despacho'
+  if (status === 'Entregado' || status === 'Cancelado') return 'Fecha programada original'
+  return 'Fecha de entrega programada'
+}
+
 export default function TrackingPublicPage() {
   const { trackingId } = useParams<{ trackingId: string }>()
   const [shipment, setShipment] = useState<Shipment | null>(null)
@@ -258,6 +267,18 @@ export default function TrackingPublicPage() {
                       </Box>
                     </Stack>
 
+                    {/* G1L-17: fecha calendarizada como hito visible para el cliente. */}
+                    {shipment.fechaCalendarizada && (
+                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: '#FFF7E6', border: '1px solid #F4C77B' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {fechaEstimadaLabel(shipment.status)}
+                        </Typography>
+                        <Typography sx={{ fontWeight: 700, color: '#7C4A00' }}>
+                          {formatDate(shipment.fechaCalendarizada)}
+                        </Typography>
+                      </Box>
+                    )}
+
                     {shipment.cancellationReason && (
                       <Alert severity="error">Motivo de cancelación: {shipment.cancellationReason}</Alert>
                     )}
@@ -316,6 +337,13 @@ export default function TrackingPublicPage() {
                                   ? 'Hito completado.'
                                   : 'Pendiente de actualización.'}
                             </Typography>
+                            {/* G1L-17: en el primer hito mostramos la fecha estimada de entrega
+                                (criterio "Estado Inicial" del AC). */}
+                            {index === 0 && shipment.fechaCalendarizada && (
+                              <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: '#B26A00', fontWeight: 600 }}>
+                                Entrega estimada: {formatDate(shipment.fechaCalendarizada)}
+                              </Typography>
+                            )}
                           </Box>
                         </Stack>
                       )

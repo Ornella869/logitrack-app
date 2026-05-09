@@ -33,11 +33,13 @@ import NavigationIcon from '@mui/icons-material/Navigation'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { shipmentService } from '../../services/shipmentService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
 import StatusBadge from '../../components/StatusBadge'
 import RouteMap from '../../components/RouteMap'
 import QrCameraScanner from '../../components/QrCameraScanner'
+import { buildMapsUrl } from '../../utils/mapsUrl'
 import type { Shipment, User } from '../../types'
 
 // G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy,
@@ -50,34 +52,18 @@ function getGreeting(name: string) {
   return `Buenas noches, ${name}!`
 }
 
-// Construye la URL de Google Maps con direcciones reales:
-// origen = sucursal asignada (si tiene coords); si no, la primera parada.
-function buildMapsUrl(paradas: Shipment[], origen: BranchOrigin | null): string | null {
-  if (paradas.length === 0) return null
-  const pending = paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
-  const active = pending.length > 0 ? pending : paradas
+// Convierte las paradas (Shipment) y la sucursal origen (BranchOrigin) al
+// formato genérico que entiende `buildMapsUrl` (utils/mapsUrl).
+const stopsForMaps = (paradas: Shipment[]) =>
+  paradas.map((p) => ({
+    direccion: p.receiver.address,
+    localidad: p.receiver.city,
+    codigoPostal: p.receiver.postalCode,
+    status: p.status,
+  }))
 
-  const addr = (p: Shipment) =>
-    p.receiverUbicacion?.latitud != null
-      ? `${p.receiverUbicacion.latitud},${p.receiverUbicacion.longitud}`
-      : `${p.receiver.address},${p.receiver.city}`
-
-  const origin =
-    origen?.latitud != null && origen?.longitud != null
-      ? `${origen.latitud},${origen.longitud}`
-      : origen
-        ? `${origen.address},${origen.city}`
-        : addr(active[0])
-
-  const params = new URLSearchParams({
-    api: '1',
-    origin,
-    destination: addr(active[active.length - 1]),
-  })
-  const stops = active.length > 1 ? active.slice(0, -1) : []
-  if (stops.length > 0) params.set('waypoints', stops.map(addr).join('|'))
-  return `https://www.google.com/maps/dir/?${params.toString()}`
-}
+const originForMaps = (origen: BranchOrigin | null) =>
+  origen ? { direccion: origen.address, ciudad: origen.city, codigoPostal: origen.postalCode } : null
 
 export default function RepartidorDashboard() {
   const navigate = useNavigate()
@@ -134,8 +120,33 @@ export default function RepartidorDashboard() {
       (p) => p.status !== 'Entregado' && p.status !== 'Cancelado',
     )
     const cpZona = paradas[0]?.receiver.postalCode
-    return { entregadas, enCamino, totalPeso, proximaIdx, cpZona }
+    const listosParaSalir = paradas.filter((p) => p.status === 'Listo para salir').length
+    return { entregadas, enCamino, totalPeso, proximaIdx, cpZona, listosParaSalir }
   }, [paradas])
+
+  // G1L-43: Inicializar Ruta — habilita la transición masiva Listo → En Tránsito.
+  // Sólo se ofrece cuando hay paradas en "Listo para salir" (todos los paquetes
+  // del día ya fueron escaneados por el repartidor en la sucursal).
+  const [iniciandoRuta, setIniciandoRuta] = useState(false)
+  const [confirmInicioOpen, setConfirmInicioOpen] = useState(false)
+  const [inicioFeedback, setInicioFeedback] = useState<{ severity: 'success' | 'error'; message: string } | null>(null)
+
+  const handleConfirmarInicio = async () => {
+    setIniciandoRuta(true)
+    setInicioFeedback(null)
+    const result = await shipmentService.inicializarRuta(fechaRuta ?? undefined)
+    setIniciandoRuta(false)
+    setConfirmInicioOpen(false)
+    if (!result.success) {
+      setInicioFeedback({ severity: 'error', message: result.error ?? 'No se pudo iniciar la ruta' })
+      return
+    }
+    setInicioFeedback({
+      severity: 'success',
+      message: `Ruta iniciada. ${result.cantidad} envío${result.cantidad === 1 ? '' : 's'} pasaron a En Tránsito.`,
+    })
+    void load(fechaRuta ?? undefined)
+  }
 
   const fechaActual = fechaRuta ? new Date(fechaRuta) : new Date()
   const fechaHoy = fechaActual.toLocaleDateString('es-AR', {
@@ -252,6 +263,20 @@ export default function RepartidorDashboard() {
           >
             Escanear QR
           </Button>
+          {/* G1L-43: aparece cuando hay paradas en "Listo para Salir". */}
+          {esHoy && metrics.listosParaSalir > 0 && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<PlayArrowIcon />}
+              onClick={() => {
+                setInicioFeedback(null)
+                setConfirmInicioOpen(true)
+              }}
+            >
+              Inicializar Ruta ({metrics.listosParaSalir})
+            </Button>
+          )}
           <Button startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
             Actualizar
           </Button>
@@ -272,6 +297,12 @@ export default function RepartidorDashboard() {
       )}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {inicioFeedback && (
+        <Alert severity={inicioFeedback.severity} sx={{ mb: 2 }} onClose={() => setInicioFeedback(null)}>
+          {inicioFeedback.message}
+        </Alert>
+      )}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
@@ -322,7 +353,7 @@ export default function RepartidorDashboard() {
                     startIcon={<MapIcon />}
                     disabled={paradas.length === 0}
                     onClick={() => {
-                      const url = buildMapsUrl(paradas, origen)
+                      const url = buildMapsUrl(stopsForMaps(paradas), originForMaps(origen))
                       if (url) window.open(url, '_blank', 'noopener,noreferrer')
                     }}
                   >
@@ -469,6 +500,36 @@ export default function RepartidorDashboard() {
           )}
         </>
       )}
+
+      {/* G1L-43: confirmación de inicio de ruta. Pasa todos los "Listo para Salir" a "En Tránsito". */}
+      <Dialog open={confirmInicioOpen} onClose={() => !iniciandoRuta && setConfirmInicioOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <PlayArrowIcon color="success" /> <span>Inicializar ruta del día</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Vas a iniciar la ruta con <strong>{metrics.listosParaSalir} envío{metrics.listosParaSalir === 1 ? '' : 's'}</strong> en estado "Listo para Salir".
+            Todos pasarán a <strong>En Tránsito</strong> y quedarás como responsable.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontStyle: 'italic' }}>
+            Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmInicioOpen(false)} disabled={iniciandoRuta}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleConfirmarInicio}
+            disabled={iniciandoRuta}
+            startIcon={iniciandoRuta ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+          >
+            {iniciandoRuta ? 'Iniciando...' : 'Sí, iniciar ruta'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Diálogo de escaneo de QR — cámara (default) o entrada manual del código. */}
       <Dialog

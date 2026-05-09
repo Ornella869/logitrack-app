@@ -7,6 +7,7 @@ interface RegistarSucursalRequest {
   Direccion: string
   Ciudad: string
   CodigoPostal: string
+  Provincia?: string
   Telefono: string
 }
 
@@ -27,6 +28,7 @@ const mapToBranch = (sucursal: any): Branch => ({
   address: sucursal.direccion,
   city: sucursal.ciudad,
   postalCode: sucursal.codigoPostal ?? '',
+  province: sucursal.provincia ?? undefined,
   phone: sucursal.telefono,
   createdDate: new Date().toISOString().split('T')[0],
   status: mapStatus(sucursal.estado)
@@ -64,6 +66,7 @@ export const branchService = {
         Direccion: branchData.address,
         Ciudad: branchData.city,
         CodigoPostal: branchData.postalCode,
+        Provincia: branchData.province,
         Telefono: branchData.phone,
       }
 
@@ -88,6 +91,7 @@ export const branchService = {
         Direccion: branchData.address,
         Ciudad: branchData.city,
         CodigoPostal: branchData.postalCode,
+        Provincia: branchData.province,
         Telefono: branchData.phone,
       }
       await api.put(`/envios/sucursales/${id}`, request)

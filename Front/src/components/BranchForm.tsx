@@ -10,10 +10,16 @@ import {
   CircularProgress,
   Stack,
   InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
 } from '@mui/material'
 import type { Branch, BranchStatus } from '../types'
 import { branchService } from '../services/branchService'
 import { postalCodeService } from '../services/postalCodeService'
+import { AR_PROVINCIAS, normalizeProvincia } from '../utils/provincias'
 
 interface BranchFormProps {
   open: boolean
@@ -33,6 +39,7 @@ const EMPTY_FORM = {
   address: '',
   city: '',
   postalCode: '',
+  province: '',
   phone: '',
   status: 'Activa' as BranchStatus,
 }
@@ -53,6 +60,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
         address: initialData.address,
         city: initialData.city,
         postalCode: initialData.postalCode,
+        province: initialData.province ?? '',
         phone: initialData.phone,
         status: initialData.status,
       })
@@ -75,7 +83,16 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
       value = value.replace(/[^A-Za-zÀ-ÿ\s'-]/g, '')
     }
 
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value }
+      // Cambio de CP → limpiamos la provincia auto-rellenada para que el blur
+      // re-sugiera la del CP nuevo. Si el operador eligió manualmente una
+      // provincia después, su elección se respeta (ver checkPostal).
+      if (name === 'postalCode' && value !== prev.postalCode) {
+        next.province = ''
+      }
+      return next
+    })
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
     }
@@ -96,8 +113,15 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
         delete next.postalCode
         return next
       })
+      // Pre-rellena provincia solo si está vacía. Si el operador la eligió
+      // manualmente (CPs ambiguos como 9420), respetamos su elección.
+      const normalizedProvince = normalizeProvincia(result.province)
+      setFormData((prev) => ({
+        ...prev,
+        city: result.city ?? prev.city,
+        province: prev.province || normalizedProvince || '',
+      }))
       if (result.city) {
-        setFormData((prev) => ({ ...prev, city: result.city as string }))
         setErrors((prev) => {
           const next = { ...prev }
           delete next.city
@@ -136,6 +160,10 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
       newErrors.postalCode = 'Debe tener 4 dígitos'
     }
 
+    if (!formData.province.trim()) {
+      newErrors.province = 'Requerido'
+    }
+
     if (!formData.phone.trim()) {
       newErrors.phone = 'Requerido'
     } else if (!phoneRegex.test(formData.phone.trim())) {
@@ -168,6 +196,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
         address: formData.address.trim(),
         city: formData.city.trim(),
         postalCode: formData.postalCode.trim(),
+        province: formData.province.trim() || undefined,
         phone: formData.phone.trim(),
         status: formData.status,
       }
@@ -262,6 +291,25 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
             fullWidth
             disabled={loading}
           />
+
+          <FormControl fullWidth required error={!!errors.province} disabled={loading}>
+            <InputLabel>Provincia</InputLabel>
+            <Select
+              value={formData.province}
+              label="Provincia"
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, province: e.target.value }))
+                if (errors.province) setErrors((prev) => ({ ...prev, province: '' }))
+              }}
+            >
+              {AR_PROVINCIAS.map((p) => (
+                <MenuItem key={p} value={p}>{p}</MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              {errors.province ?? 'Se pre-selecciona al validar el CP — verificá que sea correcta para CPs ambiguos.'}
+            </FormHelperText>
+          </FormControl>
 
           <TextField
             label="Teléfono"

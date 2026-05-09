@@ -21,6 +21,7 @@ import {
 import type { Shipment, TipoEnvio, TipoPaquete, Branch } from '../types'
 import { postalCodeService } from '../services/postalCodeService'
 import { branchService } from '../services/branchService'
+import { AR_PROVINCIAS, normalizeProvincia } from '../utils/provincias'
 
 interface ShipmentFormProps {
   open: boolean
@@ -115,7 +116,16 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       value = value.replace(/[^\d+\s-]/g, '')
     }
 
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value }
+      // Si el operador cambia el CP, limpiamos la provincia auto-rellenada
+      // para que el próximo blur re-sugiera una. Si después él/ella elige una
+      // provincia manualmente, esa elección NO se vuelve a pisar (ver checkReceiverPostal).
+      if (name === 'receiverPostal' && value !== prev.receiverPostal) {
+        next.receiverProvince = ''
+      }
+      return next
+    })
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
     }
@@ -137,14 +147,16 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         delete next.receiverPostal
         return next
       })
-      // Autocompletar siempre la ciudad y la provincia con lo que devuelva la API
-      // (sobreescribe lo escrito). La provincia no se muestra en el form pero se
-      // envía al backend para que el geocoding la use como `state` en Nominatim
-      // y resuelva la dirección en la provincia correcta.
+      // Pre-rellenamos ciudad y provincia con lo que sugiere la API. La provincia
+      // SOLO la sobreescribimos si el dropdown está vacío — así, si el operador
+      // ya eligió una manualmente (caso CPs ambiguos como 9420 → Tierra del Fuego),
+      // su elección manda. Cuando el CP cambia (handleChange) se limpia la
+      // provincia, así un nuevo CP vuelve a recibir una sugerencia fresca.
+      const normalizedProvince = normalizeProvincia(result.province)
       setFormData((prev) => ({
         ...prev,
         receiverCity: result.city ?? prev.receiverCity,
-        receiverProvince: result.province ?? prev.receiverProvince,
+        receiverProvince: prev.receiverProvince || normalizedProvince || '',
       }))
       if (result.city) {
         setErrors((prev) => {
@@ -184,6 +196,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       newErrors.receiverPostal = 'Requerido'
     } else if (!postalCodeService.isValidFormat(formData.receiverPostal)) {
       newErrors.receiverPostal = 'Debe tener 4 dígitos'
+    }
+
+    if (!formData.receiverProvince.trim()) {
+      newErrors.receiverProvince = 'Requerido'
     }
 
     if (formData.receiverPhone.trim() && !phoneRegex.test(formData.receiverPhone.trim())) {
@@ -403,6 +419,28 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   fullWidth
                   size="small"
                 />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small" required error={!!errors.receiverProvince}>
+                  <InputLabel>Provincia</InputLabel>
+                  <Select
+                    value={formData.receiverProvince}
+                    label="Provincia"
+                    onChange={(e) => {
+                      setFormData((prev) => ({ ...prev, receiverProvince: e.target.value }))
+                      if (errors.receiverProvince) {
+                        setErrors((prev) => ({ ...prev, receiverProvince: '' }))
+                      }
+                    }}
+                  >
+                    {AR_PROVINCIAS.map((p) => (
+                      <MenuItem key={p} value={p}>{p}</MenuItem>
+                    ))}
+                  </Select>
+                  {errors.receiverProvince && (
+                    <FormHelperText>{errors.receiverProvince}</FormHelperText>
+                  )}
+                </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <TextField

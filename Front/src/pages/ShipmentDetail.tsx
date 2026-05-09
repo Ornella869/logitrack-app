@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -36,6 +36,7 @@ import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PersonIcon from '@mui/icons-material/Person'
 import MapIcon from '@mui/icons-material/Map'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import { Tab, Tabs } from '@mui/material'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
@@ -54,6 +55,12 @@ const CANCEL_REASONS = [
 
 type CancelMode = 'Definitivo' | 'Reagendar'
 
+// Código de confirmación de entrega — temporal hardcodeado.
+// En el próximo sprint se va a generar uno por envío y se enviará al destinatario
+// por email cuando el paquete pasa a En Tránsito. Mientras tanto, todos los envíos
+// usan este mismo valor para que el equipo pueda probar el flujo end-to-end.
+const ENTREGA_CONFIRMATION_CODE = '123456'
+
 function ShipmentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -61,11 +68,14 @@ function ShipmentDetail() {
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [openStatusDialog, setOpenStatusDialog] = useState(false)
   const [openCancelDialog, setOpenCancelDialog] = useState(false)
   const [openEditDialog, setOpenEditDialog] = useState(false)
-  const [newStatus, setNewStatus] = useState<Shipment['status']>('En tránsito')
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  // Confirmación de entrega con código (Repartidor sobre envíos En Tránsito).
+  const [openEntregaDialog, setOpenEntregaDialog] = useState(false)
+  const [entregaCodigo, setEntregaCodigo] = useState('')
+  const [entregaError, setEntregaError] = useState('')
+  const [confirmandoEntrega, setConfirmandoEntrega] = useState(false)
   // Cancelación
   const [cancelReason, setCancelReason] = useState('')
   const [cancelDetail, setCancelDetail] = useState('')
@@ -103,14 +113,18 @@ function ShipmentDetail() {
   const [qrFeedback, setQrFeedback] = useState<{ severity: 'success' | 'info' | 'error'; message: string } | null>(null)
   const lastScannedRef = useRef<{ code: string; at: number } | null>(null)
 
-  // G1L-9: Repartidor cambia estados (Listo→Tránsito, Tránsito→Entregado/Cancelado)
-  // G1L-13: Operador/Supervisor cancelan Pendiente o Listo para Salir.
+  // G1L-13 / G1L-68: Operador/Supervisor cancelan Pendiente o cualquier estado
+  // calendarizado (Asignado/Cargado/Listo para Salir) — en estos últimos podrán
+  // elegir entre cancelar definitivo o volver a calendarizar.
   // G1L-9: Repartidor cancela solo En Tránsito (Entrega Fallida).
-  const canChangeStatus = isRepartidor
+  // La transición Tránsito→Entregado va por el botón "Confirmar entrega" con código.
   const status = shipment?.status
   const canCancel =
     ((isOperador || isSupervisor) &&
-      (status === 'Pendiente de calendarización' || status === 'Listo para salir')) ||
+      (status === 'Pendiente de calendarización' ||
+        status === 'Asignado a vehículo' ||
+        status === 'Cargado en vehículo' ||
+        status === 'Listo para salir')) ||
     (isRepartidor && status === 'En tránsito')
   // G1L-12, G1L-41: Editar solo si está pendiente de calendarización (paquete.isEditable)
   const canEdit = isOperador && shipment?.isEditable === true
@@ -128,7 +142,6 @@ function ShipmentDetail() {
       const data = await shipmentService.getShipmentTracking(id)
       if (data) {
         setShipment(data)
-        setNewStatus(data.status)
         // G1L-42: cargar repartidor asignado para Supervisor / Admin
         if ((isSupervisor || isAdmin) && data.id) {
           const rep = await shipmentService.getRepartidorDePaquete(data.id)
@@ -158,47 +171,49 @@ function ShipmentDetail() {
     }
   }
 
-  // Transiciones permitidas según estado actual (G1L-9)
-  const allowedStatusTransitions = useMemo<Shipment['status'][]>(() => {
-    if (!shipment) return []
-    switch (shipment.status) {
-      case 'Listo para salir':
-        return ['En tránsito']
-      case 'En tránsito':
-        return ['Entregado']
-      default:
-        return []
-    }
-  }, [shipment])
-
-  useEffect(() => {
-    if (openStatusDialog && allowedStatusTransitions.length > 0) {
-      setNewStatus(allowedStatusTransitions[0])
-    }
-  }, [openStatusDialog, allowedStatusTransitions])
+  // G1L-68: estados calendarizados en los que ofrecemos elegir entre cancelar definitivo
+  // y volver a calendarizar. El backend ya soporta los 3 (EnviosService.CancelarPaquete).
+  const isCalendarizadoCancelable =
+    shipment?.status === 'Asignado a vehículo' ||
+    shipment?.status === 'Cargado en vehículo' ||
+    shipment?.status === 'Listo para salir'
 
   useEffect(() => {
     if (openCancelDialog) {
       setCancelReason('')
       setCancelDetail('')
-      setCancelMode(shipment?.status === 'Listo para salir' ? 'Reagendar' : 'Definitivo')
+      setCancelMode(isCalendarizadoCancelable ? 'Reagendar' : 'Definitivo')
     }
-  }, [openCancelDialog, shipment])
+  }, [openCancelDialog, shipment, isCalendarizadoCancelable])
 
-  const handleUpdateStatus = async () => {
+  // Confirma la entrega validando el código que el destinatario tiene que dar.
+  // Por ahora el código está hardcodeado (ENTREGA_CONFIRMATION_CODE). En el próximo
+  // sprint se reemplaza por uno generado por envío y enviado por mail al destinatario
+  // cuando el paquete pasa a En Tránsito.
+  const handleConfirmarEntrega = async () => {
     if (!id || !shipment) return
-    if (!allowedStatusTransitions.includes(newStatus)) return
-    setUpdatingStatus(true)
-    const result = await shipmentService.changeShipmentStatus(id, newStatus)
+    const codigo = entregaCodigo.trim()
+    if (codigo.length !== 6) {
+      setEntregaError('El código debe tener 6 dígitos.')
+      return
+    }
+    if (codigo !== ENTREGA_CONFIRMATION_CODE) {
+      setEntregaError('Código incorrecto. Verificá con el destinatario.')
+      return
+    }
+    setConfirmandoEntrega(true)
+    setEntregaError('')
+    const result = await shipmentService.changeShipmentStatus(id, 'Entregado')
+    setConfirmandoEntrega(false)
     if (result.success) {
       const updated = await shipmentService.getShipmentTracking(id)
       if (updated) setShipment(updated)
-      setOpenStatusDialog(false)
-      showActionToast(`Estado actualizado a ${newStatus}`, 'success')
+      setOpenEntregaDialog(false)
+      setEntregaCodigo('')
+      showActionToast('Entrega confirmada. ¡Gracias!', 'success')
     } else {
-      showActionToast(result.error || 'Error al actualizar el estado', 'error')
+      setEntregaError(result.error || 'No se pudo confirmar la entrega')
     }
-    setUpdatingStatus(false)
   }
 
   // G1L-13: Cancelar con motivo obligatorio + opción reagendar si está Listo para Salir
@@ -407,14 +422,23 @@ function ShipmentDetail() {
                 Pasar de estado (QR)
               </Button>
             )}
-          {/* G1L-9: cambiar estado manual (solo Repartidor con transiciones permitidas) */}
-          {canChangeStatus && allowedStatusTransitions.length > 0 && (
+          {/* G1L-9 (parcial): la confirmación de entrega va por el botón "Confirmar entrega"
+              con código de verificación. La transición Listo→Tránsito va por "Inicializar Ruta"
+              desde el panel del repartidor (G1L-43). El cambio de estado manual genérico
+              quedó retirado para evitar saltos de estado fuera del flujo definido. */}
+          {isRepartidor && status === 'En tránsito' && (
             <Button
-              variant="outlined"
+              variant="contained"
+              color="success"
               size="small"
-              onClick={() => setOpenStatusDialog(true)}
+              startIcon={<CheckCircleIcon />}
+              onClick={() => {
+                setEntregaCodigo('')
+                setEntregaError('')
+                setOpenEntregaDialog(true)
+              }}
             >
-              Cambiar estado manual
+              Confirmar entrega
             </Button>
           )}
           {/* G1L-13: cancelar (operador, supervisor o repartidor) */}
@@ -621,40 +645,63 @@ function ShipmentDetail() {
         )}
       </Grid>
 
-      {/* Dialog: cambiar estado (G1L-9) */}
+      {/* Dialog: confirmar entrega — el repartidor pide el código al destinatario.
+          Hoy el código es hardcodeado; próximamente se enviará por email al destinatario. */}
       <Dialog
-        open={openStatusDialog}
-        onClose={() => !updatingStatus && setOpenStatusDialog(false)}
+        open={openEntregaDialog}
+        onClose={() => !confirmandoEntrega && setOpenEntregaDialog(false)}
+        fullWidth
+        maxWidth="xs"
       >
-        <DialogTitle>Cambiar estado del envío</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <FormControl fullWidth size="small" sx={{ mt: 1 }}>
-            <InputLabel>Nuevo estado</InputLabel>
-            <Select
-              value={newStatus}
-              label="Nuevo estado"
-              onChange={(e) => setNewStatus(e.target.value as Shipment['status'])}
-              disabled={updatingStatus}
-            >
-              {allowedStatusTransitions.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {newStatus === 'Entregado' && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Una vez marcado como Entregado, no se podrá modificar el estado.
-            </Alert>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <CheckCircleIcon color="success" /> <span>Confirmar entrega</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Pedile al destinatario el código de 6 dígitos que recibió por email.
+          </DialogContentText>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Mientras el envío por email no esté integrado, usá el código <strong>{ENTREGA_CONFIRMATION_CODE}</strong> para todos los envíos. Próximamente se generará uno único por envío.
+          </Alert>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Código de entrega"
+            placeholder="123456"
+            value={entregaCodigo}
+            onChange={(e) => {
+              const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 6)
+              setEntregaCodigo(onlyDigits)
+              setEntregaError('')
+            }}
+            disabled={confirmandoEntrega}
+            inputProps={{
+              maxLength: 6,
+              inputMode: 'numeric',
+              style: { fontFamily: 'monospace', letterSpacing: 6, textAlign: 'center', fontSize: 22 },
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && entregaCodigo.length === 6) void handleConfirmarEntrega()
+            }}
+          />
+          {entregaError && (
+            <Alert severity="error" sx={{ mt: 2 }}>{entregaError}</Alert>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenStatusDialog(false)} disabled={updatingStatus}>
-            Cerrar
+          <Button onClick={() => setOpenEntregaDialog(false)} disabled={confirmandoEntrega}>
+            Cancelar
           </Button>
-          <Button onClick={handleUpdateStatus} variant="contained" disabled={updatingStatus}>
-            {updatingStatus ? <CircularProgress size={20} /> : 'Confirmar'}
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={confirmandoEntrega ? <CircularProgress size={16} color="inherit" /> : <CheckCircleIcon />}
+            onClick={handleConfirmarEntrega}
+            disabled={confirmandoEntrega || entregaCodigo.length !== 6}
+          >
+            {confirmandoEntrega ? 'Confirmando...' : 'Confirmar entrega'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -668,8 +715,9 @@ function ShipmentDetail() {
       >
         <DialogTitle>Cancelar envío</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          {/* Modo: solo si está en Listo para Salir */}
-          {shipment.status === 'Listo para salir' && (
+          {/* G1L-68: en estados calendarizados (Asignado/Cargado/Listo para Salir) ofrecemos
+              elegir entre cancelar definitivo o volver a calendarizar. */}
+          {isCalendarizadoCancelable && (
             <FormControl sx={{ mt: 1, mb: 2 }}>
               <Typography variant="body2" sx={{ mb: 1 }}>
                 ¿Qué querés hacer con el envío?

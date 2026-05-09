@@ -286,19 +286,10 @@ namespace Back.Application.Services
                     throw new InvalidOperationException("El paquete ya está cargado en el vehículo. Esperá a que todos los del día estén cargados para que pase a 'Listo para Salir'.");
 
                 case PaqueteStatus.ListoParaSalir:
-                    paquete.IniciarTransito();
-                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.QR);
-                    await _auditoria.RegistrarAsync(
-                        Domain.Models.TipoAccion.CambioEstadoEnvio,
-                        $"Inició tránsito de {paquete.CodigoSeguimiento} (escaneo QR)",
-                        recursoId: paquete.CodigoSeguimiento);
-                    return new EscaneoResultado
-                    {
-                        Status = paquete.Status,
-                        Accion = "TransitoIniciado",
-                        CodigoSeguimiento = paquete.CodigoSeguimiento,
-                        PaqueteId = paquete.Id,
-                    };
+                    // G1L-43: la transición Listo→En Tránsito se dispara con el botón
+                    // "Inicializar Ruta" desde el panel del repartidor, no por escaneo QR.
+                    throw new InvalidOperationException(
+                        "Para iniciar el tránsito de tus paquetes usá el botón 'Inicializar Ruta' desde tu panel.");
 
                 case PaqueteStatus.EnTransito:
                     return new EscaneoResultado
@@ -315,6 +306,34 @@ namespace Back.Application.Services
                 default:
                     throw new InvalidOperationException($"El paquete está en estado {paquete.Status} y no puede escanearse.");
             }
+        }
+
+        // G1L-43: el repartidor inicia su ruta del día. Toma todos los paquetes en
+        // "Listo para Salir" para esa fecha y los pasa a "En Tránsito" en bloque.
+        // Se queda como responsable él mismo (ya está asignado por la calendarización).
+        public async Task<int> IniciarRutaDelDiaAsync(Guid repartidorId, DateTime fecha, Guid? usuarioId)
+        {
+            var paquetesDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fecha);
+            var listos = paquetesDia.Where(p => p.Status == PaqueteStatus.ListoParaSalir).ToList();
+
+            if (listos.Count == 0)
+                throw new InvalidOperationException(
+                    "No tenés paquetes en estado 'Listo para Salir' para iniciar la ruta. " +
+                    "Asegurate de haber escaneado todos los paquetes del día.");
+
+            foreach (var p in listos)
+            {
+                p.IniciarTransito();
+                await _historial.RegistrarCambioAsync(
+                    p.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.Manual, "Inicializar Ruta");
+            }
+
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CambioEstadoEnvio,
+                $"Inicializó la ruta del día: {listos.Count} envíos pasaron a 'En Tránsito'",
+                contexto: $"Repartidor {repartidorId} fecha {fecha:yyyy-MM-dd}");
+
+            return listos.Count;
         }
 
         // Cuando todos los paquetes del repartidor para esa fecha están "Cargados", pasa todos a "Listo para Salir".

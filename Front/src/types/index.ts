@@ -73,6 +73,7 @@ export interface Branch {
   address: string
   city: string
   postalCode: string
+  province?: string
   phone: string
   createdDate: string
   status: BranchStatus

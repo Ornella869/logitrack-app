@@ -16,9 +16,13 @@ import {
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import RouteIcon from '@mui/icons-material/Route'
+import MapIcon from '@mui/icons-material/Map'
+import NavigationIcon from '@mui/icons-material/Navigation'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import RouteMap from '../components/RouteMap'
+import { branchService, type BranchOrigin } from '../services/branchService'
+import { buildMapsUrl } from '../utils/mapsUrl'
 import type { User } from '../types'
 
 type DetalleParada = {
@@ -67,6 +71,7 @@ export default function DetalleRutaPage() {
   const [searchParams] = useSearchParams()
   const fecha = searchParams.get('fecha') ?? undefined
   const [detalle, setDetalle] = useState<DetalleRuta | null>(null)
+  const [origen, setOrigen] = useState<BranchOrigin | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -81,10 +86,15 @@ export default function DetalleRutaPage() {
     setLoading(true)
     setError('')
     try {
-      const response = await api.get(`/rutas-activas/${repartidorId}`, {
-        params: fecha ? { fecha } : undefined,
-      })
-      setDetalle(response.data)
+      // Cargamos detalle y sucursal de origen en paralelo. El origen sirve
+      // tanto para pintar el marker en el mapa como para construir la URL
+      // de Google Maps con el mismo punto de salida que el repartidor.
+      const [detalleResp, sucursal] = await Promise.all([
+        api.get(`/rutas-activas/${repartidorId}`, { params: fecha ? { fecha } : undefined }),
+        origen ? Promise.resolve(origen) : branchService.getSucursalOrigen(),
+      ])
+      setDetalle(detalleResp.data)
+      if (!origen) setOrigen(sucursal)
     } catch {
       setError('No se pudo cargar el detalle de la ruta')
     } finally {
@@ -104,8 +114,29 @@ export default function DetalleRutaPage() {
   const canceladas = detalle.paradas.filter((p) => p.status === 'Cancelado').length
   const completas = entregadas + canceladas
   const proximaIdx = detalle.paradas.findIndex((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+  const proxima = proximaIdx >= 0 ? detalle.paradas[proximaIdx] : null
   const pesoTotal = detalle.paradas.reduce((acc, p) => acc + p.peso, 0)
   const initials = detalle.repartidorNombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+  const cpZona = detalle.paradas[0]?.codigoPostal
+
+  // Las paradas vienen del back con status PascalCase ("EnTransito"). El RouteMap
+  // y el helper de Maps comparan contra el formato display ("En tránsito"), así
+  // que normalizamos antes de pasarlas.
+  const paradasNormalizadas = detalle.paradas.map((p) => ({
+    ...p,
+    status: statusToShipmentStatus(p.status),
+  }))
+
+  const stopsForMaps = paradasNormalizadas.map((p) => ({
+    direccion: p.direccion,
+    localidad: p.localidad,
+    codigoPostal: p.codigoPostal,
+    status: p.status,
+  }))
+
+  const originForMaps = origen
+    ? { direccion: origen.address, ciudad: origen.city, codigoPostal: origen.postalCode }
+    : null
 
   return (
     <Box>
@@ -132,13 +163,71 @@ export default function DetalleRutaPage() {
       <Grid container spacing={3}>
         {/* IZQ: Mapa mock + Lista de paradas */}
         <Grid item xs={12} md={8}>
-          <Card variant="outlined" sx={{ overflow: 'hidden', mb: 2 }}>
-            <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee' }}>
-              <Typography variant="subtitle1" fontWeight={600}>📍 Mapa de seguimiento</Typography>
+          {/* Mismo card del mapa que ve el repartidor en su panel: header con
+              info y acciones, mapa con sucursal de origen + paradas, footer con
+              próxima parada. Mantiene la consistencia entre roles. */}
+          <Card variant="outlined" sx={{ mb: 2, overflow: 'hidden' }}>
+            <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Box>
+                <Typography variant="body2" fontWeight={600}>
+                  Ruta optimizada{cpZona ? ` · CP ${cpZona}` : ''}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {origen
+                    ? `Salida desde ${origen.name} · ${detalle.paradas.length} paradas en orden`
+                    : `Orden automático por código postal y FIFO · ${detalle.paradas.length} paradas`}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<MapIcon />}
+                  disabled={detalle.paradas.length === 0}
+                  onClick={() => {
+                    const url = buildMapsUrl(stopsForMaps, originForMaps)
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  Abrir ruta en Maps
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<NavigationIcon />}
+                  disabled={!proxima}
+                  onClick={() => proxima && navigate(`/shipment/${proxima.paqueteId}`)}
+                >
+                  Ver próxima parada
+                </Button>
+              </Stack>
             </Box>
-            <Box sx={{ p: 0 }}>
-              <RouteMap paradas={detalle.paradas} proximaIdx={proximaIdx} height={340} />
-            </Box>
+            <RouteMap
+              paradas={paradasNormalizadas}
+              proximaIdx={proximaIdx}
+              origen={
+                origen?.latitud != null && origen?.longitud != null
+                  ? {
+                      nombre: origen.name,
+                      direccion: origen.address,
+                      ciudad: origen.city,
+                      latitud: origen.latitud,
+                      longitud: origen.longitud,
+                    }
+                  : null
+              }
+              height={380}
+            />
+            {proxima && (
+              <Box sx={{ p: 2, bgcolor: '#f8fdf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="body2">
+                  <strong>Próxima parada:</strong> {proxima.direccion}, {proxima.localidad} · {proxima.destinatario} · {proxima.peso} kg
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  CP {proxima.codigoPostal}
+                </Typography>
+              </Box>
+            )}
           </Card>
 
           <Card variant="outlined">
