@@ -7,21 +7,20 @@ using Back.Domain.Models;
 
 namespace Back.Application.Services
 {
-    // Geocodificación contra Nominatim (OpenStreetMap).
-    // Usamos búsqueda estructurada (street/city/postalcode) + countrycodes=ar
-    // para reducir falsos positivos como "Roque Sáenz Peña 888" cayendo en
-    // otra provincia. Si la estructurada no resuelve, intentamos un free-text
-    // con la cadena completa.
+    // Geocodificación en dos capas:
+    //   0) Georef (datos.gob.ar) — API oficial argentina, mejor precisión para
+    //      calles del padrón nacional. Acepta dirección + localidad + (provincia).
+    //   1) Nominatim (OpenStreetMap) — fallback cuando Georef no resuelve.
+    //      Se intenta primero de forma estructurada (street/city/postalcode)
+    //      y luego con free-text. Pedimos varios candidatos y elegimos el que
+    //      mejor coincide con la altura (house_number) y el CP.
     //
-    // Para mejorar la precisión "a nivel calle" pedimos varios candidatos y
-    // elegimos el que coincide en altura (house_number). Sin esto, Nominatim
-    // suele devolver el primer match que puede caer 2-3 cuadras del número real.
-    //
-    // Cache process-wide: Nominatim limita a ~1 req/seg y direcciones que ya
-    // resolvimos no necesitan re-pegar. Persiste mientras el proceso vive.
+    // Cache process-wide: reduce llamadas repetidas y respeta los rate-limits
+    // de ambas APIs. Persiste mientras el proceso vive.
     public class GeocodingService
     {
-        private const string BaseUrl = "https://nominatim.openstreetmap.org/search";
+        private const string NominatimBaseUrl = "https://nominatim.openstreetmap.org/search";
+        private const string GeorefBaseUrl = "https://apis.datos.gob.ar/georef/api/direcciones";
         private const string CountryCode = "ar";
         private const int CandidateLimit = 5;
 
@@ -53,22 +52,26 @@ namespace Back.Application.Services
 
             var alturaPedida = ExtraerAltura(direccionTrim);
 
-            // 1) Estructurada con CP + provincia — la más precisa.
+            // 0) Georef — fuente primaria para Argentina.
+            var ubicGeoref = await TryGeoref(direccionTrim, localidadTrim, provinciaTrim);
+            if (ubicGeoref is not null) { Cache[cacheKey] = ubicGeoref; return ubicGeoref; }
+
+            // 1) Nominatim estructurada con CP + provincia — la más precisa.
             if (!string.IsNullOrEmpty(cpTrim))
             {
-                var ubicCp = await SearchAsync(BuildStructured(direccionTrim, localidadTrim, cpTrim, provinciaTrim), alturaPedida, cpTrim);
+                var ubicCp = await SearchNominatim(BuildStructured(direccionTrim, localidadTrim, cpTrim, provinciaTrim), alturaPedida, cpTrim);
                 if (ubicCp is not null) { Cache[cacheKey] = ubicCp; return ubicCp; }
             }
 
-            // 2) Estructurada sin CP.
-            var ubicEstructurada = await SearchAsync(BuildStructured(direccionTrim, localidadTrim, postalcode: null, state: provinciaTrim), alturaPedida, cpTrim);
+            // 2) Nominatim estructurada sin CP.
+            var ubicEstructurada = await SearchNominatim(BuildStructured(direccionTrim, localidadTrim, postalcode: null, state: provinciaTrim), alturaPedida, cpTrim);
             if (ubicEstructurada is not null) { Cache[cacheKey] = ubicEstructurada; return ubicEstructurada; }
 
-            // 3) Free-text como último recurso (texto + AR).
+            // 3) Nominatim free-text.
             var query = string.IsNullOrEmpty(cpTrim)
                 ? $"{direccionTrim}, {localidadTrim}{(string.IsNullOrEmpty(provinciaTrim) ? "" : ", " + provinciaTrim)}, Argentina"
                 : $"{direccionTrim}, {localidadTrim}, {cpTrim}{(string.IsNullOrEmpty(provinciaTrim) ? "" : ", " + provinciaTrim)}, Argentina";
-            var ubicFree = await SearchAsync(BuildFreeText(query), alturaPedida, cpTrim);
+            var ubicFree = await SearchNominatim(BuildFreeText(query), alturaPedida, cpTrim);
             if (ubicFree is not null) { Cache[cacheKey] = ubicFree; return ubicFree; }
 
             // 4) Último recurso: localidad + CP (centro de la ciudad). Sirve para
@@ -79,7 +82,7 @@ namespace Back.Application.Services
                 var fallbackQuery = string.IsNullOrEmpty(cpTrim)
                     ? $"{localidadTrim}, Argentina"
                     : $"{localidadTrim}, {cpTrim}, Argentina";
-                var ubicFallback = await SearchAsync(BuildFreeText(fallbackQuery), alturaPedida: null, expectedPostalCode: null);
+                var ubicFallback = await SearchNominatim(BuildFreeText(fallbackQuery), alturaPedida: null, expectedPostalCode: null);
                 if (ubicFallback is not null) { Cache[cacheKey] = ubicFallback; return ubicFallback; }
             }
 
@@ -123,12 +126,49 @@ namespace Back.Application.Services
                 ["accept-language"] = "es",
             };
 
-        private async Task<Ubicacion?> SearchAsync(Dictionary<string, string?> parameters, int? alturaPedida, string? expectedPostalCode)
+        // ── Georef ──────────────────────────────────────────────────────────────
+        // API: https://apis.datos.gob.ar/georef/api/direcciones
+        // Docs: https://datosgobar.github.io/georef-ar-api/
+        private async Task<Ubicacion?> TryGeoref(string direccion, string localidad, string? provincia)
+        {
+            if (string.IsNullOrEmpty(direccion) || string.IsNullOrEmpty(localidad)) return null;
+            try
+            {
+                var p = new Dictionary<string, string?>
+                {
+                    ["direccion"] = direccion,
+                    ["localidad"] = localidad,
+                    ["max"] = "1",
+                };
+                if (!string.IsNullOrEmpty(provincia)) p["provincia"] = provincia;
+
+                var qs = string.Join("&", p
+                    .Where(kv => !string.IsNullOrEmpty(kv.Value))
+                    .Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value!)}"));
+
+                using var response = await _httpClient.GetAsync($"{GeorefBaseUrl}?{qs}");
+                if (!response.IsSuccessStatusCode) return null;
+
+                var json = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<GeorefDireccionesResponse>(json);
+                var ubicacion = result?.Direcciones?.FirstOrDefault()?.Ubicacion;
+                if (ubicacion is null) return null;
+
+                return new Ubicacion(ubicacion.Lat, ubicacion.Lon);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // ── Nominatim ───────────────────────────────────────────────────────────
+        private async Task<Ubicacion?> SearchNominatim(Dictionary<string, string?> parameters, int? alturaPedida, string? expectedPostalCode)
         {
             var qs = string.Join("&", parameters
                 .Where(kv => !string.IsNullOrEmpty(kv.Value))
                 .Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value!)}"));
-            var url = $"{BaseUrl}?{qs}";
+            var url = $"{NominatimBaseUrl}?{qs}";
 
             try
             {
@@ -184,6 +224,24 @@ namespace Back.Application.Services
             }
         }
 
+        // ── DTOs Georef ─────────────────────────────────────────────────────────
+        private sealed class GeorefDireccionesResponse
+        {
+            [JsonPropertyName("direcciones")] public List<GeorefDireccion>? Direcciones { get; set; }
+        }
+
+        private sealed class GeorefDireccion
+        {
+            [JsonPropertyName("ubicacion")] public GeorefUbicacion? Ubicacion { get; set; }
+        }
+
+        private sealed class GeorefUbicacion
+        {
+            [JsonPropertyName("lat")] public double Lat { get; set; }
+            [JsonPropertyName("lon")] public double Lon { get; set; }
+        }
+
+        // ── DTOs Nominatim ──────────────────────────────────────────────────────
         private sealed class NominatimResult
         {
             [JsonPropertyName("lat")] public string Lat { get; set; } = string.Empty;
