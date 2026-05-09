@@ -125,10 +125,10 @@ export default function RutasActivasPage() {
         <Box>
           <Typography variant="h4" fontWeight={700}>
             <RouteIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            Rutas Activas Hoy
+            Rutas Activas
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-            {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })} — Monitoreo en tiempo real
+          <Typography variant="body2" color="text.secondary">
+            Rutas calendarizadas para hoy y los próximos días — monitoreo en tiempo real.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
@@ -173,6 +173,7 @@ export default function RutasActivasPage() {
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: '#e3f2fd' }}>
+                <TableCell>Fecha</TableCell>
                 <TableCell>Repartidor</TableCell>
                 <TableCell>CP / Zona</TableCell>
                 <TableCell>Capacidad</TableCell>
@@ -187,8 +188,22 @@ export default function RutasActivasPage() {
                 const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                 const completas = r.entregadas + r.canceladas
                 const pct = r.totalParadas > 0 ? Math.round((completas / r.totalParadas) * 100) : 0
+                const fecha = new Date(r.fecha)
+                const hoyStr = new Date().toDateString()
+                const esHoy = fecha.toDateString() === hoyStr
+                const fechaIso = fecha.toISOString().split('T')[0]
                 return (
-                  <TableRow key={r.repartidorId} sx={r.esDemorada ? { bgcolor: '#fff8f0' } : {}}>
+                  <TableRow key={`${r.repartidorId}-${fechaIso}`} sx={r.esDemorada ? { bgcolor: '#fff8f0' } : {}}>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600} sx={{ textTransform: 'capitalize' }}>
+                        {esHoy ? 'Hoy' : fecha.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                      </Typography>
+                      {!esHoy && (
+                        <Typography variant="caption" color="text.secondary">
+                          {fecha.toLocaleDateString('es-AR')}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1.5} alignItems="center">
                         <Avatar sx={{ bgcolor: color, width: 32, height: 32, fontSize: 12 }}>{initials}</Avatar>
@@ -226,12 +241,18 @@ export default function RutasActivasPage() {
                         <Chip size="small" label="Completada" sx={{ bgcolor: '#e8f5e9', color: '#2e7d32' }} />
                       ) : r.estado === 'EnTransito' ? (
                         <Chip size="small" label="En Tránsito" sx={{ bgcolor: '#fff3e0', color: '#ed6c02' }} />
+                      ) : r.estado === 'Programada' ? (
+                        <Chip size="small" label="Programada" sx={{ bgcolor: '#ede7f6', color: '#5e35b1' }} />
                       ) : (
                         <Chip size="small" label="Listo para Salir" sx={{ bgcolor: '#e1f5fe', color: '#0288d1' }} />
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button size="small" variant="outlined" onClick={() => navigate(`/rutas-activas/${r.repartidorId}`)}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => navigate(`/rutas-activas/${r.repartidorId}?fecha=${fechaIso}`)}
+                      >
                         Ver detalle
                       </Button>
                     </TableCell>

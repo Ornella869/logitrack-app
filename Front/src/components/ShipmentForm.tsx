@@ -55,6 +55,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     receiverAddress: '',
     receiverCity: '',
     receiverPostal: '',
+    receiverProvince: '', // se autocompleta cuando el CP valida (no editable por UI)
     receiverPhone: '',
     weight: '',
     description: '',
@@ -72,6 +73,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         receiverAddress: initialData.receiver.address,
         receiverCity: initialData.receiver.city,
         receiverPostal: initialData.receiver.postalCode,
+        receiverProvince: initialData.receiver.province ?? '',
         receiverPhone: initialData.receiver.phone ?? '',
         weight: String(initialData.weight),
         description: initialData.description,
@@ -135,9 +137,16 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         delete next.receiverPostal
         return next
       })
-      // Autocompletar siempre la ciudad con la que devuelva la API (sobreescribe lo escrito).
+      // Autocompletar siempre la ciudad y la provincia con lo que devuelva la API
+      // (sobreescribe lo escrito). La provincia no se muestra en el form pero se
+      // envía al backend para que el geocoding la use como `state` en Nominatim
+      // y resuelva la dirección en la provincia correcta.
+      setFormData((prev) => ({
+        ...prev,
+        receiverCity: result.city ?? prev.receiverCity,
+        receiverProvince: result.province ?? prev.receiverProvince,
+      }))
       if (result.city) {
-        setFormData((prev) => ({ ...prev, receiverCity: result.city as string }))
         setErrors((prev) => {
           const next = { ...prev }
           delete next.receiverCity
@@ -193,6 +202,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       const cpResult = await postalCodeService.validate(formData.receiverPostal)
       if (!cpResult.valid) {
         newErrors.receiverPostal = cpResult.error ?? 'CP inválido'
+      } else if (cpResult.province && !formData.receiverProvince) {
+        // Si valida pero por algún motivo nunca se hizo el blur, igual capturamos
+        // la provincia para enviarla al backend.
+        setFormData((prev) => ({ ...prev, receiverProvince: cpResult.province as string }))
       }
     }
 
@@ -220,6 +233,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
           address: formData.receiverAddress.trim(),
           city: formData.receiverCity.trim(),
           postalCode: formData.receiverPostal.trim(),
+          province: formData.receiverProvince.trim() || undefined,
           phone: formData.receiverPhone.trim() || undefined,
         },
         origin: origin.city,
@@ -238,6 +252,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         receiverAddress: '',
         receiverCity: '',
         receiverPostal: '',
+        receiverProvince: '',
         receiverPhone: '',
         weight: '',
         description: '',

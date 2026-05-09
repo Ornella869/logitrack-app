@@ -89,6 +89,7 @@ export interface Shipment {
     address: string
     city: string
     postalCode: string
+    province?: string
     phone?: string
   }
   receiver: {
@@ -96,6 +97,7 @@ export interface Shipment {
     address: string
     city: string
     postalCode: string
+    province?: string
     phone?: string
   }
   receiverUbicacion?: { latitud: number; longitud: number } | null

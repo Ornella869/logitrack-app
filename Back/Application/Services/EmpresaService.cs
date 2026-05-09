@@ -56,11 +56,11 @@ namespace Back.Application.Services
             {
                 Plan = PlanEmpresa.Basico,
                 Nombre = "Básico",
-                LimiteCuentas = 20,
+                LimiteCuentas = 50,
                 PrecioMock = "$50.000 / mes",
                 Funcionalidades = new List<string>
                 {
-                    "Hasta 20 cuentas activas",
+                    "Hasta 50 cuentas activas",
                     "Calendarización automática",
                     "Tracking público con QR",
                     "Reportes básicos (CSV)",

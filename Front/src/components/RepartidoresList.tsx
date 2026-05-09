@@ -9,20 +9,18 @@ import {
   Chip,
   CircularProgress,
   Grid,
-  InputAdornment,
   Stack,
   TablePagination,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 
 import type { RepartidorEstado } from '../types'
 import { authService, type RepartidorListItem } from '../services/authService'
+import SearchBar from './SearchBar'
 
 interface RepartidoresListProps {
   userRole?: string
@@ -114,12 +112,12 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
     setEstadoFilters(newFilters)
   }
 
-  const handleSearchChange = (value: string) => {
+  const handleSearch = async (value: string) => {
     setPage(0)
-    setSearch(value)
+    setSearch(value.trim())
   }
 
-  if (loading) {
+  if (loading && repartidores.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
         <CircularProgress />
@@ -130,22 +128,14 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   return (
     <Box sx={{ width: '100%' }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
-          <TextField
-            size="small"
-            placeholder="Buscar por nombre, email, DNI o licencia..."
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ maxWidth: 420, width: '100%' }}
-          />
-        </Stack>
+        {/* SearchBar con debounce: la consulta se dispara después de 500ms sin tipear,
+            o con Enter. Igual que en la pantalla de Envíos. */}
+        <SearchBar
+          onSearch={handleSearch}
+          loading={loading}
+          placeholder="Buscar por nombre, email, DNI o licencia..."
+          value={search}
+        />
 
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>

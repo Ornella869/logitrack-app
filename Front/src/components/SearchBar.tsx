@@ -8,15 +8,26 @@ interface SearchBarProps {
   onSearch: (query: string) => Promise<void>
   loading?: boolean
   placeholder?: string
+  /** Si se pasa, sincroniza el input cuando el padre lo limpia desde afuera. */
+  value?: string
 }
 
 function SearchBar({
   onSearch,
   loading = false,
   placeholder = 'Buscar por tracking ID, remitente o destinatario…',
+  value,
 }: SearchBarProps) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(value ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Permitimos al padre forzar el valor (ej. botón "Limpiar" externo).
+  useEffect(() => {
+    if (value !== undefined && value !== query) {
+      setQuery(value)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
 
   // Cleanup timer on unmount
   useEffect(() => {

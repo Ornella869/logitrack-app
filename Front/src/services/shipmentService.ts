@@ -13,6 +13,7 @@ interface RegistrarPaqueteRequest {
     Direccion: string
     Localidad: string
     CP: string
+    Provincia?: string
     Telefono?: string
   }
   Destinatario: {
@@ -21,6 +22,7 @@ interface RegistrarPaqueteRequest {
     Direccion: string
     Localidad: string
     CP: string
+    Provincia?: string
     Telefono?: string
   }
 }
@@ -143,6 +145,7 @@ export const shipmentService = {
           Direccion: shipment.sender.address,
           Localidad: shipment.sender.city,
           CP: shipment.sender.postalCode,
+          Provincia: shipment.sender.province,
           Telefono: shipment.sender.phone,
         },
         Destinatario: {
@@ -151,6 +154,7 @@ export const shipmentService = {
           Direccion: shipment.receiver.address,
           Localidad: shipment.receiver.city,
           CP: shipment.receiver.postalCode,
+          Provincia: shipment.receiver.province,
           Telefono: shipment.receiver.phone,
         }
       }
@@ -353,6 +357,7 @@ export const shipmentService = {
           Direccion: data.sender.address,
           Localidad: data.sender.city,
           CP: data.sender.postalCode,
+          Provincia: data.sender.province,
           Telefono: data.sender.phone,
         },
         Destinatario: {
@@ -361,6 +366,7 @@ export const shipmentService = {
           Direccion: data.receiver.address,
           Localidad: data.receiver.city,
           CP: data.receiver.postalCode,
+          Provincia: data.receiver.province,
           Telefono: data.receiver.phone,
         },
       })
@@ -544,8 +550,7 @@ export interface EtiquetaCliente {
 export interface EscaneoResultado {
   paqueteId: string
   codigoSeguimiento: string
-  estadoAnterior: string
-  estadoNuevo: string
+  status: string
   accion: string
-  mensaje: string
+  mensaje?: string
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -8,12 +8,18 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Grid,
   MenuItem,
   Select,
   Stack,
   Tab,
   Tabs,
+  TextField,
   Typography,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -24,13 +30,18 @@ import Inventory2Icon from '@mui/icons-material/Inventory2'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import MapIcon from '@mui/icons-material/Map'
 import NavigationIcon from '@mui/icons-material/Navigation'
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
+import KeyboardIcon from '@mui/icons-material/Keyboard'
+import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import { shipmentService } from '../../services/shipmentService'
+import { branchService, type BranchOrigin } from '../../services/branchService'
 import StatusBadge from '../../components/StatusBadge'
 import RouteMap from '../../components/RouteMap'
+import QrCameraScanner from '../../components/QrCameraScanner'
 import type { Shipment, User } from '../../types'
 
 // G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy,
-// ordenados por CP. Mapa mock por ahora — Leaflet llega en Fase B (G1L-18).
+// ordenados por CP. El mapa pinta la sucursal de origen y las paradas en orden.
 
 function getGreeting(name: string) {
   const h = new Date().getHours()
@@ -39,20 +50,32 @@ function getGreeting(name: string) {
   return `Buenas noches, ${name}!`
 }
 
-function buildMapsUrl(paradas: Shipment[]): string | null {
+// Construye la URL de Google Maps con direcciones reales:
+// origen = sucursal asignada (si tiene coords); si no, la primera parada.
+function buildMapsUrl(paradas: Shipment[], origen: BranchOrigin | null): string | null {
   if (paradas.length === 0) return null
   const pending = paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
   const active = pending.length > 0 ? pending : paradas
+
   const addr = (p: Shipment) =>
     p.receiverUbicacion?.latitud != null
       ? `${p.receiverUbicacion.latitud},${p.receiverUbicacion.longitud}`
       : `${p.receiver.address},${p.receiver.city}`
-  const params = new URLSearchParams({ api: '1', destination: addr(active[active.length - 1]) })
-  if (active.length > 1) {
-    params.set('origin', addr(active[0]))
-    const stops = active.slice(1, -1)
-    if (stops.length > 0) params.set('waypoints', stops.map(addr).join('|'))
-  }
+
+  const origin =
+    origen?.latitud != null && origen?.longitud != null
+      ? `${origen.latitud},${origen.longitud}`
+      : origen
+        ? `${origen.address},${origen.city}`
+        : addr(active[0])
+
+  const params = new URLSearchParams({
+    api: '1',
+    origin,
+    destination: addr(active[active.length - 1]),
+  })
+  const stops = active.length > 1 ? active.slice(0, -1) : []
+  if (stops.length > 0) params.set('waypoints', stops.map(addr).join('|'))
   return `https://www.google.com/maps/dir/?${params.toString()}`
 }
 
@@ -62,21 +85,35 @@ export default function RepartidorDashboard() {
   const [paradas, setParadas] = useState<Shipment[]>([])
   const [fechaRuta, setFechaRuta] = useState<string | null>(null)
   const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([])
+  const [origen, setOrigen] = useState<BranchOrigin | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState(0)
+
+  // QR scanner (cámara + entrada manual del código).
+  const [openQr, setOpenQr] = useState(false)
+  const [qrMode, setQrMode] = useState<'camera' | 'manual'>('camera')
+  const [qrCode, setQrCode] = useState('')
+  const [qrSubmitting, setQrSubmitting] = useState(false)
+  const [qrFeedback, setQrFeedback] = useState<{ severity: 'success' | 'info' | 'error'; message: string } | null>(null)
+  // Para no dispararse contra el backend si el scanner devuelve la misma lectura
+  // muchas veces seguidas (cosa que el detector hace normalmente).
+  const lastScannedRef = useRef<{ code: string; at: number } | null>(null)
 
   const load = async (fecha?: string) => {
     setLoading(true)
     setError('')
     try {
-      const [data, fechas] = await Promise.all([
+      const [data, fechas, sucursal] = await Promise.all([
         shipmentService.getMiRutaDelDia(fecha),
         shipmentService.getMisFechasDeRuta(),
+        // origen sólo se pide en la primera carga; cacheamos.
+        origen ? Promise.resolve(origen) : branchService.getSucursalOrigen(),
       ])
       setParadas(data.paradas)
       setFechaRuta(data.fecha)
       setFechasDisponibles(fechas)
+      if (!origen) setOrigen(sucursal)
     } catch {
       setError('No se pudo cargar tu ruta del día')
     } finally {
@@ -86,6 +123,7 @@ export default function RepartidorDashboard() {
 
   useEffect(() => {
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const metrics = useMemo(() => {
@@ -110,6 +148,51 @@ export default function RepartidorDashboard() {
 
   const proxima = metrics.proximaIdx >= 0 ? paradas[metrics.proximaIdx] : null
 
+  // G1L-43: Escaneo de QR — el repartidor confirma carga / inicia tránsito / abre ficha.
+  // Aceptamos un código optional para usar directamente lo decodificado por la cámara
+  // sin esperar a que React propague el setState a `qrCode`.
+  const handleScanQr = async (codeArg?: string) => {
+    const code = (codeArg ?? qrCode).trim()
+    if (!code) return
+    setQrSubmitting(true)
+    setQrFeedback(null)
+    const result = await shipmentService.escanearQr(code)
+    setQrSubmitting(false)
+    if (!result.success) {
+      setQrFeedback({ severity: 'error', message: result.error ?? 'No se pudo procesar el QR' })
+      return
+    }
+    const accion = result.data?.accion
+    if (accion === 'AbrirFichaEntrega' && result.data?.paqueteId) {
+      // En tránsito: vamos directo a la ficha de gestión.
+      setOpenQr(false)
+      setQrCode('')
+      navigate(`/shipment/${result.data.paqueteId}`)
+      return
+    }
+    setQrFeedback({
+      severity: 'success',
+      message: result.data?.mensaje
+        ?? (accion === 'TransitoIniciado'
+          ? 'Tránsito iniciado. ¡Buena ruta!'
+          : 'Estado actualizado correctamente.'),
+    })
+    setQrCode('')
+    void load(fechaRuta ?? undefined)
+  }
+
+  // Llamado por el componente de cámara cuando detecta un QR válido.
+  // Anti-rebote: el detector dispara N veces el mismo código por segundo.
+  const handleCameraDetect = (code: string) => {
+    if (qrSubmitting) return
+    const now = Date.now()
+    const last = lastScannedRef.current
+    if (last && last.code === code && now - last.at < 3000) return
+    lastScannedRef.current = { code, at: now }
+    setQrCode(code)
+    void handleScanQr(code)
+  }
+
   return (
     <Box>
       <Stack
@@ -131,8 +214,13 @@ export default function RepartidorDashboard() {
               {getGreeting(user.name)}
             </Typography>
           )}
+          {origen && (
+            <Typography variant="caption" color="text.secondary" display="block">
+              🏢 Salís desde: <strong>{origen.name}</strong> — {origen.address}, {origen.city}
+            </Typography>
+          )}
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
           {fechasDisponibles.length > 1 && (
             <Select
               size="small"
@@ -152,7 +240,19 @@ export default function RepartidorDashboard() {
               {metrics.entregadas} / {paradas.length}
             </Typography>
           </Box>
-          <Button startIcon={<RefreshIcon />} onClick={() => load()} disabled={loading}>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<QrCodeScannerIcon />}
+            onClick={() => {
+              setQrCode('')
+              setQrFeedback(null)
+              setOpenQr(true)
+            }}
+          >
+            Escanear QR
+          </Button>
+          <Button startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
             Actualizar
           </Button>
         </Stack>
@@ -161,6 +261,13 @@ export default function RepartidorDashboard() {
       {esFutura && (
         <Alert severity="info" sx={{ mb: 2 }}>
           Tu próxima ruta está programada para el <strong>{fechaHoy}</strong>. Hoy no tenés paradas asignadas.
+        </Alert>
+      )}
+
+      {origen && (origen.latitud == null || origen.longitud == null) && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          No se pudo ubicar la sucursal <strong>{origen.name}</strong> en el mapa
+          ({origen.address}, {origen.city}). Verificá la dirección en el panel del administrador.
         </Alert>
       )}
 
@@ -203,21 +310,23 @@ export default function RepartidorDashboard() {
                     Ruta optimizada{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Orden automático por código postal y FIFO · {paradas.length} paradas
+                    {origen
+                      ? `Salida desde ${origen.name} · ${paradas.length} paradas en orden`
+                      : `Orden automático por código postal y FIFO · ${paradas.length} paradas`}
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
                   <Button
                     size="small"
                     variant="outlined"
                     startIcon={<MapIcon />}
                     disabled={paradas.length === 0}
                     onClick={() => {
-                      const url = buildMapsUrl(paradas)
+                      const url = buildMapsUrl(paradas, origen)
                       if (url) window.open(url, '_blank', 'noopener,noreferrer')
                     }}
                   >
-                    Abrir en Maps
+                    Abrir ruta en Maps
                   </Button>
                   <Button
                     size="small"
@@ -243,6 +352,17 @@ export default function RepartidorDashboard() {
                   longitud: p.receiverUbicacion?.longitud ?? null,
                 }))}
                 proximaIdx={metrics.proximaIdx}
+                origen={
+                  origen?.latitud != null && origen?.longitud != null
+                    ? {
+                        nombre: origen.name,
+                        direccion: origen.address,
+                        ciudad: origen.city,
+                        latitud: origen.latitud,
+                        longitud: origen.longitud,
+                      }
+                    : null
+                }
                 height={380}
               />
               {proxima && (
@@ -349,6 +469,83 @@ export default function RepartidorDashboard() {
           )}
         </>
       )}
+
+      {/* Diálogo de escaneo de QR — cámara (default) o entrada manual del código. */}
+      <Dialog
+        open={openQr}
+        onClose={() => !qrSubmitting && setOpenQr(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <QrCodeScannerIcon color="primary" /> <span>Escanear QR del paquete</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Tabs
+            value={qrMode}
+            onChange={(_, v) => {
+              setQrMode(v)
+              setQrFeedback(null)
+            }}
+            variant="fullWidth"
+            sx={{ mb: 2 }}
+          >
+            <Tab value="camera" icon={<CameraAltIcon />} iconPosition="start" label="Cámara" />
+            <Tab value="manual" icon={<KeyboardIcon />} iconPosition="start" label="Manual" />
+          </Tabs>
+
+          {qrMode === 'camera' ? (
+            <>
+              <DialogContentText sx={{ mb: 1 }}>
+                Apuntá la cámara al código QR del paquete. El sistema lo detecta y avanza el estado solo.
+              </DialogContentText>
+              <QrCameraScanner onDetect={handleCameraDetect} />
+            </>
+          ) : (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Ingresá el código de seguimiento manualmente. El sistema avanza el estado del paquete según corresponda.
+              </DialogContentText>
+              <TextField
+                autoFocus
+                fullWidth
+                label="Código de seguimiento"
+                placeholder="Ej: TRK-AB12-CD34"
+                value={qrCode}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  const match = v.match(/seguimiento\/([^/?#]+)/i)
+                  setQrCode(match ? match[1] : v)
+                }}
+                disabled={qrSubmitting}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && qrCode.trim()) void handleScanQr()
+                }}
+              />
+            </>
+          )}
+
+          {qrFeedback && (
+            <Alert severity={qrFeedback.severity} sx={{ mt: 2 }}>
+              {qrFeedback.message}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenQr(false)} disabled={qrSubmitting}>Cerrar</Button>
+          {qrMode === 'manual' && (
+            <Button
+              variant="contained"
+              onClick={() => void handleScanQr()}
+              disabled={qrSubmitting || !qrCode.trim()}
+            >
+              {qrSubmitting ? <CircularProgress size={20} /> : 'Procesar'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
@@ -380,4 +577,3 @@ function KpiCard({
     </Grid>
   )
 }
-

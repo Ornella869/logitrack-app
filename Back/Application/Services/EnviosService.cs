@@ -65,7 +65,11 @@ namespace Back.Application.Services
         {
             ValidarPaqueteData(request);
 
-            var ubicacionDestinatario = await _geocoding.GeocodeAsync(request.Destinatario.Direccion, request.Destinatario.Localidad);
+            var ubicacionDestinatario = await _geocoding.GeocodeAsync(
+                request.Destinatario.Direccion,
+                request.Destinatario.Localidad,
+                request.Destinatario.CP,
+                request.Destinatario.Provincia);
             if (ubicacionDestinatario is null)
                 throw new InvalidOperationException(
                     $"No se pudo geocodificar la dirección del destinatario: \"{request.Destinatario.Direccion}, {request.Destinatario.Localidad}\". " +
@@ -123,7 +127,11 @@ namespace Back.Application.Services
             if (paquete.Status != PaqueteStatus.PendienteDeCalendarizacion)
                 throw new InvalidOperationException("El envío ya fue calendarizado y no puede modificarse.");
 
-            var ubicacionDestinatario = await _geocoding.GeocodeAsync(request.Destinatario.Direccion, request.Destinatario.Localidad);
+            var ubicacionDestinatario = await _geocoding.GeocodeAsync(
+                request.Destinatario.Direccion,
+                request.Destinatario.Localidad,
+                request.Destinatario.CP,
+                request.Destinatario.Provincia);
             if (ubicacionDestinatario is null)
                 throw new InvalidOperationException(
                     $"No se pudo geocodificar la dirección del destinatario: \"{request.Destinatario.Direccion}, {request.Destinatario.Localidad}\". " +

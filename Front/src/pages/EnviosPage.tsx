@@ -167,7 +167,7 @@ export default function EnviosPage() {
     setPage(1)
   }
 
-  const showCreateButton = user.role === 'operador' || user.role === 'supervisor'
+  const showCreateButton = user.role === 'operador'
 
   return (
     <Box>

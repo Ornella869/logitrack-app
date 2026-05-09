@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -64,6 +64,8 @@ export default function DetalleRutaPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
   const { repartidorId } = useParams<{ repartidorId: string }>()
+  const [searchParams] = useSearchParams()
+  const fecha = searchParams.get('fecha') ?? undefined
   const [detalle, setDetalle] = useState<DetalleRuta | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -72,13 +74,16 @@ export default function DetalleRutaPage() {
     if (!repartidorId) return
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
-  }, [repartidorId, user.role])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repartidorId, user.role, fecha])
 
   const load = async () => {
     setLoading(true)
     setError('')
     try {
-      const response = await api.get(`/rutas-activas/${repartidorId}`)
+      const response = await api.get(`/rutas-activas/${repartidorId}`, {
+        params: fecha ? { fecha } : undefined,
+      })
       setDetalle(response.data)
     } catch {
       setError('No se pudo cargar el detalle de la ruta')

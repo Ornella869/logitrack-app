@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   FormControl,
   Grid,
@@ -30,13 +31,18 @@ import EditIcon from '@mui/icons-material/Edit'
 import CancelIcon from '@mui/icons-material/Cancel'
 import HistoryIcon from '@mui/icons-material/History'
 import QrCode2Icon from '@mui/icons-material/QrCode2'
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
+import KeyboardIcon from '@mui/icons-material/Keyboard'
+import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PersonIcon from '@mui/icons-material/Person'
 import MapIcon from '@mui/icons-material/Map'
+import { Tab, Tabs } from '@mui/material'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
 import ShipmentMap from '../components/ShipmentMap'
+import QrCameraScanner from '../components/QrCameraScanner'
 
 // Motivos predefinidos de cancelación según G1L-13 AC3
 const CANCEL_REASONS = [
@@ -88,6 +94,14 @@ function ShipmentDetail() {
   // Posición en mapa para edición pendiente
   const [draftPos, setDraftPos] = useState<{ latitud: number; longitud: number } | null>(null)
   const [savingUbicacion, setSavingUbicacion] = useState(false)
+
+  // G1L-43: Pasar de estado vía QR (cámara + entrada manual del código)
+  const [openQrDialog, setOpenQrDialog] = useState(false)
+  const [qrMode, setQrMode] = useState<'camera' | 'manual'>('camera')
+  const [qrCode, setQrCode] = useState('')
+  const [qrSubmitting, setQrSubmitting] = useState(false)
+  const [qrFeedback, setQrFeedback] = useState<{ severity: 'success' | 'info' | 'error'; message: string } | null>(null)
+  const lastScannedRef = useRef<{ code: string; at: number } | null>(null)
 
   // G1L-9: Repartidor cambia estados (Listo→Tránsito, Tránsito→Entregado/Cancelado)
   // G1L-13: Operador/Supervisor cancelan Pendiente o Listo para Salir.
@@ -228,6 +242,64 @@ function ShipmentDetail() {
     setUpdatingStatus(false)
   }
 
+  // Avanza el estado del paquete según el flujo QR del backend.
+  // Sirve para Asignado→Cargado, Listo→Tránsito y Tránsito→ficha de entrega.
+  // codeArg permite usar directamente la lectura de la cámara sin esperar al setState.
+  const handleScanQr = async (codeArg?: string) => {
+    const code = (codeArg ?? qrCode).trim()
+    if (!code) return
+    setQrSubmitting(true)
+    setQrFeedback(null)
+    const result = await shipmentService.escanearQr(code)
+    setQrSubmitting(false)
+    if (!result.success) {
+      setQrFeedback({ severity: 'error', message: result.error ?? 'No se pudo procesar el QR' })
+      return
+    }
+    const accion = result.data?.accion
+    if (accion === 'AbrirFichaEntrega') {
+      setQrFeedback({
+        severity: 'info',
+        message: 'El envío ya está En Tránsito. Confirmá la entrega o cancelala desde esta misma pantalla.',
+      })
+    } else {
+      setQrFeedback({
+        severity: 'success',
+        message:
+          accion === 'TransitoIniciado'
+            ? 'Tránsito iniciado. ¡Buena ruta!'
+            : accion === 'Cargado'
+              ? 'Paquete marcado como Cargado en Vehículo.'
+              : 'Estado actualizado correctamente.',
+      })
+    }
+    // Refrescamos el detalle para reflejar el nuevo estado.
+    if (id) {
+      const updated = await shipmentService.getShipmentTracking(id)
+      if (updated) setShipment(updated)
+    }
+  }
+
+  const openQrFlow = () => {
+    setQrFeedback(null)
+    setQrMode('camera')
+    // Pre-cargamos con el tracking de este envío. El repartidor lo puede borrar
+    // y pegar otro código si está escaneando varios paquetes en serie.
+    setQrCode(shipment?.trackingId ?? '')
+    setOpenQrDialog(true)
+  }
+
+  // Anti-rebote para la cámara (la lectura se dispara N veces por segundo).
+  const handleCameraDetect = (code: string) => {
+    if (qrSubmitting) return
+    const now = Date.now()
+    const last = lastScannedRef.current
+    if (last && last.code === code && now - last.at < 3000) return
+    lastScannedRef.current = { code, at: now }
+    setQrCode(code)
+    void handleScanQr(code)
+  }
+
   const handleEditSubmit = async (data: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => {
     if (!id) return
     const result = await shipmentService.editShipment(id, data)
@@ -318,14 +390,31 @@ function ShipmentDetail() {
               Editar
             </Button>
           )}
-          {/* G1L-9: cambiar estado (solo Repartidor con transiciones permitidas) */}
+          {/* G1L-43: Pasar de estado vía QR (escaneo o tipeo manual del código).
+              Disponible cuando el paquete está en algún estado intermedio del flujo. */}
+          {isRepartidor &&
+            (status === 'Asignado a vehículo' ||
+              status === 'Cargado en vehículo' ||
+              status === 'Listo para salir' ||
+              status === 'En tránsito') && (
+              <Button
+                variant="contained"
+                size="small"
+                color="primary"
+                startIcon={<QrCodeScannerIcon />}
+                onClick={openQrFlow}
+              >
+                Pasar de estado (QR)
+              </Button>
+            )}
+          {/* G1L-9: cambiar estado manual (solo Repartidor con transiciones permitidas) */}
           {canChangeStatus && allowedStatusTransitions.length > 0 && (
             <Button
-              variant="contained"
+              variant="outlined"
               size="small"
               onClick={() => setOpenStatusDialog(true)}
             >
-              Cambiar estado
+              Cambiar estado manual
             </Button>
           )}
           {/* G1L-13: cancelar (operador, supervisor o repartidor) */}
@@ -648,6 +737,86 @@ function ShipmentDetail() {
           >
             {updatingStatus ? <CircularProgress size={20} /> : 'Confirmar'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: pasar de estado vía QR (G1L-43) — cámara o manual. */}
+      <Dialog
+        open={openQrDialog}
+        onClose={() => !qrSubmitting && setOpenQrDialog(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <QrCodeScannerIcon color="primary" /> <span>Pasar de estado (QR)</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Tabs
+            value={qrMode}
+            onChange={(_, v) => {
+              setQrMode(v)
+              setQrFeedback(null)
+            }}
+            variant="fullWidth"
+            sx={{ mb: 2 }}
+          >
+            <Tab value="camera" icon={<CameraAltIcon />} iconPosition="start" label="Cámara" />
+            <Tab value="manual" icon={<KeyboardIcon />} iconPosition="start" label="Manual" />
+          </Tabs>
+
+          {qrMode === 'camera' ? (
+            <>
+              <DialogContentText sx={{ mb: 1 }}>
+                Apuntá la cámara al QR del paquete. Al detectarlo, el sistema avanza el estado solo.
+              </DialogContentText>
+              <QrCameraScanner onDetect={handleCameraDetect} />
+            </>
+          ) : (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Ingresá el código de seguimiento. El sistema avanza el estado según el flujo
+                (cargado → listo → en tránsito).
+              </DialogContentText>
+              <TextField
+                autoFocus
+                fullWidth
+                label="Código de seguimiento"
+                placeholder="Ej: TRK-AB12-CD34"
+                value={qrCode}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  const match = v.match(/seguimiento\/([^/?#]+)/i)
+                  setQrCode(match ? match[1] : v)
+                }}
+                disabled={qrSubmitting}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && qrCode.trim()) void handleScanQr()
+                }}
+              />
+            </>
+          )}
+
+          {qrFeedback && (
+            <Alert severity={qrFeedback.severity} sx={{ mt: 2 }}>
+              {qrFeedback.message}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenQrDialog(false)} disabled={qrSubmitting}>
+            Cerrar
+          </Button>
+          {qrMode === 'manual' && (
+            <Button
+              variant="contained"
+              onClick={() => void handleScanQr()}
+              disabled={qrSubmitting || !qrCode.trim()}
+            >
+              {qrSubmitting ? <CircularProgress size={20} /> : 'Procesar'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

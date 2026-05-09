@@ -196,12 +196,32 @@ namespace Back.Application.Services
                 };
             }
 
-            var repartidores = (await _userRepository.GetRepartidores())
+            var todosRepartidores = (await _userRepository.GetRepartidores())
                 .Where(r => r.Activo && r.PuedeSerAsignado)
                 .ToList();
 
-            if (repartidores.Count == 0)
+            if (todosRepartidores.Count == 0)
                 throw new InvalidOperationException("No hay repartidores activos disponibles.");
+
+            // Cargamos lo que ya está asignado (no pendiente) para:
+            //  1) Excluir repartidores con paquetes En Tránsito (ya están en la calle).
+            //  2) Inicializar la matriz `carga` con sus asignaciones existentes,
+            //     para que el algoritmo respete la capacidad real y la cercanía
+            //     a su CP actual del día.
+            var existentes = await _enviosRepository.GetPaquetesConAsignacionActiva();
+
+            var enTransito = existentes
+                .Where(p => p.Status == PaqueteStatus.EnTransito && p.RepartidorAsignadoId.HasValue)
+                .Select(p => p.RepartidorAsignadoId!.Value)
+                .ToHashSet();
+
+            var repartidores = todosRepartidores
+                .Where(r => !enTransito.Contains(r.Id))
+                .ToList();
+
+            if (repartidores.Count == 0)
+                throw new InvalidOperationException(
+                    "Todos los repartidores activos están En Tránsito. Esperá a que vuelvan para calendarizar nuevos envíos.");
 
             // Orden requerido: Prioritarios primero, luego Comunes; ambos por orden de creación.
             var cola = pendientes
@@ -209,48 +229,85 @@ namespace Back.Application.Services
                 .ThenBy(p => p.CreadoEn)
                 .ToList();
 
-            // Carga acumulada en memoria por (repartidor, día).
             var carga = new Dictionary<(Guid repartidorId, DateTime fecha), List<Paquete>>();
-            var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+            foreach (var existente in existentes)
+            {
+                if (!existente.RepartidorAsignadoId.HasValue || !existente.FechaCalendarizada.HasValue) continue;
+                if (enTransito.Contains(existente.RepartidorAsignadoId.Value)) continue;
+                AsignarEnMemoria(carga, existente.RepartidorAsignadoId.Value, existente.FechaCalendarizada.Value.Date, existente);
+            }
 
+            // Total histórico por repartidor → para round-robin entre libres
+            // (evita que siempre caiga el mismo cuando todos están vacíos).
+            var totalHistorico = repartidores.ToDictionary(
+                r => r.Id,
+                r => existentes.Count(p => p.RepartidorAsignadoId == r.Id));
+
+            var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
             int sinAsignar = 0;
+
+            // Mantenemos un mapa de quién recibió un paquete recién calendarizado
+            // (por día) para resumen final y para la auditoría/notificaciones.
+            var asignacionesNuevas = new Dictionary<(Guid, DateTime), List<Paquete>>();
 
             foreach (var paquete in cola)
             {
                 bool asignado = false;
+                var cpPaquete = ParseCp(paquete.Destinatario.Direccion.CP);
 
                 for (int offset = 1; offset <= MaxDiasParaProgramar && !asignado; offset++)
                 {
                     var fecha = hoy.AddDays(offset);
 
-                    // 1) Buscar primer repartidor LIBRE ese día.
-                    var libre = repartidores.FirstOrDefault(r =>
-                        !carga.ContainsKey((r.Id, fecha)) || carga[(r.Id, fecha)].Count == 0);
-
-                    if (libre is not null)
+                    // 1) Match exacto de CP — el ideal para batching de zona.
+                    var matchCp = repartidores
+                        .Where(r =>
+                        {
+                            if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0) return false;
+                            var coincide = lista.Any(p => p.Destinatario.Direccion.CP == paquete.Destinatario.Direccion.CP);
+                            return coincide && (lista.Sum(p => p.Peso) + paquete.Peso) <= Capacidad.RepartidorKg;
+                        })
+                        .OrderBy(r => carga[(r.Id, fecha)].Sum(p => p.Peso))
+                        .FirstOrDefault();
+                    if (matchCp is not null)
                     {
-                        AsignarEnMemoria(carga, libre.Id, fecha, paquete);
-                        paquete.AsignarParaCalendarizacion(libre.Id, fecha);
+                        Asignar(matchCp, fecha, paquete);
                         asignado = true;
                         break;
                     }
 
-                    // 2) Buscar repartidor con CP coincidente y capacidad disponible.
-                    var cpDestino = paquete.Destinatario.Direccion.CP;
-                    var matchCp = repartidores.FirstOrDefault(r =>
+                    // 2) Repartidor libre ese día (round-robin: el menos usado en total).
+                    //    Esto rota la carga entre repartidores y evita que siempre
+                    //    caiga el mismo cuando no hay match de CP.
+                    var libre = repartidores
+                        .Where(r => !carga.TryGetValue((r.Id, fecha), out var l) || l.Count == 0)
+                        .OrderBy(r => totalHistorico[r.Id])
+                        .ThenBy(r => r.Id) // tie-break determinístico
+                        .FirstOrDefault();
+                    if (libre is not null)
                     {
-                        if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0)
-                            return false;
+                        Asignar(libre, fecha, paquete);
+                        asignado = true;
+                        break;
+                    }
 
-                        var coincide = lista.Any(p => p.Destinatario.Direccion.CP == cpDestino);
-                        var pesoActual = lista.Sum(p => p.Peso);
-                        return coincide && (pesoActual + paquete.Peso) <= Capacidad.RepartidorKg;
-                    });
-
-                    if (matchCp is not null)
+                    // 3) Sin libres → al repartidor con CP más cercano en su carga del día.
+                    //    Si no hay ninguno con capacidad, avanzamos al siguiente día.
+                    var cercano = repartidores
+                        .Where(r => carga.TryGetValue((r.Id, fecha), out var lista) && lista.Count > 0
+                                    && (lista.Sum(p => p.Peso) + paquete.Peso) <= Capacidad.RepartidorKg)
+                        .Select(r => new
+                        {
+                            Rep = r,
+                            Distancia = carga[(r.Id, fecha)].Min(p => Math.Abs(ParseCp(p.Destinatario.Direccion.CP) - cpPaquete)),
+                            Peso = carga[(r.Id, fecha)].Sum(p => p.Peso),
+                        })
+                        .OrderBy(x => x.Distancia)
+                        .ThenBy(x => x.Peso)
+                        .FirstOrDefault();
+                    if (cercano is not null)
                     {
-                        AsignarEnMemoria(carga, matchCp.Id, fecha, paquete);
-                        paquete.AsignarParaCalendarizacion(matchCp.Id, fecha);
+                        Asignar(cercano.Rep, fecha, paquete);
                         asignado = true;
                         break;
                     }
@@ -270,8 +327,9 @@ namespace Back.Application.Services
                     "Calendarización automática");
             }
 
-            var resumen = carga
-                .GroupBy(kv => kv.Key.fecha)
+            // Resumen por día — sólo de lo NUEVO calendarizado en esta corrida.
+            var resumen = asignacionesNuevas
+                .GroupBy(kv => kv.Key.Item2)
                 .OrderBy(g => g.Key)
                 .Select(g => new DiaResumen
                 {
@@ -279,7 +337,7 @@ namespace Back.Application.Services
                     Cantidad = g.Sum(x => x.Value.Count),
                     Repartidores = g.Select(x =>
                     {
-                        var rep = repartidores.First(r => r.Id == x.Key.repartidorId);
+                        var rep = repartidores.First(r => r.Id == x.Key.Item1);
                         return new RepartidorResumen
                         {
                             RepartidorId = rep.Id,
@@ -303,9 +361,27 @@ namespace Back.Application.Services
             await _auditoria.RegistrarAsync(
                 TipoAccion.Calendarizacion,
                 $"Calendarización ejecutada: {resultado.TotalCalendarizados} envíos asignados, {resultado.TotalSinAsignar} sin asignar",
-                contexto: $"Días: {resumen.Count} | Repartidores afectados: {resumen.SelectMany(d => d.Repartidores.Select(r => r.RepartidorId)).Distinct().Count()}");
+                contexto: $"Días: {resumen.Count} | Repartidores afectados: {resumen.SelectMany(d => d.Repartidores.Select(r => r.RepartidorId)).Distinct().Count()} | Excluidos por En Tránsito: {enTransito.Count}");
 
             return resultado;
+
+            void Asignar(Repartidor rep, DateTime fecha, Paquete pk)
+            {
+                AsignarEnMemoria(carga, rep.Id, fecha, pk);
+                AsignarEnMemoria(asignacionesNuevas, rep.Id, fecha, pk);
+                pk.AsignarParaCalendarizacion(rep.Id, fecha);
+                totalHistorico[rep.Id] = totalHistorico[rep.Id] + 1;
+            }
+        }
+
+        private static int ParseCp(string cp)
+        {
+            // CPs argentinos: 4 dígitos. Si vinieran con prefijos alfanuméricos
+            // (ej "C1425"), nos quedamos con la parte numérica y truncamos a 4.
+            var soloDigitos = new string((cp ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (soloDigitos.Length == 0) return int.MaxValue;
+            if (soloDigitos.Length > 4) soloDigitos = soloDigitos[..4];
+            return int.TryParse(soloDigitos, out var n) ? n : int.MaxValue;
         }
 
         private static void AsignarEnMemoria(

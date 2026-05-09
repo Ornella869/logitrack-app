@@ -471,6 +471,41 @@ namespace Back.Controllers
             return Ok(sucursales);
         }
 
+        // Sucursal de origen con coordenadas (geocodificadas on-the-fly).
+        // La usa el repartidor para mostrar su punto de salida en el mapa.
+        [Authorize]
+        [HttpGet("sucursal-origen")]
+        public async Task<ActionResult<object>> GetSucursalOrigen([FromServices] GeocodingService geocoding)
+        {
+            var sucursales = await _enviosRepository.GetSucursales();
+            var sucursal = sucursales.FirstOrDefault(s => s.Estado == SucursalStatus.Activa)
+                ?? sucursales.FirstOrDefault();
+            if (sucursal is null) return NoContent();
+
+            Ubicacion? coords = null;
+            try
+            {
+                coords = await geocoding.GeocodeAsync(sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal);
+            }
+            catch
+            {
+                // No bloquea: si el geocoding falla, devolvemos sin coords y el front
+                // hace fallback al centro de las paradas.
+            }
+
+            return Ok(new
+            {
+                id = sucursal.Id,
+                nombre = sucursal.Nombre,
+                direccion = sucursal.Direccion,
+                ciudad = sucursal.Ciudad,
+                codigoPostal = sucursal.CodigoPostal,
+                telefono = sucursal.Telefono,
+                latitud = coords?.Latitud,
+                longitud = coords?.Longitud,
+            });
+        }
+
         [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
         [HttpPost("sucursales/registrar-sucursal")]
         public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
@@ -548,6 +583,10 @@ namespace Back.Controllers
         [Required] public string CP { get; set; } = string.Empty;
         [Required] public string Nombre { get; set; } = string.Empty;
         [Required] public string Apellido { get; set; } = string.Empty;
+        // Provincia es opcional. La envía el front a partir de la validación
+        // del CP y se usa para que el geocoding (Nominatim) caiga en la provincia
+        // correcta cuando el nombre de calle es ambiguo entre provincias.
+        public string? Provincia { get; set; }
         public string? Telefono { get; set; }
     }
 
