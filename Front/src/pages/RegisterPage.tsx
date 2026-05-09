@@ -18,6 +18,7 @@ import {
   Snackbar,
 } from '@mui/material'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { authService } from '../services/authService'
 import type { RegisterData, UserRole } from '../types'
 
@@ -143,6 +144,15 @@ function RegisterPage() {
     setGeneralError('')
   }
 
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate('/')
+  }
+
   return (
     <Container maxWidth="sm">
       <Box
@@ -154,9 +164,18 @@ function RegisterPage() {
           minHeight: '100vh',
           py: 2,
         }}
-      >
-        <Card sx={{ width: '100%', p: 4 }}>
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
+        >
+          <Card sx={{ width: '100%', p: 4 }}>
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={handleGoBack}
+              size="small"
+              sx={{ mb: 2, alignSelf: 'flex-start' }}
+            >
+              Volver
+            </Button>
+
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Box
                 sx={{

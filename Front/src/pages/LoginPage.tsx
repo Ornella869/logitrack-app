@@ -4,6 +4,7 @@ import {
   Box,
   TextField,
   Button,
+  IconButton,
   Link,
   Typography,
   Card,
@@ -15,6 +16,7 @@ import {
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 // import ReCAPTCHA from 'react-google-recaptcha'
 import { authService } from '../services/authService'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
@@ -129,6 +131,15 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
     fillDemo('admin@logitrack.com')
   }
 
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate('/')
+  }
+
   return (
     <Box
       sx={{
@@ -141,7 +152,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
         py: 4,
       }}
     >
-      <Box sx={{ width: '100%', maxWidth: 420 }}>
+      <Box sx={{ width: '100%', maxWidth: 480 }}>
         {/* Brand header above card */}
         <Box sx={{ textAlign: 'center', mb: 3, color: 'white' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
@@ -162,24 +173,48 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}
         >
-          {/* Card title */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-            <Box
-              sx={{
-                width: 36,
-                height: 36,
-                borderRadius: 2,
-                bgcolor: 'primary.main',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <LockOutlinedIcon sx={{ color: 'white', fontSize: 18 }} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ justifySelf: 'start' }}>
+              <IconButton
+                aria-label="Volver"
+                onClick={handleGoBack}
+                size="small"
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 2,
+                  bgcolor: 'transparent',
+                  color: 'primary.main',
+                  '&:hover': {
+                    bgcolor: 'rgba(25, 118, 210, 0.16)',
+                  },
+                }}
+              >
+                <ArrowBackIcon sx={{ fontSize: 18 }} />
+              </IconButton>
             </Box>
-            <Typography variant="h6" fontWeight={700}>
-              Iniciar sesión
-            </Typography>
+
+            {/* Card title */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: 'center' }}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 2,
+                  bgcolor: 'primary.main',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <LockOutlinedIcon sx={{ color: 'white', fontSize: 18 }} />
+              </Box>
+              <Typography variant="h6" fontWeight={700}>
+                Iniciar sesión
+              </Typography>
+            </Box>
+
+            <Box />
           </Box>
 
           {error && (
