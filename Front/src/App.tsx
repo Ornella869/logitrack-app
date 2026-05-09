@@ -189,7 +189,7 @@ function App() {
             path="/app"
             element={
               user && !isRepartidorRole(user.role) ? (
-                <Dashboard />
+                user.role === 'operador' ? <Navigate to="/envios" replace /> : <Dashboard />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

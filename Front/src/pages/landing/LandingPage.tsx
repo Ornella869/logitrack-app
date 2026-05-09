@@ -19,7 +19,6 @@ import {
   LinearProgress,
   MenuItem,
   Paper,
-  Select,
   Rating,
   Snackbar,
   Stack,
@@ -237,12 +236,7 @@ const plans: Array<{
 ]
 
 const COUNTRIES = [
-  { code: 'AR', dial: '+54', flag: '🇦🇷', name: 'Argentina', digits: 10 },
-  { code: 'UY', dial: '+598', flag: '🇺🇾', name: 'Uruguay', digits: 8 },
-  { code: 'CL', dial: '+56', flag: '🇨🇱', name: 'Chile', digits: 9 },
-  { code: 'BR', dial: '+55', flag: '🇧🇷', name: 'Brasil', digits: 11 },
-  { code: 'ES', dial: '+34', flag: '🇪🇸', name: 'España', digits: 9 },
-  { code: 'MX', dial: '+52', flag: '🇲🇽', name: 'México', digits: 10 },
+  { code: 'AR', dial: '+54', name: 'Argentina', digits: 10 },
 ]
 
 export default function LandingPage() {
@@ -275,8 +269,7 @@ export default function LandingPage() {
   const [leadError, setLeadError] = useState('')
   const [leadForm, setLeadForm] = useState(initialLeadForm)
   const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
-  const [leadCountry, setLeadCountry] = useState('AR')
-  const selectedCountry = COUNTRIES.find((c) => c.code === leadCountry) ?? COUNTRIES[0]
+  const selectedCountry = COUNTRIES[0]
 
   const closeReviewToast = () => {
     setReviewSent(false)
@@ -417,7 +410,7 @@ export default function LandingPage() {
       errors.phone = 'Completá el teléfono de contacto.'
     } else if (digits.length !== selectedCountry.digits) {
       errors.phone = `Ingresá ${selectedCountry.digits} dígitos (${selectedCountry.name}).`
-    } else if (leadCountry === 'AR' && (digits.startsWith('0') || digits.startsWith('15'))) {
+    } else if (selectedCountry.code === 'AR' && (digits.startsWith('0') || digits.startsWith('15'))) {
       errors.phone = 'Para Argentina, el número no debe comenzar con 0 ni con 15.'
     }
 
@@ -1292,15 +1285,27 @@ export default function LandingPage() {
             </Grid>
             <Grid item xs={12} md={6}>
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Select
-                  value={leadCountry}
-                  onChange={(e) => setLeadCountry(e.target.value as string)}
-                  sx={{ minWidth: 95 }}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    border: '1px solid rgba(0,0,0,0.23)',
+                    borderRadius: 1,
+                    px: 1.5,
+                    height: 56,
+                    minWidth: 100,
+                    flexShrink: 0,
+                  }}
                 >
-                  {COUNTRIES.map((c) => (
-                    <MenuItem key={c.code} value={c.code}>{c.flag} {c.dial}</MenuItem>
-                  ))}
-                </Select>
+                  <img
+                    src="https://flagcdn.com/w20/ar.png"
+                    width={20}
+                    alt="Argentina"
+                    style={{ borderRadius: 2, display: 'block' }}
+                  />
+                  <span style={{ fontSize: 14 }}>+54</span>
+                </Box>
                 <TextField
                   label="Teléfono"
                   fullWidth

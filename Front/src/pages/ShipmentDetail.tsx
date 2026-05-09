@@ -25,6 +25,7 @@ import {
   Stack,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
@@ -95,6 +96,8 @@ function ShipmentDetail() {
   const isOperador = user?.role === 'operador'
   const isSupervisor = user?.role === 'supervisor'
   const isAdmin = user?.role === 'administrador'
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const isRepartidor = user?.role === 'repartidor'
 
   // G1L-42: repartidor asignado al envío (Supervisor / Admin)
@@ -460,13 +463,13 @@ function ShipmentDetail() {
 
       {/* Banner especial para envíos cancelados — con motivo y reenvío */}
       {shipment.status === 'Cancelado' && (
-        <Card sx={{ mb: 3, bgcolor: '#ffebee', borderLeft: '4px solid #d32f2f' }}>
+        <Card sx={{ mb: 3, bgcolor: isDark ? 'rgba(211,47,47,0.18)' : '#ffebee', borderLeft: '4px solid #d32f2f' }}>
           <CardContent>
-            <Typography variant="h6" sx={{ color: '#d32f2f' }}>
+            <Typography variant="h6" sx={{ color: isDark ? '#ef9a9a' : '#d32f2f' }}>
               Envío cancelado
             </Typography>
             {shipment.cancellationReason && (
-              <Typography variant="body2" sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ mt: 1, color: isDark ? 'rgba(255,255,255,0.8)' : 'text.primary' }}>
                 Motivo: {shipment.cancellationReason}
               </Typography>
             )}
@@ -487,7 +490,7 @@ function ShipmentDetail() {
 
       <Grid container spacing={3}>
         {/* Información general */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 3 : undefined }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -516,7 +519,7 @@ function ShipmentDetail() {
         </Grid>
 
         {/* Remitente */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 5 : undefined }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -534,7 +537,7 @@ function ShipmentDetail() {
         </Grid>
 
         {/* Destinatario */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 4 : undefined }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -553,7 +556,7 @@ function ShipmentDetail() {
 
         {/* G1L-15: Línea de tiempo del historial — solo Operador y Supervisor */}
         {(isOperador || isSupervisor) && (
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 2 : undefined }}>
             <Card>
               <CardContent>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
@@ -568,7 +571,7 @@ function ShipmentDetail() {
 
         {/* G1L-42: Repartidor asignado (Supervisor / Admin, solo lectura) */}
         {(isSupervisor || isAdmin) && repartidorAsignado && (
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 1 : undefined }}>
             <Card>
               <CardContent>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
@@ -609,7 +612,7 @@ function ShipmentDetail() {
         {/* G1L-18 + G1L-17 GPS: Mapa con ubicación actual.
             Admin puede actualizar haciendo click; resto solo lectura. */}
         {(shipment.status === 'En tránsito' || shipment.ubicacionActual) && (isAdmin || isSupervisor) && (
-          <Grid item xs={12}>
+          <Grid item xs={12} sx={{ order: isSupervisor ? 6 : undefined }}>
             <Card>
               <CardContent>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>

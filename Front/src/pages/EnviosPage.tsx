@@ -29,6 +29,13 @@ function getPageTitle(user: User) {
   return 'Envíos'
 }
 
+function getGreeting(name: string) {
+  const h = new Date().getHours()
+  if (h >= 6 && h < 12) return `Buenos días, ${name}!`
+  if (h >= 12 && h < 20) return `Buenas tardes, ${name}!`
+  return `Buenas noches, ${name}!`
+}
+
 export default function EnviosPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
@@ -178,6 +185,11 @@ export default function EnviosPage() {
         sx={{ mb: 3, gap: 2 }}
       >
         <Box>
+          {user.role === 'operador' && (
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 0.5 }}>
+              {getGreeting(user.name)}
+            </Typography>
+          )}
           <Typography variant="h4" fontWeight={700}>
             {getPageTitle(user)}
           </Typography>

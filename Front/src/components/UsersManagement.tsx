@@ -323,18 +323,11 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
     setSubmitting(false)
     setOpenConfirmToggle(false)
     if (ok) {
-      // Actualizar tanto el flag `activo` (soft-delete) como `estado` para reflejar al instante
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === selectedUser.id
-            ? { ...u, estado: nuevoEstado, activo: nuevoEstado === 'Activo' }
-            : u,
-        ),
-      )
       showToast(
         `Usuario ${nuevoEstado === 'Inactivo' ? 'desactivado' : 'activado'} correctamente`,
         nuevoEstado === 'Inactivo' ? 'warning' : 'success',
       )
+      void loadUsers()
     } else {
       showToast('No se pudo cambiar el estado del usuario', 'error')
     }
@@ -453,7 +446,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
           </Box>
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: '#FFF8F0', fontSize: '0.75rem' } }}>
+              <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: (theme) => theme.palette.mode === 'dark' ? '#1B2D42' : '#FFF8F0', fontSize: '0.75rem' } }}>
                 <TableCell>Email</TableCell>
                 <TableCell>Fecha de solicitud</TableCell>
                 <TableCell align="center">Acción</TableCell>
@@ -525,19 +518,19 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             <ToggleButton value="all">Todos</ToggleButton>
             <ToggleButton
               value="supervisor"
-              sx={{ color: '#7c4010', bgcolor: '#fff8f1', '&:hover': { bgcolor: '#ffeedd' }, '&.Mui-selected': { color: '#BF360C', bgcolor: '#FFE0B2', borderColor: '#FFCC80' }, '&.Mui-selected:hover': { bgcolor: '#ffd494' } }}
+              sx={{ '&.Mui-selected': { color: '#BF360C', bgcolor: '#FFE0B2', borderColor: '#FFCC80' }, '&.Mui-selected:hover': { bgcolor: '#ffd494' } }}
             >
               Supervisores
             </ToggleButton>
             <ToggleButton
               value="operador"
-              sx={{ color: '#4a1a7a', bgcolor: '#f8f2ff', '&:hover': { bgcolor: '#efe2ff' }, '&.Mui-selected': { color: '#6A1B9A', bgcolor: '#E1BEE7', borderColor: '#CE93D8' }, '&.Mui-selected:hover': { bgcolor: '#d4a8e0' } }}
+              sx={{ '&.Mui-selected': { color: '#6A1B9A', bgcolor: '#E1BEE7', borderColor: '#CE93D8' }, '&.Mui-selected:hover': { bgcolor: '#d4a8e0' } }}
             >
               Operadores
             </ToggleButton>
             <ToggleButton
               value="repartidor"
-              sx={{ color: '#8c1a4a', bgcolor: '#fff2f7', '&:hover': { bgcolor: '#ffe0ee' }, '&.Mui-selected': { color: '#AD1457', bgcolor: '#F8BBD0', borderColor: '#F48FB1' }, '&.Mui-selected:hover': { bgcolor: '#f5a3c0' } }}
+              sx={{ '&.Mui-selected': { color: '#AD1457', bgcolor: '#F8BBD0', borderColor: '#F48FB1' }, '&.Mui-selected:hover': { bgcolor: '#f5a3c0' } }}
             >
               Repartidores
             </ToggleButton>
@@ -569,6 +562,22 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               Inactivos
             </ToggleButton>
           </ToggleButtonGroup>
+
+          {filtersApplied && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                setSearch('')
+                setRoleFilter('all')
+                setEstadoFilter('all')
+                setPage(1)
+              }}
+              sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, textTransform: 'none' }}
+            >
+              Limpiar filtros
+            </Button>
+          )}
         </Box>
       </Stack>
 
@@ -586,7 +595,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: '#F5F7FA', fontSize: '0.78rem' } }}>
+              <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: (theme) => theme.palette.mode === 'dark' ? '#1B2D42' : '#F5F7FA', fontSize: '0.78rem' } }}>
                 <TableCell>Integrante</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>DNI</TableCell>
@@ -632,7 +641,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                     <TableCell><RoleChip role={user.role} /></TableCell>
                     <TableCell><EstadoChip activo={user.activo} estado={user.estado} /></TableCell>
                     <TableCell align="center">
-                      <Stack direction="row" spacing={0.5} justifyContent="center">
+                      <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
                         <Tooltip title="Editar datos">
                           <span>
                             <Button
@@ -640,7 +649,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                               variant="outlined"
                               startIcon={<EditIcon sx={{ fontSize: 14 }} />}
                               onClick={() => handleOpenEdit(user)}
-                              sx={{ fontSize: '0.72rem', py: 0.3, px: 1 }}
+                              sx={{ fontSize: '0.72rem', py: 0.3, px: 1, minWidth: 76 }}
                             >
                               Editar
                             </Button>
@@ -667,7 +676,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                                       : <CheckCircleIcon sx={{ fontSize: 14 }} />
                                   }
                                   onClick={() => handleOpenToggle(user)}
-                                  sx={{ fontSize: '0.72rem', py: 0.3, px: 1 }}
+                                  sx={{ fontSize: '0.72rem', py: 0.3, px: 1, minWidth: 104 }}
                                 >
                                   {active ? 'Desactivar' : 'Activar'}
                                 </Button>

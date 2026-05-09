@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -22,7 +22,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -46,15 +45,6 @@ const PROCESS_STEPS = [
 ] as const
 
 type Repartidor = { id: string; nombre: string; apellido: string; email: string; activo: boolean; estado?: string }
-type AsignacionActualRow = {
-  key: string
-  repartidorId: string
-  nombre: string
-  email: string
-  fecha: string
-  cantidad: number
-  pesoTotal: number
-}
 
 export default function CalendarizarPage() {
   const user = useOutletContext<User>()
@@ -65,9 +55,6 @@ export default function CalendarizarPage() {
   const [error, setError] = useState('')
   const [repartidorSearch, setRepartidorSearch] = useState('')
   const [visibleRepartidores, setVisibleRepartidores] = useState(8)
-  const [asignacionesPage, setAsignacionesPage] = useState(0)
-  const [asignacionesRowsPerPage, setAsignacionesRowsPerPage] = useState(10)
-
   // Modal de confirmación previa (G1L-54 AC "Confirmación Previa")
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -77,7 +64,6 @@ export default function CalendarizarPage() {
   const [resultado, setResultado] = useState<CalendarizacionResultado | null>(null)
   const [exec, setExec] = useState<{ ok: boolean; error?: string } | null>(null)
 
-  // Estado actual de asignaciones (para testing y monitoreo)
   const [estadoActual, setEstadoActual] = useState<DiaResumen[]>([])
 
   useEffect(() => {
@@ -157,25 +143,6 @@ export default function CalendarizarPage() {
     [repartidoresDisponibles, visibleRepartidores],
   )
 
-  const asignacionesActuales = useMemo<AsignacionActualRow[]>(() => {
-    return estadoActual.flatMap((dia) =>
-      dia.repartidores.map((repartidor) => ({
-        key: `${dia.fecha}-${repartidor.repartidorId}`,
-        repartidorId: repartidor.repartidorId,
-        nombre: repartidor.nombre,
-        email: repartidor.email,
-        fecha: dia.fecha,
-        cantidad: repartidor.cantidad,
-        pesoTotal: repartidor.pesoTotal,
-      })),
-    )
-  }, [estadoActual])
-
-  const asignacionesActualesPaginadas = useMemo(() => {
-    const from = asignacionesPage * asignacionesRowsPerPage
-    return asignacionesActuales.slice(from, from + asignacionesRowsPerPage)
-  }, [asignacionesActuales, asignacionesPage, asignacionesRowsPerPage])
-
   const summary = useMemo(() => {
     const prio = pendientes.filter((p) => p.tipoEnvio === 'Prioritario').length
     const comm = pendientes.length - prio
@@ -229,14 +196,6 @@ export default function CalendarizarPage() {
     setVisibleRepartidores(8)
   }
 
-  const handleAsignacionesPageChange = (_event: unknown, nextPage: number) => {
-    setAsignacionesPage(nextPage)
-  }
-
-  const handleAsignacionesRowsPerPageChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setAsignacionesRowsPerPage(Number(event.target.value))
-    setAsignacionesPage(0)
-  }
 
   return (
     <Box>
@@ -415,83 +374,6 @@ export default function CalendarizarPage() {
         </Grid>
       )}
 
-      {/* SECCIÓN: Asignaciones actuales (para monitoreo y testing) */}
-      {!loading && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Asignaciones actuales
-          </Typography>
-          {asignacionesActuales.length === 0 ? (
-            <Alert severity="info">
-              No hay envíos asignados a repartidores todavía. Ejecutá la calendarización para asignarlos.
-            </Alert>
-          ) : (
-            <Card variant="outlined">
-              <CardContent>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Repartidor</TableCell>
-                      <TableCell>Email (login)</TableCell>
-                      <TableCell>Día</TableCell>
-                      <TableCell align="right">Envíos</TableCell>
-                      <TableCell align="right">Capacidad usada</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {asignacionesActualesPaginadas.map((asignacion, idx) => {
-                        const initials = asignacion.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
-                        const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                        const pesoPct = Math.min(100, (asignacion.pesoTotal / 500) * 100)
-                        const pesoColor = pesoPct >= 90 ? '#c62828' : pesoPct >= 70 ? '#ed6c02' : '#2e7d32'
-                        return (
-                          <TableRow key={asignacion.key}>
-                            <TableCell>
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <Avatar sx={{ bgcolor: color, width: 28, height: 28, fontSize: 11 }}>{initials}</Avatar>
-                                <Typography variant="body2" fontWeight={600}>{asignacion.nombre}</Typography>
-                              </Stack>
-                            </TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{asignacion.email}</TableCell>
-                            <TableCell>
-                              {new Date(asignacion.fecha).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
-                            </TableCell>
-                            <TableCell align="right"><strong>{asignacion.cantidad}</strong></TableCell>
-                            <TableCell align="right">
-                              <Box sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 120 }}>
-                                <Typography variant="caption" sx={{ color: pesoColor, fontWeight: 600 }}>
-                                  {asignacion.pesoTotal.toFixed(0)} / 500 kg
-                                </Typography>
-                                <LinearProgress
-                                  variant="determinate"
-                                  value={pesoPct}
-                                  sx={{
-                                    width: 100, height: 6, borderRadius: 1, mt: 0.5,
-                                    '& .MuiLinearProgress-bar': { bgcolor: pesoColor },
-                                  }}
-                                />
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-              <TablePagination
-                component="div"
-                count={asignacionesActuales.length}
-                page={asignacionesPage}
-                onPageChange={handleAsignacionesPageChange}
-                rowsPerPage={asignacionesRowsPerPage}
-                onRowsPerPageChange={handleAsignacionesRowsPerPageChange}
-                rowsPerPageOptions={[5, 10, 20]}
-                labelRowsPerPage="Filas por página"
-              />
-            </Card>
-          )}
-        </Box>
-      )}
 
       {/* G1L-54 AC "Confirmación Previa": modal con la cantidad antes de disparar el proceso. */}
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>

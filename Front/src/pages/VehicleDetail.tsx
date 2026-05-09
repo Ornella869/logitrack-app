@@ -278,7 +278,7 @@ export default function VehicleDetail() {
                   <Typography variant="body2" color="text.secondary" fontWeight={600}>
                     Capacidad de carga
                   </Typography>
-                  <Typography variant="body2">{vehicle.capacidadCarga} kg</Typography>
+                  <Typography variant="body2">{Math.round(Number(vehicle.capacidadCarga))} kg</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary" fontWeight={600}>

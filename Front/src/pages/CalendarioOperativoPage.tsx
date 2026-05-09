@@ -13,15 +13,19 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  InputAdornment,
   LinearProgress,
   Stack,
+  TextField,
   Tooltip,
   Typography,
+  useTheme,
 } from '@mui/material'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import BoltIcon from '@mui/icons-material/Bolt'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import SearchIcon from '@mui/icons-material/Search'
 import api from '../services/api'
 import type { User } from '../types'
 
@@ -61,11 +65,14 @@ const DIAS_VISIBLES = 7
 export default function CalendarioOperativoPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [data, setData] = useState<CalendarioOperativo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pageOffset, setPageOffset] = useState(0) // 0 = días 0-6, 1 = 7-13
   const [detalleCelda, setDetalleCelda] = useState<CalendarioCelda | null>(null)
+  const [searchRepartidor, setSearchRepartidor] = useState('')
 
   useEffect(() => {
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
@@ -89,14 +96,18 @@ export default function CalendarioOperativoPage() {
     if (!data) return null
     const start = pageOffset * DIAS_VISIBLES
     const end = start + DIAS_VISIBLES
+    const q = searchRepartidor.trim().toLowerCase()
+    const repartidoresFiltrados = q
+      ? data.repartidores.filter((r) => r.nombre.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+      : data.repartidores
     return {
       dias: data.dias.slice(start, end),
-      repartidores: data.repartidores.map((r) => ({
+      repartidores: repartidoresFiltrados.map((r) => ({
         ...r,
         celdas: r.celdas.slice(start, end),
       })),
     }
-  }, [data, pageOffset])
+  }, [data, pageOffset, searchRepartidor])
 
   if (user.role !== 'supervisor' && user.role !== 'administrador') {
     return <Alert severity="warning">Solo Supervisor o Administrador pueden ver el calendario operativo.</Alert>
@@ -133,10 +144,11 @@ export default function CalendarioOperativoPage() {
         <Card variant="outlined" sx={{ overflow: 'hidden' }}>
           {/* Toolbar */}
           <Stack
-            direction="row"
+            direction={{ xs: 'column', sm: 'row' }}
             justifyContent="space-between"
-            alignItems="center"
-            sx={{ p: 2, bgcolor: '#e3f2fd', borderBottom: '1px solid #ddd' }}
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            gap={1}
+            sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#e3f2fd', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#ddd'}` }}
           >
             <Stack direction="row" spacing={1} alignItems="center">
               <IconButton size="small" onClick={() => setPageOffset(0)} disabled={pageOffset === 0}>
@@ -155,14 +167,24 @@ export default function CalendarioOperativoPage() {
                 <ChevronRightIcon />
               </IconButton>
             </Stack>
-            <Button size="small" onClick={() => setPageOffset(0)}>Hoy</Button>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <TextField
+                size="small"
+                placeholder="Filtrar repartidor..."
+                value={searchRepartidor}
+                onChange={(e) => setSearchRepartidor(e.target.value)}
+                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+                sx={{ width: 200 }}
+              />
+              <Button size="small" onClick={() => setPageOffset(0)}>Hoy</Button>
+            </Stack>
           </Stack>
 
           {/* Grilla */}
           <Box sx={{ overflowX: 'auto' }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: `200px repeat(${visible.dias.length}, minmax(140px, 1fr))`, minWidth: 900 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: `260px repeat(${visible.dias.length}, minmax(140px, 1fr))`, minWidth: 980 }}>
               {/* Header de días */}
-              <Box sx={{ p: 1.5, bgcolor: '#fafafa', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', color: 'text.secondary', borderBottom: '1px solid #ddd', borderRight: '1px solid #ddd' }}>
+              <Box sx={{ p: 1.5, bgcolor: isDark ? '#1B2D42' : '#fafafa', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', color: 'text.secondary', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#ddd'}`, borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#ddd'}` }}>
                 Repartidor
               </Box>
               {visible.dias.map((d) => {
@@ -172,10 +194,15 @@ export default function CalendarioOperativoPage() {
                   <Box
                     key={d}
                     sx={{
-                      p: 1.5, bgcolor: isHoy ? '#e3f2fd' : '#fafafa',
+                      p: 1.5,
+                      bgcolor: isHoy
+                        ? (isDark ? 'rgba(21,101,192,0.3)' : '#e3f2fd')
+                        : (isDark ? '#1B2D42' : '#fafafa'),
                       fontWeight: 700, fontSize: 12, textTransform: 'capitalize',
-                      color: isHoy ? '#1565c0' : 'text.secondary',
-                      textAlign: 'center', borderBottom: '1px solid #ddd', borderRight: '1px solid #eee',
+                      color: isHoy ? (isDark ? '#42A5F5' : '#1565c0') : 'text.secondary',
+                      textAlign: 'center',
+                      borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#ddd'}`,
+                      borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#eee'}`,
                     }}
                   >
                     {date.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit' })}
@@ -193,7 +220,7 @@ export default function CalendarioOperativoPage() {
                       direction="row"
                       spacing={1.5}
                       alignItems="center"
-                      sx={{ p: 1.5, bgcolor: '#fafafa', borderRight: '1px solid #ddd', borderBottom: '1px solid #eee', minHeight: 90 }}
+                      sx={{ p: 1.5, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#ddd'}`, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#eee'}`, minHeight: 90 }}
                     >
                       <Avatar sx={{ bgcolor: color, width: 32, height: 32, fontSize: 12 }}>{initials}</Avatar>
                       <Box>
@@ -214,9 +241,11 @@ export default function CalendarioOperativoPage() {
                         <Box
                           key={celda.fecha}
                           sx={{
-                            p: 1, borderRight: '1px solid #eee', borderBottom: '1px solid #eee',
+                            p: 1,
+                            borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#eee'}`,
+                            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#eee'}`,
                             cursor: celda.paquetes.length ? 'pointer' : 'default',
-                            '&:hover': celda.paquetes.length ? { bgcolor: '#f5f5f5' } : {},
+                            '&:hover': celda.paquetes.length ? { bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f5f5f5' } : {},
                           }}
                           onClick={() => celda.paquetes.length && setDetalleCelda(celda)}
                         >
@@ -234,7 +263,12 @@ export default function CalendarioOperativoPage() {
                                   <Tooltip key={p.paqueteId} title={`${p.codigoSeguimiento} · ${p.peso} kg · ${p.status}`}>
                                     <Box
                                       sx={{
-                                        bgcolor: p.esPrioritario ? '#fdecea' : '#e1f5fe',
+                                        bgcolor: p.esPrioritario
+                                          ? (isDark ? 'rgba(198,40,40,0.3)' : '#fdecea')
+                                          : (isDark ? 'rgba(2,136,209,0.3)' : '#e1f5fe'),
+                                        color: p.esPrioritario
+                                          ? (isDark ? '#ef9a9a' : 'inherit')
+                                          : (isDark ? '#81d4fa' : 'inherit'),
                                         borderLeft: `3px solid ${p.esPrioritario ? '#c62828' : '#0288d1'}`,
                                         borderRadius: 0.5, px: 0.5, py: 0.3,
                                         fontSize: 10, fontFamily: 'monospace',

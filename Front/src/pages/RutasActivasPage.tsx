@@ -21,6 +21,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import RouteIcon from '@mui/icons-material/Route'
@@ -64,6 +65,8 @@ type RutasActivasResponse = PagedResult<RutaActiva> & {
 export default function RutasActivasPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [rutas, setRutas] = useState<RutaActiva[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -172,7 +175,7 @@ export default function RutasActivasPage() {
           <Box sx={{ overflowX: 'auto' }}>
           <Table>
             <TableHead>
-              <TableRow sx={{ bgcolor: '#e3f2fd' }}>
+              <TableRow sx={{ bgcolor: isDark ? '#1B2D42' : '#e3f2fd' }}>
                 <TableCell>Fecha</TableCell>
                 <TableCell>Repartidor</TableCell>
                 <TableCell>CP / Zona</TableCell>
@@ -193,7 +196,7 @@ export default function RutasActivasPage() {
                 const esHoy = fecha.toDateString() === hoyStr
                 const fechaIso = fecha.toISOString().split('T')[0]
                 return (
-                  <TableRow key={`${r.repartidorId}-${fechaIso}`} sx={r.esDemorada ? { bgcolor: '#fff8f0' } : {}}>
+                  <TableRow key={`${r.repartidorId}-${fechaIso}`} sx={r.esDemorada ? { bgcolor: isDark ? 'rgba(237,108,2,0.1)' : '#fff8f0' } : {}}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={600} sx={{ textTransform: 'capitalize' }}>
                         {esHoy ? 'Hoy' : fecha.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
@@ -236,15 +239,15 @@ export default function RutasActivasPage() {
                     </TableCell>
                     <TableCell>
                       {r.esDemorada ? (
-                        <Chip size="small" label="⚠️ Demorada" sx={{ bgcolor: '#fff3e0', color: '#ed6c02', border: '1px solid #ed6c02' }} />
+                        <Chip size="small" label="⚠️ Demorada" sx={{ bgcolor: isDark ? 'rgba(237,108,2,0.2)' : '#fff3e0', color: '#ed6c02', border: '1px solid #ed6c02' }} />
                       ) : r.estado === 'Completada' ? (
-                        <Chip size="small" label="Completada" sx={{ bgcolor: '#e8f5e9', color: '#2e7d32' }} />
+                        <Chip size="small" label="Completada" sx={{ bgcolor: isDark ? 'rgba(46,125,50,0.2)' : '#e8f5e9', color: isDark ? '#81c784' : '#2e7d32' }} />
                       ) : r.estado === 'EnTransito' ? (
-                        <Chip size="small" label="En Tránsito" sx={{ bgcolor: '#fff3e0', color: '#ed6c02' }} />
+                        <Chip size="small" label="En Tránsito" sx={{ bgcolor: isDark ? 'rgba(237,108,2,0.2)' : '#fff3e0', color: '#ed6c02' }} />
                       ) : r.estado === 'Programada' ? (
-                        <Chip size="small" label="Programada" sx={{ bgcolor: '#ede7f6', color: '#5e35b1' }} />
+                        <Chip size="small" label="Programada" sx={{ bgcolor: isDark ? 'rgba(94,53,177,0.2)' : '#ede7f6', color: isDark ? '#ce93d8' : '#5e35b1' }} />
                       ) : (
-                        <Chip size="small" label="Listo para Salir" sx={{ bgcolor: '#e1f5fe', color: '#0288d1' }} />
+                        <Chip size="small" label="Listo para Salir" sx={{ bgcolor: isDark ? 'rgba(2,136,209,0.2)' : '#e1f5fe', color: isDark ? '#81d4fa' : '#0288d1' }} />
                       )}
                     </TableCell>
                     <TableCell>

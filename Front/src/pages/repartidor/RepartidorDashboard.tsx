@@ -21,6 +21,7 @@ import {
   Tabs,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import RouteIcon from '@mui/icons-material/Route'
@@ -68,6 +69,8 @@ const originForMaps = (origen: BranchOrigin | null) =>
 export default function RepartidorDashboard() {
   const navigate = useNavigate()
   const user = useOutletContext<User>()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [paradas, setParadas] = useState<Shipment[]>([])
   const [fechaRuta, setFechaRuta] = useState<string | null>(null)
   const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([])
@@ -318,7 +321,7 @@ export default function RepartidorDashboard() {
             <KpiCard label="En camino" value={metrics.enCamino} color="#ed6c02" icon={<LocalShippingIcon />} />
             <KpiCard
               label="Capacidad"
-              value={metrics.totalPeso}
+              value={Math.round(metrics.totalPeso)}
               suffix=" / 500 kg"
               color="#1976d2"
               icon={<Inventory2Icon />}
@@ -335,7 +338,7 @@ export default function RepartidorDashboard() {
 
           {tab === 0 && (
             <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden' }}>
-              <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderBottom: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
                     Ruta optimizada{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
@@ -397,9 +400,9 @@ export default function RepartidorDashboard() {
                 height={380}
               />
               {proxima && (
-                <Box sx={{ p: 2, bgcolor: '#f8fdf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#f8fdf8', borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e8f5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                   <Typography variant="body2">
-                    <strong>Próxima parada:</strong> {proxima.receiver.address}, {proxima.receiver.city} · {proxima.receiver.name} · {proxima.weight} kg
+                    <strong>Próxima parada:</strong> {proxima.receiver.address}, {proxima.receiver.city} · {proxima.receiver.name} · {Math.round(proxima.weight)} kg
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     CP {proxima.receiver.postalCode}
@@ -421,7 +424,11 @@ export default function RepartidorDashboard() {
                   sx={{
                     borderLeft: '4px solid',
                     borderLeftColor: isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#1976d2',
-                    bgcolor: isCompleted ? '#f8fdf8' : isCurrent ? '#fffbf5' : 'white',
+                    bgcolor: isCompleted
+                    ? (isDark ? 'rgba(46,125,50,0.12)' : '#f8fdf8')
+                    : isCurrent
+                      ? (isDark ? 'rgba(237,108,2,0.12)' : '#fffbf5')
+                      : (isDark ? '#162032' : 'white'),
                     opacity: isCompleted ? 0.85 : 1,
                   }}
                 >
@@ -449,7 +456,7 @@ export default function RepartidorDashboard() {
                             📦 {p.trackingId}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            👤 {p.receiver.name} · {p.weight} kg
+                            👤 {p.receiver.name} · {Math.round(p.weight)} kg
                           </Typography>
                           {p.receiver.phone && (
                             <Typography variant="caption" color="text.secondary">

@@ -30,7 +30,10 @@ import StoreIcon from '@mui/icons-material/Store'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
-import { useState, useEffect } from 'react'
+import WbSunnyIcon from '@mui/icons-material/WbSunny'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
+import { useState, useEffect, useMemo } from 'react'
+import { createTheme, ThemeProvider } from '@mui/material/styles'
 import type { User } from '../types'
 import ChangePasswordDialog from './ChangePasswordDialog'
 
@@ -47,12 +50,59 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [openChangePassword, setOpenChangePassword] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [isDarkPremium, setIsDarkPremium] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
+  const [isPremiumPlan, setIsPremiumPlan] = useState(() => localStorage.getItem('miPlanTipo') === 'Premium')
+
+  const darkPremiumTheme = useMemo(() => createTheme({
+    palette: {
+      mode: 'dark',
+      primary: { main: '#42A5F5' },
+      secondary: { main: '#7E57C2' },
+      background: { default: '#0A1628', paper: '#162032' },
+    },
+    shape: { borderRadius: 10 },
+    components: {
+      MuiCard: { styleOverrides: { root: { borderRadius: 12, transition: 'background-color 0.4s ease, box-shadow 0.3s ease', '&:hover': { boxShadow: '0 4px 20px rgba(66,165,245,0.18)' } } } },
+      MuiPaper: { styleOverrides: { root: { transition: 'background-color 0.4s ease' } } },
+      MuiButton: { styleOverrides: { root: { borderRadius: 8 } } },
+      MuiChip: { styleOverrides: { root: { borderRadius: 6 } } },
+      MuiDialog: { styleOverrides: { paper: { borderRadius: 14 } } },
+      MuiTableCell: {
+        styleOverrides: {
+          head: {
+            backgroundColor: '#1B2D42',
+            color: 'rgba(255,255,255,0.87)',
+            borderColor: 'rgba(255,255,255,0.12)',
+          },
+          root: {
+            borderColor: 'rgba(255,255,255,0.1)',
+          },
+        },
+      },
+    },
+  }), [])
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    const onDarkChange = () => {
+      setIsDarkPremium(localStorage.getItem('miPlanDarkMode') === 'true')
+      setIsPremiumPlan(localStorage.getItem('miPlanTipo') === 'Premium')
+    }
+    window.addEventListener('miPlanDarkModeChange', onDarkChange)
+    return () => window.removeEventListener('miPlanDarkModeChange', onDarkChange)
+  }, [])
+
+  const toggleDarkPremium = () => {
+    const next = !isDarkPremium
+    setIsDarkPremium(next)
+    localStorage.setItem('miPlanDarkMode', String(next))
+    window.dispatchEvent(new Event('miPlanDarkModeChange'))
+  }
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -109,8 +159,17 @@ function Layout({ user, onLogout }: LayoutProps) {
   const isAccessDeniedPage = location.pathname === '/access-denied'
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
+    <Box data-dark={isDarkPremium ? 'true' : undefined} sx={{ minHeight: '100vh', bgcolor: isDarkPremium ? '#0A1628' : 'background.default', color: isDarkPremium ? 'rgba(255,255,255,0.87)' : undefined, transition: 'background-color 0.5s ease' }}>
+      {isDarkPremium && (
+        <style>{`
+          [data-dark] .MuiTableHead-root .MuiTableRow-root { background-color: #1B2D42 !important; }
+          [data-dark] .MuiTableHead-root .MuiTableCell-root { background-color: #1B2D42 !important; color: rgba(255,255,255,0.87) !important; border-color: rgba(255,255,255,0.12) !important; }
+          [data-dark] .MuiTableCell-root { border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.87) !important; }
+          [data-dark] .MuiTableBody-root .MuiTableRow-root:hover { background-color: rgba(255,255,255,0.06) !important; }
+          [data-dark] .MuiTableBody-root .MuiTableRow-root { background-color: #162032; }
+        `}</style>
+      )}
+      <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.15)', ...(isDarkPremium && { background: 'linear-gradient(135deg, #0A1628 0%, #1B2D42 100%)' }) }}>
         <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
           {/* Logo */}
           <Box
@@ -164,6 +223,15 @@ function Layout({ user, onLogout }: LayoutProps) {
                   sx={{ height: 20, color: 'rgba(255,255,255,0.85)', borderColor: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}
                 />
               </Box>
+            )}
+
+            {/* Dark mode toggle — only for Premium plan */}
+            {isPremiumPlan && (
+              <Tooltip title={isDarkPremium ? 'Cambiar a modo claro' : 'Activar modo oscuro Premium'}>
+                <IconButton onClick={toggleDarkPremium} size="small" sx={{ color: 'white' }}>
+                  {isDarkPremium ? <WbSunnyIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
             )}
 
             {/* Avatar with dropdown */}
@@ -226,14 +294,29 @@ function Layout({ user, onLogout }: LayoutProps) {
 
       {/* Tabs nav */}
       {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador') && (
-        <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #e0e0e0', px: { xs: 1, sm: 4 }, position: 'sticky', top: 64, zIndex: 90 }}>
+        <Box sx={{
+          bgcolor: isDarkPremium ? '#1B2D42' : 'white',
+          borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
+          px: { xs: 1, sm: 4 },
+          position: 'sticky',
+          top: 64,
+          zIndex: 90,
+          transition: 'background-color 0.5s ease',
+        }}>
           <Tabs
             value={selectedTab}
             onChange={(_, v) => navigate(v)}
             variant="scrollable"
             scrollButtons="auto"
+            sx={isDarkPremium ? {
+              '& .MuiTab-root': { color: 'rgba(255,255,255,0.85)' },
+              '& .Mui-selected': { color: '#42A5F5' },
+              '& .MuiTabs-indicator': { backgroundColor: '#42A5F5' },
+            } : {}}
           >
-            <Tab icon={<DashboardIcon fontSize="small" />} iconPosition="start" label="Dashboard" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
+            {user.role !== 'operador' && (
+              <Tab icon={<DashboardIcon fontSize="small" />} iconPosition="start" label="Dashboard" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
             {(user.role === 'supervisor' || user.role === 'operador') && (
               <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/envios" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
@@ -283,19 +366,22 @@ function Layout({ user, onLogout }: LayoutProps) {
         </IconButton>
       )}
 
-      {isAccessDeniedPage ? (
-        <Outlet context={user} />
-      ) : (
-        <Container
-          maxWidth="lg"
-          sx={{
-            py: { xs: 2, sm: 3 },
-            px: { xs: 2, sm: 3 },
-          }}
-        >
+      <ThemeProvider theme={isDarkPremium ? darkPremiumTheme : theme}>
+        {isAccessDeniedPage ? (
           <Outlet context={user} />
-        </Container>
-      )}
+        ) : (
+          <Container
+            maxWidth="lg"
+            sx={{
+              py: { xs: 2, sm: 3 },
+              px: { xs: 2, sm: 3 },
+              color: isDarkPremium ? 'rgba(255,255,255,0.87)' : undefined,
+            }}
+          >
+            <Outlet context={user} />
+          </Container>
+        )}
+      </ThemeProvider>
     </Box>
   )
 }

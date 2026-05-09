@@ -29,10 +29,10 @@ interface BranchFormProps {
   initialData?: Branch
 }
 
-const nameRegex = /^[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s'.-]{1,}$/
+const nameRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.-]{1,}$/
 const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
 const addressRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s.,'-]*\s\d+[A-Za-z]?$/
-const phoneRegex = /^[+\d][\d\s-]{6,19}$/
+const phoneRegex = /^[+\d][\d\s-]{3,13}$/
 
 const EMPTY_FORM = {
   name: '',
@@ -77,10 +77,13 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
       value = value.replace(/\D/g, '').slice(0, 4)
     }
     if (name === 'phone') {
-      value = value.replace(/[^\d+\s-]/g, '')
+      value = value.replace(/[^\d+\s-]/g, '').slice(0, 15)
     }
     if (name === 'city') {
       value = value.replace(/[^A-Za-zÀ-ÿ\s'-]/g, '')
+    }
+    if (name === 'name') {
+      value = value.replace(/[0-9]/g, '')
     }
 
     setFormData((prev) => {
@@ -322,6 +325,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
             fullWidth
             placeholder="Ej: 11 4567-8901"
             disabled={loading}
+            inputProps={{ maxLength: 15 }}
           />
         </Stack>
       </DialogContent>

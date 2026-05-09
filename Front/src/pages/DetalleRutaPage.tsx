@@ -13,6 +13,7 @@ import {
   Grid,
   Stack,
   Typography,
+  useTheme,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import RouteIcon from '@mui/icons-material/Route'
@@ -67,6 +68,8 @@ const statusToShipmentStatus = (s: string): any => {
 export default function DetalleRutaPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const { repartidorId } = useParams<{ repartidorId: string }>()
   const [searchParams] = useSearchParams()
   const fecha = searchParams.get('fecha') ?? undefined
@@ -167,7 +170,7 @@ export default function DetalleRutaPage() {
               info y acciones, mapa con sucursal de origen + paradas, footer con
               próxima parada. Mantiene la consistencia entre roles. */}
           <Card variant="outlined" sx={{ mb: 2, overflow: 'hidden' }}>
-            <Box sx={{ p: 2, bgcolor: '#fafafa', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderBottom: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Box>
                 <Typography variant="body2" fontWeight={600}>
                   Ruta optimizada{cpZona ? ` · CP ${cpZona}` : ''}
@@ -219,9 +222,9 @@ export default function DetalleRutaPage() {
               height={380}
             />
             {proxima && (
-              <Box sx={{ p: 2, bgcolor: '#f8fdf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#f8fdf8', borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e8f5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2">
-                  <strong>Próxima parada:</strong> {proxima.direccion}, {proxima.localidad} · {proxima.destinatario} · {proxima.peso} kg
+                  <strong>Próxima parada:</strong> {proxima.direccion}, {proxima.localidad} · {proxima.destinatario} · {Math.round(proxima.peso)} kg
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   CP {proxima.codigoPostal}
@@ -247,7 +250,11 @@ export default function DetalleRutaPage() {
                       sx={{
                         borderLeft: '4px solid',
                         borderLeftColor: isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#1976d2',
-                        bgcolor: isCompleted ? '#f8fdf8' : isCurrent ? '#fffbf5' : 'white',
+                        bgcolor: isCompleted
+                          ? (isDark ? 'rgba(46,125,50,0.12)' : '#f8fdf8')
+                          : isCurrent
+                            ? (isDark ? 'rgba(237,108,2,0.12)' : '#fffbf5')
+                            : (isDark ? '#162032' : 'white'),
                         opacity: isCompleted ? 0.85 : 1,
                       }}
                     >
@@ -273,7 +280,7 @@ export default function DetalleRutaPage() {
                             <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
                               <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{p.codigoSeguimiento}</Typography>
                               <Typography variant="caption" color="text.secondary">
-                                👤 {p.destinatario} · {p.peso} kg
+                                👤 {p.destinatario} · {Math.round(p.peso)} kg
                               </Typography>
                               {p.telefono && <Typography variant="caption" color="text.secondary">📱 {p.telefono}</Typography>}
                               {p.esPrioritario && (
