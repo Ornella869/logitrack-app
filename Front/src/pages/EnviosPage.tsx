@@ -1,0 +1,211 @@
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Grid,
+  Snackbar,
+  Stack,
+  Typography,
+} from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import { shipmentService } from '../services/shipmentService'
+import type { Shipment, User } from '../types'
+import ShipmentCard from '../components/ShipmentCard'
+import ShipmentForm from '../components/ShipmentForm'
+import SearchBar from '../components/SearchBar'
+import ShipmentFilters, { type ShipmentFiltersValue } from '../components/ShipmentFilters'
+
+const EMPTY_FILTERS: ShipmentFiltersValue = { status: [], from: '', to: '' }
+
+type Severity = 'success' | 'info' | 'warning' | 'error'
+
+function getPageTitle(user: User) {
+  if (user.role === 'operador') return 'Gestión de envíos'
+  return 'Envíos'
+}
+
+export default function EnviosPage() {
+  const user = useOutletContext<User>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [shipments, setShipments] = useState<Shipment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [openShipmentForm, setOpenShipmentForm] = useState(false)
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<ShipmentFiltersValue>(EMPTY_FILTERS)
+  const [hasQuery, setHasQuery] = useState(false)
+  const [actionToast, setActionToast] = useState<{ open: boolean; message: string; severity: Severity }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  })
+
+  const showActionToast = (message: string, severity: Severity = 'success') => {
+    setActionToast({ open: true, message, severity })
+  }
+
+  const closeActionToast = () => {
+    setActionToast((prev) => ({ ...prev, open: false, message: '' }))
+  }
+
+  const loadShipments = async (query: string, activeFilters: ShipmentFiltersValue) => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await shipmentService.getAllShipments(
+        query || undefined,
+        activeFilters.status.length ? activeFilters.status : undefined,
+        activeFilters.from || undefined,
+        activeFilters.to || undefined,
+      )
+      setShipments(data)
+      setHasQuery(Boolean(query || activeFilters.status.length || activeFilters.from || activeFilters.to))
+    } catch {
+      setError('Error al cargar los envíos')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadShipments(search, filters)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filters.status.join(','), filters.from, filters.to])
+
+  useEffect(() => {
+    if (location.pathname === '/envios' && location.state?.forceReload) {
+      void loadShipments(search, filters)
+      navigate('/envios', { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.state])
+
+  const handleSearch = async (query: string) => setSearch(query.trim())
+
+  const handleCreateShipment = async (shipment: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => {
+    try {
+      const newShipment = await shipmentService.registerShipment(shipment)
+      if (newShipment) {
+        setShipments((prev) => [newShipment, ...prev])
+        showActionToast(`Envío creado. Tracking ID: ${newShipment.trackingId}`, 'success')
+        setOpenShipmentForm(false)
+        return
+      }
+      throw new Error('No se pudo crear el envío')
+    } catch {
+      showActionToast('Error al crear el envío', 'error')
+      throw new Error('No se pudo crear el envío')
+    }
+  }
+
+  const handleDownloadShipments = () => {
+    if (shipments.length === 0) {
+      showActionToast('No hay envíos para descargar', 'warning')
+      return
+    }
+
+    const headers = ['ID', 'Tracking ID', 'Estado', 'Origen', 'Destino', 'Remitente', 'Destinatario', 'Peso (kg)', 'Descripción', 'Fecha Creación']
+    const rows = shipments.map((shipment) => [
+      shipment.id,
+      shipment.trackingId,
+      shipment.status,
+      shipment.origin,
+      shipment.destination,
+      shipment.sender.name,
+      shipment.receiver.name,
+      shipment.weight,
+      shipment.description,
+      shipment.createdDate,
+    ])
+    const csvContent = '﻿' + [headers.join(';'), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(';'))].join('\n')
+    const element = document.createElement('a')
+    element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent))
+    element.setAttribute('download', `envios_${new Date().toISOString().split('T')[0]}.csv`)
+    element.style.display = 'none'
+    document.body.appendChild(element)
+    element.click()
+    document.body.removeChild(element)
+    showActionToast('CSV descargado correctamente', 'info')
+  }
+
+  const handleClearFilters = () => {
+    setFilters(EMPTY_FILTERS)
+    setSearch('')
+  }
+
+  const showCreateButton = user.role === 'operador' || user.role === 'supervisor'
+
+  return (
+    <Box>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        sx={{ mb: 3, gap: 2 }}
+      >
+        <Box>
+          <Typography variant="h4" fontWeight={700}>
+            {getPageTitle(user)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Consultá, filtrá y exportá el listado operativo de envíos.
+          </Typography>
+        </Box>
+
+        <Stack direction="row" spacing={1}>
+          {showCreateButton && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenShipmentForm(true)}>
+              Nuevo envío
+            </Button>
+          )}
+          <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleDownloadShipments}>
+            Exportar CSV
+          </Button>
+        </Stack>
+      </Stack>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+      )}
+
+      <SearchBar onSearch={handleSearch} loading={loading} />
+      <ShipmentFilters value={filters} onChange={setFilters} onClear={handleClearFilters} />
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+          <CircularProgress />
+        </Box>
+      ) : shipments.length === 0 ? (
+        <Alert severity="info">
+          {hasQuery ? 'No se encontraron envíos para los filtros aplicados.' : 'No hay envíos disponibles.'}
+        </Alert>
+      ) : (
+        <Grid container spacing={3}>
+          {shipments.map((shipment) => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={shipment.id}>
+              <ShipmentCard shipment={shipment} />
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      <ShipmentForm open={openShipmentForm} onClose={() => setOpenShipmentForm(false)} onSubmit={handleCreateShipment} />
+
+      <Snackbar
+        open={actionToast.open}
+        autoHideDuration={3500}
+        onClose={closeActionToast}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity={actionToast.severity} variant="filled" onClose={closeActionToast} sx={{ width: '100%' }}>
+          {actionToast.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  )
+}

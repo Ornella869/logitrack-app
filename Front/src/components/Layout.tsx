@@ -18,9 +18,11 @@ import {
   Tab,
 } from '@mui/material'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
+import DashboardIcon from '@mui/icons-material/Dashboard'
 import BoltIcon from '@mui/icons-material/Bolt'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
+import GroupIcon from '@mui/icons-material/Group'
 import HistoryIcon from '@mui/icons-material/History'
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import StoreIcon from '@mui/icons-material/Store'
@@ -78,6 +80,25 @@ function Layout({ user, onLogout }: LayoutProps) {
     operador: 'Operador',
     repartidor: 'Repartidor',
   }
+
+  const selectedTab = (() => {
+    const pathname = location.pathname
+
+    if (pathname === '/app') return '/app'
+    if (pathname === '/envios') return '/envios'
+    if (pathname.startsWith('/repartidor/') && pathname.endsWith('/rendimiento')) return false
+    if (pathname.startsWith('/shipment/')) return false
+    if (pathname.startsWith('/calendario')) return '/calendario'
+    if (pathname.startsWith('/calendarizar')) return '/calendarizar'
+    if (pathname.startsWith('/repartidores')) return '/repartidores'
+    if (pathname.startsWith('/rutas-activas')) return '/rutas-activas'
+    if (pathname.startsWith('/auditoria')) return '/auditoria'
+    if (pathname.startsWith('/mi-plan')) return '/mi-plan'
+    if (pathname.startsWith('/sucursales')) return '/sucursales'
+    return false
+  })()
+
+  const isAccessDeniedPage = location.pathname === '/access-denied'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -195,30 +216,31 @@ function Layout({ user, onLogout }: LayoutProps) {
         </Toolbar>
       </AppBar>
 
-      {/* Tabs nav (Supervisor / Admin) */}
-      {(user.role === 'supervisor' || user.role === 'administrador') && (
+      {/* Tabs nav */}
+      {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador') && (
         <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #e0e0e0', px: { xs: 1, sm: 4 }, position: 'sticky', top: 64, zIndex: 90 }}>
           <Tabs
-            value={(() => {
-              const p = location.pathname
-              if (p.startsWith('/calendario')) return '/calendario'
-              if (p.startsWith('/calendarizar')) return '/calendarizar'
-              if (p.startsWith('/rutas-activas')) return '/rutas-activas'
-              if (p.startsWith('/auditoria')) return '/auditoria'
-              if (p.startsWith('/mi-plan')) return '/mi-plan'
-              if (p.startsWith('/sucursales')) return '/sucursales'
-              return '/app'
-            })()}
+            value={selectedTab}
             onChange={(_, v) => navigate(v)}
             variant="scrollable"
             scrollButtons="auto"
           >
-            <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
+            <Tab icon={<DashboardIcon fontSize="small" />} iconPosition="start" label="Dashboard" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
+            {(user.role === 'supervisor' || user.role === 'operador') && (
+              <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/envios" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
             {user.role === 'supervisor' && (
               <Tab icon={<BoltIcon fontSize="small" />} iconPosition="start" label="Calendarizar" value="/calendarizar" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start" label="Calendario Operativo" value="/calendario" sx={{ minHeight: 48, textTransform: 'none' }} />
-            <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
+            {user.role === 'supervisor' && (
+              <Tab icon={<GroupIcon fontSize="small" />} iconPosition="start" label="Repartidores" value="/repartidores" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {(user.role === 'supervisor' || user.role === 'administrador') && (
+              <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start" label="Calendario Operativo" value="/calendario" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {(user.role === 'supervisor' || user.role === 'administrador') && (
+              <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
             {user.role === 'administrador' && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
@@ -235,15 +257,19 @@ function Layout({ user, onLogout }: LayoutProps) {
       {/* Dialog para cambiar contraseña */}
       <ChangePasswordDialog open={openChangePassword} onClose={() => setOpenChangePassword(false)} />
 
-      <Container
-        maxWidth="lg"
-        sx={{
-          py: { xs: 2, sm: 3 },
-          px: { xs: 2, sm: 3 },
-        }}
-      >
+      {isAccessDeniedPage ? (
         <Outlet context={user} />
-      </Container>
+      ) : (
+        <Container
+          maxWidth="lg"
+          sx={{
+            py: { xs: 2, sm: 3 },
+            px: { xs: 2, sm: 3 },
+          }}
+        >
+          <Outlet context={user} />
+        </Container>
+      )}
     </Box>
   )
 }

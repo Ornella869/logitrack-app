@@ -246,7 +246,7 @@ function ShipmentDetail() {
     if (isRepartidor) {
       navigate('/repartidor')
     } else {
-      navigate('/app', { state: { forceReload: Date.now() } })
+      navigate('/envios', { state: { forceReload: Date.now() } })
     }
   }
 

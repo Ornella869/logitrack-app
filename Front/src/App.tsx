@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Box, CircularProgress } from '@mui/material'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
+import EnviosPage from './pages/EnviosPage'
 import CalendarizarPage from './pages/CalendarizarPage'
 import CalendarioOperativoPage from './pages/CalendarioOperativoPage'
 import RutasActivasPage from './pages/RutasActivasPage'
@@ -10,6 +11,7 @@ import DetalleRutaPage from './pages/DetalleRutaPage'
 import AuditoriaPage from './pages/AuditoriaPage'
 import MiPlanPage from './pages/MiPlanPage'
 import SucursalesPage from './pages/SucursalesPage'
+import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
@@ -164,6 +166,8 @@ function App() {
             user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
           }
         >
+          <Route path="/access-denied" element={<AccessDenied user={user as User} />} />
+
           {/* Rutas comunes — el componente decide qué hacer según rol */}
           <Route path="/shipment/:id" element={<ShipmentDetail />} />
           <Route path="/shipment/:id/etiqueta" element={<ShipmentLabel />} />
@@ -175,7 +179,7 @@ function App() {
               user && isRepartidorRole(user.role) ? (
                 <RepartidorDashboard />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -187,7 +191,17 @@ function App() {
               user && !isRepartidorRole(user.role) ? (
                 <Dashboard />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
+            path="/envios"
+            element={
+              user && (user.role === 'operador' || user.role === 'supervisor') ? (
+                <EnviosPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -199,19 +213,30 @@ function App() {
               user && user.role === 'supervisor' ? (
                 <CalendarizarPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
 
           {/* Supervisor / Admin: calendario operativo y rutas activas */}
           <Route
+            path="/repartidores"
+            element={
+              user && user.role === 'supervisor' ? (
+                <RepartidoresPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+
+          <Route
             path="/calendario"
             element={
               user && (user.role === 'supervisor' || user.role === 'administrador') ? (
                 <CalendarioOperativoPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -221,7 +246,7 @@ function App() {
               user && (user.role === 'supervisor' || user.role === 'administrador') ? (
                 <RutasActivasPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -231,7 +256,7 @@ function App() {
               user && (user.role === 'supervisor' || user.role === 'administrador') ? (
                 <DetalleRutaPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -243,7 +268,7 @@ function App() {
               user && user.role === 'administrador' ? (
                 <AuditoriaPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -253,7 +278,7 @@ function App() {
               user && user.role === 'administrador' ? (
                 <MiPlanPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -263,7 +288,7 @@ function App() {
               user && user.role === 'administrador' ? (
                 <SucursalesPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
@@ -275,16 +300,11 @@ function App() {
               user && (user.role === 'supervisor' || user.role === 'administrador') ? (
                 <PerfilRendimientoPage />
               ) : (
-                <AccessDenied user={user as User} />
+                <Navigate to="/access-denied" replace />
               )
             }
           />
         </Route>
-
-        <Route
-          path="/access-denied"
-          element={user ? <AccessDenied user={user} /> : <Navigate to="/login" />}
-        />
 
         <Route path="*" element={<Navigate to={user ? (isRepartidorRole(user.role) ? '/repartidor' : '/app') : '/login'} />} />
       </Routes>

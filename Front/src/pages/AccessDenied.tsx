@@ -20,7 +20,7 @@ function AccessDenied({ user }: AccessDeniedProps) {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        minHeight: { xs: 'calc(100vh - 56px)', sm: 'calc(100vh - 64px)' },
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

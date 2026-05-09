@@ -102,6 +102,8 @@ export default function CalendarioOperativoPage() {
     return <Alert severity="warning">Solo Supervisor o Administrador pueden ver el calendario operativo.</Alert>
   }
 
+  const canCreateCalendarizacion = user.role === 'supervisor'
+
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -114,9 +116,11 @@ export default function CalendarioOperativoPage() {
             Vista de solo lectura — Envíos asignados por día y repartidor.
           </Typography>
         </Box>
-        <Button variant="outlined" startIcon={<BoltIcon />} onClick={() => navigate('/calendarizar')}>
-          Nueva Calendarización
-        </Button>
+        {canCreateCalendarizacion && (
+          <Button variant="outlined" startIcon={<BoltIcon />} onClick={() => navigate('/calendarizar')}>
+            Nueva Calendarización
+          </Button>
+        )}
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
