@@ -12,6 +12,14 @@ vi.mock('../../../services/authService', () => ({
   },
 }))
 
+vi.mock('react-google-recaptcha', () => ({
+  default: ({ onChange }: { onChange?: (token: string | null) => void }) => (
+    <button type="button" onClick={() => onChange?.('captcha-token')}>
+      Resolver captcha
+    </button>
+  ),
+}))
+
 import { authService } from '../../../services/authService'
 
 const mockedAuthService = authService as unknown as {
@@ -55,12 +63,13 @@ describe('LoginPage integration', () => {
 
     await user.type(screen.getByLabelText('Email'), 'florencia@gmail.com')
     await user.type(screen.getByLabelText('Contraseña'), '12345678')
+    await user.click(screen.getByRole('button', { name: 'Resolver captcha' }))
     await user.click(screen.getByRole('button', { name: 'Ingresar' }))
 
     expect(mockedAuthService.login).toHaveBeenCalledWith({
       email: 'florencia@gmail.com',
       password: '12345678',
-      recaptchaToken: '',
+      recaptchaToken: 'captcha-token',
     })
     expect(onLogin).toHaveBeenCalledTimes(1)
     expect(await screen.findByText('APP_DASHBOARD')).toBeInTheDocument()
@@ -75,6 +84,7 @@ describe('LoginPage integration', () => {
 
     await user.type(screen.getByLabelText('Email'), 'example@gmail.com')
     await user.type(screen.getByLabelText('Contraseña'), '888888')
+    await user.click(screen.getByRole('button', { name: 'Resolver captcha' }))
     await user.click(screen.getByRole('button', { name: 'Ingresar' }))
 
     expect(await screen.findByText('Email o contraseña incorrectos')).toBeInTheDocument()
@@ -91,10 +101,8 @@ describe('LoginPage integration', () => {
     expect(mockedAuthService.login).not.toHaveBeenCalled()
   })
 
-  it('permite enviar sin captcha porque esta deshabilitado', async () => {
+  it('bloquea el submit cuando no se completa captcha', async () => {
     const user = userEvent.setup()
-
-    mockedAuthService.login.mockResolvedValueOnce(null)
 
     renderLogin()
 
@@ -102,7 +110,8 @@ describe('LoginPage integration', () => {
     await user.type(screen.getByLabelText('Contraseña'), '12345678')
     await user.click(screen.getByRole('button', { name: 'Ingresar' }))
 
-    expect(mockedAuthService.login).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Completá el captcha para continuar')).toBeInTheDocument()
+    expect(mockedAuthService.login).not.toHaveBeenCalled()
   })
 
   it('CP-10 pendiente funcional: no existe bloqueo por 3 intentos en frontend actual', () => {
