@@ -609,43 +609,7 @@ function ShipmentDetail() {
           </Grid>
         )}
 
-        {/* G1L-18 + G1L-17 GPS: Mapa con ubicación actual.
-            Admin puede actualizar haciendo click; resto solo lectura. */}
-        {(shipment.status === 'En tránsito' || shipment.ubicacionActual) && (isAdmin || isSupervisor) && (
-          <Grid item xs={12} sx={{ order: isSupervisor ? 6 : undefined }}>
-            <Card>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <MapIcon color="primary" />
-                  <Typography variant="h6">Ubicación del envío</Typography>
-                  {isAdmin && shipment.status === 'En tránsito' && (
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                      (Hacé click en el mapa para actualizar la ubicación)
-                    </Typography>
-                  )}
-                </Stack>
-                <ShipmentMap
-                  position={draftPos ?? shipment.ubicacionActual}
-                  editable={isAdmin && shipment.status === 'En tránsito'}
-                  onChange={(lat, lng) => setDraftPos({ latitud: lat, longitud: lng })}
-                />
-                {isAdmin && draftPos && (
-                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                    <Button variant="contained" onClick={confirmarUbicacion} disabled={savingUbicacion}>
-                      {savingUbicacion ? 'Guardando...' : `Confirmar nueva ubicación (${draftPos.latitud.toFixed(5)}, ${draftPos.longitud.toFixed(5)})`}
-                    </Button>
-                    <Button onClick={() => setDraftPos(null)} disabled={savingUbicacion}>Cancelar</Button>
-                  </Stack>
-                )}
-                {isAdmin && shipment.status !== 'En tránsito' && (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    La simulación de movimiento solo está disponible para envíos en tránsito.
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
+       
       </Grid>
 
       {/* Dialog: confirmar entrega — el repartidor pide el código al destinatario.
