@@ -326,10 +326,10 @@ function Layout({ user, onLogout }: LayoutProps) {
             {user.role === 'supervisor' && (
               <Tab icon={<GroupIcon fontSize="small" />} iconPosition="start" label="Repartidores" value="/repartidores" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {(user.role === 'supervisor' || user.role === 'administrador') && (
+            {user.role === 'supervisor' && (
               <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start" label="Calendario Operativo" value="/calendario" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {(user.role === 'supervisor' || user.role === 'administrador') && (
+            {user.role === 'supervisor' && (
               <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (
