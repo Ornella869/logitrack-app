@@ -36,14 +36,12 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PersonIcon from '@mui/icons-material/Person'
-import MapIcon from '@mui/icons-material/Map'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import { Tab, Tabs } from '@mui/material'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
-import ShipmentMap from '../components/ShipmentMap'
 import QrCameraScanner from '../components/QrCameraScanner'
 
 // Motivos predefinidos de cancelación según G1L-13 AC3
@@ -104,9 +102,6 @@ function ShipmentDetail() {
   const [repartidorAsignado, setRepartidorAsignado] = useState<{
     id: string; nombre: string; apellido: string; email: string; estado: string
   } | null>(null)
-  // Posición en mapa para edición pendiente
-  const [draftPos, setDraftPos] = useState<{ latitud: number; longitud: number } | null>(null)
-  const [savingUbicacion, setSavingUbicacion] = useState(false)
 
   // G1L-43: Pasar de estado vía QR (cámara + entrada manual del código)
   const [openQrDialog, setOpenQrDialog] = useState(false)
@@ -157,20 +152,6 @@ function ShipmentDetail() {
       setError('Error al cargar el envío')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const confirmarUbicacion = async () => {
-    if (!shipment || !draftPos) return
-    setSavingUbicacion(true)
-    const r = await shipmentService.actualizarUbicacion(shipment.id, draftPos.latitud, draftPos.longitud)
-    setSavingUbicacion(false)
-    if (r.success) {
-      showActionToast('Ubicación actualizada', 'success')
-      setDraftPos(null)
-      void loadShipment()
-    } else {
-      showActionToast(r.error ?? 'Error', 'error')
     }
   }
 
