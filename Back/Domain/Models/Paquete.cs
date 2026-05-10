@@ -161,7 +161,13 @@ namespace Back.Domain.Models
         {
             RepartidorAsignadoId = null;
             FechaCalendarizada = null;
-            if (Status == PaqueteStatus.AsignadoAVehiculo || Status == PaqueteStatus.CargadoEnVehiculo)
+            // G1L-68: al "volver a calendarizar" también caemos desde ListoParaSalir,
+            // no solo desde Asignado/Cargado. Si no incluimos ese estado, el paquete
+            // queda con repartidor/fecha en null pero el Status sigue mostrándose
+            // como ListoParaSalir en los listados y no se puede recalendarizar.
+            if (Status == PaqueteStatus.AsignadoAVehiculo
+                || Status == PaqueteStatus.CargadoEnVehiculo
+                || Status == PaqueteStatus.ListoParaSalir)
                 Status = PaqueteStatus.PendienteDeCalendarizacion;
         }
 
