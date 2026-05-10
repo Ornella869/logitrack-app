@@ -210,7 +210,7 @@ namespace Back.Controllers
         // ============== G1L-41: Detalle de envío ==============
 
         /// <summary>Detalle del paquete por ID (incluye flag isEditable).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("paquete/{paqueteId:guid}")]
         public async Task<ActionResult<Paquete>> GetPaquete(Guid paqueteId)
         {
@@ -302,7 +302,7 @@ namespace Back.Controllers
         // ============== G1L-15: Historial de estados ==============
 
         /// <summary>Historial cronológico (descendente) de cambios de estado del paquete.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
         [HttpGet("paquete/{paqueteId:guid}/historial")]
         public async Task<ActionResult<List<HistorialEstadoEnvio>>> GetHistorial(Guid paqueteId)
         {
@@ -315,7 +315,7 @@ namespace Back.Controllers
         // ============== G1L-32: QR ==============
 
         /// <summary>Devuelve el QR del paquete como PNG.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
         [HttpGet("paquete/{paqueteId:guid}/qr")]
         public async Task<ActionResult> GetQr(Guid paqueteId)
         {
@@ -368,7 +368,7 @@ namespace Back.Controllers
         // ============== G1L-28: Etiqueta ==============
 
         /// <summary>Datos de la etiqueta imprimible (Operador o Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
         [HttpGet("paquete/{paqueteId:guid}/etiqueta")]
         public async Task<ActionResult<EtiquetaResponse>> GetEtiqueta(Guid paqueteId)
         {

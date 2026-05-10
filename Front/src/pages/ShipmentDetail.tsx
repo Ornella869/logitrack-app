@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
+import { useParams, useNavigate, useOutletContext, useLocation } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -65,6 +65,7 @@ const ENTREGA_CONFIRMATION_CODE = '123456'
 function ShipmentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const user = useOutletContext<User>()
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [loading, setLoading] = useState(true)
@@ -133,20 +134,20 @@ function ShipmentDetail() {
   const canEdit = isOperador && shipment?.isEditable === true
 
   useEffect(() => {
-    loadShipment()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
-
-  const loadShipment = async () => {
     if (!id) return
+    loadShipment(id, isAdmin, isSupervisor)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isAdmin, isSupervisor])
+
+  const loadShipment = async (paqueteId: string, admin: boolean, supervisor: boolean) => {
     setLoading(true)
     setError('')
     try {
-      const data = await shipmentService.getShipmentTracking(id)
+      const data = await shipmentService.getShipmentTracking(paqueteId)
       if (data) {
         setShipment(data)
         // G1L-42: cargar repartidor asignado para Supervisor / Admin
-        if ((isSupervisor || isAdmin) && data.id) {
+        if ((supervisor || admin) && data.id) {
           const rep = await shipmentService.getRepartidorDePaquete(data.id)
           setRepartidorAsignado(rep)
         }
@@ -168,7 +169,7 @@ function ShipmentDetail() {
     if (r.success) {
       showActionToast('Ubicación actualizada', 'success')
       setDraftPos(null)
-      void loadShipment()
+      void loadShipment(id!, isAdmin, isSupervisor)
     } else {
       showActionToast(r.error ?? 'Error', 'error')
     }
@@ -335,6 +336,16 @@ function ShipmentDetail() {
   const handleBack = () => {
     if (isRepartidor) {
       navigate('/repartidor')
+      return
+    }
+    // Si hay historial de navegación dentro de la app, volvemos atrás.
+    // Esto cubre el caso del Administrador que llega desde /rutas-activas
+    // o cualquier otra página distinta a /envios (a la que el admin no tiene acceso).
+    // location.key es 'default' solo cuando es la primera entrada del historial.
+    if (location.key !== 'default') {
+      navigate(-1)
+    } else if (isAdmin) {
+      navigate('/app')
     } else {
       navigate('/envios', { state: { forceReload: Date.now() } })
     }
