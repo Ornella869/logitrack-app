@@ -20,20 +20,20 @@ namespace Back.Controllers
 
         private readonly AuthService _authService;
         private readonly IUserRepository _userRepository;
-        private readonly IRutasRepository _rutasRepository;
+        private readonly IEnviosRepository _enviosRepository;
         private readonly LogiTrackDbContext _context;
         private readonly IRecaptchaValidationService _recaptchaValidationService;
 
         public AuthController(
             AuthService authService,
             IUserRepository userRepository,
-            IRutasRepository rutasRepository,
+            IEnviosRepository enviosRepository,
             LogiTrackDbContext context,
             IRecaptchaValidationService recaptchaValidationService)
         {
             _authService = authService;
             _userRepository = userRepository;
-            _rutasRepository = rutasRepository;
+            _enviosRepository = enviosRepository;
             _context = context;
             _recaptchaValidationService = recaptchaValidationService;
         }
@@ -111,30 +111,36 @@ namespace Back.Controllers
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
 
             var repartidores = await _userRepository.GetRepartidores();
-            var rutas = await _rutasRepository.GetRutas();
-            var rutasPorRepartidor = rutas
-                .GroupBy(r => r.Repartidor.Id)
+            var asignados = await _enviosRepository.GetPaquetesConAsignacionActiva();
+            var paquetesActivosPorRepartidor = asignados
+                .GroupBy(p => p.RepartidorAsignadoId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var query = repartidores.Select(t =>
             {
-                rutasPorRepartidor.TryGetValue(t.Id, out var asignadas);
-                asignadas ??= new List<Ruta>();
+                paquetesActivosPorRepartidor.TryGetValue(t.Id, out var paquetesActivos);
+                paquetesActivos ??= new List<Paquete>();
 
-                var routeStatusKey = asignadas.Any(r => r.Estado == RutaStatus.EnCurso)
+                var assignedRoutesCount = paquetesActivos
+                    .Where(p => p.FechaCalendarizada.HasValue)
+                    .Select(p => p.FechaCalendarizada!.Value.Date)
+                    .Distinct()
+                    .Count();
+
+                var routeStatusKey = paquetesActivos.Any(p => p.Status == PaqueteStatus.EnTransito)
                     ? "en-viaje"
-                    : asignadas.Any(r => r.Estado == RutaStatus.Pendiente)
+                    : paquetesActivos.Any(p => p.Status == PaqueteStatus.AsignadoAVehiculo
+                        || p.Status == PaqueteStatus.CargadoEnVehiculo
+                        || p.Status == PaqueteStatus.ListoParaSalir)
                         ? "con-ruta-asignada"
-                        : asignadas.Count == 0
-                            ? "sin-asignacion"
-                            : "disponible";
+                        : "sin-asignacion";
 
                 var routeStatusLabel = routeStatusKey switch
                 {
                     "en-viaje" => "En viaje",
                     "con-ruta-asignada" => "Con ruta asignada",
                     "sin-asignacion" => "Sin asignacion",
-                    _ => "Disponible"
+                    _ => "Sin asignacion"
                 };
 
                 return new RepartidorListadoResponse
@@ -148,7 +154,7 @@ namespace Back.Controllers
                     Role = Roles.Repartidor,
                     Licencia = t.Licencia,
                     Estado = t.EstadoLabel,
-                    AssignedRoutesCount = asignadas.Count,
+                    AssignedRoutesCount = assignedRoutesCount,
                     RouteStatusKey = routeStatusKey,
                     RouteStatusLabel = routeStatusLabel,
                 };
@@ -169,8 +175,8 @@ namespace Back.Controllers
                 var normalized = accountStatus.Trim().ToLowerInvariant();
                 query = normalized switch
                 {
-                    "activo" => query.Where(r => string.Equals(r.Estado, "Activo", StringComparison.OrdinalIgnoreCase)),
-                    "inactivo" => query.Where(r => !string.Equals(r.Estado, "Activo", StringComparison.OrdinalIgnoreCase)),
+                    "activo" => query.Where(r => r.Activo),
+                    "inactivo" => query.Where(r => !r.Activo),
                     _ => query,
                 };
             }

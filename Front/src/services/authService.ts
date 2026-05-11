@@ -19,7 +19,7 @@ interface CreateRepartidorResult {
 
 export interface RepartidorListItem extends User {
   assignedRoutesCount: number
-  routeStatusKey: 'en-viaje' | 'con-ruta-asignada' | 'sin-asignacion' | 'disponible'
+  routeStatusKey: 'en-viaje' | 'con-ruta-asignada' | 'sin-asignacion'
   routeStatusLabel: string
 }
 

@@ -18,18 +18,11 @@ import {
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 
-import type { RepartidorEstado } from '../types'
 import { authService, type RepartidorListItem } from '../services/authService'
 import SearchBar from './SearchBar'
 
 interface RepartidoresListProps {
   userRole?: string
-}
-
-const estadoColorMap: Record<RepartidorEstado, 'success' | 'warning' | 'error'> = {
-  Activo: 'success',
-  Suspendido: 'warning',
-  Inhabilitado: 'error',
 }
 
 const FILTER_OPTIONS = [
@@ -103,8 +96,16 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
       case 'sin-asignacion':
         return { label: repartidor.routeStatusLabel, color: 'default' as const }
       default:
-        return { label: repartidor.routeStatusLabel, color: 'success' as const }
+        return { label: repartidor.routeStatusLabel, color: 'default' as const }
     }
+  }
+
+  const getAccountStatus = (repartidor: RepartidorListItem) => {
+    if (repartidor.activo === false) {
+      return { label: 'Cuenta: Inactiva', color: 'error' as const }
+    }
+
+    return { label: 'Cuenta: Activa', color: 'success' as const }
   }
 
   const handleEstadoToggle = (_event: unknown, newFilters: FilterValue[]) => {
@@ -228,7 +229,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
           <Grid container spacing={3}>
             {repartidores.map((repartidor) => {
               const routeStatus = getRouteStatus(repartidor)
-              const estadoCuenta = (repartidor.estado ?? 'Activo') as RepartidorEstado
+              const accountStatus = getAccountStatus(repartidor)
 
               return (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={repartidor.id}>
@@ -281,8 +282,8 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                         </Box>
                         <Box sx={{ pt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                           <Chip
-                            label={`Cuenta: ${estadoCuenta}`}
-                            color={estadoColorMap[estadoCuenta]}
+                            label={accountStatus.label}
+                            color={accountStatus.color}
                             size="small"
                             variant="filled"
                             icon={<VerifiedUserIcon />}
