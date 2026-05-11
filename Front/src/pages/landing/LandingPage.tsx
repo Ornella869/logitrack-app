@@ -44,6 +44,7 @@ import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded'
 import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded'
 import DirectionsCarFilledRoundedIcon from '@mui/icons-material/DirectionsCarFilledRounded'
 import warehouseImage from '../../assets/warehouse.jpg'
+import { empresaService } from '../../services/empresaService'
 import { leadService, type PlanInteres } from '../../services/leadService'
 
 type ReviewCategory = 'entrega' | 'vehiculo' | 'general'
@@ -202,18 +203,20 @@ const steps = [
   },
 ]
 
-const plans: Array<{
+type LandingPlan = {
   name: string
   planValue: PlanInteres
   accountLimit: string
   price: string
   features: string[]
-}> = [
+}
+
+const fallbackPlans: LandingPlan[] = [
   {
-    name: 'Basico',
+    name: 'Básico',
     planValue: 'Basico',
     accountLimit: 'Hasta 50 cuentas',
-    price: '$89.900 / mes (mock)',
+    price: '$50.000 / mes',
     features: [
       'Registro y seguimiento de envios',
       'Estados de entrega y trazabilidad',
@@ -224,8 +227,8 @@ const plans: Array<{
   {
     name: 'Premium',
     planValue: 'Premium',
-    accountLimit: 'Hasta 200 cuentas',
-    price: '$249.900 / mes (mock)',
+    accountLimit: 'Hasta 100 cuentas',
+    price: '$180.000 / mes',
     features: [
       'Todo lo incluido en Basico',
       'Planificacion de rutas avanzada',
@@ -234,6 +237,21 @@ const plans: Array<{
     ],
   },
 ]
+
+const landingFeaturesByPlan: Record<PlanInteres, string[]> = {
+  Basico: [
+    'Registro y seguimiento de envios',
+    'Estados de entrega y trazabilidad',
+    'Dashboard operativo estandar',
+    'Soporte por correo en horario laboral',
+  ],
+  Premium: [
+    'Todo lo incluido en Basico',
+    'Planificacion de rutas avanzada',
+    'Reportes ejecutivos y metricas ampliadas',
+    'Soporte prioritario y acompanamiento',
+  ],
+}
 
 const COUNTRIES = [
   { code: 'AR', dial: '+54', name: 'Argentina', digits: 10 },
@@ -269,6 +287,7 @@ export default function LandingPage() {
   const [leadError, setLeadError] = useState('')
   const [leadForm, setLeadForm] = useState(initialLeadForm)
   const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
+  const [plans, setPlans] = useState<LandingPlan[]>(fallbackPlans)
   const selectedCountry = COUNTRIES[0]
 
   const closeReviewToast = () => {
@@ -300,6 +319,39 @@ export default function LandingPage() {
     handleScroll()
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    const loadPlans = async () => {
+      const catalogo = await empresaService.catalogo()
+      if (!active || !catalogo.length) return
+
+      const orderedPlans: PlanInteres[] = ['Basico', 'Premium']
+      setPlans(
+        orderedPlans
+          .map((planValue) => {
+            const plan = catalogo.find((item) => item.plan === planValue)
+            if (!plan) return null
+
+            return {
+              name: plan.nombre,
+              planValue,
+              accountLimit: `Hasta ${plan.limiteCuentas} cuentas`,
+              price: plan.precioMock,
+              features: landingFeaturesByPlan[planValue],
+            }
+          })
+          .filter((plan): plan is LandingPlan => plan !== null),
+      )
+    }
+
+    void loadPlans()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   const average = useMemo(() => {
