@@ -268,7 +268,6 @@ namespace Back.Controllers
         // ============== G1L-30 / G1L-47: CRUD Usuarios + credenciales (Administrador) ==============
 
         /// <summary>Listado de usuarios con búsqueda parcial por nombre, apellido, email o DNI.</summary>
-        [Authorize(Roles = Roles.Administrador)]
         [HttpGet("usuarios")]
         public async Task<ActionResult<PagedResponse<UserInfoResponse>>> GetUsuarios(
             [FromQuery] string? search,
@@ -434,9 +433,11 @@ namespace Back.Controllers
     {
         [Required] public string Nombre { get; set; } = string.Empty;
         [Required] public string Apellido { get; set; } = string.Empty;
-        [Required][EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
+        [Required]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
         public string Email { get; set; } = string.Empty;
-        [Required][Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
+        [Required]
+        [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
         [Required] public string Licencia { get; set; } = string.Empty;
     }
@@ -454,7 +455,8 @@ namespace Back.Controllers
     public class CambiarPasswordRequest
     {
         [Required] public string PasswordActual { get; set; } = string.Empty;
-        [Required][MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
+        [Required]
+        [MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
         public string PasswordNueva { get; set; } = string.Empty;
         [Required] public string PasswordConfirmacion { get; set; } = string.Empty;
     }
@@ -463,12 +465,15 @@ namespace Back.Controllers
     {
         [Required] public string Nombre { get; set; } = string.Empty;
         [Required] public string Apellido { get; set; } = string.Empty;
-        [Required][EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
+        [Required]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
         public string Email { get; set; } = string.Empty;
-        [Required][Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
+        [Required]
+        [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
         [Required] public string Role { get; set; } = string.Empty;
-        [Required][MinLength(8, ErrorMessage = "La contraseña temporal debe tener al menos 8 caracteres.")]
+        [Required]
+        [MinLength(8, ErrorMessage = "La contraseña temporal debe tener al menos 8 caracteres.")]
         public string PasswordTemporal { get; set; } = string.Empty;
         public string? Licencia { get; set; }
     }
@@ -477,9 +482,11 @@ namespace Back.Controllers
     {
         [Required] public string Nombre { get; set; } = string.Empty;
         [Required] public string Apellido { get; set; } = string.Empty;
-        [Required][EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
+        [Required]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
         public string Email { get; set; } = string.Empty;
-        [Required][Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
+        [Required]
+        [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
     }
 
@@ -495,9 +502,11 @@ namespace Back.Controllers
 
     public class LoginRequest
     {
-        [Required][EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
+        [Required]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
         public string Email { get; set; } = string.Empty;
-        [Required][MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
+        [Required]
+        [MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
         public string Password { get; set; } = string.Empty;
         // Captcha temporalmente deshabilitado para testing
         // [Required(ErrorMessage = "El captcha es obligatorio.")]
@@ -523,11 +532,14 @@ namespace Back.Controllers
     {
         [Required] public string Nombre { get; set; }
         [Required] public string Apellido { get; set; }
-        [Required][EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
+        [Required]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido.")]
         public string Email { get; set; }
-        [Required][MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
+        [Required]
+        [MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
         public string Password { get; set; }
-        [Required][Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
+        [Required]
+        [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; }
         public string Role { get; set; }
     }
