@@ -4,20 +4,26 @@ import {
   Alert,
   Box,
   Button,
+  ButtonGroup,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Grid,
   LinearProgress,
   Stack,
   TextField,
+  Tooltip,
   Typography,
+  useTheme,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PersonIcon from '@mui/icons-material/Person'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import TrendingUpIcon from '@mui/icons-material/TrendingUp'
+import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import api from '../services/api'
 import type { User } from '../types'
 
@@ -35,8 +41,29 @@ type Rendimiento = {
   tieneActividad: boolean
 }
 
-const today = () => new Date().toISOString().split('T')[0]
-const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().split('T')[0]
+const fmt = (d: Date) => d.toISOString().split('T')[0]
+const today = () => fmt(new Date())
+const daysAgo = (n: number) => fmt(new Date(Date.now() - n * 86400000))
+const startOfMonth = () => {
+  const d = new Date()
+  return fmt(new Date(d.getFullYear(), d.getMonth(), 1))
+}
+
+const PRESETS = [
+  { label: 'Última semana', from: () => daysAgo(7), to: today },
+  { label: 'Mes actual', from: startOfMonth, to: today },
+  { label: 'Últimos 30 días', from: () => daysAgo(30), to: today },
+] as const
+
+/** Devuelve el período anterior de igual duración */
+function prevPeriod(from: string, to: string) {
+  const msFrom = new Date(from).getTime()
+  const msTo = new Date(to).getTime()
+  const duration = msTo - msFrom
+  const prevTo = fmt(new Date(msFrom - 86400000))
+  const prevFrom = fmt(new Date(msFrom - 86400000 - duration))
+  return { from: prevFrom, to: prevTo }
+}
 
 export default function PerfilRendimientoPage() {
   const user = useOutletContext<User>()
@@ -44,7 +71,9 @@ export default function PerfilRendimientoPage() {
   const { repartidorId } = useParams<{ repartidorId: string }>()
   const [from, setFrom] = useState<string>(daysAgo(30))
   const [to, setTo] = useState<string>(today())
+  const [dateError, setDateError] = useState('')
   const [data, setData] = useState<Rendimiento | null>(null)
+  const [prevData, setPrevData] = useState<Rendimiento | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -52,19 +81,43 @@ export default function PerfilRendimientoPage() {
     if (!repartidorId) return
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
-  }, [repartidorId, user.role, from, to])
+  }, [repartidorId, user.role])
 
-  const load = async () => {
+  const validate = (f: string, t: string): boolean => {
+    if (t < f) { setDateError('La fecha fin no puede ser anterior a la fecha inicio.'); return false }
+    if (t > today()) { setDateError('La fecha fin no puede ser una fecha futura.'); return false }
+    setDateError('')
+    return true
+  }
+
+  const load = async (overrideFrom?: string, overrideTo?: string) => {
+    const f = overrideFrom ?? from
+    const t = overrideTo ?? to
+    if (!validate(f, t)) return
+    if (!repartidorId) return
     setLoading(true)
     setError('')
     try {
-      const r = await api.get(`/repartidores/${repartidorId}/rendimiento`, { params: { from, to } })
-      setData(r.data)
+      const prev = prevPeriod(f, t)
+      const [res, prevRes] = await Promise.all([
+        api.get(`/repartidores/${repartidorId}/rendimiento`, { params: { from: f, to: t } }),
+        api.get(`/repartidores/${repartidorId}/rendimiento`, { params: { from: prev.from, to: prev.to } }).catch(() => null),
+      ])
+      setData(res.data)
+      setPrevData(prevRes?.data ?? null)
     } catch (e: any) {
       setError(e.response?.data ?? 'No se pudo cargar el rendimiento')
     } finally {
       setLoading(false)
     }
+  }
+
+  const applyPreset = (preset: typeof PRESETS[number]) => {
+    const f = preset.from()
+    const t = preset.to()
+    setFrom(f)
+    setTo(t)
+    void load(f, t)
   }
 
   if (user.role !== 'supervisor' && user.role !== 'administrador') {
@@ -91,11 +144,50 @@ export default function PerfilRendimientoPage() {
 
       <Card variant="outlined" sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <Typography variant="subtitle2">Período</Typography>
-            <TextField type="date" size="small" label="Desde" InputLabelProps={{ shrink: true }} value={from} onChange={(e) => setFrom(e.target.value)} />
-            <TextField type="date" size="small" label="Hasta" InputLabelProps={{ shrink: true }} value={to} onChange={(e) => setTo(e.target.value)} />
-            <Button size="small" onClick={load}>Aplicar</Button>
+          <Stack spacing={2}>
+            {/* Presets */}
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mr: 0.5 }}>Período rápido:</Typography>
+              <ButtonGroup size="small" variant="outlined">
+                {PRESETS.map((p) => (
+                  <Button key={p.label} onClick={() => applyPreset(p)} sx={{ textTransform: 'none', fontSize: '0.75rem' }}>
+                    {p.label}
+                  </Button>
+                ))}
+              </ButtonGroup>
+            </Stack>
+
+            {/* Custom range */}
+            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+              <Typography variant="subtitle2">Rango personalizado</Typography>
+              <TextField
+                type="date"
+                size="small"
+                label="Desde"
+                InputLabelProps={{ shrink: true }}
+                value={from}
+                inputProps={{ max: today() }}
+                onChange={(e) => { setFrom(e.target.value); setDateError('') }}
+              />
+              <TextField
+                type="date"
+                size="small"
+                label="Hasta"
+                InputLabelProps={{ shrink: true }}
+                value={to}
+                inputProps={{ max: today() }}
+                onChange={(e) => { setTo(e.target.value); setDateError('') }}
+              />
+              <Button size="small" variant="contained" onClick={() => void load()}>Aplicar</Button>
+            </Stack>
+
+            {dateError && <Alert severity="error" sx={{ py: 0 }}>{dateError}</Alert>}
+
+            {prevData && prevData.tieneActividad && (
+              <Typography variant="caption" color="text.secondary">
+                Comparando con período anterior: {prevData.from} → {prevData.to}
+              </Typography>
+            )}
           </Stack>
         </CardContent>
       </Card>
@@ -107,20 +199,212 @@ export default function PerfilRendimientoPage() {
       ) : !data ? null : !data.tieneActividad ? (
         <Alert severity="info">No hay datos operativos registrados para el período seleccionado.</Alert>
       ) : (
-        <Grid container spacing={2}>
-          <Kpi label="Total de Entregas" value={data.totalEntregas} sub={`de ${data.totalAsignados} asignados`} color="#2e7d32" icon={<CheckCircleIcon />} />
-          <Kpi label="Efectividad On-Time" value={`${data.efectividadOnTimePct.toFixed(1)}%`} sub="entregadas en fecha" color="#1976d2" icon={<AccessTimeIcon />} progress={data.efectividadOnTimePct} progressColor={data.efectividadOnTimePct >= 80 ? '#2e7d32' : data.efectividadOnTimePct >= 60 ? '#ed6c02' : '#c62828'} />
-          <Kpi label="Tasa de Incidencias" value={`${data.tasaIncidenciasPct.toFixed(1)}%`} sub={`${data.totalCancelaciones} canceladas`} color="#c62828" icon={<WarningAmberIcon />} progress={data.tasaIncidenciasPct} progressColor={data.tasaIncidenciasPct <= 10 ? '#2e7d32' : data.tasaIncidenciasPct <= 25 ? '#ed6c02' : '#c62828'} />
-          <Kpi label="Total Asignados" value={data.totalAsignados} sub="en el período" color="#5e35b1" icon={<PersonIcon />} />
-        </Grid>
+        <>
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Kpi
+              label="Total de Entregas"
+              value={data.totalEntregas}
+              sub={`de ${data.totalAsignados} asignados`}
+              color="#2e7d32"
+              icon={<CheckCircleIcon />}
+              compareValue={data.totalEntregas}
+              comparePrev={prevData?.tieneActividad ? prevData.totalEntregas : undefined}
+              higherIsBetter
+            />
+            <Kpi
+              label="Efectividad On-Time"
+              value={`${data.efectividadOnTimePct.toFixed(1)}%`}
+              sub="entregadas en fecha"
+              color="#1976d2"
+              icon={<AccessTimeIcon />}
+              progress={data.efectividadOnTimePct}
+              progressColor={data.efectividadOnTimePct >= 80 ? '#2e7d32' : data.efectividadOnTimePct >= 60 ? '#ed6c02' : '#c62828'}
+              compareValue={data.efectividadOnTimePct}
+              comparePrev={prevData?.tieneActividad ? prevData.efectividadOnTimePct : undefined}
+              higherIsBetter
+            />
+            <Kpi
+              label="Tasa de Incidencias"
+              value={`${data.tasaIncidenciasPct.toFixed(1)}%`}
+              sub={`${data.totalCancelaciones} canceladas`}
+              color="#c62828"
+              icon={<WarningAmberIcon />}
+              progress={data.tasaIncidenciasPct}
+              progressColor={data.tasaIncidenciasPct <= 10 ? '#2e7d32' : data.tasaIncidenciasPct <= 25 ? '#ed6c02' : '#c62828'}
+              compareValue={data.tasaIncidenciasPct}
+              comparePrev={prevData?.tieneActividad ? prevData.tasaIncidenciasPct : undefined}
+              higherIsBetter={false}
+            />
+            <Kpi
+              label="Total Asignados"
+              value={data.totalAsignados}
+              sub="en el período"
+              color="#5e35b1"
+              icon={<PersonIcon />}
+              compareValue={data.totalAsignados}
+              comparePrev={prevData?.tieneActividad ? prevData.totalAsignados : undefined}
+              higherIsBetter
+            />
+          </Grid>
+
+          {prevData?.tieneActividad && (
+            <ComparisonChart data={data} prevData={prevData} from={from} to={to} />
+          )}
+        </>
       )}
     </Box>
   )
 }
 
-function Kpi({
-  label, value, sub, color, icon, progress, progressColor,
-}: { label: string; value: number | string; sub: string; color: string; icon: React.ReactNode; progress?: number; progressColor?: string }) {
+// ─── Comparison bar chart ────────────────────────────────────────────────────
+
+interface ComparisonChartProps {
+  data: Rendimiento
+  prevData: Rendimiento
+  from: string
+  to: string
+}
+
+const BAR_MAX_H = 100
+
+function ComparisonBar({
+  label,
+  current,
+  prev,
+  color,
+  maxVal,
+  isPercent = false,
+  higherIsBetter = true,
+}: {
+  label: string
+  current: number
+  prev: number
+  color: string
+  maxVal: number
+  isPercent?: boolean
+  higherIsBetter?: boolean
+}) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const safe = maxVal > 0 ? maxVal : 1
+  const currentH = Math.max(4, (current / safe) * BAR_MAX_H)
+  const prevH = Math.max(4, (prev / safe) * BAR_MAX_H)
+  const improved = higherIsBetter ? current >= prev : current <= prev
+  const fmt = (v: number) => (isPercent ? `${v.toFixed(1)}%` : String(v))
+
+  return (
+    <Box sx={{ flex: 1, minWidth: 80, textAlign: 'center' }}>
+      <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 1, fontSize: '0.7rem' }}>
+        {label}
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', height: BAR_MAX_H }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <Typography variant="caption" fontWeight={700} sx={{ color, fontSize: '0.65rem' }}>{fmt(current)}</Typography>
+          <Box sx={{ width: 26, height: `${currentH}px`, bgcolor: color, borderRadius: '4px 4px 0 0' }} />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Actual</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>{fmt(prev)}</Typography>
+          <Box sx={{ width: 26, height: `${prevH}px`, bgcolor: isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd', borderRadius: '4px 4px 0 0' }} />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Anterior</Typography>
+        </Box>
+      </Box>
+      <Box sx={{ mt: 0.5 }}>
+        <Chip
+          size="small"
+          label={improved ? '↑ Mejor' : '↓ Bajó'}
+          sx={{
+            height: 18,
+            fontSize: '0.62rem',
+            bgcolor: improved
+              ? (isDark ? 'rgba(46,125,50,0.3)' : '#e8f5e9')
+              : (isDark ? 'rgba(198,40,40,0.3)' : '#ffebee'),
+            color: improved ? '#2e7d32' : '#c62828',
+          }}
+        />
+      </Box>
+    </Box>
+  )
+}
+
+function ComparisonChart({ data, prevData, from, to }: ComparisonChartProps) {
+  const { from: prevFrom, to: prevTo } = prevPeriod(from, to)
+  const maxEntregas = Math.max(data.totalEntregas, prevData.totalEntregas) * 1.15 || 1
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={700}>
+            Comparativa visual vs período anterior
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Anterior: {new Date(prevFrom).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} — {new Date(prevTo).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+          </Typography>
+        </Stack>
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-around', flexWrap: 'wrap' }}>
+          <ComparisonBar
+            label="Entregas totales"
+            current={data.totalEntregas}
+            prev={prevData.totalEntregas}
+            color="#2e7d32"
+            maxVal={maxEntregas}
+            higherIsBetter
+          />
+          <ComparisonBar
+            label="On-Time %"
+            current={data.efectividadOnTimePct}
+            prev={prevData.efectividadOnTimePct}
+            color="#1976d2"
+            maxVal={100}
+            isPercent
+            higherIsBetter
+          />
+          <ComparisonBar
+            label="Incidencias %"
+            current={data.tasaIncidenciasPct}
+            prev={prevData.tasaIncidenciasPct}
+            color="#c62828"
+            maxVal={Math.max(data.tasaIncidenciasPct, prevData.tasaIncidenciasPct) * 1.15 || 1}
+            isPercent
+            higherIsBetter={false}
+          />
+          <ComparisonBar
+            label="Asignados"
+            current={data.totalAsignados}
+            prev={prevData.totalAsignados}
+            color="#5e35b1"
+            maxVal={Math.max(data.totalAsignados, prevData.totalAsignados) * 1.15 || 1}
+            higherIsBetter
+          />
+        </Box>
+      </CardContent>
+    </Card>
+  )
+}
+
+interface KpiProps {
+  label: string
+  value: number | string
+  sub: string
+  color: string
+  icon: React.ReactNode
+  progress?: number
+  progressColor?: string
+  compareValue?: number
+  comparePrev?: number
+  higherIsBetter?: boolean
+}
+
+function Kpi({ label, value, sub, color, icon, progress, progressColor, compareValue, comparePrev, higherIsBetter = true }: KpiProps) {
+  const showCompare = compareValue !== undefined && comparePrev !== undefined && comparePrev !== 0
+  let pct = 0
+  let isGood = false
+  if (showCompare) {
+    pct = ((compareValue! - comparePrev!) / Math.abs(comparePrev!)) * 100
+    isGood = higherIsBetter ? pct >= 0 : pct <= 0
+  }
+
   return (
     <Grid item xs={12} sm={6} md={3}>
       <Card variant="outlined" sx={{ borderLeft: `4px solid ${color}`, height: '100%' }}>
@@ -137,6 +421,23 @@ function Kpi({
               value={Math.min(100, Math.max(0, progress))}
               sx={{ mt: 1, height: 6, borderRadius: 1, '& .MuiLinearProgress-bar': { bgcolor: progressColor ?? color } }}
             />
+          )}
+          {showCompare && (
+            <Tooltip title={`Período anterior: ${comparePrev!.toFixed(comparePrev! % 1 !== 0 ? 1 : 0)}`}>
+              <Chip
+                size="small"
+                icon={pct >= 0 ? <TrendingUpIcon sx={{ fontSize: '14px !important' }} /> : <TrendingDownIcon sx={{ fontSize: '14px !important' }} />}
+                label={`${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs anterior`}
+                sx={{
+                  mt: 1,
+                  fontSize: '0.68rem',
+                  height: 20,
+                  bgcolor: isGood ? '#e8f5e9' : '#ffebee',
+                  color: isGood ? '#2e7d32' : '#c62828',
+                  '& .MuiChip-icon': { color: isGood ? '#2e7d32' : '#c62828' },
+                }}
+              />
+            </Tooltip>
           )}
         </CardContent>
       </Card>

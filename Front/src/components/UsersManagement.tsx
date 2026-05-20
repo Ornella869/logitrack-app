@@ -4,12 +4,14 @@ import {
   Avatar,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Collapse,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   FormControl,
   IconButton,
@@ -32,6 +34,7 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Typography,
+  useTheme,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -62,6 +65,13 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
   repartidor: { bg: '#E8F5E9', color: '#1B5E20' },
 }
 
+const ROLE_COLORS_DARK: Record<UserRole, { bg: string; color: string }> = {
+  administrador: { bg: 'rgba(69,39,160,0.25)', color: '#CE93D8' },
+  supervisor: { bg: 'rgba(183,28,28,0.25)', color: '#EF9A9A' },
+  operador: { bg: 'rgba(13,71,161,0.25)', color: '#90CAF9' },
+  repartidor: { bg: 'rgba(27,94,32,0.25)', color: '#A5D6A7' },
+}
+
 type RoleFilter = UserRole | 'all'
 type EstadoFilter = 'all' | 'active' | 'inactive'
 
@@ -80,13 +90,20 @@ function isActive(user?: { activo?: boolean; estado?: string }): boolean {
 }
 
 function EstadoChip({ activo, estado }: { activo?: boolean; estado?: string }) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   if (isActive({ activo, estado })) {
     return (
       <Chip
         icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
         label="Activo"
         size="small"
-        sx={{ bgcolor: '#E8F5E9', color: '#1B5E20', fontWeight: 700, fontSize: '0.7rem', '& .MuiChip-icon': { color: '#1B5E20' } }}
+        sx={{
+          bgcolor: isDark ? 'rgba(27,94,32,0.25)' : '#E8F5E9',
+          color: isDark ? '#A5D6A7' : '#1B5E20',
+          fontWeight: 700, fontSize: '0.7rem',
+          '& .MuiChip-icon': { color: isDark ? '#A5D6A7' : '#1B5E20' },
+        }}
       />
     )
   }
@@ -96,13 +113,20 @@ function EstadoChip({ activo, estado }: { activo?: boolean; estado?: string }) {
       icon={<BlockIcon sx={{ fontSize: 14 }} />}
       label={label}
       size="small"
-      sx={{ bgcolor: '#FFEBEE', color: '#B71C1C', fontWeight: 700, fontSize: '0.7rem', '& .MuiChip-icon': { color: '#B71C1C' } }}
+      sx={{
+        bgcolor: isDark ? 'rgba(183,28,28,0.25)' : '#FFEBEE',
+        color: isDark ? '#EF9A9A' : '#B71C1C',
+        fontWeight: 700, fontSize: '0.7rem',
+        '& .MuiChip-icon': { color: isDark ? '#EF9A9A' : '#B71C1C' },
+      }}
     />
   )
 }
 
 function RoleChip({ role }: { role: UserRole }) {
-  const cfg = ROLE_COLORS[role] ?? { bg: '#F5F5F5', color: '#555' }
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const cfg = (isDark ? ROLE_COLORS_DARK[role] : ROLE_COLORS[role]) ?? { bg: isDark ? 'rgba(255,255,255,0.1)' : '#F5F5F5', color: isDark ? 'rgba(255,255,255,0.7)' : '#555' }
   return (
     <Chip
       label={ROLE_LABELS[role] ?? role}
@@ -127,6 +151,8 @@ interface UsersManagementProps {
 }
 
 export default function UsersManagement({ currentUserId }: UsersManagementProps = {}) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -168,6 +194,9 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
     severity: 'success' | 'error' | 'info' | 'warning'
   }>({ open: false, message: '', severity: 'success' })
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [openBulkConfirm, setOpenBulkConfirm] = useState(false)
+
   const showToast = (message: string, severity: typeof toast.severity = 'success') => {
     setToast({ open: true, message, severity })
   }
@@ -180,6 +209,10 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   useEffect(() => {
     void loadUsers()
     loadPendingResets()
+  }, [page, pageSize, search, roleFilter, estadoFilter])
+
+  useEffect(() => {
+    setSelectedIds(new Set())
   }, [page, pageSize, search, roleFilter, estadoFilter])
 
   const loadUsers = async () => {
@@ -333,6 +366,33 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
     }
   }
 
+  // ── Bulk toggle estado ───────────────────────────────────────────────────────
+
+  const handleBulkToggle = async () => {
+    const selectedUsers = users.filter((u) => selectedIds.has(u.id))
+    const toDeactivate = selectedUsers.filter((u) => isActive(u))
+    const toActivate = selectedUsers.filter((u) => !isActive(u))
+    setSubmitting(true)
+    try {
+      await Promise.all([
+        ...toDeactivate.map((u) => authService.updateUsuarioEstado(u.id, 'Inactivo')),
+        ...toActivate.map((u) => authService.updateUsuarioEstado(u.id, 'Activo')),
+      ])
+      setOpenBulkConfirm(false)
+      setSelectedIds(new Set())
+      const parts = [
+        toDeactivate.length > 0 ? `${toDeactivate.length} cuenta${toDeactivate.length > 1 ? 's' : ''} desactivada${toDeactivate.length > 1 ? 's' : ''}` : '',
+        toActivate.length > 0 ? `${toActivate.length} cuenta${toActivate.length > 1 ? 's' : ''} activada${toActivate.length > 1 ? 's' : ''}` : '',
+      ].filter(Boolean)
+      showToast(parts.join(' y '), 'success')
+      void loadUsers()
+    } catch {
+      showToast('Error al procesar algunas cuentas', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   // ── Resolver solicitud pendiente de reseteo ──────────────────────────────────
 
   const handleOpenResolvePending = (email: string) => {
@@ -412,6 +472,12 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const filtersApplied = Boolean(search.trim() || roleFilter !== 'all' || estadoFilter !== 'all')
+  const selectableUsers = users.filter((u) => !(currentUserId && u.id === currentUserId))
+  const allSelected = selectableUsers.length > 0 && selectableUsers.every((u) => selectedIds.has(u.id))
+  const someSelected = selectableUsers.some((u) => selectedIds.has(u.id))
+  const selectedUsers = users.filter((u) => selectedIds.has(u.id))
+  const toDeactivate = selectedUsers.filter((u) => isActive(u))
+  const toActivate = selectedUsers.filter((u) => !isActive(u))
 
   return (
     <Box>
@@ -438,7 +504,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
           variant="outlined"
           sx={{ borderRadius: 2, mb: 3, overflow: 'hidden', borderColor: '#F57C00' }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1.5, bgcolor: '#FFF3E0' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1.5, bgcolor: isDark ? 'rgba(245,124,0,0.15)' : '#FFF3E0' }}>
             <NotificationsActiveIcon sx={{ color: '#F57C00', fontSize: 20 }} />
                 <Typography variant="subtitle2" sx={{ color: '#E65100', fontWeight: 700 }}>
               Solicitudes de restablecimiento de contraseña ({pendingResets.length})
@@ -518,19 +584,40 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             <ToggleButton value="all">Todos</ToggleButton>
             <ToggleButton
               value="supervisor"
-              sx={{ '&.Mui-selected': { color: '#BF360C', bgcolor: '#FFE0B2', borderColor: '#FFCC80' }, '&.Mui-selected:hover': { bgcolor: '#ffd494' } }}
+              sx={{
+                '&.Mui-selected': {
+                  color: isDark ? '#FF8A65' : '#BF360C',
+                  bgcolor: isDark ? 'rgba(191,54,12,0.25)' : '#FFE0B2',
+                  borderColor: isDark ? '#FF8A65' : '#FFCC80',
+                },
+                '&.Mui-selected:hover': { bgcolor: isDark ? 'rgba(191,54,12,0.35)' : '#ffd494' },
+              }}
             >
               Supervisores
             </ToggleButton>
             <ToggleButton
               value="operador"
-              sx={{ '&.Mui-selected': { color: '#6A1B9A', bgcolor: '#E1BEE7', borderColor: '#CE93D8' }, '&.Mui-selected:hover': { bgcolor: '#d4a8e0' } }}
+              sx={{
+                '&.Mui-selected': {
+                  color: isDark ? '#CE93D8' : '#6A1B9A',
+                  bgcolor: isDark ? 'rgba(106,27,154,0.25)' : '#E1BEE7',
+                  borderColor: isDark ? '#CE93D8' : '#CE93D8',
+                },
+                '&.Mui-selected:hover': { bgcolor: isDark ? 'rgba(106,27,154,0.35)' : '#d4a8e0' },
+              }}
             >
               Operadores
             </ToggleButton>
             <ToggleButton
               value="repartidor"
-              sx={{ '&.Mui-selected': { color: '#AD1457', bgcolor: '#F8BBD0', borderColor: '#F48FB1' }, '&.Mui-selected:hover': { bgcolor: '#f5a3c0' } }}
+              sx={{
+                '&.Mui-selected': {
+                  color: isDark ? '#F48FB1' : '#AD1457',
+                  bgcolor: isDark ? 'rgba(173,20,87,0.25)' : '#F8BBD0',
+                  borderColor: isDark ? '#F48FB1' : '#F48FB1',
+                },
+                '&.Mui-selected:hover': { bgcolor: isDark ? 'rgba(173,20,87,0.35)' : '#f5a3c0' },
+              }}
             >
               Repartidores
             </ToggleButton>
@@ -551,13 +638,25 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             <ToggleButton value="all">Todos</ToggleButton>
             <ToggleButton
               value="active"
-              sx={{ '&.Mui-selected': { color: '#1B5E20', bgcolor: '#E8F5E9', '&:hover': { bgcolor: '#C8E6C9' } } }}
+              sx={{
+                '&.Mui-selected': {
+                  color: isDark ? '#A5D6A7' : '#1B5E20',
+                  bgcolor: isDark ? 'rgba(27,94,32,0.25)' : '#E8F5E9',
+                  '&:hover': { bgcolor: isDark ? 'rgba(27,94,32,0.35)' : '#C8E6C9' },
+                },
+              }}
             >
               Activos
             </ToggleButton>
             <ToggleButton
               value="inactive"
-              sx={{ '&.Mui-selected': { color: '#B71C1C', bgcolor: '#FFEBEE', '&:hover': { bgcolor: '#FFCDD2' } } }}
+              sx={{
+                '&.Mui-selected': {
+                  color: isDark ? '#EF9A9A' : '#B71C1C',
+                  bgcolor: isDark ? 'rgba(183,28,28,0.25)' : '#FFEBEE',
+                  '&:hover': { bgcolor: isDark ? 'rgba(183,28,28,0.35)' : '#FFCDD2' },
+                },
+              }}
             >
               Inactivos
             </ToggleButton>
@@ -581,6 +680,28 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         </Box>
       </Stack>
 
+      {selectedIds.size > 0 && (
+        <Paper
+          variant="outlined"
+          sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', bgcolor: isDark ? 'rgba(25,118,210,0.18)' : '#E3F2FD', borderColor: '#1976D2', borderRadius: 2 }}
+        >
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            <strong>{selectedIds.size}</strong> seleccionado{selectedIds.size > 1 ? 's' : ''}
+            {toDeactivate.length > 0 && toActivate.length > 0
+              ? ` · desactivar ${toDeactivate.length}, activar ${toActivate.length}`
+              : toDeactivate.length > 0
+                ? ` · desactivar ${toDeactivate.length}`
+                : ` · activar ${toActivate.length}`}
+          </Typography>
+          <Button size="small" variant="contained" onClick={() => setOpenBulkConfirm(true)}>
+            Confirmar acción
+          </Button>
+          <Button size="small" onClick={() => setSelectedIds(new Set())}>
+            Cancelar selección
+          </Button>
+        </Paper>
+      )}
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
@@ -596,6 +717,20 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
           <Table size="small">
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: (theme) => theme.palette.mode === 'dark' ? '#1B2D42' : '#F5F7FA', fontSize: '0.78rem' } }}>
+                <TableCell padding="checkbox" sx={{ width: 40 }}>
+                  <Checkbox
+                    size="small"
+                    checked={allSelected}
+                    indeterminate={someSelected && !allSelected}
+                    onChange={() => {
+                      if (allSelected) {
+                        setSelectedIds(new Set())
+                      } else {
+                        setSelectedIds(new Set(selectableUsers.map((u) => u.id)))
+                      }
+                    }}
+                  />
+                </TableCell>
                 <TableCell>Integrante</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>DNI</TableCell>
@@ -616,8 +751,24 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                       opacity: active ? 1 : 0.6,
                       '&:last-child td': { border: 0 },
                       '&:hover': { bgcolor: 'action.hover' },
+                      ...(selectedIds.has(user.id) && { bgcolor: 'rgba(25,118,210,0.06)' }),
                     }}
                   >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={selectedIds.has(user.id)}
+                        disabled={!!(currentUserId && user.id === currentUserId)}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(user.id)) next.delete(user.id)
+                            else next.add(user.id)
+                            return next
+                          })
+                        }}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar
@@ -988,6 +1139,25 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             disabled={resolveSubmitting || !resolvePassValue.trim()}
           >
             {resolveSubmitting ? 'Guardando…' : 'Asignar contraseña'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmar acción masiva */}
+      <Dialog open={openBulkConfirm} onClose={() => !submitting && setOpenBulkConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Confirmar acción masiva</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {[
+              toDeactivate.length > 0 ? `¿Querés desactivar ${toDeactivate.length} cuenta${toDeactivate.length > 1 ? 's' : ''}` : '',
+              toActivate.length > 0 ? `${toDeactivate.length > 0 ? 'y activar' : '¿Querés activar'} ${toActivate.length} cuenta${toActivate.length > 1 ? 's' : ''}` : '',
+            ].filter(Boolean).join(' ')}{toDeactivate.length + toActivate.length > 0 ? '?' : ''}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenBulkConfirm(false)} disabled={submitting}>Cancelar</Button>
+          <Button variant="contained" onClick={handleBulkToggle} disabled={submitting}>
+            {submitting ? 'Procesando…' : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>

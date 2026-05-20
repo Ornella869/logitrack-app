@@ -13,6 +13,7 @@ namespace Back.Domain.Models
         CambioRol,
         LoginFallido,
         Otro,
+        ActivacionUsuario,
     }
 
     public class LogAuditoria

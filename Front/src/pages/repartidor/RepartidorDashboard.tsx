@@ -35,6 +35,7 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import DirectionsIcon from '@mui/icons-material/Directions'
 import { shipmentService } from '../../services/shipmentService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
 import StatusBadge from '../../components/StatusBadge'
@@ -133,10 +134,13 @@ export default function RepartidorDashboard() {
   const [iniciandoRuta, setIniciandoRuta] = useState(false)
   const [confirmInicioOpen, setConfirmInicioOpen] = useState(false)
   const [inicioFeedback, setInicioFeedback] = useState<{ severity: 'success' | 'error'; message: string } | null>(null)
+  const [paradaEnCurso, setParadaEnCurso] = useState<{ id: string; address: string; name: string } | null>(null)
+  const [routeCompleted, setRouteCompleted] = useState(false)
 
   const handleConfirmarInicio = async () => {
     setIniciandoRuta(true)
     setInicioFeedback(null)
+    const firstPending = paradas.find((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
     const result = await shipmentService.inicializarRuta(fechaRuta ?? undefined)
     setIniciandoRuta(false)
     setConfirmInicioOpen(false)
@@ -148,6 +152,9 @@ export default function RepartidorDashboard() {
       severity: 'success',
       message: `Ruta iniciada. ${result.cantidad} envío${result.cantidad === 1 ? '' : 's'} pasaron a En Tránsito.`,
     })
+    if (firstPending) {
+      setParadaEnCurso({ id: firstPending.id, address: firstPending.receiver.address, name: firstPending.receiver.name })
+    }
     void load(fechaRuta ?? undefined)
   }
 
@@ -161,6 +168,27 @@ export default function RepartidorDashboard() {
   const esFutura = fechaRuta ? new Date(fechaRuta).getTime() > new Date(new Date().toDateString()).getTime() : false
 
   const proxima = metrics.proximaIdx >= 0 ? paradas[metrics.proximaIdx] : null
+
+  const todasEntregadas =
+    paradas.length > 0 &&
+    paradas.some((p) => p.status === 'Entregado') &&
+    paradas.every((p) => p.status === 'Entregado' || p.status === 'Cancelado')
+
+  useEffect(() => {
+    if (todasEntregadas) {
+      setRouteCompleted(true)
+      setParadaEnCurso(null)
+    }
+  }, [todasEntregadas])
+
+  const showRetorno = todasEntregadas || routeCompleted
+
+  const buildReturnUrl = (): string | null => {
+    if (!origen) return null
+    const cp = origen.postalCode ? ` ${origen.postalCode}` : ''
+    const dest = encodeURIComponent(`${origen.address}, ${origen.city}${cp}, Argentina`)
+    return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`
+  }
 
   // G1L-43: Escaneo de QR — el repartidor confirma carga / inicia tránsito / abre ficha.
   // Aceptamos un código optional para usar directamente lo decodificado por la cámara
@@ -266,18 +294,17 @@ export default function RepartidorDashboard() {
           >
             Escanear QR
           </Button>
-          {/* G1L-43: aparece cuando hay paradas en "Listo para Salir". */}
-          {esHoy && metrics.listosParaSalir > 0 && (
+          {showRetorno && (
             <Button
               variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
+              startIcon={<DirectionsIcon />}
               onClick={() => {
-                setInicioFeedback(null)
-                setConfirmInicioOpen(true)
+                const url = buildReturnUrl()
+                if (url) window.open(url, '_blank', 'noopener,noreferrer')
               }}
+              sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
             >
-              Inicializar Ruta ({metrics.listosParaSalir})
+              Retorno a Sucursal
             </Button>
           )}
           <Button startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
@@ -307,12 +334,54 @@ export default function RepartidorDashboard() {
         </Alert>
       )}
 
+      {showRetorno && (
+        <Alert
+          severity="success"
+          sx={{ mb: 2 }}
+          icon={<DirectionsIcon />}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              startIcon={<DirectionsIcon />}
+              onClick={() => {
+                const url = buildReturnUrl()
+                if (url) window.open(url, '_blank', 'noopener,noreferrer')
+              }}
+            >
+              Ver ruta de regreso
+            </Button>
+          }
+        >
+          <strong>¡Todas las entregas completadas!</strong>
+          {origen
+            ? ` Podés volver a la sucursal ${origen.name}.`
+            : ' Podés volver a la sucursal de origen.'}
+        </Alert>
+      )}
+
+      {paradaEnCurso && !showRetorno && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate(`/shipment/${paradaEnCurso.id}`)}>
+              Ir a la entrega
+            </Button>
+          }
+        >
+          Ruta en curso · Próxima parada: <strong>{paradaEnCurso.address}</strong> · {paradaEnCurso.name}
+        </Alert>
+      )}
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
       ) : paradas.length === 0 ? (
-        <Alert severity="info">
-          No tenés paradas asignadas para hoy. Esperá a que el supervisor calendarice los envíos.
-        </Alert>
+        showRetorno ? null : (
+          <Alert severity="info">
+            No tenés paradas asignadas para hoy. Esperá a que el supervisor calendarice los envíos.
+          </Alert>
+        )
       ) : (
         <>
           {/* KPIs */}
@@ -341,12 +410,16 @@ export default function RepartidorDashboard() {
               <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderBottom: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
-                    Ruta optimizada{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
+                    {showRetorno
+                      ? '🏁 Ruta de retorno a la sucursal'
+                      : `Ruta optimizada${metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}`}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {origen
-                      ? `Salida desde ${origen.name} · ${paradas.length} paradas en orden`
-                      : `Orden automático por código postal y FIFO · ${paradas.length} paradas`}
+                    {showRetorno
+                      ? `Seguí la línea violeta para volver a ${origen?.name ?? 'la sucursal'}`
+                      : origen
+                        ? `Salida desde ${origen.name} · ${paradas.length} paradas en orden`
+                        : `Orden automático por código postal y FIFO · ${paradas.length} paradas`}
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -362,6 +435,20 @@ export default function RepartidorDashboard() {
                   >
                     Abrir ruta en Maps
                   </Button>
+                  {metrics.listosParaSalir > 0 && (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="success"
+                      startIcon={<PlayArrowIcon />}
+                      onClick={() => {
+                        setInicioFeedback(null)
+                        setConfirmInicioOpen(true)
+                      }}
+                    >
+                      Inicializar Ruta ({metrics.listosParaSalir})
+                    </Button>
+                  )}
                   <Button
                     size="small"
                     variant="contained"
@@ -371,6 +458,20 @@ export default function RepartidorDashboard() {
                   >
                     Navegar a próxima parada
                   </Button>
+                  {showRetorno && (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<DirectionsIcon />}
+                      onClick={() => {
+                        const url = buildReturnUrl()
+                        if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                      }}
+                      sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
+                    >
+                      Retorno a Sucursal
+                    </Button>
+                  )}
                 </Stack>
               </Box>
               <RouteMap
@@ -397,6 +498,7 @@ export default function RepartidorDashboard() {
                       }
                     : null
                 }
+                showReturnRoute={showRetorno}
                 height={380}
               />
               {proxima && (

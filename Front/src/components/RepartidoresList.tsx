@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
+import BarChartIcon from '@mui/icons-material/BarChart'
 
 import { authService, type RepartidorListItem } from '../services/authService'
 import SearchBar from './SearchBar'
@@ -295,6 +296,18 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                             variant="filled"
                           />
                         </Box>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<BarChartIcon />}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/repartidor/${repartidor.id}/rendimiento`)
+                          }}
+                          sx={{ mt: 1.5, textTransform: 'none', fontSize: 12 }}
+                        >
+                          Ver rendimiento
+                        </Button>
                       </Stack>
                     </CardContent>
                   </Card>

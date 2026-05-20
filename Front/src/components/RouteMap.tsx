@@ -74,6 +74,7 @@ interface RouteMapProps {
   proximaIdx: number
   origen?: Origen | null
   height?: number | string
+  showReturnRoute?: boolean
 }
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -223,7 +224,7 @@ function spreadOverlappingMarkers<T extends { latitud: number; longitud: number 
   return out
 }
 
-export default function RouteMap({ paradas, proximaIdx, origen, height = 340 }: RouteMapProps) {
+export default function RouteMap({ paradas, proximaIdx, origen, height = 340, showReturnRoute = false }: RouteMapProps) {
   const paradasConCoords = paradas.filter(
     (p): p is Parada & { latitud: number; longitud: number } =>
       p.latitud != null && p.longitud != null,
@@ -309,6 +310,30 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340 }: 
   const routeGeo = useOsrmRoute(positions)
   const trazo = routeGeo ?? positions
 
+  // Return route: from last delivered stop back to the origin branch.
+  const ultimaEntregadaParaRetorno = showReturnRoute
+    ? ([...paradasConCoords].reverse().find((p) => p.status === 'Entregado') ?? null)
+    : null
+  const returnPositions: [number, number][] =
+    ultimaEntregadaParaRetorno && tieneOrigen
+      ? [
+          [ultimaEntregadaParaRetorno.latitud, ultimaEntregadaParaRetorno.longitud],
+          [origen!.latitud, origen!.longitud],
+        ]
+      : []
+  const returnRouteGeo = useOsrmRoute(returnPositions)
+  const returnTrazo = returnRouteGeo ?? returnPositions
+  const returnTruckPos = useTruckOnRoute(
+    returnPositions.length === 2 ? returnPositions[0] : null,
+    returnPositions.length === 2 ? returnPositions[1] : null,
+  )
+
+  // When returning to branch, override truck position to the return route midpoint.
+  if (showReturnRoute && (returnTruckPos || ultimaEntregadaParaRetorno)) {
+    truckPos = returnTruckPos ?? (ultimaEntregadaParaRetorno ? [ultimaEntregadaParaRetorno.latitud, ultimaEntregadaParaRetorno.longitud] : truckPos)
+    truckLabel = 'Regresando a la sucursal'
+  }
+
   // FitBounds debe usar los puntos de paradas + origen.
   const fitPositions: [number, number][] = []
   if (tieneOrigen) fitPositions.push([origen!.latitud, origen!.longitud])
@@ -325,7 +350,12 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340 }: 
 
         {/* Trazo real por calles (OSRM). Si OSRM no responde, queda la línea recta. */}
         {trazo.length > 1 && (
-          <Polyline positions={trazo} pathOptions={{ color: '#1976d2', weight: 4, opacity: 0.8 }} />
+          <Polyline positions={trazo} pathOptions={{ color: '#1976d2', weight: 4, opacity: showReturnRoute ? 0.3 : 0.8 }} />
+        )}
+
+        {/* Ruta de retorno a la sucursal — línea punteada violeta */}
+        {returnTrazo.length > 1 && (
+          <Polyline positions={returnTrazo} pathOptions={{ color: '#5e35b1', weight: 5, opacity: 0.9, dashArray: '12,6' }} />
         )}
 
         {/* Marker especial para la sucursal de origen */}
@@ -336,7 +366,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340 }: 
               <br />
               {origen!.direccion}, {origen!.ciudad}
               <br />
-              <em>Punto de salida</em>
+              <em>{showReturnRoute ? '🏁 Destino de retorno' : 'Punto de salida'}</em>
             </Popup>
           </Marker>
         )}

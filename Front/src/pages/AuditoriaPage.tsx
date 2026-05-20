@@ -41,11 +41,28 @@ const ACCIONES = [
   'Calendarizacion',
   'Recalendarizacion',
   'CreacionUsuario',
+  'ActivacionUsuario',
   'DesactivacionUsuario',
   'CambioRol',
   'LoginFallido',
   'Otro',
 ] as const
+
+const ACCION_LABELS: Record<string, string> = {
+  Todas: 'Todas',
+  CreacionEnvio: 'Creación de Envío',
+  EdicionEnvio: 'Edición de Envío',
+  CambioEstadoEnvio: 'Cambio de Estado',
+  CancelacionEnvio: 'Cancelación de Envío',
+  Calendarizacion: 'Calendarización',
+  Recalendarizacion: 'Recalendarización',
+  CreacionUsuario: 'Creación de Usuario',
+  ActivacionUsuario: 'Activación de Usuario',
+  DesactivacionUsuario: 'Desactivación de Usuario',
+  CambioRol: 'Cambio de Rol',
+  LoginFallido: 'Login Fallido',
+  Otro: 'Otro',
+}
 
 const ACCION_COLORS: Record<string, { bg: string; color: string }> = {
   Calendarizacion: { bg: '#e3f2fd', color: '#0d47a1' },
@@ -55,6 +72,7 @@ const ACCION_COLORS: Record<string, { bg: string; color: string }> = {
   CancelacionEnvio: { bg: '#ffebee', color: '#c62828' },
   EdicionEnvio: { bg: '#fff8e1', color: '#7b5e00' },
   CreacionUsuario: { bg: '#e1f5fe', color: '#0277bd' },
+  ActivacionUsuario: { bg: '#e8f5e9', color: '#2e7d32' },
   DesactivacionUsuario: { bg: '#ffebee', color: '#c62828' },
   CambioRol: { bg: '#f3e5f5', color: '#6a1b9a' },
   LoginFallido: { bg: '#ffebee', color: '#c62828' },
@@ -185,7 +203,7 @@ export default function AuditoriaPage() {
               sx={{ minWidth: 200 }}
             >
               {ACCIONES.map((a) => (
-                <MenuItem key={a} value={a}>{a}</MenuItem>
+                <MenuItem key={a} value={a}>{ACCION_LABELS[a] ?? a}</MenuItem>
               ))}
             </TextField>
             <TextField
@@ -239,7 +257,7 @@ export default function AuditoriaPage() {
                           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                             <Typography variant="body2" fontWeight={600}>{log.usuarioNombre}</Typography>
                             <Chip size="small" label={log.usuarioRol} sx={{ bgcolor: `${rolColor}22`, color: rolColor, fontSize: 10, height: 18 }} />
-                            <Chip size="small" label={log.accion} sx={{ bgcolor: accionColor.bg, color: accionColor.color, fontSize: 10, height: 18 }} />
+                            <Chip size="small" label={ACCION_LABELS[log.accion] ?? log.accion} sx={{ bgcolor: accionColor.bg, color: accionColor.color, fontSize: 10, height: 18 }} />
                             {log.recursoId && (
                               <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#1976d2' }}>
                                 {log.recursoId}

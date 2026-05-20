@@ -23,19 +23,22 @@ namespace Back.Controllers
         private readonly IEnviosRepository _enviosRepository;
         private readonly LogiTrackDbContext _context;
         private readonly IRecaptchaValidationService _recaptchaValidationService;
+        private readonly AuditoriaService _auditoria;
 
         public AuthController(
             AuthService authService,
             IUserRepository userRepository,
             IEnviosRepository enviosRepository,
             LogiTrackDbContext context,
-            IRecaptchaValidationService recaptchaValidationService)
+            IRecaptchaValidationService recaptchaValidationService,
+            AuditoriaService auditoria)
         {
             _authService = authService;
             _userRepository = userRepository;
             _enviosRepository = enviosRepository;
             _context = context;
             _recaptchaValidationService = recaptchaValidationService;
+            _auditoria = auditoria;
         }
 
         /// <summary>Login con email + contraseña + reCAPTCHA. Devuelve JWT.</summary>
@@ -64,6 +67,14 @@ namespace Back.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                await _auditoria.RegistrarAsync(
+                    null,
+                    request.Email,
+                    "Anónimo",
+                    TipoAccion.LoginFallido,
+                    "Intento de inicio de sesión fallido",
+                    request.Email);
+                await _context.SaveChangesAsync();
                 return Unauthorized(ex.Message);
             }
         }
@@ -330,6 +341,10 @@ namespace Back.Controllers
             try
             {
                 await _authService.DesactivarUsuario(userId);
+                await _auditoria.RegistrarAsync(
+                    TipoAccion.DesactivacionUsuario,
+                    "Cuenta de usuario desactivada",
+                    userId.ToString());
                 await _context.SaveChangesAsync();
                 return Ok();
             }
@@ -346,6 +361,10 @@ namespace Back.Controllers
             try
             {
                 await _authService.ActivarUsuario(userId);
+                await _auditoria.RegistrarAsync(
+                    TipoAccion.ActivacionUsuario,
+                    "Cuenta de usuario activada",
+                    userId.ToString());
                 await _context.SaveChangesAsync();
                 return Ok();
             }

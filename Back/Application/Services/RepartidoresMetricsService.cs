@@ -64,12 +64,22 @@ namespace Back.Application.Services
             var fromUtc = DateTime.SpecifyKind((from ?? DateTime.UtcNow.AddDays(-30)).Date, DateTimeKind.Utc);
             var toUtc = DateTime.SpecifyKind((to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
 
-            // Usamos el historial: cualquier paquete cuya FechaCalendarizada caiga en el rango,
-            // y cuyo Repartidor sea este, cuenta como "asignado". Entregas y cancelaciones se cuentan por estado actual.
+            // Paquetes cuya FechaCalendarizada cae en el rango, más cualquier paquete
+            // que haya sido entregado dentro del rango aunque haya sido calendarizado antes.
+            var entregadosEnRangoIds = await _context.HistorialEstadosEnvio
+                .Where(h => h.EstadoNuevo == PaqueteStatus.Entregado
+                            && h.FechaHora >= fromUtc
+                            && h.FechaHora <= toUtc)
+                .Select(h => h.PaqueteId)
+                .Distinct()
+                .ToListAsync();
+
             var paquetes = await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
-                            && p.FechaCalendarizada >= fromUtc
-                            && p.FechaCalendarizada <= toUtc)
+                            && ((p.FechaCalendarizada.HasValue
+                                    && p.FechaCalendarizada >= fromUtc
+                                    && p.FechaCalendarizada <= toUtc)
+                                || entregadosEnRangoIds.Contains(p.Id)))
                 .ToListAsync();
 
             var totalAsignados = paquetes.Count;

@@ -41,6 +41,7 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { Tab, Tabs } from '@mui/material'
 import { shipmentService, type HistorialEstadoEnvio } from '../services/shipmentService'
+import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
@@ -236,6 +237,13 @@ function ShipmentDetail() {
       setOpenEntregaDialog(false)
       setEntregaCodigo('')
       showActionToast('Entrega confirmada. ¡Gracias!', 'success')
+      notificationService.add({
+        type: 'otro',
+        title: 'Entrega completada',
+        message: `Envío ${shipment.trackingId} entregado a ${shipment.receiver.name}`,
+        recipientId: 'supervisor',
+        navigateTo: `/shipment/${id}`,
+      })
     } else {
       setEntregaError(result.error || 'No se pudo confirmar la entrega')
     }

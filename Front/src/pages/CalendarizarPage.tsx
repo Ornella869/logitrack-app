@@ -25,6 +25,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import BoltIcon from '@mui/icons-material/Bolt'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -32,6 +33,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
 import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen } from '../services/shipmentService'
 import { authService } from '../services/authService'
+import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
@@ -49,6 +51,8 @@ type Repartidor = { id: string; nombre: string; apellido: string; email: string;
 export default function CalendarizarPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [pendientes, setPendientes] = useState<Shipment[]>([])
   const [repartidores, setRepartidores] = useState<Repartidor[]>([])
   const [loading, setLoading] = useState(true)
@@ -177,8 +181,42 @@ export default function CalendarizarPage() {
       setExec({ ok: false, error: res.error ?? 'No se pudo ejecutar la calendarización' })
       return
     }
-    setResultado(res.data ?? null)
+    const resultado = res.data ?? null
+    setResultado(resultado)
     setExec({ ok: true })
+
+    // Generar notificaciones
+    if (resultado && resultado.totalCalendarizados > 0) {
+      notificationService.add({
+        type: 'calendarizacion',
+        title: 'Calendarización completada',
+        message: `${resultado.totalCalendarizados} envío${resultado.totalCalendarizados > 1 ? 's' : ''} asignado${resultado.totalCalendarizados > 1 ? 's' : ''}${resultado.totalSinAsignar > 0 ? `. ${resultado.totalSinAsignar} sin asignar.` : '.'}`,
+        recipientId: user.id,
+        navigateTo: '/rutas-activas',
+      })
+
+      // Notificar a cada repartidor con su carga asignada
+      const porRepartidor = new Map<string, { nombre: string; cantidad: number }>()
+      resultado.resumenPorDia.forEach((dia) => {
+        dia.repartidores.forEach((rep) => {
+          const prev = porRepartidor.get(rep.repartidorId)
+          porRepartidor.set(rep.repartidorId, {
+            nombre: rep.nombre,
+            cantidad: (prev?.cantidad ?? 0) + rep.cantidad,
+          })
+        })
+      })
+      porRepartidor.forEach(({ nombre, cantidad }, repartidorId) => {
+        notificationService.add({
+          type: 'ruta-asignada',
+          title: 'Nueva ruta asignada',
+          message: `Hola ${nombre}, tenés ${cantidad} envío${cantidad > 1 ? 's' : ''} asignado${cantidad > 1 ? 's' : ''} para entrega.`,
+          recipientId: repartidorId,
+          navigateTo: '/repartidor',
+        })
+      })
+    }
+
     void loadAll()
   }
 
@@ -238,7 +276,7 @@ export default function CalendarizarPage() {
                         <Chip
                           size="small"
                           label={summary.prio}
-                          sx={{ bgcolor: '#fdecea', color: '#c62828', border: '1px solid #c62828', fontWeight: 600 }}
+                          sx={{ bgcolor: isDark ? 'rgba(198,40,40,0.2)' : '#fdecea', color: '#c62828', border: '1px solid #c62828', fontWeight: 600 }}
                         />
                       </TableCell>
                     </TableRow>
@@ -267,7 +305,7 @@ export default function CalendarizarPage() {
                   </TableBody>
                 </Table>
 
-                <Box sx={{ textAlign: 'center', mt: 3, pt: 3, borderTop: '1px solid #eee' }}>
+                <Box sx={{ textAlign: 'center', mt: 3, pt: 3, borderTop: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #eee' }}>
                   <Button
                     size="large"
                     variant="contained"
@@ -450,11 +488,15 @@ export default function CalendarizarPage() {
                   sx={{
                     p: 1.5,
                     borderRadius: 1,
-                    bgcolor: done ? '#e8f5e9' : active ? '#e3f2fd' : '#fafafa',
+                    bgcolor: done
+                      ? (isDark ? 'rgba(46,125,50,0.25)' : '#e8f5e9')
+                      : active
+                        ? (isDark ? 'rgba(25,118,210,0.25)' : '#e3f2fd')
+                        : (isDark ? 'rgba(255,255,255,0.06)' : '#fafafa'),
                   }}
                 >
                   {done ? (
-                    <CheckCircleIcon sx={{ color: '#2e7d32' }} />
+                    <CheckCircleIcon sx={{ color: isDark ? '#81c784' : '#2e7d32' }} />
                   ) : active ? (
                     <CircularProgress size={20} />
                   ) : (

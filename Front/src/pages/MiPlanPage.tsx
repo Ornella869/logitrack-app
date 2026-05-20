@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -158,7 +158,12 @@ export default function MiPlanPage() {
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
   const [showCelebration, setShowCelebration] = useState(false)
-  const firstLoad = useRef(true)
+
+  useEffect(() => {
+    const onDarkChange = () => setDarkMode(localStorage.getItem('miPlanDarkMode') === 'true')
+    window.addEventListener('miPlanDarkModeChange', onDarkChange)
+    return () => window.removeEventListener('miPlanDarkModeChange', onDarkChange)
+  }, [])
 
   const [, setPlanSeleccionado] = useState<PlanEmpresa | null>(null)
   const [codigoEmitido, setCodigoEmitido] = useState<string | null>(null)
@@ -199,12 +204,7 @@ export default function MiPlanPage() {
         setDarkMode(false)
         localStorage.setItem('miPlanDarkMode', 'false')
         window.dispatchEvent(new Event('miPlanDarkModeChange'))
-      } else if (firstLoad.current) {
-        setDarkMode(true)
-        localStorage.setItem('miPlanDarkMode', 'true')
-        window.dispatchEvent(new Event('miPlanDarkModeChange'))
       }
-      firstLoad.current = false
     } catch {
       setError('No se pudo cargar la información del plan')
     } finally {

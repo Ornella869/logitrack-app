@@ -1,21 +1,26 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppBar,
-  Toolbar,
-  Typography,
+  Badge,
   Box,
+  Chip,
   Container,
+  Divider,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemText,
   Menu,
   MenuItem,
   Avatar,
-  Chip,
+  Popover,
+  Tab,
+  Tabs,
+  Toolbar,
+  Tooltip,
+  Typography,
   useMediaQuery,
   useTheme,
-  IconButton,
-  Tooltip,
-  Divider,
-  Tabs,
-  Tab,
 } from '@mui/material'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
@@ -32,7 +37,11 @@ import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
 import WbSunnyIcon from '@mui/icons-material/WbSunny'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
-import { useState, useEffect, useMemo } from 'react'
+import NotificationsIcon from '@mui/icons-material/Notifications'
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { notificationService, type AppNotification } from '../services/notificationService'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import type { User } from '../types'
 import ChangePasswordDialog from './ChangePasswordDialog'
@@ -52,6 +61,23 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [isDarkPremium, setIsDarkPremium] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => localStorage.getItem('miPlanTipo') === 'Premium')
+
+  const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null)
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
+
+  const refreshNotifications = useCallback(() => {
+    const notifs = notificationService.getForUser(user.id, user.role)
+    setNotifications(notifs)
+    const ids = new Set<string>()
+    notifs.forEach((n) => { if (notificationService.isRead(user.id, n.id)) ids.add(n.id) })
+    setReadIds(ids)
+  }, [user.id, user.role])
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !readIds.has(n.id)).length,
+    [notifications, readIds],
+  )
 
   const darkPremiumTheme = useMemo(() => createTheme({
     palette: {
@@ -89,6 +115,12 @@ function Layout({ user, onLogout }: LayoutProps) {
   }, [])
 
   useEffect(() => {
+    refreshNotifications()
+    window.addEventListener('logitrack:notification', refreshNotifications)
+    return () => window.removeEventListener('logitrack:notification', refreshNotifications)
+  }, [refreshNotifications])
+
+  useEffect(() => {
     const onDarkChange = () => {
       setIsDarkPremium(localStorage.getItem('miPlanDarkMode') === 'true')
       setIsPremiumPlan(localStorage.getItem('miPlanTipo') === 'Premium')
@@ -102,6 +134,47 @@ function Layout({ user, onLogout }: LayoutProps) {
     setIsDarkPremium(next)
     localStorage.setItem('miPlanDarkMode', String(next))
     window.dispatchEvent(new Event('miPlanDarkModeChange'))
+  }
+
+  const handleNotifOpen = (e: React.MouseEvent<HTMLElement>) => {
+    setNotifAnchor(e.currentTarget)
+    refreshNotifications()
+  }
+  const handleNotifClose = () => setNotifAnchor(null)
+
+  const handleNotifClick = (notif: AppNotification) => {
+    notificationService.markRead(user.id, notif.id)
+    refreshNotifications()
+    handleNotifClose()
+    if (notif.navigateTo) navigate(notif.navigateTo)
+  }
+
+  const handleMarkAllRead = () => {
+    notificationService.markAllRead(user.id, user.role)
+    refreshNotifications()
+  }
+
+  const timeAgo = (dateStr: string): string => {
+    const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000)
+    if (mins < 1) return 'ahora'
+    if (mins < 60) return `hace ${mins} min`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `hace ${hrs} h`
+    return `hace ${Math.floor(hrs / 24)} día${Math.floor(hrs / 24) > 1 ? 's' : ''}`
+  }
+
+  const notifIcon = (type: AppNotification['type']) => {
+    if (type === 'calendarizacion') return <CalendarMonthIcon sx={{ fontSize: 16 }} />
+    if (type === 'ruta-asignada') return <RouteIcon sx={{ fontSize: 16 }} />
+    if (type === 'incidencia') return <WarningAmberIcon sx={{ fontSize: 16 }} />
+    return <NotificationsNoneIcon sx={{ fontSize: 16 }} />
+  }
+
+  const notifColor = (type: AppNotification['type']) => {
+    if (type === 'calendarizacion') return '#1976d2'
+    if (type === 'ruta-asignada') return '#2e7d32'
+    if (type === 'incidencia') return '#e65100'
+    return '#7b1fa2'
   }
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -234,6 +307,15 @@ function Layout({ user, onLogout }: LayoutProps) {
               </Tooltip>
             )}
 
+            {/* Notification bell */}
+            <Tooltip title="Notificaciones">
+              <IconButton onClick={handleNotifOpen} size="small" sx={{ color: 'white' }}>
+                <Badge badgeContent={unreadCount > 0 ? unreadCount : undefined} color="error" max={9}>
+                  {unreadCount > 0 ? <NotificationsIcon fontSize="small" /> : <NotificationsNoneIcon fontSize="small" />}
+                </Badge>
+              </IconButton>
+            </Tooltip>
+
             {/* Avatar with dropdown */}
             <Avatar
               onClick={handleMenuOpen}
@@ -279,6 +361,78 @@ function Layout({ user, onLogout }: LayoutProps) {
                 Cerrar sesión
               </MenuItem>
             </Menu>
+
+            {/* Notification panel */}
+            <Popover
+              open={Boolean(notifAnchor)}
+              anchorEl={notifAnchor}
+              onClose={handleNotifClose}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{ paper: { sx: { width: 360, maxHeight: 500, display: 'flex', flexDirection: 'column' } } }}
+            >
+              <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee' }}>
+                <Typography variant="subtitle1" fontWeight={700}>Notificaciones</Typography>
+                {unreadCount > 0 && (
+                  <Typography
+                    variant="caption"
+                    sx={{ cursor: 'pointer', color: 'primary.main', fontWeight: 600 }}
+                    onClick={handleMarkAllRead}
+                  >
+                    Marcar todas como leídas
+                  </Typography>
+                )}
+              </Box>
+
+              {notifications.length === 0 ? (
+                <Box sx={{ p: 4, textAlign: 'center' }}>
+                  <NotificationsNoneIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+                  <Typography variant="body2" color="text.secondary">Sin notificaciones</Typography>
+                </Box>
+              ) : (
+                <List dense disablePadding sx={{ overflow: 'auto', flex: 1 }}>
+                  {notifications.map((notif) => {
+                    const isRead = readIds.has(notif.id)
+                    const color = notifColor(notif.type)
+                    return (
+                      <ListItemButton
+                        key={notif.id}
+                        onClick={() => handleNotifClick(notif)}
+                        sx={{
+                          borderBottom: '1px solid #f0f0f0',
+                          bgcolor: isRead ? 'transparent' : 'rgba(25,118,210,0.04)',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                          py: 1.5,
+                        }}
+                      >
+                        <Box sx={{ mt: 0.3, color, flexShrink: 0 }}>{notifIcon(notif.type)}</Box>
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" fontWeight={isRead ? 400 : 700} lineHeight={1.3}>
+                              {notif.title}
+                            </Typography>
+                          }
+                          secondary={
+                            <Box>
+                              <Typography variant="caption" display="block" sx={{ mt: 0.2, lineHeight: 1.4 }}>
+                                {notif.message}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled">
+                                {timeAgo(notif.createdAt)}
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                        {!isRead && (
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1976d2', mt: 0.8, flexShrink: 0 }} />
+                        )}
+                      </ListItemButton>
+                    )
+                  })}
+                </List>
+              )}
+            </Popover>
 
             {/* Quick logout on mobile */}
             {isMobile && (
