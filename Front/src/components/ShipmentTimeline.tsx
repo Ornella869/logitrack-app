@@ -24,6 +24,7 @@ const STATUS_COLOR: Record<string, string> = {
   CargadoEnVehiculo: '#5E35B1',
   ListoParaSalir: '#FFA000',
   EnTransito: '#1976D2',
+  Demorado: '#BF360C',
   Entregado: '#2E7D32',
   Cancelado: '#C62828',
 }
@@ -34,6 +35,7 @@ const STATUS_LABEL: Record<string, string> = {
   CargadoEnVehiculo: 'Cargado en vehículo',
   ListoParaSalir: 'Listo para salir',
   EnTransito: 'En tránsito',
+  Demorado: 'Demorado',
   Entregado: 'Entregado',
   Cancelado: 'Cancelado',
 }
@@ -119,6 +121,7 @@ export default function ShipmentTimeline({ paqueteId }: Props) {
               </Typography>
               <Typography variant="caption" color="textSecondary" display="block">
                 {dateStr} · {item.origen === 'QR' ? 'Escaneo QR' : item.origen}
+                {item.usuarioNombre ? ` · ${item.usuarioNombre}` : ''}
               </Typography>
               {item.motivo && (
                 <Typography variant="body2" sx={{ mt: 0.5, fontStyle: 'italic' }}>

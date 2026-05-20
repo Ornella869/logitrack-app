@@ -257,6 +257,43 @@ namespace Back.Controllers
             }
         }
 
+        // ============== G1L-82: Estado "Demorado" ==============
+
+        /// <summary>Marca un envío En Tránsito como Demorado con motivo obligatorio (Repartidor o Supervisor).</summary>
+        [Authorize(Roles = Roles.Repartidor + "," + Roles.Supervisor)]
+        [HttpPost("paquete/{paqueteId:guid}/demorar")]
+        public async Task<ActionResult> MarcarDemorado(Guid paqueteId, [FromBody] MarcarDemoradoRequest request)
+        {
+            try
+            {
+                var rol = User.IsInRole(Roles.Supervisor) ? "Supervisor" : "Repartidor";
+                await _enviosService.MarcarDemoradoAsync(paqueteId, request.Motivo, CurrentUserId(), rol);
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>Vuelve un envío Demorado a En Tránsito (Repartidor).</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("paquete/{paqueteId:guid}/continuar-transito")]
+        public async Task<ActionResult> ContinuarTransito(Guid paqueteId)
+        {
+            try
+            {
+                await _enviosService.ContinuarTransitoAsync(paqueteId, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         // ============== G1L-13: Cancelación con motivo ==============
 
         /// <summary>Cancelar un paquete con motivo obligatorio.
@@ -304,7 +341,7 @@ namespace Back.Controllers
         /// <summary>Historial cronológico (descendente) de cambios de estado del paquete.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor)]
         [HttpGet("paquete/{paqueteId:guid}/historial")]
-        public async Task<ActionResult<List<HistorialEstadoEnvio>>> GetHistorial(Guid paqueteId)
+        public async Task<ActionResult<List<HistorialEstadoEnvioDto>>> GetHistorial(Guid paqueteId)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound();
@@ -576,6 +613,13 @@ namespace Back.Controllers
         [Required(ErrorMessage = "El motivo de cancelación es obligatorio.")]
         public string Motivo { get; set; } = string.Empty;
         public CancelarEnvioMode Mode { get; set; } = CancelarEnvioMode.Definitivo;
+    }
+
+    // G1L-82: motivos sugeridos por el CA — el front debería ofrecer estos como dropdown.
+    public class MarcarDemoradoRequest
+    {
+        [Required(ErrorMessage = "El motivo de la demora es obligatorio.")]
+        public string Motivo { get; set; } = string.Empty;
     }
 
     public class CambiarEstadoRequest

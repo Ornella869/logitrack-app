@@ -37,8 +37,10 @@ import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PersonIcon from '@mui/icons-material/Person'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { Tab, Tabs } from '@mui/material'
-import { shipmentService } from '../services/shipmentService'
+import { shipmentService, type HistorialEstadoEnvio } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
@@ -49,6 +51,14 @@ const CANCEL_REASONS = [
   'Solicitud del cliente',
   'Datos incorrectos',
   'Imprevisto operativo',
+  'Otro',
+]
+
+// G1L-82: motivos predefinidos para marcar un envío como Demorado.
+const DEMORA_REASONS = [
+  'Problema mecánico',
+  'Corte de ruta',
+  'Condiciones climáticas',
   'Otro',
 ]
 
@@ -79,6 +89,12 @@ function ShipmentDetail() {
   const [cancelReason, setCancelReason] = useState('')
   const [cancelDetail, setCancelDetail] = useState('')
   const [cancelMode, setCancelMode] = useState<CancelMode>('Definitivo')
+  // G1L-82: marcar como demorado (motivo obligatorio)
+  const [openDemoraDialog, setOpenDemoraDialog] = useState(false)
+  const [demoraMotivo, setDemoraMotivo] = useState('')
+  const [demoraDetalle, setDemoraDetalle] = useState('')
+  const [demorando, setDemorando] = useState(false)
+  const [continuando, setContinuando] = useState(false)
   const [actionToast, setActionToast] = useState<{
     open: boolean
     message: string
@@ -103,6 +119,10 @@ function ShipmentDetail() {
     id: string; nombre: string; apellido: string; email: string; estado: string
   } | null>(null)
 
+  // G1L-81: para "Cargado en Vehículo" mostramos quién hizo el escaneo y cuándo.
+  // Lo sacamos del historial (último cambio a CargadoEnVehiculo).
+  const [ultimoEscaneoCarga, setUltimoEscaneoCarga] = useState<HistorialEstadoEnvio | null>(null)
+
   // G1L-43: Pasar de estado vía QR (cámara + entrada manual del código)
   const [openQrDialog, setOpenQrDialog] = useState(false)
   const [qrMode, setQrMode] = useState<'camera' | 'manual'>('camera')
@@ -123,9 +143,14 @@ function ShipmentDetail() {
         status === 'Asignado a vehículo' ||
         status === 'Cargado en vehículo' ||
         status === 'Listo para salir')) ||
-    (isRepartidor && status === 'En tránsito')
+    // G1L-82: el repartidor cancela desde "En tránsito" o "Demorado" (entrega fallida).
+    (isRepartidor && (status === 'En tránsito' || status === 'Demorado'))
   // G1L-12, G1L-41: Editar solo si está pendiente de calendarización (paquete.isEditable)
   const canEdit = isOperador && shipment?.isEditable === true
+  // G1L-82: marcar como Demorado lo pueden hacer Repartidor o Supervisor sobre un envío En Tránsito.
+  const canMarcarDemorado = (isRepartidor || isSupervisor) && status === 'En tránsito'
+  // G1L-82: continuar ruta tras la demora — solo el repartidor.
+  const canContinuarRuta = isRepartidor && status === 'Demorado'
 
   useEffect(() => {
     loadShipment()
@@ -144,6 +169,22 @@ function ShipmentDetail() {
         if ((isSupervisor || isAdmin) && data.id) {
           const rep = await shipmentService.getRepartidorDePaquete(data.id)
           setRepartidorAsignado(rep)
+        }
+        // G1L-81: si el envío está "Cargado en Vehículo" o "Listo para Salir",
+        // buscamos en el historial el último escaneo que lo marcó como cargado.
+        if (
+          (isOperador || isSupervisor || isAdmin) &&
+          (data.status === 'Cargado en vehículo' || data.status === 'Listo para salir')
+        ) {
+          try {
+            const historial = await shipmentService.getHistorial(data.id)
+            const escaneo = historial.find((h) => h.estadoNuevo === 'CargadoEnVehiculo') ?? null
+            setUltimoEscaneoCarga(escaneo)
+          } catch {
+            setUltimoEscaneoCarga(null)
+          }
+        } else {
+          setUltimoEscaneoCarga(null)
         }
       } else {
         setError('Envío no encontrado')
@@ -225,6 +266,44 @@ function ShipmentDetail() {
       showActionToast(result.error || 'Error al cancelar el envío', 'error')
     }
     setUpdatingStatus(false)
+  }
+
+  // G1L-82: el repartidor o supervisor marca el envío como Demorado con motivo obligatorio.
+  const handleMarcarDemorado = async () => {
+    if (!id || !shipment) return
+    const finalMotivo = demoraMotivo === 'Otro' ? demoraDetalle.trim() : demoraMotivo
+    if (!finalMotivo) {
+      showActionToast('El motivo de la demora es obligatorio', 'warning')
+      return
+    }
+    setDemorando(true)
+    const result = await shipmentService.marcarDemorado(id, finalMotivo)
+    setDemorando(false)
+    if (result.success) {
+      const updated = await shipmentService.getShipmentTracking(id)
+      if (updated) setShipment(updated)
+      setOpenDemoraDialog(false)
+      setDemoraMotivo('')
+      setDemoraDetalle('')
+      showActionToast('Envío marcado como Demorado', 'success')
+    } else {
+      showActionToast(result.error || 'No se pudo marcar como demorado', 'error')
+    }
+  }
+
+  // G1L-82: el repartidor retoma el recorrido tras resolver el imprevisto.
+  const handleContinuarRuta = async () => {
+    if (!id) return
+    setContinuando(true)
+    const result = await shipmentService.continuarTransito(id)
+    setContinuando(false)
+    if (result.success) {
+      const updated = await shipmentService.getShipmentTracking(id)
+      if (updated) setShipment(updated)
+      showActionToast('Ruta retomada. El envío vuelve a estar En Tránsito.', 'success')
+    } else {
+      showActionToast(result.error || 'No se pudo continuar la ruta', 'error')
+    }
   }
 
   const handleResend = async () => {
@@ -328,6 +407,8 @@ function ShipmentDetail() {
         return 'default'
       case 'En tránsito':
         return 'info'
+      case 'Demorado':
+        return 'warning'
       case 'Entregado':
         return 'success'
       case 'Cancelado':
@@ -406,11 +487,8 @@ function ShipmentDetail() {
                 Pasar de estado (QR)
               </Button>
             )}
-          {/* G1L-9 (parcial): la confirmación de entrega va por el botón "Confirmar entrega"
-              con código de verificación. La transición Listo→Tránsito va por "Inicializar Ruta"
-              desde el panel del repartidor (G1L-43). El cambio de estado manual genérico
-              quedó retirado para evitar saltos de estado fuera del flujo definido. */}
-          {isRepartidor && status === 'En tránsito' && (
+          {/* G1L-9 / G1L-82: confirmación de entrega habilitada para "En Tránsito" y "Demorado". */}
+          {isRepartidor && (status === 'En tránsito' || status === 'Demorado') && (
             <Button
               variant="contained"
               color="success"
@@ -423,6 +501,35 @@ function ShipmentDetail() {
               }}
             >
               Confirmar entrega
+            </Button>
+          )}
+          {/* G1L-82: marcar como demorado (Repartidor o Supervisor) desde En Tránsito. */}
+          {canMarcarDemorado && (
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{ color: '#BF360C', borderColor: '#BF360C', '&:hover': { borderColor: '#BF360C', bgcolor: '#FFE0B2' } }}
+              startIcon={<ReportProblemIcon />}
+              onClick={() => {
+                setDemoraMotivo('')
+                setDemoraDetalle('')
+                setOpenDemoraDialog(true)
+              }}
+            >
+              Marcar demorado
+            </Button>
+          )}
+          {/* G1L-82: continuar ruta (Repartidor) desde Demorado. */}
+          {canContinuarRuta && (
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={continuando ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+              onClick={handleContinuarRuta}
+              disabled={continuando}
+            >
+              {continuando ? 'Retomando…' : 'Continuar ruta'}
             </Button>
           )}
           {/* G1L-13: cancelar (operador, supervisor o repartidor) */}
@@ -441,6 +548,29 @@ function ShipmentDetail() {
             )}
         </Stack>
       </Stack>
+
+      {/* G1L-82: Banner naranja destacado cuando el envío está Demorado.
+          Visible para todos los roles que ven el detalle (Supervisor, Operador, Repartidor). */}
+      {shipment.status === 'Demorado' && (
+        <Card sx={{ mb: 3, bgcolor: isDark ? 'rgba(191,54,12,0.18)' : '#FFE0B2', borderLeft: '4px solid #BF360C' }}>
+          <CardContent>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+              <ReportProblemIcon sx={{ color: isDark ? '#FFB74D' : '#BF360C' }} />
+              <Typography variant="h6" sx={{ color: isDark ? '#FFB74D' : '#BF360C' }}>
+                Envío demorado
+              </Typography>
+            </Stack>
+            {shipment.razonDemora && (
+              <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.85)' : 'text.primary' }}>
+                Motivo: {shipment.razonDemora}
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+              El repartidor puede continuar la ruta cuando el imprevisto se resuelva.
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Banner especial para envíos cancelados — con motivo y reenvío */}
       {shipment.status === 'Cancelado' && (
@@ -490,6 +620,27 @@ function ShipmentDetail() {
                   </Typography>
                   <Chip label={shipment.status} color={statusColor(shipment.status) as any} />
                 </Box>
+                {/* G1L-81: fecha de despacho prevista cuando el envío ya está calendarizado. */}
+                {shipment.fechaCalendarizada &&
+                  (shipment.status === 'Asignado a vehículo' ||
+                    shipment.status === 'Cargado en vehículo' ||
+                    shipment.status === 'Listo para salir') && (
+                    <TextField
+                      label="Fecha de despacho prevista"
+                      value={new Date(shipment.fechaCalendarizada).toLocaleDateString('es-AR')}
+                      fullWidth
+                      disabled
+                    />
+                  )}
+                {/* G1L-81: registro del escaneo que dejó el paquete en "Cargado en Vehículo". */}
+                {ultimoEscaneoCarga && (
+                  <TextField
+                    label="Cargado por"
+                    value={`${ultimoEscaneoCarga.usuarioNombre ?? 'Repartidor'} · ${new Date(ultimoEscaneoCarga.fechaHora).toLocaleString('es-AR')}`}
+                    fullWidth
+                    disabled
+                  />
+                )}
                 <TextField label="Peso (kg)" value={shipment.weight} fullWidth disabled />
                 <TextField label="Tipo de envío" value={shipment.tipoEnvio ?? '-'} fullWidth disabled />
                 <TextField label="Tipo de paquete" value={shipment.tipoPaquete ?? '-'} fullWidth disabled />
@@ -650,6 +801,63 @@ function ShipmentDetail() {
             disabled={confirmandoEntrega || entregaCodigo.length !== 6}
           >
             {confirmandoEntrega ? 'Confirmando...' : 'Confirmar entrega'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* G1L-82: Dialog para marcar como Demorado con motivo obligatorio. */}
+      <Dialog
+        open={openDemoraDialog}
+        onClose={() => !demorando && setOpenDemoraDialog(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <ReportProblemIcon sx={{ color: '#BF360C' }} /> <span>Marcar envío como demorado</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Indicá el motivo del imprevisto. El envío queda en estado "Demorado" hasta que retomes la ruta.
+          </DialogContentText>
+          <FormControl fullWidth size="small">
+            <InputLabel>Motivo</InputLabel>
+            <Select
+              value={demoraMotivo}
+              label="Motivo"
+              onChange={(e) => setDemoraMotivo(e.target.value)}
+              disabled={demorando}
+            >
+              {DEMORA_REASONS.map((r) => (
+                <MenuItem key={r} value={r}>{r}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {demoraMotivo === 'Otro' && (
+            <TextField
+              label="Detalle del motivo"
+              value={demoraDetalle}
+              onChange={(e) => setDemoraDetalle(e.target.value)}
+              fullWidth
+              multiline
+              rows={2}
+              sx={{ mt: 2 }}
+              disabled={demorando}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDemoraDialog(false)} disabled={demorando}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            sx={{ bgcolor: '#BF360C', '&:hover': { bgcolor: '#8C2A06' } }}
+            onClick={handleMarcarDemorado}
+            disabled={demorando || !demoraMotivo || (demoraMotivo === 'Otro' && !demoraDetalle.trim())}
+          >
+            {demorando ? <CircularProgress size={20} color="inherit" /> : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>

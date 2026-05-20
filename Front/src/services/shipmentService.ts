@@ -37,6 +37,7 @@ const mapStatus = (status: string): Shipment['status'] => {
     case 'Cancelado': return 'Cancelado'
     case 'AsignadoAVehiculo': return 'Asignado a vehículo'
     case 'CargadoEnVehiculo': return 'Cargado en vehículo'
+    case 'Demorado': return 'Demorado'
     default: return 'Pendiente de calendarización'
   }
 }
@@ -54,6 +55,7 @@ const mapStatusToBackend = (status: string): string => {
       return 'Cancelado'
     case 'Asignado a vehículo': return 'AsignadoAVehiculo'
     case 'Cargado en vehículo': return 'CargadoEnVehiculo'
+    case 'Demorado': return 'Demorado'
     default:
       return 'PendienteDeCalendarizacion'
   }
@@ -90,6 +92,7 @@ const mapToShipment = (paquete: any): Shipment => ({
   description: paquete.descripcion || '',
   routeId: undefined,
   cancellationReason: paquete.razonCancelacion,
+  razonDemora: paquete.razonDemora ?? null,
   fechaCalendarizada: paquete.fechaCalendarizada ?? null,
   ubicacionActual: paquete.ubicacionActual
     ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
@@ -266,6 +269,30 @@ export const shipmentService = {
     } catch (error: any) {
       console.error('Cancel shipment error:', error)
       const errorMessage = error.response?.data || 'Error al cancelar el paquete'
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // G1L-82: marcar un envío En Tránsito como Demorado (Repartidor o Supervisor).
+  marcarDemorado: async (shipmentId: string, motivo: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post(`/envios/paquete/${shipmentId}/demorar`, { Motivo: motivo })
+      return { success: true }
+    } catch (error: any) {
+      console.error('Marcar demorado error:', error)
+      const errorMessage = error.response?.data || 'Error al marcar el envío como demorado'
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // G1L-82: volver un envío Demorado a En Tránsito (Repartidor).
+  continuarTransito: async (shipmentId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post(`/envios/paquete/${shipmentId}/continuar-transito`)
+      return { success: true }
+    } catch (error: any) {
+      console.error('Continuar transito error:', error)
+      const errorMessage = error.response?.data || 'Error al continuar la ruta'
       return { success: false, error: errorMessage }
     }
   },
@@ -534,6 +561,7 @@ export interface HistorialEstadoEnvio {
   estadoNuevo: string
   fechaHora: string
   usuarioId?: string
+  usuarioNombre?: string
   origen: 'Manual' | 'QR' | 'Sistema'
   motivo?: string
 }

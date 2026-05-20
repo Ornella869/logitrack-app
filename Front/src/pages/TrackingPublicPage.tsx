@@ -79,6 +79,14 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
         badgeColor: '#0D47A1',
         badgeBg: '#E3F2FD',
       }
+    case 'Demorado':
+      return {
+        badge: 'Demorado',
+        title: 'Tu envio esta demorado',
+        description: 'Se presento un imprevisto durante el recorrido. El repartidor retomara la ruta en cuanto se resuelva.',
+        badgeColor: '#BF360C',
+        badgeBg: '#FFE0B2',
+      }
     case 'Entregado':
       return {
         badge: 'Entregado',
@@ -105,6 +113,8 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
     'Cargado en vehículo': 1,
     'Listo para salir': 1,
     'En tránsito': 2,
+    // G1L-82: en el flujo público, "Demorado" sigue en la etapa de tránsito (no es estado final).
+    Demorado: 2,
     Entregado: 3,
     Cancelado: 2,
   }
@@ -114,7 +124,7 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
   return [
     { key: 'created', label: 'Pedido registrado', done: currentIndex >= 0, active: currentIndex === 0 },
     { key: 'ready', label: 'Preparado para despacho', done: currentIndex >= 1, active: currentIndex === 1 },
-    { key: 'transit', label: status === 'Cancelado' ? 'Proceso interrumpido' : 'En tránsito', done: currentIndex >= 2, active: currentIndex === 2 },
+    { key: 'transit', label: status === 'Cancelado' ? 'Proceso interrumpido' : status === 'Demorado' ? 'Demorado' : 'En tránsito', done: currentIndex >= 2, active: currentIndex === 2 },
     { key: 'final', label: status === 'Cancelado' ? 'Envío cancelado' : 'Entregado', done: status === 'Entregado' || status === 'Cancelado', active: currentIndex === 3 },
   ]
 }

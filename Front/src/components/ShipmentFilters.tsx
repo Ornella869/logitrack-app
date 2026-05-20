@@ -20,6 +20,8 @@ const STATUS_OPTIONS: { backendValue: string; label: string; color: string; bg: 
   { backendValue: 'CargadoEnVehiculo', label: 'Cargado en vehículo', color: '#1976d2', bg: '#e8f0fe' },
   { backendValue: 'ListoParaSalir', label: 'Listo para salir', color: '#00695c', bg: '#e0f2f1' },
   { backendValue: 'EnTransito', label: 'En tránsito', color: '#2e7d32', bg: '#e8f5e9' },
+  // G1L-82: Demorado destacado en naranja
+  { backendValue: 'Demorado', label: 'Demorado', color: '#bf360c', bg: '#ffe0b2' },
   { backendValue: 'Entregado', label: 'Entregado', color: '#1b5e20', bg: '#c8e6c9' },
   { backendValue: 'Cancelado', label: 'Cancelado', color: '#b71c1c', bg: '#fce4ec' },
 ]

@@ -14,6 +14,7 @@ namespace Back.Domain.Models
         ListoParaSalir = 4,
         AsignadoAVehiculo = 5,
         CargadoEnVehiculo = 6,
+        Demorado = 7,
     }
 
     public enum TipoEnvio
@@ -47,6 +48,8 @@ namespace Back.Domain.Models
         public string DestinatarioCompleto => $"{Destinatario.Nombre} {Destinatario.Apellido}";
         public string? Descripcion { get; set; } = string.Empty;
         public string? RazonCancelacion { get; private set; }
+        // G1L-82: motivo del estado "Demorado" (Problema mecánico, Corte de ruta, etc.)
+        public string? RazonDemora { get; private set; }
         public float Distancia { get; set; } = 0;
         public DateTime? FechaCalendarizada { get; private set; }
         public Guid? RepartidorAsignadoId { get; private set; }
@@ -107,10 +110,35 @@ namespace Back.Domain.Models
             if (Status == PaqueteStatus.Cancelado)
                 throw new InvalidOperationException("No se puede entregar un paquete cancelado.");
 
-            if (Status != PaqueteStatus.EnTransito)
-                throw new InvalidOperationException("Solo se pueden entregar paquetes que están en tránsito.");
+            // G1L-82: la entrega es válida también desde "Demorado" (no es estado final).
+            if (Status != PaqueteStatus.EnTransito && Status != PaqueteStatus.Demorado)
+                throw new InvalidOperationException("Solo se pueden entregar paquetes que están en tránsito o demorados.");
 
             Status = PaqueteStatus.Entregado;
+            RazonDemora = null;
+        }
+
+        // G1L-82: el repartidor o supervisor registra un imprevisto sobre un envío En Tránsito.
+        public void MarcarDemorado(string motivo)
+        {
+            if (string.IsNullOrWhiteSpace(motivo))
+                throw new InvalidOperationException("El motivo de la demora es obligatorio.");
+
+            if (Status != PaqueteStatus.EnTransito)
+                throw new InvalidOperationException("Solo se pueden marcar como demorados los paquetes que están en tránsito.");
+
+            Status = PaqueteStatus.Demorado;
+            RazonDemora = motivo;
+        }
+
+        // G1L-82: el repartidor retoma el recorrido después de resolver el imprevisto.
+        public void ContinuarTransito()
+        {
+            if (Status != PaqueteStatus.Demorado)
+                throw new InvalidOperationException("Solo se puede continuar la ruta de paquetes demorados.");
+
+            Status = PaqueteStatus.EnTransito;
+            RazonDemora = null;
         }
 
         public void ReEnviar()

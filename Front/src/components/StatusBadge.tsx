@@ -1,7 +1,7 @@
 import { Chip } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
 
-type ShipmentStatus = 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo'
+type ShipmentStatus = 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado'
 type RouteStatus = 'Creada' | 'En Curso' | 'Finalizada' | 'Cancelada'
 
 type StatusType = ShipmentStatus | RouteStatus
@@ -19,6 +19,8 @@ const statusConfig: Record<StatusType, { label: string; color: string; bg: strin
   'Cargado en vehículo': { label: 'Cargado en vehículo', color: '#311B92', bg: '#D1C4E9' },
   'Listo para salir': { label: 'Listo para salir', color: '#E65100', bg: '#FFF3E0' },
   'En tránsito': { label: 'En tránsito', color: '#0D47A1', bg: '#E3F2FD' },
+  // G1L-82: Demorado se muestra destacado en naranja fuerte para que el Supervisor lo identifique rápido.
+  Demorado: { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2' },
   Entregado: { label: 'Entregado', color: '#1B5E20', bg: '#E8F5E9' },
   Cancelado: { label: 'Cancelado', color: '#7F0000', bg: '#FFEBEE' },
   // Route statuses

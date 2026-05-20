@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import ClearAllIcon from '@mui/icons-material/ClearAll'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
@@ -222,7 +223,16 @@ export default function EnviosPage() {
           <CircularProgress />
         </Box>
       ) : shipments.length === 0 ? (
-        <Alert severity="info">
+        <Alert
+          severity="info"
+          action={
+            hasQuery ? (
+              <Button color="inherit" size="small" startIcon={<ClearAllIcon />} onClick={handleClearFilters}>
+                Limpiar filtros
+              </Button>
+            ) : undefined
+          }
+        >
           {hasQuery ? 'No se encontraron envíos para los filtros aplicados.' : 'No hay envíos disponibles.'}
         </Alert>
       ) : (

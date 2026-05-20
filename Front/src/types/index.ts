@@ -102,7 +102,7 @@ export interface Shipment {
     phone?: string
   }
   receiverUbicacion?: { latitud: number; longitud: number } | null
-  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo'
+  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado'
   fechaCalendarizada?: string | null
   ubicacionActual?: { latitud: number; longitud: number } | null
   tipoEnvio?: TipoEnvio
@@ -117,6 +117,8 @@ export interface Shipment {
   description: string
   routeId?: string // ID de la ruta a la que pertenece
   cancellationReason?: string // Motivo de cancelación
+  // G1L-82: motivo de la demora cuando el envío está en estado "Demorado".
+  razonDemora?: string | null
 }
 
 export interface LoginCredentials {
