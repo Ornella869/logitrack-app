@@ -45,6 +45,8 @@ const ACCIONES = [
   'DesactivacionUsuario',
   'CambioRol',
   'LoginFallido',
+  'ConsentimientoOjoPatron',
+  'PruebaOjoDelPatron',
   'Otro',
 ] as const
 
@@ -61,6 +63,8 @@ const ACCION_LABELS: Record<string, string> = {
   DesactivacionUsuario: 'Desactivación de Usuario',
   CambioRol: 'Cambio de Rol',
   LoginFallido: 'Login Fallido',
+  ConsentimientoOjoPatron: 'Consentimiento Ojo del Patrón',
+  PruebaOjoDelPatron: 'Prueba Ojo del Patrón',
   Otro: 'Otro',
 }
 
@@ -76,6 +80,8 @@ const ACCION_COLORS: Record<string, { bg: string; color: string }> = {
   DesactivacionUsuario: { bg: '#ffebee', color: '#c62828' },
   CambioRol: { bg: '#f3e5f5', color: '#6a1b9a' },
   LoginFallido: { bg: '#ffebee', color: '#c62828' },
+  ConsentimientoOjoPatron: { bg: '#ede7f6', color: '#4527a0' },
+  PruebaOjoDelPatron: { bg: '#e0f2f1', color: '#00695c' },
   Otro: { bg: '#f5f5f5', color: '#555' },
 }
 

@@ -39,6 +39,7 @@ namespace Back.Application.Services
         private readonly QrService _qrService;
         private readonly AuditoriaService _auditoria;
         private readonly GeocodingService _geocoding;
+        private readonly TarifaService _tarifas;
 
         public EnviosService(
             IEnviosRepository enviosRepository,
@@ -48,7 +49,8 @@ namespace Back.Application.Services
             HistorialEstadoEnvioService historial,
             QrService qrService,
             AuditoriaService auditoria,
-            GeocodingService geocoding)
+            GeocodingService geocoding,
+            TarifaService tarifas)
         {
             _rutasRepository = rutasRepository;
             _enviosRepository = enviosRepository;
@@ -58,6 +60,17 @@ namespace Back.Application.Services
             _qrService = qrService;
             _auditoria = auditoria;
             _geocoding = geocoding;
+            _tarifas = tarifas;
+        }
+
+        // G1L-88: calcula y deja congelada la cotización del paquete con la ubicación ya geocodificada.
+        private async Task AplicarCotizacion(Paquete paquete, double peso, float distancia, Ubicacion? ubicacion)
+        {
+            var config = await _tarifas.GetConfiguracionAsync();
+            var esPeligrosa = ubicacion is not null
+                && await _tarifas.EsZonaPeligrosaAsync(ubicacion.Latitud, ubicacion.Longitud);
+            var cotizacion = _tarifas.Calcular(peso, distancia, esPeligrosa, config);
+            paquete.AsignarCotizacion(cotizacion.Total, cotizacion.CostoRecargo, esPeligrosa);
         }
 
         // G1L-10
@@ -92,6 +105,8 @@ namespace Back.Application.Services
                 TipoEnvio = request.TipoEnvio,
                 TipoPaquete = request.TipoPaquete,
             };
+
+            await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario);
 
             await _enviosRepository.Add(paquete);
 
@@ -160,6 +175,8 @@ namespace Back.Application.Services
                 request.Comentarios,
                 distancia,
                 prioridad);
+
+            await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario);
 
             await _historial.RegistrarCambioAsync(
                 paquete.Id,

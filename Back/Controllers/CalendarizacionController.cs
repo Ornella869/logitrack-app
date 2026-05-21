@@ -53,6 +53,26 @@ namespace Back.Controllers
             return Ok(calendario);
         }
 
+        /// <summary>G1L-83: Precalendarización manual de un envío a un repartidor y día (Supervisor).</summary>
+        [Authorize(Roles = Roles.Supervisor)]
+        [HttpPost("precalendarizar")]
+        public async Task<ActionResult<PrecalendarizacionResultado>> Precalendarizar([FromBody] PrecalendarizarRequest request)
+        {
+            try
+            {
+                var resultado = await _service.PrecalendarizarManualAsync(
+                    request.PaqueteId, request.RepartidorId, request.Fecha, request.ConfirmarSobrecarga, CurrentUserId());
+                // Si requiere confirmación no persistimos cambios (no se asignó nada).
+                if (!resultado.RequiereConfirmacion)
+                    await _context.SaveChangesAsync();
+                return Ok(resultado);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         /// <summary>Ejecuta el algoritmo de calendarización automática (G1L-54).</summary>
         [Authorize(Roles = Roles.Supervisor)]
         [HttpPost("ejecutar")]
@@ -69,5 +89,14 @@ namespace Back.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+    }
+
+    // G1L-83
+    public class PrecalendarizarRequest
+    {
+        public Guid PaqueteId { get; set; }
+        public Guid RepartidorId { get; set; }
+        public DateTime Fecha { get; set; }
+        public bool ConfirmarSobrecarga { get; set; }
     }
 }

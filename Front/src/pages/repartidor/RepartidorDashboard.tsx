@@ -36,16 +36,23 @@ import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import DirectionsIcon from '@mui/icons-material/Directions'
+import GavelIcon from '@mui/icons-material/Gavel'
 import { shipmentService } from '../../services/shipmentService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
+import { ojoPatronService } from '../../services/ojoPatronService'
 import StatusBadge from '../../components/StatusBadge'
 import RouteMap from '../../components/RouteMap'
 import QrCameraScanner from '../../components/QrCameraScanner'
+import ConsentimientoOjoPatronDialog from '../../components/ConsentimientoOjoPatronDialog'
+import PruebaAcusticaDialog from '../../components/PruebaAcusticaDialog'
 import { buildMapsUrl } from '../../utils/mapsUrl'
 import type { Shipment, User } from '../../types'
 
 // G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy,
 // ordenados por CP. El mapa pinta la sucursal de origen y las paradas en orden.
+
+// Clave para recordar el día seleccionado al navegar entre pantallas.
+const FECHA_STORAGE_KEY = 'repartidor_fecha_ruta'
 
 function getGreeting(name: string) {
   const h = new Date().getHours()
@@ -103,6 +110,8 @@ export default function RepartidorDashboard() {
       setParadas(data.paradas)
       setFechaRuta(data.fecha)
       setFechasDisponibles(fechas)
+      // Persistimos el día elegido para que sobreviva al salir/entrar de la vista.
+      if (data.fecha) sessionStorage.setItem(FECHA_STORAGE_KEY, data.fecha)
       if (!origen) setOrigen(sucursal)
     } catch {
       setError('No se pudo cargar tu ruta del día')
@@ -112,7 +121,9 @@ export default function RepartidorDashboard() {
   }
 
   useEffect(() => {
-    load()
+    // Si veníamos de otra pantalla, restauramos el día que estaba seleccionado.
+    const guardada = sessionStorage.getItem(FECHA_STORAGE_KEY)
+    load(guardada ?? undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -135,7 +146,39 @@ export default function RepartidorDashboard() {
   const [confirmInicioOpen, setConfirmInicioOpen] = useState(false)
   const [inicioFeedback, setInicioFeedback] = useState<{ severity: 'success' | 'error'; message: string } | null>(null)
   const [paradaEnCurso, setParadaEnCurso] = useState<{ id: string; address: string; name: string } | null>(null)
-  const [routeCompleted, setRouteCompleted] = useState(false)
+
+  // G1L-59 / G1L-60 / G1L-61: Ojo del Patrón.
+  const [consentimientoAceptado, setConsentimientoAceptado] = useState<boolean | null>(null)
+  const [consentDialog, setConsentDialog] = useState<null | 'requerido' | 'gestion'>(null)
+  const [pruebaRealizadaHoy, setPruebaRealizadaHoy] = useState<boolean | null>(null)
+  const [umbralPrueba, setUmbralPrueba] = useState(0.4)
+  const [pruebaOpen, setPruebaOpen] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      const [consent, prueba] = await Promise.all([
+        ojoPatronService.getConsentimiento(),
+        ojoPatronService.getEstadoPrueba(),
+      ])
+      setConsentimientoAceptado(consent?.aceptado ?? false)
+      setPruebaRealizadaHoy(prueba?.realizadaHoy ?? false)
+      if (prueba?.umbralAlertness != null) setUmbralPrueba(prueba.umbralAlertness)
+    })()
+  }, [])
+
+  // Inicio de ruta con gating secuencial: consentimiento → prueba acústica → confirmar.
+  const intentarIniciarRuta = () => {
+    setInicioFeedback(null)
+    if (consentimientoAceptado === false) {
+      setConsentDialog('requerido')
+      return
+    }
+    if (pruebaRealizadaHoy === false) {
+      setPruebaOpen(true)
+      return
+    }
+    setConfirmInicioOpen(true)
+  }
 
   const handleConfirmarInicio = async () => {
     setIniciandoRuta(true)
@@ -175,13 +218,12 @@ export default function RepartidorDashboard() {
     paradas.every((p) => p.status === 'Entregado' || p.status === 'Cancelado')
 
   useEffect(() => {
-    if (todasEntregadas) {
-      setRouteCompleted(true)
-      setParadaEnCurso(null)
-    }
+    if (todasEntregadas) setParadaEnCurso(null)
   }, [todasEntregadas])
 
-  const showRetorno = todasEntregadas || routeCompleted
+  // El retorno se muestra solo si TODO el día que estoy viendo está entregado/cancelado.
+  // (Antes arrastraba un flag global que lo dejaba visible al cambiar a otro día con pendientes.)
+  const showRetorno = todasEntregadas
 
   const buildReturnUrl = (): string | null => {
     if (!origen) return null
@@ -307,6 +349,14 @@ export default function RepartidorDashboard() {
               Retorno a Sucursal
             </Button>
           )}
+          {/* G1L-59: gestión del consentimiento (equivale a "Mi Perfil"). */}
+          <Button
+            startIcon={<GavelIcon />}
+            color={consentimientoAceptado === false ? 'warning' : 'inherit'}
+            onClick={() => setConsentDialog('gestion')}
+          >
+            Consentimiento
+          </Button>
           <Button startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
             Actualizar
           </Button>
@@ -441,10 +491,7 @@ export default function RepartidorDashboard() {
                       variant="contained"
                       color="success"
                       startIcon={<PlayArrowIcon />}
-                      onClick={() => {
-                        setInicioFeedback(null)
-                        setConfirmInicioOpen(true)
-                      }}
+                      onClick={intentarIniciarRuta}
                     >
                       Inicializar Ruta ({metrics.listosParaSalir})
                     </Button>
@@ -609,6 +656,38 @@ export default function RepartidorDashboard() {
           )}
         </>
       )}
+
+      {/* G1L-59: modal de consentimiento del Ojo del Patrón. */}
+      <ConsentimientoOjoPatronDialog
+        open={consentDialog !== null}
+        modo={consentDialog ?? 'gestion'}
+        onClose={async () => {
+          setConsentDialog(null)
+          // Re-chequeamos por si revocó desde la gestión.
+          const estado = await ojoPatronService.getConsentimiento()
+          setConsentimientoAceptado(estado?.aceptado ?? false)
+        }}
+        onAceptado={() => {
+          setConsentimientoAceptado(true)
+          // Si venía del flujo de inicio de ruta, seguimos: prueba acústica o confirmación.
+          if (consentDialog === 'requerido') {
+            if (pruebaRealizadaHoy === false) setPruebaOpen(true)
+            else setConfirmInicioOpen(true)
+          }
+        }}
+      />
+
+      {/* G1L-60: prueba acústica antes de iniciar la ruta. */}
+      <PruebaAcusticaDialog
+        open={pruebaOpen}
+        umbral={umbralPrueba}
+        onClose={() => setPruebaOpen(false)}
+        onCompletado={() => {
+          setPruebaRealizadaHoy(true)
+          setPruebaOpen(false)
+          setConfirmInicioOpen(true)
+        }}
+      />
 
       {/* G1L-43: confirmación de inicio de ruta. Pasa todos los "Listo para Salir" a "En Tránsito". */}
       <Dialog open={confirmInicioOpen} onClose={() => !iniciandoRuta && setConfirmInicioOpen(false)} maxWidth="xs" fullWidth>

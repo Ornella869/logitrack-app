@@ -30,6 +30,9 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
 import GroupIcon from '@mui/icons-material/Group'
 import HistoryIcon from '@mui/icons-material/History'
+import BarChartIcon from '@mui/icons-material/BarChart'
+import PriceChangeIcon from '@mui/icons-material/PriceChange'
+import GraphicEqIcon from '@mui/icons-material/GraphicEq'
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import StoreIcon from '@mui/icons-material/Store'
 import LogoutIcon from '@mui/icons-material/Logout'
@@ -42,6 +45,7 @@ import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
+import { alertService } from '../services/alertService'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import type { User } from '../types'
 import ChangePasswordDialog from './ChangePasswordDialog'
@@ -65,6 +69,13 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  // G1L-84: contador de alertas para el badge del tab (solo Supervisor).
+  const [alertasCount, setAlertasCount] = useState(0)
+
+  useEffect(() => {
+    if (user.role !== 'supervisor') return
+    void alertService.contar().then(setAlertasCount)
+  }, [user.role])
 
   const refreshNotifications = useCallback(() => {
     const notifs = notificationService.getForUser(user.id, user.role)
@@ -223,9 +234,13 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/calendarizar')) return '/calendarizar'
     if (pathname.startsWith('/repartidores')) return '/repartidores'
     if (pathname.startsWith('/rutas-activas')) return '/rutas-activas'
+    if (pathname.startsWith('/alertas')) return '/alertas'
+    if (pathname.startsWith('/reportes')) return '/reportes'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
+    if (pathname.startsWith('/tarifas')) return '/tarifas'
+    if (pathname.startsWith('/ojo-patron')) return '/ojo-patron'
     return false
   })()
 
@@ -486,11 +501,33 @@ function Layout({ user, onLogout }: LayoutProps) {
             {user.role === 'supervisor' && (
               <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
+            {user.role === 'supervisor' && (
+              <Tab
+                icon={
+                  <Badge badgeContent={alertasCount > 0 ? alertasCount : undefined} color="error" max={9}>
+                    <WarningAmberIcon fontSize="small" />
+                  </Badge>
+                }
+                iconPosition="start"
+                label="Alertas"
+                value="/alertas"
+                sx={{ minHeight: 48, textTransform: 'none' }}
+              />
+            )}
+            {user.role === 'supervisor' && (
+              <Tab icon={<BarChartIcon fontSize="small" />} iconPosition="start" label="Reportes" value="/reportes" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
             {user.role === 'administrador' && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (
               <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Sucursales" value="/sucursales" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'administrador' && (
+              <Tab icon={<PriceChangeIcon fontSize="small" />} iconPosition="start" label="Tarifas" value="/tarifas" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'administrador' && (
+              <Tab icon={<GraphicEqIcon fontSize="small" />} iconPosition="start" label="Ojo del Patrón" value="/ojo-patron" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (
               <Tab icon={<WorkspacePremiumIcon fontSize="small" />} iconPosition="start" label="Mi Plan" value="/mi-plan" sx={{ minHeight: 48, textTransform: 'none' }} />

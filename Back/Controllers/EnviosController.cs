@@ -385,10 +385,18 @@ namespace Back.Controllers
         /// del repartidor logueado para la fecha indicada (o hoy) a "En Tránsito".</summary>
         [Authorize(Roles = Roles.Repartidor)]
         [HttpPost("inicializar-ruta")]
-        public async Task<ActionResult<object>> InicializarRuta([FromQuery] DateTime? fecha)
+        public async Task<ActionResult<object>> InicializarRuta(
+            [FromQuery] DateTime? fecha,
+            [FromServices] Application.Services.OjoPatronService ojoPatron)
         {
             var userId = CurrentUserId();
             if (userId is null) return Unauthorized();
+            // G1L-59: bloqueo de inicio de ruta si no hay consentimiento vigente del Ojo del Patrón.
+            if (!await ojoPatron.TieneConsentimientoVigenteAsync(userId.Value))
+                return BadRequest(new { message = "Debés aceptar el consentimiento del Ojo del Patrón antes de iniciar la ruta." });
+            // G1L-61: bloqueo si no realizó la prueba acústica del día.
+            if (!await ojoPatron.TienePruebaAprobadaHoyAsync(userId.Value))
+                return BadRequest(new { message = "Debés completar la prueba acústica del Ojo del Patrón antes de iniciar la ruta." });
             try
             {
                 var dia = (fecha ?? DateTime.UtcNow).Date;

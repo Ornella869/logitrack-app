@@ -14,6 +14,9 @@ namespace Back.Domain.Models
         LoginFallido,
         Otro,
         ActivacionUsuario,
+        // G1L-59 / G1L-61: seguridad del repartidor (Ojo del Patrón).
+        ConsentimientoOjoPatron,
+        PruebaOjoDelPatron,
     }
 
     public class LogAuditoria

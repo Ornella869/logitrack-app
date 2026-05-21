@@ -61,6 +61,17 @@ namespace Back.Application.Services
         public required List<CalendarioCelda> Celdas { get; init; }
     }
 
+    // G1L-83: resultado de la precalendarización manual.
+    public class PrecalendarizacionResultado
+    {
+        public required bool RequiereConfirmacion { get; init; }
+        public required double PesoActual { get; init; }
+        public required double PesoResultante { get; init; }
+        public required double CapacidadKg { get; init; }
+        public required bool HuboReversion { get; init; }
+        public string? Mensaje { get; init; }
+    }
+
     public class CalendarizacionService
     {
         private const int MaxDiasParaProgramar = 30;
@@ -179,6 +190,83 @@ namespace Back.Application.Services
                         .ToList(),
                 })
                 .ToList();
+        }
+
+        // G1L-83: Precalendarización manual de un envío a un repartidor y día específicos.
+        public async Task<PrecalendarizacionResultado> PrecalendarizarManualAsync(
+            Guid paqueteId, Guid repartidorId, DateTime fecha, bool confirmarSobrecarga, Guid? supervisorId)
+        {
+            var paquete = await _enviosRepository.GetPaquete(paqueteId)
+                ?? throw new InvalidOperationException("Paquete no encontrado.");
+
+            if (paquete.Status != PaqueteStatus.PendienteDeCalendarizacion)
+                throw new InvalidOperationException("Solo se pueden asignar manualmente envíos pendientes de calendarización.");
+
+            var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
+                ?? throw new InvalidOperationException("Repartidor no encontrado.");
+            if (!rep.Activo || !rep.PuedeSerAsignado)
+                throw new InvalidOperationException("El repartidor está suspendido o inhabilitado y no puede recibir asignaciones.");
+
+            var fechaUtc = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
+            var delDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fechaUtc);
+
+            var pesoActual = delDia.Sum(p => p.Peso);
+            var pesoResultante = pesoActual + paquete.Peso;
+
+            // CA Validación de Capacidad: si supera CAPACIDAD_REPARTIDOR_KG = 500,
+            // devolvemos la advertencia y NO asignamos hasta confirmación explícita.
+            if (pesoResultante > Capacidad.RepartidorKg && !confirmarSobrecarga)
+            {
+                return new PrecalendarizacionResultado
+                {
+                    RequiereConfirmacion = true,
+                    PesoActual = pesoActual,
+                    PesoResultante = pesoResultante,
+                    CapacidadKg = Capacidad.RepartidorKg,
+                    HuboReversion = false,
+                    Mensaje = $"El peso acumulado ({pesoResultante:0.##} kg) supera la capacidad de {Capacidad.RepartidorKg} kg. Confirmá para continuar igualmente.",
+                };
+            }
+
+            // CA Recálculo de Listo para Salir post-asignación manual:
+            // si el repartidor ya tenía paquetes Cargados o Listos ese día, entra carga
+            // nueva → revertimos TODOS a "Asignado a Vehículo" para forzar la recarga.
+            var aRevertir = delDia
+                .Where(p => p.Status == PaqueteStatus.CargadoEnVehiculo || p.Status == PaqueteStatus.ListoParaSalir)
+                .ToList();
+            bool huboReversion = aRevertir.Count > 0;
+            foreach (var p in aRevertir)
+            {
+                p.CambiarEstado(PaqueteStatus.AsignadoAVehiculo);
+                await _historial.RegistrarCambioAsync(
+                    p.Id, PaqueteStatus.AsignadoAVehiculo, supervisorId, OrigenCambioEstado.Sistema,
+                    "Reversión por asignación manual de un nuevo envío");
+            }
+
+            paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
+            await _historial.RegistrarCambioAsync(
+                paquete.Id, PaqueteStatus.AsignadoAVehiculo, supervisorId, OrigenCambioEstado.Manual,
+                "Precalendarización manual por Supervisor");
+
+            await _auditoria.RegistrarAsync(
+                TipoAccion.Calendarizacion,
+                $"Asignación manual de {paquete.CodigoSeguimiento} a {rep.Nombre} {rep.Apellido} ({fechaUtc:yyyy-MM-dd})",
+                recursoId: paquete.CodigoSeguimiento,
+                contexto: huboReversion
+                    ? $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd} | Revertidos {aRevertir.Count} envíos a Asignado a Vehículo"
+                    : $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd}");
+
+            return new PrecalendarizacionResultado
+            {
+                RequiereConfirmacion = false,
+                PesoActual = pesoActual,
+                PesoResultante = pesoResultante,
+                CapacidadKg = Capacidad.RepartidorKg,
+                HuboReversion = huboReversion,
+                Mensaje = huboReversion
+                    ? "El repartidor ya estaba listo para salir. Deberá volver a cargar todos sus paquetes (incluido el nuevo) antes de iniciar la ruta."
+                    : null,
+            };
         }
 
         public async Task<CalendarizacionResultado> EjecutarAsync(Guid? supervisorId)

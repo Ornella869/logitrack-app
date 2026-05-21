@@ -1,0 +1,112 @@
+import { useEffect, useState } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from '@mui/material'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import { alertService, type AlertaPaqueteSinEstadoFinal } from '../services/alertService'
+import type { User } from '../types'
+
+// G1L-84: panel de alertas de paquetes sin estado final (Supervisor).
+export default function AlertasPage() {
+  const user = useOutletContext<User>()
+  const navigate = useNavigate()
+  const [alertas, setAlertas] = useState<AlertaPaqueteSinEstadoFinal[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    setAlertas(await alertService.getPaquetesSinEstadoFinal())
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (user.role === 'supervisor') void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (user.role !== 'supervisor') {
+    return <Alert severity="warning">Solo el Supervisor puede ver las alertas.</Alert>
+  }
+
+  return (
+    <Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={700}>
+            <WarningAmberIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#ed6c02' }} />
+            Alertas de envíos
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Paquetes En Tránsito o Demorados cuya fecha de entrega prevista ya venció.
+          </Typography>
+        </Box>
+        <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualizar</Button>
+      </Stack>
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+      ) : alertas.length === 0 ? (
+        <Alert severity="success" sx={{ mt: 2 }}>No hay paquetes sin estado final. Todo al día.</Alert>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Tracking ID</TableCell>
+                <TableCell>Repartidor</TableCell>
+                <TableCell>Fecha prevista</TableCell>
+                <TableCell align="center">Días de demora</TableCell>
+                <TableCell>Estado</TableCell>
+                <TableCell align="right">Acción</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {alertas.map((a) => (
+                <TableRow key={a.paqueteId} hover>
+                  <TableCell sx={{ fontFamily: 'monospace' }}>{a.trackingId}</TableCell>
+                  <TableCell>{a.repartidorNombre}</TableCell>
+                  <TableCell>{new Date(a.fechaPrevista).toLocaleDateString('es-AR')}</TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      size="small"
+                      label={`${a.diasDemora} día${a.diasDemora === 1 ? '' : 's'}`}
+                      sx={{ bgcolor: a.diasDemora >= 3 ? '#ffebee' : '#fff3e0', color: a.diasDemora >= 3 ? '#c62828' : '#e65100', fontWeight: 600 }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={a.estadoActual}
+                      sx={{ bgcolor: a.estadoActual === 'Demorado' ? '#ffe0b2' : '#e3f2fd', color: a.estadoActual === 'Demorado' ? '#bf360c' : '#0d47a1', fontWeight: 600 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/shipment/${a.paqueteId}`)}>
+                      Ver envío
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  )
+}

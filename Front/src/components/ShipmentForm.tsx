@@ -21,6 +21,7 @@ import {
 import type { Shipment, TipoEnvio, TipoPaquete, Branch } from '../types'
 import { postalCodeService } from '../services/postalCodeService'
 import { branchService } from '../services/branchService'
+import { tarifaService, type Cotizacion } from '../services/tarifaService'
 import { AR_PROVINCIAS, normalizeProvincia } from '../utils/provincias'
 
 interface ShipmentFormProps {
@@ -51,6 +52,9 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState<string>('')
   const [loadingBranches, setLoadingBranches] = useState(false)
+  // G1L-88: cotización detallada (preview antes de confirmar).
+  const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null)
+  const [cotizando, setCotizando] = useState(false)
   const [formData, setFormData] = useState({
     receiverName: '',
     receiverAddress: '',
@@ -67,6 +71,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   useEffect(() => {
     if (!open) return
     setErrors({})
+    setCotizacion(null)
     loadBranches()
     if (isEdit && initialData) {
       setFormData({
@@ -80,6 +85,20 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         description: initialData.description,
         tipoEnvio: initialData.tipoEnvio ?? 'Comun',
         tipoPaquete: initialData.tipoPaquete ?? 'Comun',
+      })
+    } else {
+      // Alta nueva: limpiamos los campos para no arrastrar datos de un intento previo.
+      setFormData({
+        receiverName: '',
+        receiverAddress: '',
+        receiverCity: '',
+        receiverPostal: '',
+        receiverProvince: '',
+        receiverPhone: '',
+        weight: '',
+        description: '',
+        tipoEnvio: 'Comun',
+        tipoPaquete: 'Comun',
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,6 +147,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     })
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
+    }
+    // G1L-88: si cambia algo que afecta el precio, invalidamos la cotización previa.
+    if (['receiverAddress', 'receiverCity', 'receiverPostal', 'weight'].includes(name)) {
+      setCotizacion(null)
     }
   }
 
@@ -227,6 +250,19 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  // G1L-88: pide la cotización al backend (geocodifica destino y evalúa zona peligrosa).
+  const handleCotizar = async () => {
+    const peso = Number(formData.weight)
+    if (!formData.receiverAddress || !formData.receiverCity || !formData.receiverPostal || isNaN(peso) || peso <= 0) {
+      return
+    }
+    setCotizando(true)
+    const result = await tarifaService.cotizar(
+      peso, formData.receiverAddress, formData.receiverCity, formData.receiverPostal, formData.receiverProvince || undefined)
+    setCotizando(false)
+    setCotizacion(result)
   }
 
   const handleSubmit = async () => {
@@ -514,6 +550,46 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
             multiline
             rows={2}
           />
+
+          {/* G1L-88: Cotización detallada (visualización; el Operador no modifica los valores base). */}
+          <Box sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: cotizacion ? 1.5 : 0 }}>
+              <Typography variant="subtitle2">Cotización del envío</Typography>
+              <Button size="small" onClick={handleCotizar} disabled={cotizando}>
+                {cotizando ? <CircularProgress size={16} /> : 'Calcular'}
+              </Button>
+            </Box>
+            {cotizacion && (
+              <Box>
+                <Row label={`Peso (${cotizacion.peso} kg × $${cotizacion.precioPorKg}/kg)`} value={cotizacion.costoPeso} />
+                <Row label={`Distancia (${cotizacion.distanciaKm} km × $${cotizacion.precioPorKm}/km)`} value={cotizacion.costoDistancia} />
+                {cotizacion.esZonaPeligrosa && (
+                  <>
+                    <Alert severity="warning" sx={{ my: 1, py: 0 }}>
+                      Destino en zona peligrosa: recargo por seguridad del {cotizacion.porcentajeRecargo}%.
+                    </Alert>
+                    <Row label={`Costo extra por seguridad (${cotizacion.porcentajeRecargo}%)`} value={cotizacion.costoRecargo} highlight />
+                  </>
+                )}
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1, pt: 1, display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle1" fontWeight={700}>Total</Typography>
+                  <Typography variant="subtitle1" fontWeight={700}>${cotizacion.total.toLocaleString('es-AR')}</Typography>
+                </Box>
+                {/* Diagnóstico de geocodificación: ayuda a entender si (no) se aplicó el recargo. */}
+                {!cotizacion.geocodificado ? (
+                  <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 1 }}>
+                    ⚠️ No se pudo ubicar la dirección en el mapa, por eso no se evaluó la zona peligrosa.
+                  </Typography>
+                ) : (
+                  cotizacion.latitud != null && (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                      📍 Ubicación detectada: {cotizacion.latitud.toFixed(4)}, {cotizacion.longitud?.toFixed(4)}
+                    </Typography>
+                  )
+                )}
+              </Box>
+            )}
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -529,6 +605,18 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         </Button>
       </DialogActions>
     </Dialog>
+  )
+}
+
+// G1L-88: fila itemizada del desglose de la cotización.
+function Row({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.25 }}>
+      <Typography variant="body2" color={highlight ? 'warning.main' : 'text.secondary'}>{label}</Typography>
+      <Typography variant="body2" fontWeight={highlight ? 700 : 400} color={highlight ? 'warning.main' : 'text.primary'}>
+        ${value.toLocaleString('es-AR')}
+      </Typography>
+    </Box>
   )
 }
 

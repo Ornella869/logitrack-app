@@ -16,6 +16,11 @@ namespace Back.Infrastructure.Database
         public DbSet<SolicitudComercial> SolicitudesComerciales { get; set; }
         public DbSet<LogAuditoria> LogsAuditoria { get; set; }
         public DbSet<Empresa> Empresas { get; set; }
+        public DbSet<ConfiguracionTarifa> ConfiguracionesTarifa { get; set; }
+        public DbSet<ZonaPeligrosa> ZonasPeligrosas { get; set; }
+        public DbSet<ConsentimientoOjoPatron> ConsentimientosOjoPatron { get; set; }
+        public DbSet<PruebaOjoPatron> PruebasOjoPatron { get; set; }
+        public DbSet<ConfiguracionOjoPatron> ConfiguracionesOjoPatron { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {

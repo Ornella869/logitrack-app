@@ -39,6 +39,7 @@ import PersonIcon from '@mui/icons-material/Person'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import { Tab, Tabs } from '@mui/material'
 import { shipmentService, type HistorialEstadoEnvio } from '../services/shipmentService'
 import { notificationService } from '../services/notificationService'
@@ -46,6 +47,7 @@ import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
 import QrCameraScanner from '../components/QrCameraScanner'
+import PrecalendarizarDialog from '../components/PrecalendarizarDialog'
 
 // Motivos predefinidos de cancelación según G1L-13 AC3
 const CANCEL_REASONS = [
@@ -152,6 +154,9 @@ function ShipmentDetail() {
   const canMarcarDemorado = (isRepartidor || isSupervisor) && status === 'En tránsito'
   // G1L-82: continuar ruta tras la demora — solo el repartidor.
   const canContinuarRuta = isRepartidor && status === 'Demorado'
+  // G1L-83: el Supervisor asigna manualmente un envío pendiente de calendarización.
+  const canPrecalendarizar = isSupervisor && status === 'Pendiente de calendarización'
+  const [openPrecalendarizar, setOpenPrecalendarizar] = useState(false)
 
   useEffect(() => {
     loadShipment()
@@ -540,6 +545,18 @@ function ShipmentDetail() {
               {continuando ? 'Retomando…' : 'Continuar ruta'}
             </Button>
           )}
+          {/* G1L-83: asignar manualmente (Supervisor) un envío pendiente de calendarización. */}
+          {canPrecalendarizar && (
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={<EventAvailableIcon />}
+              onClick={() => setOpenPrecalendarizar(true)}
+            >
+              Asignar manualmente
+            </Button>
+          )}
           {/* G1L-13: cancelar (operador, supervisor o repartidor) */}
           {canCancel &&
             shipment.status !== 'Cancelado' &&
@@ -650,6 +667,24 @@ function ShipmentDetail() {
                   />
                 )}
                 <TextField label="Peso (kg)" value={shipment.weight} fullWidth disabled />
+                {/* G1L-88: costo del envío cotizado al alta. */}
+                {shipment.costoEnvio != null && shipment.costoEnvio > 0 && (
+                  <Box>
+                    <Typography variant="body2" color="textSecondary" gutterBottom>
+                      Costo del envío
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      ${shipment.costoEnvio.toLocaleString('es-AR')}
+                    </Typography>
+                    {shipment.esZonaPeligrosa && (shipment.costoRecargoSeguridad ?? 0) > 0 && (
+                      <Chip
+                        size="small"
+                        label={`Incluye $${(shipment.costoRecargoSeguridad ?? 0).toLocaleString('es-AR')} por zona peligrosa`}
+                        sx={{ mt: 0.5, bgcolor: '#fff3e0', color: '#e65100', fontWeight: 600 }}
+                      />
+                    )}
+                  </Box>
+                )}
                 <TextField label="Tipo de envío" value={shipment.tipoEnvio ?? '-'} fullWidth disabled />
                 <TextField label="Tipo de paquete" value={shipment.tipoPaquete ?? '-'} fullWidth disabled />
                 <TextField label="Descripción" value={shipment.description} fullWidth disabled multiline />
@@ -812,6 +847,21 @@ function ShipmentDetail() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* G1L-83: Dialog de asignación manual (Supervisor sobre envío pendiente). */}
+      {canPrecalendarizar && (
+        <PrecalendarizarDialog
+          open={openPrecalendarizar}
+          shipment={shipment}
+          onClose={() => setOpenPrecalendarizar(false)}
+          onSuccess={async (mensaje) => {
+            setOpenPrecalendarizar(false)
+            const updated = await shipmentService.getShipmentTracking(shipment.id)
+            if (updated) setShipment(updated)
+            showActionToast(mensaje, 'success')
+          }}
+        />
+      )}
 
       {/* G1L-82: Dialog para marcar como Demorado con motivo obligatorio. */}
       <Dialog

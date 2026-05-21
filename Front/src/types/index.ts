@@ -119,6 +119,10 @@ export interface Shipment {
   cancellationReason?: string // Motivo de cancelación
   // G1L-82: motivo de la demora cuando el envío está en estado "Demorado".
   razonDemora?: string | null
+  // G1L-88: cotización congelada al alta.
+  costoEnvio?: number
+  costoRecargoSeguridad?: number
+  esZonaPeligrosa?: boolean
 }
 
 export interface LoginCredentials {

@@ -3,6 +3,7 @@ using System;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Back.Infrastructure.Database
 {
     [DbContext(typeof(LogiTrackDbContext))]
-    partial class LogiTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260520211451_Sprint3OjoPatronConsentimiento")]
+    partial class Sprint3OjoPatronConsentimiento
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,23 +24,6 @@ namespace Back.Infrastructure.Database
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("Back.Domain.Models.ConfiguracionOjoPatron", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ActualizadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("UmbralAlertness")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("ConfiguracionesOjoPatron");
-                });
 
             modelBuilder.Entity("Back.Domain.Models.ConfiguracionTarifa", b =>
                 {
@@ -231,12 +217,6 @@ namespace Back.Infrastructure.Database
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<double>("CostoEnvio")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("CostoRecargoSeguridad")
-                        .HasColumnType("double precision");
-
                     b.Property<DateTime>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
 
@@ -245,9 +225,6 @@ namespace Back.Infrastructure.Database
 
                     b.Property<float>("Distancia")
                         .HasColumnType("real");
-
-                    b.Property<bool>("EsZonaPeligrosa")
-                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("FechaCalendarizada")
                         .HasColumnType("timestamp with time zone");
@@ -284,47 +261,6 @@ namespace Back.Infrastructure.Database
                     b.HasIndex("RutaId");
 
                     b.ToTable("Paquetes");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.PruebaOjoPatron", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("AlertnessScore")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("FechaHora")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Intentos")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Resultado")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("ScoreAng")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("ScoreHap")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("ScoreNeu")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("ScoreSad")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("UmbralUsado")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid>("UsuarioId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PruebasOjoPatron");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Ruta", b =>

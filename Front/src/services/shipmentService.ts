@@ -93,6 +93,9 @@ const mapToShipment = (paquete: any): Shipment => ({
   routeId: undefined,
   cancellationReason: paquete.razonCancelacion,
   razonDemora: paquete.razonDemora ?? null,
+  costoEnvio: paquete.costoEnvio ?? undefined,
+  costoRecargoSeguridad: paquete.costoRecargoSeguridad ?? undefined,
+  esZonaPeligrosa: paquete.esZonaPeligrosa ?? undefined,
   fechaCalendarizada: paquete.fechaCalendarizada ?? null,
   ubicacionActual: paquete.ubicacionActual
     ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
@@ -553,6 +556,78 @@ export const calendarizacionService = {
       return []
     }
   },
+
+  // G1L-83: calendario operativo (repartidores + carga por día) para el selector manual.
+  getCalendario: async (dias = 7): Promise<CalendarioOperativo | null> => {
+    try {
+      const response = await api.get('/calendarizacion/calendario', { params: { dias } })
+      return response.data as CalendarioOperativo
+    } catch (error) {
+      console.error('Get calendario error:', error)
+      return null
+    }
+  },
+
+  // G1L-83: precalendarización manual. Si requiereConfirmacion=true, no se asignó nada
+  // (hay sobrecarga de peso) y hay que reintentar con confirmarSobrecarga=true.
+  precalendarizar: async (
+    paqueteId: string,
+    repartidorId: string,
+    fecha: string,
+    confirmarSobrecarga = false,
+  ): Promise<{ success: boolean; data?: PrecalendarizacionResultado; error?: string }> => {
+    try {
+      const response = await api.post('/calendarizacion/precalendarizar', {
+        PaqueteId: paqueteId,
+        RepartidorId: repartidorId,
+        Fecha: fecha,
+        ConfirmarSobrecarga: confirmarSobrecarga,
+      })
+      return { success: true, data: response.data as PrecalendarizacionResultado }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message ?? error.response?.data ?? 'No se pudo asignar manualmente'
+      return { success: false, error: typeof errorMessage === 'string' ? errorMessage : 'Error desconocido' }
+    }
+  },
+}
+
+// G1L-83: tipos del calendario operativo y la precalendarización.
+export interface CalendarioCeldaPaquete {
+  paqueteId: string
+  codigoSeguimiento: string
+  cpDestino: string
+  peso: number
+  esPrioritario: boolean
+  status: string
+}
+
+export interface CalendarioCelda {
+  repartidorId: string
+  repartidorNombre: string
+  fecha: string
+  pesoTotal: number
+  paquetes: CalendarioCeldaPaquete[]
+}
+
+export interface CalendarioRepartidor {
+  repartidorId: string
+  nombre: string
+  email: string
+  celdas: CalendarioCelda[]
+}
+
+export interface CalendarioOperativo {
+  dias: string[]
+  repartidores: CalendarioRepartidor[]
+}
+
+export interface PrecalendarizacionResultado {
+  requiereConfirmacion: boolean
+  pesoActual: number
+  pesoResultante: number
+  capacidadKg: number
+  huboReversion: boolean
+  mensaje?: string | null
 }
 
 export interface HistorialEstadoEnvio {

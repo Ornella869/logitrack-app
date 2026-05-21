@@ -51,6 +51,10 @@ namespace Back.Domain.Models
         // G1L-82: motivo del estado "Demorado" (Problema mecánico, Corte de ruta, etc.)
         public string? RazonDemora { get; private set; }
         public float Distancia { get; set; } = 0;
+        // G1L-88: cotización congelada al momento del alta (no cambia si luego cambian las tarifas).
+        public double CostoEnvio { get; private set; }
+        public double CostoRecargoSeguridad { get; private set; }
+        public bool EsZonaPeligrosa { get; private set; }
         public DateTime? FechaCalendarizada { get; private set; }
         public Guid? RepartidorAsignadoId { get; private set; }
         public Ubicacion? UbicacionActual { get; set; }
@@ -173,6 +177,14 @@ namespace Back.Domain.Models
         public void CambiarEstado(PaqueteStatus status)
         {
             Status = status;
+        }
+
+        // G1L-88: guarda la cotización calculada al dar de alta o editar el envío.
+        public void AsignarCotizacion(double costoTotal, double costoRecargoSeguridad, bool esZonaPeligrosa)
+        {
+            CostoEnvio = costoTotal;
+            CostoRecargoSeguridad = costoRecargoSeguridad;
+            EsZonaPeligrosa = esZonaPeligrosa;
         }
 
         public void AsignarParaCalendarizacion(Guid repartidorId, DateTime fecha)

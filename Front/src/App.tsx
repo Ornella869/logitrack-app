@@ -10,6 +10,10 @@ import RutasActivasPage from './pages/RutasActivasPage'
 import DetalleRutaPage from './pages/DetalleRutaPage'
 import AuditoriaPage from './pages/AuditoriaPage'
 import MiPlanPage from './pages/MiPlanPage'
+import ReportesPage from './pages/ReportesPage'
+import TarifasPage from './pages/TarifasPage'
+import OjoPatronConfigPage from './pages/OjoPatronConfigPage'
+import AlertasPage from './pages/AlertasPage'
 import SucursalesPage from './pages/SucursalesPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
@@ -287,6 +291,52 @@ function App() {
             element={
               user && user.role === 'administrador' ? (
                 <SucursalesPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          {/* G1L-86/87/88: Gestión de tarifas y zonas peligrosas (Admin) */}
+          <Route
+            path="/tarifas"
+            element={
+              user && user.role === 'administrador' ? (
+                <TarifasPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          {/* G1L-61: Configuración del Ojo del Patrón (Admin) */}
+          <Route
+            path="/ojo-patron"
+            element={
+              user && user.role === 'administrador' ? (
+                <OjoPatronConfigPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+
+          {/* G1L-84: Panel de alertas de paquetes sin estado final (Supervisor) */}
+          <Route
+            path="/alertas"
+            element={
+              user && user.role === 'supervisor' ? (
+                <AlertasPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+
+          {/* G1L-26: Reportes de volumen (Supervisor) */}
+          <Route
+            path="/reportes"
+            element={
+              user && user.role === 'supervisor' ? (
+                <ReportesPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

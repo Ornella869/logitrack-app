@@ -100,6 +100,8 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.CargadoEnVehiculo,
                 PaqueteStatus.ListoParaSalir,
                 PaqueteStatus.EnTransito,
+                // G1L-82: un envío demorado sigue ocupando carga del repartidor ese día.
+                PaqueteStatus.Demorado,
             };
             return await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId != null
@@ -117,6 +119,8 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.CargadoEnVehiculo,
                 PaqueteStatus.ListoParaSalir,
                 PaqueteStatus.EnTransito,
+                // G1L-82: un envío demorado sigue ocupando carga del repartidor ese día.
+                PaqueteStatus.Demorado,
             };
             var fecha = await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
