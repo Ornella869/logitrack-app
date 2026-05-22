@@ -21,6 +21,7 @@ import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
 import TrackingPublicPage from './pages/TrackingPublicPage'
+import PortalClientePublico from './pages/PortalClientePublico'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import ClienteDashboard from './pages/ClienteDashboard'
@@ -152,6 +153,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/seguimiento/:trackingId" element={<TrackingPublicPage />} />
+        <Route path="/portal-cliente" element={<PortalClientePublico />} />
 
         <Route
           path="/login"

@@ -31,6 +31,7 @@ export interface Incidencia {
   origen?: 'repartidor' | 'cliente'
   envioId?: string
   emailContacto?: string
+  chatFinalizado?: boolean
 }
 
 const STORAGE_KEY = 'logitrack_incidencias'
@@ -118,6 +119,15 @@ export const incidenciaService = {
     return loadAll().some(
       (i) => i.envioId === envioId && i.tipo === tipo && i.estado !== 'Resuelta' && i.fechaReporte >= cutoff,
     )
+  },
+
+  finalizarChat(id: string): Incidencia | null {
+    const all = loadAll()
+    const idx = all.findIndex((i) => i.id === id)
+    if (idx < 0) return null
+    all[idx]!.chatFinalizado = true
+    saveAll(all)
+    return all[idx]!
   },
 
   checkDuplicateRepartidor(repartidorId: string, tipo: string): boolean {

@@ -12,6 +12,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   Grid,
   InputLabel,
@@ -19,6 +20,8 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   useTheme,
@@ -35,6 +38,9 @@ import CancelIcon from '@mui/icons-material/Cancel'
 import RepeatIcon from '@mui/icons-material/Repeat'
 import ChatIcon from '@mui/icons-material/Chat'
 import SendIcon from '@mui/icons-material/Send'
+import EmailIcon from '@mui/icons-material/Email'
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike'
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import {
   incidenciaService,
   type EstadoIncidencia,
@@ -222,16 +228,23 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
 
       <DialogContent dividers>
         <Stack spacing={2.5}>
-          {/* Datos del repartidor */}
+          {/* Datos del origen */}
           <Box>
             <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.5 }}>
-              <PersonIcon fontSize="small" color="action" />
+              {inc.origen === 'cliente' ? <PersonOutlineIcon fontSize="small" color="action" /> : <PersonIcon fontSize="small" color="action" />}
               <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
-                Repartidor
+                {inc.origen === 'cliente' ? 'Origen: Cliente' : 'Repartidor'}
               </Typography>
+              {inc.origen === 'cliente' && (
+                <Chip label="Portal cliente" size="small" sx={{ height: 16, fontSize: 10, fontWeight: 600, bgcolor: '#E0F7FA', color: '#006064', border: '1px solid #80DEEA', '& .MuiChip-label': { px: 0.8 } }} />
+              )}
             </Stack>
-            <Typography variant="body2" fontWeight={600}>{inc.repartidorNombre}</Typography>
-            <Typography variant="caption" color="text.secondary">ID: {inc.repartidorId}</Typography>
+            {inc.origen !== 'cliente' && (
+              <>
+                <Typography variant="body2" fontWeight={600}>{inc.repartidorNombre}</Typography>
+                <Typography variant="caption" color="text.secondary">ID: {inc.repartidorId}</Typography>
+              </>
+            )}
           </Box>
 
           {/* Descripción */}
@@ -460,7 +473,41 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
             </Stack>
           </Box>
 
-          {/* Mensajería interna supervisor ↔ repartidor */}
+          {/* Datos de contacto para incidencias de cliente */}
+          {inc.origen === 'cliente' && (
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
+                <PersonOutlineIcon fontSize="small" color="action" />
+                <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
+                  Datos del cliente
+                </Typography>
+              </Stack>
+              <Stack spacing={0.6}>
+                {inc.envioId && (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <LocalShippingIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
+                    <Typography variant="body2" color="text.secondary">Envío:</Typography>
+                    <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace' }}>{inc.envioId}</Typography>
+                  </Stack>
+                )}
+                {inc.emailContacto ? (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <EmailIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
+                    <Typography variant="body2" color="text.secondary">Email:</Typography>
+                    <Typography variant="body2" fontWeight={600}>{inc.emailContacto}</Typography>
+                  </Stack>
+                ) : (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <EmailIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
+                    <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Sin email de contacto</Typography>
+                  </Stack>
+                )}
+              </Stack>
+            </Box>
+          )}
+
+          {/* Mensajería interna supervisor ↔ repartidor (solo para incidencias de repartidor) */}
+          {inc.origen !== 'cliente' && (
           <Box>
             <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
               <ChatIcon fontSize="small" color="action" />
@@ -468,6 +515,13 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                 Chat con repartidor
               </Typography>
             </Stack>
+
+            {inc.chatFinalizado && (
+              <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.5, fontSize: 12, borderRadius: 1.5 }}>
+                Chat finalizado por el supervisor. No se pueden enviar más mensajes.
+              </Alert>
+            )}
+
             <Box
               sx={{
                 border: '1px solid',
@@ -516,29 +570,47 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                 </Stack>
               )}
             </Box>
-            <Stack direction="row" spacing={1}>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder={`Escribir a ${inc.repartidorNombre}…`}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMensaje() } }}
-                multiline
-                maxRows={3}
-              />
-              <Button
-                variant="contained"
-                size="small"
-                onClick={handleSendMensaje}
-                disabled={!chatInput.trim()}
-                startIcon={<SendIcon />}
-                sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 1.5 }}
-              >
-                Enviar
-              </Button>
-            </Stack>
+            {!inc.chatFinalizado && (
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder={`Escribir a ${inc.repartidorNombre}…`}
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMensaje() } }}
+                    multiline
+                    maxRows={3}
+                  />
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleSendMensaje}
+                    disabled={!chatInput.trim()}
+                    startIcon={<SendIcon />}
+                    sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 1.5 }}
+                  >
+                    Enviar
+                  </Button>
+                </Stack>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  fullWidth
+                  onClick={() => {
+                    const updated = incidenciaService.finalizarChat(inc.id)
+                    if (updated) onUpdated(updated)
+                  }}
+                  sx={{ fontWeight: 600, borderStyle: 'dashed' }}
+                >
+                  Finalizar chat con {inc.repartidorNombre.split(' ')[0]}
+                </Button>
+              </Stack>
+            )}
           </Box>
+          )}
         </Stack>
       </DialogContent>
 
@@ -584,6 +656,7 @@ export default function IncidenciasPage() {
   const isDark = theme.palette.mode === 'dark'
 
   const [incidencias, setIncidencias] = useState<Incidencia[]>([])
+  const [tabVista, setTabVista] = useState<'repartidores' | 'clientes'>('repartidores')
   const [filtroEstado, setFiltroEstado] = useState<EstadoIncidencia | 'Todas'>('Todas')
   const [busqueda, setBusqueda] = useState('')
   const [detalle, setDetalle] = useState<Incidencia | null>(null)
@@ -592,7 +665,7 @@ export default function IncidenciasPage() {
   const cargar = () => setIncidencias(incidenciaService.getAll())
 
   const refreshChats = () => {
-    const all = incidenciaService.getAll().filter((inc) => inc.estado !== 'Resuelta')
+    const all = incidenciaService.getAll().filter((inc) => inc.estado !== 'Resuelta' && inc.origen !== 'cliente' && !inc.chatFinalizado)
     setActiveChats(
       all
         .map((inc) => ({
@@ -624,18 +697,26 @@ export default function IncidenciasPage() {
     }
   }, [])
 
-  const incidenciasFiltradas = incidencias.filter((inc) => {
+  const incidenciasDeRepartidor = incidencias.filter((i) => i.origen !== 'cliente')
+  const incidenciasDeCliente = incidencias.filter((i) => i.origen === 'cliente')
+  const incidenciasBase = tabVista === 'repartidores' ? incidenciasDeRepartidor : incidenciasDeCliente
+
+  const incidenciasFiltradas = incidenciasBase.filter((inc) => {
     const matchEstado = filtroEstado === 'Todas' || inc.estado === filtroEstado
     const q = busqueda.toLowerCase()
-    const matchBusqueda = !q || inc.repartidorNombre.toLowerCase().includes(q) || inc.tipoLabel.toLowerCase().includes(q) || inc.descripcion.toLowerCase().includes(q)
+    const matchBusqueda = !q
+      || inc.repartidorNombre.toLowerCase().includes(q)
+      || inc.tipoLabel.toLowerCase().includes(q)
+      || inc.descripcion.toLowerCase().includes(q)
+      || (inc.envioId ?? '').toLowerCase().includes(q)
     return matchEstado && matchBusqueda
   })
 
   const counts = {
-    total: incidencias.length,
-    abiertas: incidencias.filter((i) => i.estado === 'Abierta').length,
-    enRevision: incidencias.filter((i) => i.estado === 'En Revisión').length,
-    resueltas: incidencias.filter((i) => i.estado === 'Resuelta').length,
+    total: incidenciasBase.length,
+    abiertas: incidenciasBase.filter((i) => i.estado === 'Abierta').length,
+    enRevision: incidenciasBase.filter((i) => i.estado === 'En Revisión').length,
+    resueltas: incidenciasBase.filter((i) => i.estado === 'Resuelta').length,
   }
 
   return (
@@ -653,10 +734,53 @@ export default function IncidenciasPage() {
             Gestión de Incidencias
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Panel centralizado de incidentes reportados por repartidores
+            Panel centralizado de incidentes
           </Typography>
         </Box>
       </Stack>
+
+      {/* Solapas Repartidores / Clientes */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs
+          value={tabVista}
+          onChange={(_, v: 'repartidores' | 'clientes') => { setTabVista(v); setFiltroEstado('Todas'); setBusqueda('') }}
+        >
+          <Tab
+            value="repartidores"
+            label={
+              <Stack direction="row" alignItems="center" spacing={0.8}>
+                <DirectionsBikeIcon sx={{ fontSize: 17 }} />
+                <span>Repartidores</span>
+                {incidenciasDeRepartidor.filter(i => i.estado === 'Abierta').length > 0 && (
+                  <Chip
+                    label={incidenciasDeRepartidor.filter(i => i.estado === 'Abierta').length}
+                    size="small"
+                    color="error"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 700, '& .MuiChip-label': { px: 0.8 } }}
+                  />
+                )}
+              </Stack>
+            }
+          />
+          <Tab
+            value="clientes"
+            label={
+              <Stack direction="row" alignItems="center" spacing={0.8}>
+                <PersonOutlineIcon sx={{ fontSize: 17 }} />
+                <span>Clientes</span>
+                {incidenciasDeCliente.filter(i => i.estado === 'Abierta').length > 0 && (
+                  <Chip
+                    label={incidenciasDeCliente.filter(i => i.estado === 'Abierta').length}
+                    size="small"
+                    color="error"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 700, '& .MuiChip-label': { px: 0.8 } }}
+                  />
+                )}
+              </Stack>
+            }
+          />
+        </Tabs>
+      </Box>
 
       {/* KPIs */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -700,7 +824,7 @@ export default function IncidenciasPage() {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
             <TextField
               size="small"
-              placeholder="Buscar por repartidor, tipo o descripción…"
+              placeholder={tabVista === 'repartidores' ? 'Buscar por repartidor, tipo o descripción…' : 'Buscar por envío, tipo o descripción…'}
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} /> }}
@@ -726,14 +850,17 @@ export default function IncidenciasPage() {
       {/* Lista de incidencias */}
       {incidenciasFiltradas.length === 0 ? (
         <Alert severity="info" icon={<CheckCircleIcon />}>
-          {incidencias.length === 0
-            ? 'No hay incidencias reportadas aún. Aparecerán aquí cuando un repartidor use el asistente Tracky.'
+          {incidenciasBase.length === 0
+            ? tabVista === 'repartidores'
+              ? 'No hay incidencias de repartidores aún. Aparecerán cuando usen el asistente Tracky.'
+              : 'No hay incidencias de clientes aún. Aparecerán cuando reporten desde el portal público.'
             : 'No hay incidencias que coincidan con el filtro actual.'}
         </Alert>
       ) : (
         <Stack spacing={1.5}>
           {incidenciasFiltradas.map((inc) => {
             const tipoInfo = TIPO_INFO[inc.tipo] ?? TIPO_INFO.otro!
+            const esCliente = inc.origen === 'cliente'
             return (
               <Card
                 key={inc.id}
@@ -755,18 +882,31 @@ export default function IncidenciasPage() {
                         <Typography variant="subtitle2" fontWeight={700}>
                           {tipoInfo.label}
                         </Typography>
-                        <EstadoChip estado={inc.estado} />
+                        <Stack direction="row" spacing={0.8} alignItems="center">
+                          {esCliente && (
+                            <Chip label="Cliente" size="small" sx={{ height: 18, fontSize: 10, fontWeight: 600, bgcolor: '#E0F7FA', color: '#006064', border: '1px solid #80DEEA', '& .MuiChip-label': { px: 0.8 } }} />
+                          )}
+                          <EstadoChip estado={inc.estado} />
+                        </Stack>
                       </Stack>
                       <Stack direction="row" spacing={2} sx={{ mt: 0.4 }} flexWrap="wrap">
                         <Typography variant="caption" color="text.secondary">
-                          <PersonIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
-                          {inc.repartidorNombre}
+                          {esCliente
+                            ? <><LocalShippingIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />{inc.envioId ?? inc.repartidorNombre}</>
+                            : <><PersonIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />{inc.repartidorNombre}</>
+                          }
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           <AccessTimeIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
                           {formatFecha(inc.fechaReporte)}
                         </Typography>
-                        {inc.observaciones.length > 0 && (
+                        {esCliente && inc.emailContacto && (
+                          <Typography variant="caption" color="text.secondary">
+                            <EmailIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
+                            {inc.emailContacto}
+                          </Typography>
+                        )}
+                        {!esCliente && inc.observaciones.length > 0 && (
                           <Typography variant="caption" color="text.secondary">
                             <CommentIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
                             {inc.observaciones.length} obs.

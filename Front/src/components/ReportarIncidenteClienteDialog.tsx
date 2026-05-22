@@ -29,7 +29,12 @@ const MOTIVOS: { value: TipoIncidencia; label: string }[] = [
   { value: 'otro', label: 'Otro' },
 ]
 
-const ESTADOS_BLOQUEADOS: Shipment['status'][] = ['Pendiente de calendarización', 'Listo para salir']
+const ESTADOS_BLOQUEADOS: Shipment['status'][] = [
+  'Pendiente de calendarización',
+  'Asignado a vehículo',
+  'Cargado en vehículo',
+  'Listo para salir',
+]
 
 interface Props {
   open: boolean

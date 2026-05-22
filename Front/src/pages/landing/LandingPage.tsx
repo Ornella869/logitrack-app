@@ -693,6 +693,21 @@ export default function LandingPage() {
                 </Button>
               ))}
               <Button
+                variant="outlined"
+                onClick={() => navigate('/portal-cliente')}
+                sx={{
+                  ml: 1,
+                  borderRadius: '999px',
+                  px: 2.5,
+                  borderColor: scrolled ? '#0288D1' : 'rgba(255,255,255,0.5)',
+                  color: scrolled ? '#0288D1' : '#fff',
+                  fontWeight: 600,
+                  '&:hover': { borderColor: '#0288D1', bgcolor: 'rgba(2,136,209,0.08)' },
+                }}
+              >
+                Soy cliente
+              </Button>
+              <Button
                 variant="contained"
                 onClick={() => navigate('/login')}
                 sx={{
@@ -843,7 +858,7 @@ export default function LandingPage() {
                 rutas y equipos desde un solo lugar.
               </Typography>
 
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }} flexWrap="wrap">
                 <Button
                   size="large"
                   variant="contained"
@@ -878,6 +893,22 @@ export default function LandingPage() {
                   }}
                 >
                   Ver planes
+                </Button>
+                <Button
+                  size="large"
+                  variant="outlined"
+                  onClick={() => navigate('/portal-cliente')}
+                  sx={{
+                    px: 3.5,
+                    py: 1.4,
+                    borderRadius: '16px',
+                    borderColor: 'rgba(157,231,255,0.6)',
+                    color: '#9DE7FF',
+                    fontWeight: 700,
+                    '&:hover': { borderColor: '#9DE7FF', background: 'rgba(157,231,255,0.1)' },
+                  }}
+                >
+                  Soy cliente →
                 </Button>
               </Stack>
 

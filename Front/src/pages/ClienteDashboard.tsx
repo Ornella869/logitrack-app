@@ -36,7 +36,12 @@ const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; 
   'Cancelado': { label: 'Cancelado', color: '#7F0000', bg: '#FFEBEE', icon: <CancelOutlinedIcon /> },
 }
 
-const ESTADOS_BLOQUEADOS: Shipment['status'][] = ['Pendiente de calendarización', 'Listo para salir']
+const ESTADOS_BLOQUEADOS: Shipment['status'][] = [
+  'Pendiente de calendarización',
+  'Asignado a vehículo',
+  'Cargado en vehículo',
+  'Listo para salir',
+]
 
 const TIPO_LABEL: Record<string, string> = {
   no_llego: 'No llegó',
@@ -57,9 +62,7 @@ const ESTADO_INCIDENCIA_COLOR: Record<string, { color: string; bg: string }> = {
 }
 
 function canReportIncidencia(shipment: Shipment): boolean {
-  if (ESTADOS_BLOQUEADOS.includes(shipment.status)) return false
-  if (shipment.status === 'Entregado' || shipment.status === 'Cancelado') return true
-  return !!shipment.estimatedDelivery && new Date(shipment.estimatedDelivery) < new Date()
+  return !ESTADOS_BLOQUEADOS.includes(shipment.status)
 }
 
 function formatFecha(iso: string | null | undefined): string {
