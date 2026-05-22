@@ -73,7 +73,8 @@ namespace Back.Infrastructure.Database
                 .HasValue<Supervisor>("Supervisor")
                 .HasValue<Operador>("Operador")
                 .HasValue<Administrador>("Administrador")
-                .HasValue<Gerente>("Gerente");
+                .HasValue<Gerente>("Gerente")
+                .HasValue<UsuarioPortal>("UsuarioPortal");
 
             // Épica D: cobertura de provincias por sucursal, persistida como JSON.
             modelBuilder.Entity<Sucursal>(s =>

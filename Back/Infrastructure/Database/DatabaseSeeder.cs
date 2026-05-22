@@ -59,6 +59,8 @@ namespace Back.Infrastructure.Database
 
             // Épica D: aseguramos la cuenta demo de Gerente incluso si la BD ya tiene datos.
             await AsegurarGerenteDemoAsync();
+            // Portal cliente: cuenta demo para probar el flujo de incidencias públicas.
+            await AsegurarClientePortalDemoAsync();
 
             // Guard de idempotencia: si ya hay datos, no duplicar.
             if (await _context.Usuarios.AnyAsync())
@@ -120,6 +122,19 @@ namespace Back.Infrastructure.Database
             _context.Paquetes.AddRange([.. PaquetesGenerator.GenerarPaquetes(20)]);
             _context.Rutas.AddRange(rutas);
 
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task AsegurarClientePortalDemoAsync()
+        {
+            const string email = "cliente.demo@logitrack.com";
+            if (await _context.Usuarios.AnyAsync(u => u.Email == email)) return;
+
+            var cliente = new UsuarioPortal(
+                "Cliente", "Demo", email,
+                PasswordHasher.HashPassword("kjkszpj1234"),
+                "99999999");
+            _context.Usuarios.Add(cliente);
             await _context.SaveChangesAsync();
         }
 

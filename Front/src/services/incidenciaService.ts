@@ -1,5 +1,5 @@
 export type EstadoIncidencia = 'Abierta' | 'En Revisión' | 'Resuelta'
-export type TipoIncidencia = 'accident' | 'mechanical' | 'danger' | 'health' | 'delivery' | 'otro'
+export type TipoIncidencia = 'accident' | 'mechanical' | 'danger' | 'health' | 'delivery' | 'otro' | 'no_llego' | 'llego_danado' | 'llego_tarde'
 
 export interface ObservacionIncidencia {
   texto: string
@@ -28,6 +28,9 @@ export interface Incidencia {
   observaciones: ObservacionIncidencia[]
   historialEstados: HistorialEstadoIncidencia[]
   paradasAfectadas?: string[]
+  origen?: 'repartidor' | 'cliente'
+  envioId?: string
+  emailContacto?: string
 }
 
 const STORAGE_KEY = 'logitrack_incidencias'
@@ -108,6 +111,20 @@ export const incidenciaService = {
     all[idx] = inc
     saveAll(all)
     return inc
+  },
+
+  checkDuplicateCliente(envioId: string, tipo: string): boolean {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    return loadAll().some(
+      (i) => i.envioId === envioId && i.tipo === tipo && i.estado !== 'Resuelta' && i.fechaReporte >= cutoff,
+    )
+  },
+
+  checkDuplicateRepartidor(repartidorId: string, tipo: string): boolean {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    return loadAll().some(
+      (i) => i.repartidorId === repartidorId && i.tipo === tipo && i.estado !== 'Resuelta' && i.fechaReporte >= cutoff,
+    )
   },
 
   agregarObservacion(

@@ -106,7 +106,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
 
       if (user) {
         onLogin(user)
-        navigate(isRepartidorRole(user.role) ? '/repartidor' : '/app')
+        navigate(isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : '/app')
       } else {
         setError('Email o contraseña incorrectos')
       }
@@ -358,6 +358,20 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
                   />
                 ))}
               </Stack>
+
+              <Divider sx={{ my: 2 }}>
+                <Typography variant="caption" color="text.disabled" fontWeight={600}>
+                  PORTAL CLIENTE
+                </Typography>
+              </Divider>
+              <Chip
+                label="Cliente Demo · cliente.demo@logitrack.com"
+                color="info"
+                variant="outlined"
+                size="small"
+                onClick={() => fillDemo('cliente.demo@logitrack.com')}
+                sx={{ cursor: 'pointer', fontWeight: 600, width: '100%', justifyContent: 'center' }}
+              />
             </Box>
           )}
         </Card>

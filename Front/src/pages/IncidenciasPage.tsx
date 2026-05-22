@@ -51,6 +51,9 @@ const TIPO_INFO: Record<string, { label: string; emoji: string; color: string }>
   health: { label: 'Problema de salud', emoji: '😷', color: '#6a1b9a' },
   delivery: { label: 'Problema de entrega', emoji: '📦', color: '#1565c0' },
   otro: { label: 'Otro', emoji: '📋', color: '#37474f' },
+  no_llego: { label: 'No llegó', emoji: '❌', color: '#b71c1c' },
+  llego_danado: { label: 'Llegó dañado', emoji: '💥', color: '#e65100' },
+  llego_tarde: { label: 'Llegó tarde', emoji: '⏰', color: '#f57f17' },
 }
 
 const ESTADO_INFO: Record<EstadoIncidencia, { color: string; bg: string; label: string }> = {
@@ -99,7 +102,9 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   const [feedback, setFeedback] = useState('')
   const [paradasData, setParadasData] = useState<Shipment[]>([])
   const [paradasLoading, setParadasLoading] = useState(false)
-  const [paradasAccion, setParadasAccion] = useState<Record<string, 'loading' | 'done' | 'error'>>({})
+  const [paradasAccion, setParadasAccion] = useState<Record<string, 'loading' | 'done' | 'error' | string>>({})
+  const [cancelarDialogId, setCancelarDialogId] = useState<string | null>(null)
+  const [cancelarMotivo, setCancelarMotivo] = useState('')
 
   const tipoInfo = TIPO_INFO[inc.tipo] ?? TIPO_INFO.otro!
 
@@ -150,20 +155,24 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
 
   const handleReprogramar = async (shipmentId: string) => {
     setParadasAccion((prev) => ({ ...prev, [shipmentId]: 'loading' }))
-    const result = await shipmentService.cancelShipment(shipmentId, 'Incidente del repartidor — reprogramado por supervisor', 'Reagendar')
-    setParadasAccion((prev) => ({ ...prev, [shipmentId]: result.success ? 'done' : 'error' }))
+    const result = await shipmentService.resolverIncidente(shipmentId, 'Reprogramar', 'Reprogramado por supervisor debido a incidente del repartidor')
+    setParadasAccion((prev) => ({ ...prev, [shipmentId]: result.success ? 'done' : `error: ${result.error ?? 'Error'}` }))
     if (result.success) {
       setParadasData((prev) => prev.map((p) => p.id === shipmentId ? { ...p, status: 'Pendiente de calendarización' as const } : p))
     }
   }
 
-  const handleCancelar = async (shipmentId: string) => {
+  const handleConfirmarCancelar = async () => {
+    if (!cancelarDialogId || !cancelarMotivo.trim()) return
+    const shipmentId = cancelarDialogId
+    setCancelarDialogId(null)
     setParadasAccion((prev) => ({ ...prev, [shipmentId]: 'loading' }))
-    const result = await shipmentService.cancelShipment(shipmentId, 'Incidente del repartidor — cancelado por supervisor', 'Definitivo')
-    setParadasAccion((prev) => ({ ...prev, [shipmentId]: result.success ? 'done' : 'error' }))
+    const result = await shipmentService.resolverIncidente(shipmentId, 'Cancelar', cancelarMotivo.trim())
+    setParadasAccion((prev) => ({ ...prev, [shipmentId]: result.success ? 'done' : `error: ${result.error ?? 'Error'}` }))
     if (result.success) {
       setParadasData((prev) => prev.map((p) => p.id === shipmentId ? { ...p, status: 'Cancelado' as const } : p))
     }
+    setCancelarMotivo('')
   }
 
   const handleGuardarEstado = () => {
@@ -192,6 +201,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   }
 
   return (
+    <>
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -367,7 +377,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                                 color="error"
                                 startIcon={isLoading ? <CircularProgress size={12} /> : <CancelIcon />}
                                 disabled={isLoading || p.status === 'Cancelado'}
-                                onClick={() => void handleCancelar(p.id)}
+                                onClick={() => { setCancelarDialogId(p.id); setCancelarMotivo('') }}
                                 sx={{ fontSize: 11 }}
                               >
                                 Cancelar
@@ -377,8 +387,13 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                           {isDone && (
                             <Chip label="Acción aplicada" size="small" color="success" />
                           )}
-                          {accion === 'error' && (
-                            <Chip label="Error" size="small" color="error" />
+                          {typeof accion === 'string' && accion.startsWith('error') && (
+                            <Chip
+                              label={accion.replace('error: ', '') || 'Error'}
+                              size="small"
+                              color="error"
+                              sx={{ maxWidth: 200, height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal' } }}
+                            />
                           )}
                         </Stack>
                       </Box>
@@ -531,6 +546,35 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
         <Button onClick={onClose}>Cerrar</Button>
       </DialogActions>
     </Dialog>
+
+    {/* Dialogo de motivo para cancelar envío */}
+    <Dialog open={!!cancelarDialogId} onClose={() => setCancelarDialogId(null)} maxWidth="xs" fullWidth>
+      <DialogTitle>Motivo de cancelación</DialogTitle>
+      <DialogContent>
+        <TextField
+          fullWidth
+          autoFocus
+          label="Motivo (obligatorio)"
+          multiline
+          minRows={2}
+          value={cancelarMotivo}
+          onChange={(e) => setCancelarMotivo(e.target.value)}
+          sx={{ mt: 1 }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setCancelarDialogId(null)}>Volver</Button>
+        <Button
+          variant="contained"
+          color="error"
+          disabled={!cancelarMotivo.trim()}
+          onClick={() => void handleConfirmarCancelar()}
+        >
+          Confirmar cancelación
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   )
 }
 
@@ -543,14 +587,41 @@ export default function IncidenciasPage() {
   const [filtroEstado, setFiltroEstado] = useState<EstadoIncidencia | 'Todas'>('Todas')
   const [busqueda, setBusqueda] = useState('')
   const [detalle, setDetalle] = useState<Incidencia | null>(null)
+  const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
 
   const cargar = () => setIncidencias(incidenciaService.getAll())
+
+  const refreshChats = () => {
+    const all = incidenciaService.getAll().filter((inc) => inc.estado !== 'Resuelta')
+    setActiveChats(
+      all
+        .map((inc) => ({
+          incidencia: inc,
+          unread: mensajeIncidenciaService.countUnreadForSupervisorInIncidencia(inc.id),
+        }))
+        .filter(({ incidencia, unread }) =>
+          unread > 0 || mensajeIncidenciaService.getByIncidencia(incidencia.id).length > 0,
+        )
+        .sort((a, b) => b.unread - a.unread),
+    )
+  }
 
   useEffect(() => {
     cargar()
     const handler = () => cargar()
     window.addEventListener('logitrack:incidencias', handler)
     return () => window.removeEventListener('logitrack:incidencias', handler)
+  }, [])
+
+  useEffect(() => {
+    refreshChats()
+    const handler = () => refreshChats()
+    window.addEventListener('logitrack:mensajes_incidencia', handler)
+    window.addEventListener('logitrack:incidencias', handler)
+    return () => {
+      window.removeEventListener('logitrack:mensajes_incidencia', handler)
+      window.removeEventListener('logitrack:incidencias', handler)
+    }
   }, [])
 
   const incidenciasFiltradas = incidencias.filter((inc) => {
@@ -729,6 +800,141 @@ export default function IncidenciasPage() {
             cargar()
           }}
         />
+      )}
+
+      {/* Solapas de chat flotantes — una por incidente con mensajes activos */}
+      {activeChats.length > 0 && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            right: 24,
+            zIndex: 1300,
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 1.5,
+          }}
+        >
+          {activeChats.slice(0, 4).map(({ incidencia, unread }) => {
+            const tipoInfo = TIPO_INFO[incidencia.tipo] ?? TIPO_INFO.otro!
+            return (
+              <Box
+                key={incidencia.id}
+                onClick={() => setDetalle(incidencia)}
+                sx={{
+                  cursor: 'pointer',
+                  width: 240,
+                  borderRadius: '12px 12px 0 0',
+                  overflow: 'hidden',
+                  boxShadow: '0 -4px 24px rgba(0,0,0,0.22)',
+                  border: '1px solid',
+                  borderBottom: 'none',
+                  borderColor: unread > 0 ? '#c62828' : (isDark ? 'rgba(25,118,210,0.5)' : '#bbcfe8'),
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  '&:hover': {
+                    transform: 'translateY(-3px)',
+                    boxShadow: '0 -6px 28px rgba(0,0,0,0.28)',
+                  },
+                }}
+              >
+                {/* Header */}
+                <Box
+                  sx={{
+                    px: 2,
+                    py: 1.2,
+                    background: unread > 0
+                      ? 'linear-gradient(135deg, #b71c1c, #c62828)'
+                      : (isDark
+                        ? 'linear-gradient(135deg, #0d2137, #1a3a58)'
+                        : 'linear-gradient(135deg, #1565C0, #1976D2)'),
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                  }}
+                >
+                  <Box sx={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{tipoInfo.emoji}</Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography noWrap sx={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.2 }}>
+                      {incidencia.repartidorNombre}
+                    </Typography>
+                    <Typography noWrap sx={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', lineHeight: 1.2 }}>
+                      {tipoInfo.label}
+                    </Typography>
+                  </Box>
+                  {unread > 0 ? (
+                    <Box sx={{
+                      bgcolor: 'white',
+                      color: '#c62828',
+                      borderRadius: '12px',
+                      minWidth: 24,
+                      height: 24,
+                      px: 0.8,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {unread > 9 ? '9+' : unread}
+                    </Box>
+                  ) : (
+                    <ChatIcon sx={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', flexShrink: 0 }} />
+                  )}
+                </Box>
+
+                {/* Preview del último estado */}
+                <Box sx={{
+                  px: 2,
+                  py: 1,
+                  bgcolor: isDark ? '#1a2a3a' : 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}>
+                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: unread > 0 ? '#c62828' : '#4caf50', flexShrink: 0 }} />
+                  <Typography noWrap sx={{ fontSize: 12, color: 'text.secondary', flex: 1 }}>
+                    {unread > 0 ? `${unread} mensaje${unread > 1 ? 's' : ''} sin leer` : 'Clic para abrir chat'}
+                  </Typography>
+                </Box>
+              </Box>
+            )
+          })}
+
+          {activeChats.length > 4 && (
+            <Box
+              sx={{
+                cursor: 'default',
+                width: 60,
+                borderRadius: '12px 12px 0 0',
+                overflow: 'hidden',
+                boxShadow: '0 -4px 16px rgba(0,0,0,0.15)',
+                border: '1px solid',
+                borderBottom: 'none',
+                borderColor: isDark ? 'rgba(25,118,210,0.3)' : '#bbdefb',
+              }}
+            >
+              <Box sx={{
+                px: 1,
+                py: 1.2,
+                background: isDark ? '#0d1b2a' : '#e3f2fd',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+              }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: isDark ? '#64B5F6' : '#1565C0', lineHeight: 1 }}>
+                  +{activeChats.length - 4}
+                </Typography>
+                <Typography sx={{ fontSize: 10, color: 'text.secondary', lineHeight: 1.2, textAlign: 'center', mt: 0.3 }}>
+                  más
+                </Typography>
+              </Box>
+              <Box sx={{ px: 1, py: 1, bgcolor: isDark ? '#1a2a3a' : 'white' }} />
+            </Box>
+          )}
+        </Box>
       )}
     </Box>
   )

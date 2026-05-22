@@ -356,6 +356,7 @@ export const authService = {
       repartidor: 'Repartidor',
       administrador: 'Administrador',
       gerente: 'Gerente',
+      cliente: 'UsuarioPortal',
     }
     try {
       const response = await api.post('/auth/usuarios', {

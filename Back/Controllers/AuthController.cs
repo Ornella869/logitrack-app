@@ -413,6 +413,7 @@ namespace Back.Controllers
                 Supervisor => Roles.Supervisor,
                 Operador => Roles.Operador,
                 Repartidor => Roles.Repartidor,
+                UsuarioPortal => Roles.UsuarioPortal,
                 _ => "Usuario"
             }
         };

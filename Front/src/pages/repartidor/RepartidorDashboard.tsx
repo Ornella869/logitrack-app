@@ -558,20 +558,22 @@ export default function RepartidorDashboard() {
         >
           <Tab label="🗺️ Mapa" />
           <Tab label="📋 Mis paradas" />
-          <Tab
-            label={
-              <Stack direction="row" alignItems="center" spacing={0.6}>
-                <WarningAmberIcon sx={{ fontSize: 15 }} />
-                <span>Reportar Incidente</span>
-              </Stack>
-            }
-            sx={{
-              ml: 'auto',
-              color: '#c62828',
-              '&:hover': { color: '#b71c1c', bgcolor: 'rgba(198,40,40,0.06)' },
-              '&.Mui-selected': { color: '#c62828' },
-            }}
-          />
+          {paradas.length > 0 && (
+            <Tab
+              label={
+                <Stack direction="row" alignItems="center" spacing={0.6}>
+                  <WarningAmberIcon sx={{ fontSize: 15 }} />
+                  <span>Reportar Incidente</span>
+                </Stack>
+              }
+              sx={{
+                ml: 'auto',
+                color: '#c62828',
+                '&:hover': { color: '#b71c1c', bgcolor: 'rgba(198,40,40,0.06)' },
+                '&.Mui-selected': { color: '#c62828' },
+              }}
+            />
+          )}
           {mensajesUnread > 0 && (
             <IconButton
               size="small"

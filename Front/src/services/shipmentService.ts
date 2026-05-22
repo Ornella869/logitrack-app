@@ -276,6 +276,21 @@ export const shipmentService = {
     }
   },
 
+  // Supervisor resuelve incidente: puede reprogramar o cancelar en cualquier estado.
+  resolverIncidente: async (
+    shipmentId: string,
+    accion: 'Reprogramar' | 'Cancelar',
+    motivo: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post(`/envios/paquete/${shipmentId}/resolver-incidente`, { Accion: accion, Motivo: motivo })
+      return { success: true }
+    } catch (error: any) {
+      const errorMessage = error.response?.data || 'Error al resolver el incidente'
+      return { success: false, error: errorMessage }
+    }
+  },
+
   // G1L-82: marcar un envío En Tránsito como Demorado (Repartidor o Supervisor).
   marcarDemorado: async (shipmentId: string, motivo: string): Promise<{ success: boolean; error?: string }> => {
     try {

@@ -23,6 +23,7 @@ import ShipmentLabel from './pages/ShipmentLabel'
 import TrackingPublicPage from './pages/TrackingPublicPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
+import ClienteDashboard from './pages/ClienteDashboard'
 import LandingPage from './pages/landing/LandingPage'
 import AccessDenied from './pages/AccessDenied'
 import type { User } from './types'
@@ -156,7 +157,7 @@ function App() {
           path="/login"
           element={
             user
-              ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : '/app'} />
+              ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : '/app'} />
               : <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} />
           }
         />
@@ -189,11 +190,23 @@ function App() {
             }
           />
 
+          {/* Portal cliente */}
+          <Route
+            path="/cliente"
+            element={
+              user && user.role === 'cliente' ? (
+                <ClienteDashboard />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+
           {/* Operador / Supervisor / Administrador */}
           <Route
             path="/app"
             element={
-              user && !isRepartidorRole(user.role) ? (
+              user && !isRepartidorRole(user.role) && user.role !== 'cliente' ? (
                 user.role === 'operador' ? <Navigate to="/envios" replace />
                   : user.role === 'gerente' ? <Navigate to="/sucursales" replace />
                   : <Dashboard />

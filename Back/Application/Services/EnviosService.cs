@@ -302,6 +302,44 @@ namespace Back.Application.Services
             }
         }
 
+        // Resolución de incidencia por Supervisor: puede reprogramar o cancelar envíos
+        // en cualquier estado (incluyendo EnTransito/Demorado) cuando hay un incidente activo.
+        public async Task ResolverIncidenteSupervisor(Guid paqueteId, string accion, string motivo, Guid? supervisorId)
+        {
+            if (string.IsNullOrWhiteSpace(motivo))
+                throw new InvalidOperationException("El motivo es obligatorio.");
+
+            var paquete = await _enviosRepository.GetPaquete(paqueteId)
+                ?? throw new InvalidOperationException("Paquete no encontrado.");
+
+            if (paquete.Status == PaqueteStatus.Entregado)
+                throw new InvalidOperationException("No se puede actuar sobre un envío ya entregado.");
+
+            if (accion == "Reprogramar")
+            {
+                paquete.LiberarAsignacion();
+                await DesvincularDeRutasPendientes(paquete.Id);
+                await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.PendienteDeCalendarizacion, supervisorId, OrigenCambioEstado.Manual, motivo);
+                await _auditoria.RegistrarAsync(
+                    Domain.Models.TipoAccion.Recalendarizacion,
+                    $"Supervisor reprogramó {paquete.CodigoSeguimiento} por incidente: {motivo}",
+                    recursoId: paquete.CodigoSeguimiento);
+            }
+            else if (accion == "Cancelar")
+            {
+                paquete.Cancelar(motivo);
+                await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, supervisorId, OrigenCambioEstado.Manual, motivo);
+                await _auditoria.RegistrarAsync(
+                    Domain.Models.TipoAccion.CancelacionEnvio,
+                    $"Supervisor canceló {paquete.CodigoSeguimiento} por incidente: {motivo}",
+                    recursoId: paquete.CodigoSeguimiento);
+            }
+            else
+            {
+                throw new InvalidOperationException("Acción no válida. Use 'Reprogramar' o 'Cancelar'.");
+            }
+        }
+
         // G1L-9: Repartidor cambia estado del paquete.
         public async Task CambiarEstadoPorRepartidor(Guid paqueteId, PaqueteStatus destino, string? motivo, Guid? usuarioId)
         {

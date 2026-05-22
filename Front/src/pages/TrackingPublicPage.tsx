@@ -18,8 +18,10 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import MapIcon from '@mui/icons-material/Map'
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined'
 import { shipmentService } from '../services/shipmentService'
 import ShipmentMap from '../components/ShipmentMap'
+import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment } from '../types'
 
 type TimelineStep = {
@@ -147,11 +149,14 @@ const fechaEstimadaLabel = (status: Shipment['status']): string => {
   return 'Fecha de entrega programada'
 }
 
+const ESTADOS_BLOQUEADOS: Shipment['status'][] = ['Pendiente de calendarización', 'Listo para salir']
+
 export default function TrackingPublicPage() {
   const { trackingId } = useParams<{ trackingId: string }>()
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
 
   useEffect(() => {
     const loadShipment = async () => {
@@ -180,6 +185,14 @@ export default function TrackingPublicPage() {
     () => getPublicStatusCopy(shipment?.status ?? 'Pendiente de calendarización'),
     [shipment?.status],
   )
+
+  const canReportIncidencia = useMemo(() => {
+    if (!shipment) return false
+    if (shipment.status === 'Entregado' || shipment.status === 'Cancelado') return true
+    if (ESTADOS_BLOQUEADOS.includes(shipment.status)) return false
+    const slaVencido = shipment.estimatedDelivery && new Date(shipment.estimatedDelivery) < new Date()
+    return !!slaVencido
+  }, [shipment])
 
   return (
     <Box
@@ -292,6 +305,25 @@ export default function TrackingPublicPage() {
                     {shipment.cancellationReason && (
                       <Alert severity="error">Motivo de cancelación: {shipment.cancellationReason}</Alert>
                     )}
+
+                    {canReportIncidencia && (
+                      <Box sx={{ pt: 1 }}>
+                        <Button
+                          variant="outlined"
+                          startIcon={<ReportProblemOutlinedIcon />}
+                          onClick={() => setReportDialogOpen(true)}
+                          sx={{
+                            color: '#c62828',
+                            borderColor: '#c62828',
+                            fontWeight: 600,
+                            borderRadius: 2,
+                            '&:hover': { bgcolor: 'rgba(198,40,40,0.06)', borderColor: '#b71c1c' },
+                          }}
+                        >
+                          Reportar una incidencia
+                        </Button>
+                      </Box>
+                    )}
                   </Stack>
                 </CardContent>
               </Card>
@@ -374,6 +406,12 @@ export default function TrackingPublicPage() {
                   </CardContent>
                 </Card>
               )}
+
+              <ReportarIncidenteClienteDialog
+                open={reportDialogOpen}
+                onClose={() => setReportDialogOpen(false)}
+                shipment={shipment}
+              />
             </>
           )}
         </Stack>

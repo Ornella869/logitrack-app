@@ -70,6 +70,7 @@ function AccessDenied({ user }: AccessDeniedProps) {
                     supervisor: 'Supervisor',
                     operador: 'Operador',
                     repartidor: 'Repartidor',
+                    cliente: 'Cliente Portal',
                   }[user.role] ?? user.role}
                 </strong>
                 .

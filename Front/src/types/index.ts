@@ -1,4 +1,4 @@
-export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador' | 'gerente'
+export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador' | 'gerente' | 'cliente'
 export type UserEstado = 'Activo' | 'Inactivo'
 export type RepartidorEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
 

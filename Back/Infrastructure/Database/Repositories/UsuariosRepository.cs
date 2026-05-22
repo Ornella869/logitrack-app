@@ -27,12 +27,18 @@ namespace Back.Infrastructure.Database.Repositories
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                var s = search.Trim().ToLowerInvariant();
-                query = query.Where(u =>
-                    u.Nombre.ToLower().Contains(s)
-                    || u.Apellido.ToLower().Contains(s)
-                    || u.Email.ToLower().Contains(s)
-                    || u.DNI.Contains(s));
+                // Divide por espacios para que "pablo blanco" encuentre nombre=Pablo, apellido=Blanco.
+                var parts = search.Trim().ToLowerInvariant()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var part in parts)
+                {
+                    var p = part;
+                    query = query.Where(u =>
+                        u.Nombre.ToLower().Contains(p)
+                        || u.Apellido.ToLower().Contains(p)
+                        || u.Email.ToLower().Contains(p)
+                        || u.DNI.Contains(p));
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(role))

@@ -667,10 +667,33 @@ namespace Back.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        /// <summary>Supervisor resuelve un incidente: reprograma o cancela un envío en cualquier estado.</summary>
+        [Authorize(Roles = Roles.Supervisor)]
+        [HttpPost("paquete/{paqueteId:guid}/resolver-incidente")]
+        public async Task<ActionResult> ResolverIncidente(Guid paqueteId, [FromBody] ResolverIncidenteRequest request)
+        {
+            try
+            {
+                await _enviosService.ResolverIncidenteSupervisor(paqueteId, request.Accion, request.Motivo, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 
 
     // ============== DTOs ==============
+
+    public class ResolverIncidenteRequest
+    {
+        [Required] public string Accion { get; set; } = string.Empty;
+        [Required] public string Motivo { get; set; } = string.Empty;
+    }
 
     public class CancelarPaqueteRequest
     {

@@ -59,6 +59,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   supervisor: 'Supervisor',
   operador: 'Operador',
   repartidor: 'Repartidor',
+  cliente: 'Cliente Portal',
 }
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
@@ -67,6 +68,7 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
   supervisor: { bg: '#FFEBEE', color: '#B71C1C' },
   operador: { bg: '#E3F2FD', color: '#0D47A1' },
   repartidor: { bg: '#E8F5E9', color: '#1B5E20' },
+  cliente: { bg: '#E0F7FA', color: '#006064' },
 }
 
 const ROLE_COLORS_DARK: Record<UserRole, { bg: string; color: string }> = {
@@ -75,6 +77,7 @@ const ROLE_COLORS_DARK: Record<UserRole, { bg: string; color: string }> = {
   supervisor: { bg: 'rgba(183,28,28,0.25)', color: '#EF9A9A' },
   operador: { bg: 'rgba(13,71,161,0.25)', color: '#90CAF9' },
   repartidor: { bg: 'rgba(27,94,32,0.25)', color: '#A5D6A7' },
+  cliente: { bg: 'rgba(0,96,100,0.25)', color: '#80DEEA' },
 }
 
 type RoleFilter = UserRole | 'all'

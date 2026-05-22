@@ -495,7 +495,7 @@ function Layout({ user, onLogout }: LayoutProps) {
               '& .MuiTabs-indicator': { backgroundColor: '#42A5F5' },
             } : {}}
           >
-            {user.role !== 'operador' && (
+            {(user.role === 'supervisor' || user.role === 'administrador') && (
               <Tab icon={<DashboardIcon fontSize="small" />} iconPosition="start" label="Dashboard" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {(user.role === 'supervisor' || user.role === 'operador') && (

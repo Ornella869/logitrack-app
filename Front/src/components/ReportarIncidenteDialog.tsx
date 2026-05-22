@@ -58,6 +58,21 @@ const TRACKY_RESPONSES: Record<string, string> = {
 
 const GENERIC_RESPONSE = 'Recibí tu mensaje. 📝\n\nEstoy aquí para ayudarte con cualquier situación durante tu ruta. ¿Qué querés hacer ahora?'
 
+const KEYWORDS: { pattern: RegExp; tipoId: string }[] = [
+  { pattern: /accidente|choque|colisi[oó]n|colision/i, tipoId: 'accident' },
+  { pattern: /mec[aá]nic|mecanic|veh[ií]culo|vehiculo|goma|pinchaz|freno|motor/i, tipoId: 'mechanical' },
+  { pattern: /zona|riesgo|peligro|insegur|robo|asalt/i, tipoId: 'danger' },
+  { pattern: /salud|m[eé]dico|medico|enferm|mareo|dolor|herido|lastim/i, tipoId: 'health' },
+  { pattern: /entregar|entrega|destinatario|ausente|direcci[oó]n|nadie/i, tipoId: 'delivery' },
+]
+
+function detectKeyword(text: string): string | null {
+  for (const { pattern, tipoId } of KEYWORDS) {
+    if (pattern.test(text)) return tipoId
+  }
+  return null
+}
+
 const FOLLOW_UP_OPTS = [
   { id: 'templates', emoji: '📋', label: 'Ver opciones de reporte' },
   { id: 'supervisor', emoji: '👮', label: 'Notificar supervisor' },
@@ -243,7 +258,13 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
     if (!text) return
     addUserMessage(text)
     setInput('')
-    simulateReply()
+    const detectedType = detectKeyword(text)
+    if (detectedType) {
+      setLastTemplateId(detectedType)
+      simulateReply(detectedType)
+    } else {
+      simulateReply()
+    }
   }
 
   const handleTemplate = (t: typeof TEMPLATES[0]) => {
@@ -270,6 +291,11 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
   const handleNotificarSupervisor = () => {
     const tipoTemplate = lastTemplateId ?? 'otro'
     const tipoLabel = TEMPLATES.find((t) => t.id === tipoTemplate)?.label ?? 'Incidente'
+
+    if (incidenciaService.checkDuplicateRepartidor(user.id, tipoTemplate)) {
+      addTrackyMessage(`⚠️ Ya reporté un incidente de tipo "${tipoLabel}" recientemente al supervisor. No generé una nueva notificación para evitar duplicados.\n\nSi la situación empeoró o cambió, contame los detalles nuevos.`, true)
+      return
+    }
 
     notificationService.add({
       type: 'incidencia',

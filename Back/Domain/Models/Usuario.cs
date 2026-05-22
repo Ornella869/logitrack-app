@@ -101,6 +101,15 @@ namespace Back.Domain.Models
         public void AsignarProvincia(string provincia) => Provincia = provincia;
     }
 
+    // Portal externo: cliente que puede hacer seguimiento y reportar incidencias.
+    public class UsuarioPortal : Usuario
+    {
+        public UsuarioPortal() { }
+
+        public UsuarioPortal(string nombre, string apellido, string email, string password, string dni)
+            : base(nombre, apellido, email, password, dni) { }
+    }
+
     public class Repartidor : Usuario
     {
         public enum EstadoRepartidor
