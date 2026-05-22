@@ -35,33 +35,52 @@ namespace Back.Application.Services
             _geocoding = geocoding;
         }
 
-        // G1L-87: configuración singleton (se crea con valores por defecto en el primer acceso).
-        public async Task<ConfiguracionTarifa> GetConfiguracionAsync()
+        // Épica D: provincia del usuario (Gerente → su provincia; otros → la de su sucursal).
+        public async Task<string> ResolverProvinciaUsuarioAsync(Guid usuarioId)
         {
-            var config = await _context.ConfiguracionesTarifa.FirstOrDefaultAsync();
+            var usuario = await _context.Usuarios.FindAsync(usuarioId);
+            if (usuario is Gerente g) return g.Provincia ?? string.Empty;
+            if (usuario?.SucursalId is Guid sucId)
+            {
+                var suc = await _context.Sucursales.FindAsync(sucId);
+                return suc?.Provincia ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        // Épica D: configuración por provincia (se crea con valores por defecto en el primer acceso).
+        public async Task<ConfiguracionTarifa> GetConfiguracionAsync(string provincia)
+        {
+            provincia = (provincia ?? string.Empty).Trim();
+            var config = await _context.ConfiguracionesTarifa.FirstOrDefaultAsync(c => c.Provincia == provincia);
             if (config is null)
             {
-                config = new ConfiguracionTarifa(precioPorKg: 500, precioPorKm: 100, porcentajeRecargo: 20);
+                config = new ConfiguracionTarifa(provincia, precioPorKg: 500, precioPorKm: 100, porcentajeRecargo: 20);
                 _context.ConfiguracionesTarifa.Add(config);
                 await _context.SaveChangesAsync();
             }
             return config;
         }
 
-        public async Task<ConfiguracionTarifa> ActualizarConfiguracionAsync(double precioPorKg, double precioPorKm, double porcentajeRecargo)
+        public async Task<ConfiguracionTarifa> ActualizarConfiguracionAsync(string provincia, double precioPorKg, double precioPorKm, double porcentajeRecargo)
         {
-            var config = await GetConfiguracionAsync();
+            var config = await GetConfiguracionAsync(provincia);
             config.Actualizar(precioPorKg, precioPorKm, porcentajeRecargo);
             await _context.SaveChangesAsync();
             return config;
         }
 
-        public async Task<List<ZonaPeligrosa>> GetZonasAsync()
-            => await _context.ZonasPeligrosas.OrderByDescending(z => z.CreadoEn).ToListAsync();
-
-        public async Task<ZonaPeligrosa> CrearZonaAsync(string nombre, double latMin, double latMax, double lngMin, double lngMax)
+        public async Task<List<ZonaPeligrosa>> GetZonasAsync(string provincia)
         {
-            var zona = new ZonaPeligrosa(nombre, latMin, latMax, lngMin, lngMax);
+            provincia = (provincia ?? string.Empty).Trim();
+            return await _context.ZonasPeligrosas
+                .Where(z => z.Provincia == provincia)
+                .OrderByDescending(z => z.CreadoEn).ToListAsync();
+        }
+
+        public async Task<ZonaPeligrosa> CrearZonaAsync(string nombre, string provincia, double latMin, double latMax, double lngMin, double lngMax)
+        {
+            var zona = new ZonaPeligrosa(nombre, provincia, latMin, latMax, lngMin, lngMax);
             _context.ZonasPeligrosas.Add(zona);
             await _context.SaveChangesAsync();
             return zona;
@@ -75,24 +94,27 @@ namespace Back.Application.Services
             await _context.SaveChangesAsync();
         }
 
-        // G1L-86: una ubicación es peligrosa si cae dentro de alguna zona activa.
-        public async Task<bool> EsZonaPeligrosaAsync(double lat, double lng)
+        // G1L-86: una ubicación es peligrosa si cae dentro de alguna zona activa de su provincia.
+        public async Task<bool> EsZonaPeligrosaAsync(string provincia, double lat, double lng)
         {
-            var zonas = await _context.ZonasPeligrosas.Where(z => z.Activa).ToListAsync();
+            provincia = (provincia ?? string.Empty).Trim();
+            var zonas = await _context.ZonasPeligrosas.Where(z => z.Activa && z.Provincia == provincia).ToListAsync();
             return zonas.Any(z => z.Contiene(lat, lng));
         }
 
         // G1L-88: calcula el desglose de la cotización a partir de la dirección destino.
+        // La provincia del destino define qué tarifas y zonas peligrosas aplican.
         public async Task<CotizacionResultado> CotizarAsync(
             double peso, string direccion, string localidad, string cp, string? provincia)
         {
-            var config = await GetConfiguracionAsync();
+            var prov = (provincia ?? string.Empty).Trim();
+            var config = await GetConfiguracionAsync(prov);
             var distancia = DistanciasService.CalcularDistancia(localidad);
 
             bool esPeligrosa = false;
             var ubicacion = await _geocoding.GeocodeAsync(direccion, localidad, cp, provincia);
             if (ubicacion is not null)
-                esPeligrosa = await EsZonaPeligrosaAsync(ubicacion.Latitud, ubicacion.Longitud);
+                esPeligrosa = await EsZonaPeligrosaAsync(prov, ubicacion.Latitud, ubicacion.Longitud);
 
             return Calcular(peso, distancia, esPeligrosa, config, ubicacion);
         }

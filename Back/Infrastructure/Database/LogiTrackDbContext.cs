@@ -1,5 +1,7 @@
 using Back.Domain.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Text.Json;
 
 namespace Back.Infrastructure.Database
 {
@@ -70,7 +72,24 @@ namespace Back.Infrastructure.Database
                 .HasValue<Repartidor>("Repartidor")
                 .HasValue<Supervisor>("Supervisor")
                 .HasValue<Operador>("Operador")
-                .HasValue<Administrador>("Administrador");
+                .HasValue<Administrador>("Administrador")
+                .HasValue<Gerente>("Gerente");
+
+            // Épica D: cobertura de provincias por sucursal, persistida como JSON.
+            modelBuilder.Entity<Sucursal>(s =>
+            {
+                s.Property(x => x.ProvinciasCubiertas)
+                    .HasConversion(
+                        v => JsonSerializer.Serialize(v ?? new List<string>(), (JsonSerializerOptions?)null),
+                        // Tolerante a filas viejas con "" o null (no son JSON válido) → lista vacía.
+                        v => string.IsNullOrWhiteSpace(v)
+                            ? new List<string>()
+                            : (JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>()))
+                    .Metadata.SetValueComparer(new ValueComparer<List<string>>(
+                        (a, b) => (a ?? new()).SequenceEqual(b ?? new()),
+                        v => v.Aggregate(0, (acc, str) => HashCode.Combine(acc, str.GetHashCode())),
+                        v => v.ToList()));
+            });
 
             modelBuilder.Entity<HistorialEstadoEnvio>(h =>
             {

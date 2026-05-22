@@ -86,6 +86,9 @@ export default function RepartidorDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState(0)
+  // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
+  const [estadoJornada, setEstadoJornada] = useState('Disponible')
+  const [cerrandoJornada, setCerrandoJornada] = useState(false)
 
   // QR scanner (cámara + entrada manual del código).
   const [openQr, setOpenQr] = useState(false)
@@ -101,15 +104,17 @@ export default function RepartidorDashboard() {
     setLoading(true)
     setError('')
     try {
-      const [data, fechas, sucursal] = await Promise.all([
+      const [data, fechas, sucursal, jornada] = await Promise.all([
         shipmentService.getMiRutaDelDia(fecha),
         shipmentService.getMisFechasDeRuta(),
         // origen sólo se pide en la primera carga; cacheamos.
         origen ? Promise.resolve(origen) : branchService.getSucursalOrigen(),
+        shipmentService.getEstadoJornada(),
       ])
       setParadas(data.paradas)
       setFechaRuta(data.fecha)
       setFechasDisponibles(fechas)
+      setEstadoJornada(jornada)
       // Persistimos el día elegido para que sobreviva al salir/entrar de la vista.
       if (data.fecha) sessionStorage.setItem(FECHA_STORAGE_KEY, data.fecha)
       if (!origen) setOrigen(sucursal)
@@ -122,8 +127,17 @@ export default function RepartidorDashboard() {
 
   useEffect(() => {
     // Si veníamos de otra pantalla, restauramos el día que estaba seleccionado.
+    // Pero si ese día ya pasó (sesión vieja), lo descartamos para mostrar hoy/próximo.
     const guardada = sessionStorage.getItem(FECHA_STORAGE_KEY)
-    load(guardada ?? undefined)
+    let fechaInicial = guardada ?? undefined
+    if (guardada) {
+      const inicioHoy = new Date(new Date().toDateString()).getTime()
+      if (new Date(guardada).getTime() < inicioHoy) {
+        fechaInicial = undefined
+        sessionStorage.removeItem(FECHA_STORAGE_KEY)
+      }
+    }
+    load(fechaInicial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -224,6 +238,17 @@ export default function RepartidorDashboard() {
   // El retorno se muestra solo si TODO el día que estoy viendo está entregado/cancelado.
   // (Antes arrastraba un flag global que lo dejaba visible al cambiar a otro día con pendientes.)
   const showRetorno = todasEntregadas
+
+  // Fase A: el repartidor confirma que volvió a la sucursal → vuelve a estar disponible.
+  const handleCerrarJornada = async () => {
+    setCerrandoJornada(true)
+    const res = await shipmentService.cerrarJornada()
+    setCerrandoJornada(false)
+    if (res.success) {
+      setEstadoJornada('Disponible')
+      void load(fechaRuta ?? undefined)
+    }
+  }
 
   const buildReturnUrl = (): string | null => {
     if (!origen) return null
@@ -347,6 +372,18 @@ export default function RepartidorDashboard() {
               sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
             >
               Retorno a Sucursal
+            </Button>
+          )}
+          {/* Fase A: cerrar jornada al volver. Solo mientras está "Retornando". */}
+          {showRetorno && estadoJornada === 'Retornando' && (
+            <Button
+              variant="outlined"
+              color="success"
+              startIcon={cerrandoJornada ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+              onClick={handleCerrarJornada}
+              disabled={cerrandoJornada}
+            >
+              Llegué a sucursal
             </Button>
           )}
           {/* G1L-59: gestión del consentimiento (equivale a "Mi Perfil"). */}

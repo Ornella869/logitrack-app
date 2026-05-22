@@ -6,6 +6,8 @@ namespace Back.Domain.Models
     {
         public Guid Id { get; init; } = Guid.NewGuid();
         public string Nombre { get; private set; } = string.Empty;
+        // Épica D: provincia a la que pertenece la zona (define qué gerente la administra).
+        public string Provincia { get; private set; } = string.Empty;
         public double LatMin { get; private set; }
         public double LatMax { get; private set; }
         public double LngMin { get; private set; }
@@ -15,12 +17,13 @@ namespace Back.Domain.Models
 
         private ZonaPeligrosa() { }
 
-        public ZonaPeligrosa(string nombre, double latMin, double latMax, double lngMin, double lngMax)
+        public ZonaPeligrosa(string nombre, string provincia, double latMin, double latMax, double lngMin, double lngMax)
         {
             if (string.IsNullOrWhiteSpace(nombre))
                 throw new InvalidOperationException("El nombre de la zona es obligatorio.");
 
             Nombre = nombre;
+            Provincia = provincia;
             // Normalizamos por si las esquinas vienen invertidas.
             LatMin = Math.Min(latMin, latMax);
             LatMax = Math.Max(latMin, latMax);

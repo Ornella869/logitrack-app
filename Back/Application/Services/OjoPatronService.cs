@@ -86,47 +86,95 @@ namespace Back.Application.Services
                 recursoId: usuarioId.ToString());
         }
 
-        // ===== G1L-61: configuración del umbral =====
+        // ===== G1L-61 / Épica D: configuración del umbral por provincia =====
 
-        public async Task<ConfiguracionOjoPatron> GetConfiguracionAsync()
+        // Resuelve la provincia de un usuario: Gerente → su provincia; otros → la de su sucursal.
+        public async Task<string> ResolverProvinciaUsuarioAsync(Guid usuarioId)
         {
-            var config = await _context.ConfiguracionesOjoPatron.FirstOrDefaultAsync();
+            var usuario = await _context.Usuarios.FindAsync(usuarioId);
+            if (usuario is Gerente g) return g.Provincia ?? string.Empty;
+            if (usuario?.SucursalId is Guid sucId)
+            {
+                var suc = await _context.Sucursales.FindAsync(sucId);
+                return suc?.Provincia ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        public async Task<ConfiguracionOjoPatron> GetConfiguracionAsync(string provincia)
+        {
+            provincia = (provincia ?? string.Empty).Trim();
+            var config = await _context.ConfiguracionesOjoPatron.FirstOrDefaultAsync(c => c.Provincia == provincia);
             if (config is null)
             {
                 // Umbral permisivo por defecto (se calibra con el uso real).
-                config = new ConfiguracionOjoPatron(0.4);
+                config = new ConfiguracionOjoPatron(provincia, 0.4);
                 _context.ConfiguracionesOjoPatron.Add(config);
                 await _context.SaveChangesAsync();
             }
             return config;
         }
 
-        public async Task<ConfiguracionOjoPatron> ActualizarConfiguracionAsync(double umbral)
+        public async Task<ConfiguracionOjoPatron> ActualizarConfiguracionAsync(string provincia, double umbral)
         {
-            var config = await GetConfiguracionAsync();
+            var config = await GetConfiguracionAsync(provincia);
             config.Actualizar(umbral);
             await _context.SaveChangesAsync();
             await _auditoria.RegistrarAsync(
                 TipoAccion.Otro,
-                $"Actualizó el umbral del Ojo del Patrón a {umbral:0.##}");
+                $"Actualizó el umbral del Ojo del Patrón a {umbral:0.##} (provincia {provincia})");
             return config;
         }
 
         // ===== G1L-60 / G1L-61: prueba acústica =====
 
-        // Gate estricto: solo una prueba APROBADA hoy habilita el inicio de ruta.
-        public async Task<bool> TienePruebaAprobadaHoyAsync(Guid usuarioId)
+        // Gate estricto: solo una prueba APROBADA hoy (del momento indicado) habilita continuar.
+        public async Task<bool> TienePruebaAprobadaHoyAsync(Guid usuarioId, MomentoPruebaOjoPatron momento = MomentoPruebaOjoPatron.Inicio)
         {
             var hoy = DateTime.UtcNow.Date;
             var manana = hoy.AddDays(1);
             return await _context.PruebasOjoPatron.AnyAsync(p =>
                 p.UsuarioId == usuarioId && p.FechaHora >= hoy && p.FechaHora < manana
-                && p.Resultado == ResultadoPruebaOjoPatron.Aprobada);
+                && p.Resultado == ResultadoPruebaOjoPatron.Aprobada
+                && p.Momento == momento);
+        }
+
+        // Fase B: ¿para entregar este paquete se requiere la prueba de mitad de recorrido?
+        // Se exige cuando el repartidor ya finalizó >= la mitad de sus paradas del día
+        // (ceil(total/2)), aún le quedan pendientes, y no aprobó hoy la prueba de mitad.
+        public async Task<bool> RequierePruebaMitadAsync(Guid paqueteId)
+        {
+            var paquete = await _context.Paquetes.FindAsync(paqueteId);
+            if (paquete is null || !paquete.RepartidorAsignadoId.HasValue || !paquete.FechaCalendarizada.HasValue)
+                return false;
+
+            var repartidorId = paquete.RepartidorAsignadoId.Value;
+            var dia = paquete.FechaCalendarizada.Value.Date;
+            var manana = dia.AddDays(1);
+
+            var delDia = await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidorId
+                            && p.FechaCalendarizada >= dia && p.FechaCalendarizada < manana)
+                .ToListAsync();
+
+            var total = delDia.Count;
+            if (total < 2) return false; // con 1 sola parada no hay "mitad".
+
+            var finalizadas = delDia.Count(p => p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado);
+            var umbralMitad = (int)Math.Ceiling(total / 2.0);
+
+            // Si todavía no llegó a la mitad, o ya no quedan pendientes, no aplica.
+            if (finalizadas < umbralMitad) return false;
+            if (finalizadas >= total) return false;
+
+            // Aplica si aún no aprobó la prueba de mitad hoy.
+            return !await TienePruebaAprobadaHoyAsync(repartidorId, MomentoPruebaOjoPatron.Mitad);
         }
 
         public async Task<EstadoPruebaDia> GetEstadoPruebaDiaAsync(Guid usuarioId)
         {
-            var config = await GetConfiguracionAsync();
+            var provincia = await ResolverProvinciaUsuarioAsync(usuarioId);
+            var config = await GetConfiguracionAsync(provincia);
             return new EstadoPruebaDia
             {
                 RealizadaHoy = await TienePruebaAprobadaHoyAsync(usuarioId),
@@ -137,21 +185,24 @@ namespace Back.Application.Services
         public async Task RegistrarPruebaAsync(
             Guid usuarioId, string rolUsuario,
             double scoreNeu, double scoreHap, double scoreSad, double scoreAng,
-            double alertnessScore, int intentos, ResultadoPruebaOjoPatron resultado)
+            double alertnessScore, int intentos, ResultadoPruebaOjoPatron resultado,
+            MomentoPruebaOjoPatron momento = MomentoPruebaOjoPatron.Inicio)
         {
-            var config = await GetConfiguracionAsync();
+            var provincia = await ResolverProvinciaUsuarioAsync(usuarioId);
+            var config = await GetConfiguracionAsync(provincia);
             var prueba = new PruebaOjoPatron(
                 usuarioId, scoreNeu, scoreHap, scoreSad, scoreAng,
-                alertnessScore, config.UmbralAlertness, intentos, resultado);
+                alertnessScore, config.UmbralAlertness, intentos, resultado, momento);
             _context.PruebasOjoPatron.Add(prueba);
             await _context.SaveChangesAsync();
 
             // G1L-61: cada prueba (aprobada o rechazada) queda en el log de auditoría.
+            var momentoLabel = momento == MomentoPruebaOjoPatron.Mitad ? "Mitad de recorrido" : "Inicio de ruta";
             await _auditoria.RegistrarAsync(
                 TipoAccion.PruebaOjoDelPatron,
-                $"Prueba Ojo del Patrón: {(resultado == ResultadoPruebaOjoPatron.Aprobada ? "Aprobada" : "Rechazada")}",
+                $"Prueba Ojo del Patrón ({momentoLabel}): {(resultado == ResultadoPruebaOjoPatron.Aprobada ? "Aprobada" : "Rechazada")}",
                 recursoId: usuarioId.ToString(),
-                contexto: $"Rol: {rolUsuario} | Alertness: {alertnessScore:0.###} | Umbral: {config.UmbralAlertness:0.###} | Intento: {intentos}");
+                contexto: $"Rol: {rolUsuario} | Momento: {momentoLabel} | Alertness: {alertnessScore:0.###} | Umbral: {config.UmbralAlertness:0.###} | Intento: {intentos}");
         }
     }
 }

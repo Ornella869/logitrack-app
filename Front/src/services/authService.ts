@@ -109,6 +109,8 @@ export const authService = {
         dni: '',
         role: userRole,
         activo: userInfo?.activo ?? true,
+        sucursalId: userInfo?.sucursalId ?? userInfo?.SucursalId ?? null,
+        provincia: userInfo?.provincia ?? userInfo?.Provincia ?? null,
       }
 
       console.log('✓ Login exitoso:', user)
@@ -353,6 +355,7 @@ export const authService = {
       operador: 'Operador',
       repartidor: 'Repartidor',
       administrador: 'Administrador',
+      gerente: 'Gerente',
     }
     try {
       const response = await api.post('/auth/usuarios', {
@@ -363,6 +366,8 @@ export const authService = {
         Role: roleMap[data.role],
         PasswordTemporal: data.passwordTemporal,
         ...(data.licencia ? { Licencia: data.licencia } : {}),
+        ...(data.sucursalId ? { SucursalId: data.sucursalId } : {}),
+        ...(data.provincia ? { Provincia: data.provincia } : {}),
       })
       const u = response.data
       return {

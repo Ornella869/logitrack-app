@@ -7,8 +7,8 @@ import type { User } from '../types'
 export default function SucursalesPage() {
   const user = useOutletContext<User>()
 
-  if (user.role !== 'administrador') {
-    return <Alert severity="warning">Solo el Administrador puede acceder a esta sección.</Alert>
+  if (user.role !== 'gerente') {
+    return <Alert severity="warning">Solo el Gerente puede acceder a esta sección.</Alert>
   }
 
   return (
@@ -18,9 +18,9 @@ export default function SucursalesPage() {
         Sucursales
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Gestioná las sucursales de tu empresa
+        Gestioná las sucursales de tu provincia{user.provincia ? ` (${user.provincia})` : ''}
       </Typography>
-      <BranchManagement />
+      <BranchManagement gerenteProvincia={user.provincia} />
     </Box>
   )
 }

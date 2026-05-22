@@ -21,6 +21,8 @@ import { ojoPatronService } from '../services/ojoPatronService'
 interface Props {
   open: boolean
   umbral: number
+  // Momento de la prueba: 0 = inicio de ruta, 1 = mitad de recorrido.
+  momento?: 0 | 1
   onClose: () => void
   // Se llama cuando la prueba quedó registrada (aprobada o por máximo de intentos).
   onCompletado: (aprobada: boolean) => void
@@ -31,7 +33,7 @@ const DURACION_MS = 5000
 type Fase = 'cargando-modelo' | 'listo' | 'grabando' | 'analizando' | 'resultado' | 'error'
 
 // G1L-60: prueba acústica con análisis local (HuBERT). El audio no se transmite ni se guarda.
-export default function PruebaAcusticaDialog({ open, umbral, onClose, onCompletado }: Props) {
+export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClose, onCompletado }: Props) {
   const [fase, setFase] = useState<Fase>('cargando-modelo')
   const [progresoModelo, setProgresoModelo] = useState(0)
   const [intentos, setIntentos] = useState(0)
@@ -104,7 +106,7 @@ export default function PruebaAcusticaDialog({ open, umbral, onClose, onCompleta
     setRegistrando(true)
     await ojoPatronService.registrarPrueba({
       scoreNeu: a.neu, scoreHap: a.hap, scoreSad: a.sad, scoreAng: a.ang,
-      alertnessScore: a.alertness, intentos: intento, resultado: paso ? 0 : 2,
+      alertnessScore: a.alertness, intentos: intento, resultado: paso ? 0 : 2, momento,
     })
     setRegistrando(false)
   }
@@ -113,7 +115,7 @@ export default function PruebaAcusticaDialog({ open, umbral, onClose, onCompleta
     <Dialog open={open} onClose={() => fase === 'resultado' && onClose()} fullWidth maxWidth="xs">
       <DialogTitle>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <GraphicEqIcon color="primary" /> <span>Prueba de inicio de ruta</span>
+          <GraphicEqIcon color="primary" /> <span>{momento === 1 ? 'Prueba de mitad de recorrido' : 'Prueba de inicio de ruta'}</span>
         </Stack>
       </DialogTitle>
       <DialogContent>

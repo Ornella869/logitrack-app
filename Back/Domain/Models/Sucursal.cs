@@ -13,6 +13,9 @@ namespace Back.Domain.Models
         public string? Provincia { get; private set; }
         public string Telefono { get; private set; }
         public SucursalStatus Estado { get; private set; } = SucursalStatus.Activa;
+        // Épica D: provincias adicionales (sin sucursal propia) que esta sucursal cubre.
+        // La provincia propia siempre se considera cubierta. Se persiste como JSON.
+        public List<string> ProvinciasCubiertas { get; private set; } = new();
 
         private Sucursal()
         {
@@ -37,6 +40,24 @@ namespace Back.Domain.Models
             CodigoPostal = codigoPostal;
             Provincia = provincia;
             Telefono = telefono;
+        }
+
+        public void DefinirCobertura(IEnumerable<string> provinciasCubiertas)
+        {
+            ProvinciasCubiertas = provinciasCubiertas?
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim())
+                .Distinct()
+                .ToList() ?? new();
+        }
+
+        // ¿Esta sucursal cubre la provincia indicada? (la propia siempre cuenta)
+        public bool Cubre(string? provincia)
+        {
+            if (string.IsNullOrWhiteSpace(provincia)) return false;
+            var p = provincia.Trim();
+            return string.Equals(Provincia, p, StringComparison.OrdinalIgnoreCase)
+                || ProvinciasCubiertas.Any(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase));
         }
     }
 

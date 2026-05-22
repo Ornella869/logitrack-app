@@ -93,23 +93,27 @@ namespace Back.Application.Services
             _auditoria = auditoria;
         }
 
-        public async Task<int> ContarPendientesAsync()
+        // Épica D: si se pasa sucursalId, todo se filtra a esa sucursal (envíos y repartidores).
+        public async Task<int> ContarPendientesAsync(Guid? sucursalId = null)
         {
             var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion();
-            return pendientes.Count;
+            return pendientes.Count(p => sucursalId == null || p.SucursalId == sucursalId);
         }
 
-        public async Task<CalendarioOperativo> GetCalendarioOperativoAsync(int dias = 14)
+        public async Task<CalendarioOperativo> GetCalendarioOperativoAsync(int dias = 14, Guid? sucursalId = null)
         {
             var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
             var diasList = Enumerable.Range(0, dias).Select(i => hoy.AddDays(i)).ToList();
 
             var repartidores = (await _userRepository.GetRepartidores())
                 .Where(r => r.Activo && r.PuedeSerAsignado)
+                .Where(r => sucursalId == null || r.SucursalId == sucursalId)
                 .OrderBy(r => r.Nombre)
                 .ToList();
 
-            var asignados = await _enviosRepository.GetPaquetesConAsignacionActiva();
+            var asignados = (await _enviosRepository.GetPaquetesConAsignacionActiva())
+                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
+                .ToList();
 
             var paquetesPorRepartidorYDia = asignados
                 .Where(p => p.FechaCalendarizada.HasValue && p.RepartidorAsignadoId.HasValue)
@@ -157,9 +161,11 @@ namespace Back.Application.Services
             };
         }
 
-        public async Task<List<DiaResumen>> GetEstadoActualAsync()
+        public async Task<List<DiaResumen>> GetEstadoActualAsync(Guid? sucursalId = null)
         {
-            var asignados = await _enviosRepository.GetPaquetesConAsignacionActiva();
+            var asignados = (await _enviosRepository.GetPaquetesConAsignacionActiva())
+                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
+                .ToList();
             if (asignados.Count == 0) return new List<DiaResumen>();
 
             var repartidores = await _userRepository.GetRepartidores();
@@ -206,6 +212,9 @@ namespace Back.Application.Services
                 ?? throw new InvalidOperationException("Repartidor no encontrado.");
             if (!rep.Activo || !rep.PuedeSerAsignado)
                 throw new InvalidOperationException("El repartidor está suspendido o inhabilitado y no puede recibir asignaciones.");
+            // Fase A: si está retornando a la sucursal, no puede recibir envíos nuevos hasta cerrar la jornada.
+            if (rep.EstadoJornada == Repartidor.EstadoJornadaRepartidor.Retornando)
+                throw new InvalidOperationException("El repartidor está retornando a la sucursal. Debe cerrar su jornada antes de recibir nuevos envíos.");
 
             var fechaUtc = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
             var delDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fechaUtc);
@@ -228,19 +237,21 @@ namespace Back.Application.Services
                 };
             }
 
-            // CA Recálculo de Listo para Salir post-asignación manual:
-            // si el repartidor ya tenía paquetes Cargados o Listos ese día, entra carga
-            // nueva → revertimos TODOS a "Asignado a Vehículo" para forzar la recarga.
-            var aRevertir = delDia
-                .Where(p => p.Status == PaqueteStatus.CargadoEnVehiculo || p.Status == PaqueteStatus.ListoParaSalir)
+            // Recálculo post-asignación manual: si el repartidor ya estaba "Listo para
+            // Salir", entra carga nueva → el vehículo deja de estar completo. Los paquetes
+            // que ya estaban cargados NO se bajan: bajan de "Listo para Salir" a "Cargado
+            // en Vehículo". Solo el nuevo queda en "Asignado a Vehículo" (falta cargarlo).
+            // Al escanear el nuevo, TalvezMarcarTodosListosParaSalir vuelve a dejarlos "Listo".
+            var aBajar = delDia
+                .Where(p => p.Status == PaqueteStatus.ListoParaSalir)
                 .ToList();
-            bool huboReversion = aRevertir.Count > 0;
-            foreach (var p in aRevertir)
+            bool huboReversion = aBajar.Count > 0;
+            foreach (var p in aBajar)
             {
-                p.CambiarEstado(PaqueteStatus.AsignadoAVehiculo);
+                p.CambiarEstado(PaqueteStatus.CargadoEnVehiculo);
                 await _historial.RegistrarCambioAsync(
-                    p.Id, PaqueteStatus.AsignadoAVehiculo, supervisorId, OrigenCambioEstado.Sistema,
-                    "Reversión por asignación manual de un nuevo envío");
+                    p.Id, PaqueteStatus.CargadoEnVehiculo, supervisorId, OrigenCambioEstado.Sistema,
+                    "Vuelve a Cargado: ingresó un envío nuevo al reparto");
             }
 
             paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
@@ -253,7 +264,7 @@ namespace Back.Application.Services
                 $"Asignación manual de {paquete.CodigoSeguimiento} a {rep.Nombre} {rep.Apellido} ({fechaUtc:yyyy-MM-dd})",
                 recursoId: paquete.CodigoSeguimiento,
                 contexto: huboReversion
-                    ? $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd} | Revertidos {aRevertir.Count} envíos a Asignado a Vehículo"
+                    ? $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd} | {aBajar.Count} envíos pasaron de Listo para Salir a Cargado en Vehículo"
                     : $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd}");
 
             return new PrecalendarizacionResultado
@@ -264,14 +275,21 @@ namespace Back.Application.Services
                 CapacidadKg = Capacidad.RepartidorKg,
                 HuboReversion = huboReversion,
                 Mensaje = huboReversion
-                    ? "El repartidor ya estaba listo para salir. Deberá volver a cargar todos sus paquetes (incluido el nuevo) antes de iniciar la ruta."
+                    ? "El repartidor estaba listo para salir. Debe escanear el nuevo envío antes de iniciar la ruta; los ya cargados siguen en el vehículo."
                     : null,
             };
         }
 
         public async Task<CalendarizacionResultado> EjecutarAsync(Guid? supervisorId)
         {
-            var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion();
+            // Épica D: el supervisor calendariza solo su sucursal (envíos y repartidores).
+            Guid? sucursalId = null;
+            if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
+                sucursalId = sup.SucursalId;
+
+            var pendientes = (await _enviosRepository.GetPaquetesPendientesDeCalendarizacion())
+                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
+                .ToList();
 
             if (pendientes.Count == 0)
             {
@@ -285,6 +303,7 @@ namespace Back.Application.Services
             }
 
             var todosRepartidores = (await _userRepository.GetRepartidores())
+                .Where(r => sucursalId == null || r.SucursalId == sucursalId)
                 .Where(r => r.Activo && r.PuedeSerAsignado)
                 .ToList();
 
@@ -305,6 +324,8 @@ namespace Back.Application.Services
 
             var repartidores = todosRepartidores
                 .Where(r => !enTransito.Contains(r.Id))
+                // Fase A: excluir a los que están retornando a la sucursal (no reciben envíos nuevos).
+                .Where(r => r.EstadoJornada != Repartidor.EstadoJornadaRepartidor.Retornando)
                 .ToList();
 
             if (repartidores.Count == 0)

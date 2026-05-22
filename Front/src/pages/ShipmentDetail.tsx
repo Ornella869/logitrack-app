@@ -48,6 +48,8 @@ import ShipmentForm from '../components/ShipmentForm'
 import ShipmentTimeline from '../components/ShipmentTimeline'
 import QrCameraScanner from '../components/QrCameraScanner'
 import PrecalendarizarDialog from '../components/PrecalendarizarDialog'
+import PruebaAcusticaDialog from '../components/PruebaAcusticaDialog'
+import { ojoPatronService } from '../services/ojoPatronService'
 
 // Motivos predefinidos de cancelación según G1L-13 AC3
 const CANCEL_REASONS = [
@@ -88,6 +90,9 @@ function ShipmentDetail() {
   const [entregaCodigo, setEntregaCodigo] = useState('')
   const [entregaError, setEntregaError] = useState('')
   const [confirmandoEntrega, setConfirmandoEntrega] = useState(false)
+  // Fase B: prueba de voz a mitad de recorrido (gate antes de seguir entregando).
+  const [openPruebaMitad, setOpenPruebaMitad] = useState(false)
+  const [umbralMitad, setUmbralMitad] = useState(0.4)
   // Cancelación
   const [cancelReason, setCancelReason] = useState('')
   const [cancelDetail, setCancelDetail] = useState('')
@@ -232,8 +237,24 @@ function ShipmentDetail() {
       setEntregaError('Código incorrecto. Verificá con el destinatario.')
       return
     }
-    setConfirmandoEntrega(true)
     setEntregaError('')
+    // Fase B: si al entregar este envío se cruza la mitad del recorrido, primero la prueba de voz.
+    if (isRepartidor) {
+      const requiere = await ojoPatronService.requierePruebaMitad(id)
+      if (requiere) {
+        const estado = await ojoPatronService.getEstadoPrueba()
+        if (estado?.umbralAlertness != null) setUmbralMitad(estado.umbralAlertness)
+        setOpenPruebaMitad(true)
+        return
+      }
+    }
+    await ejecutarEntrega()
+  }
+
+  // Entrega efectiva (tras pasar el gate de la prueba de mitad si correspondía).
+  const ejecutarEntrega = async () => {
+    if (!id || !shipment) return
+    setConfirmandoEntrega(true)
     const result = await shipmentService.changeShipmentStatus(id, 'Entregado')
     setConfirmandoEntrega(false)
     if (result.success) {
@@ -242,6 +263,7 @@ function ShipmentDetail() {
       setOpenEntregaDialog(false)
       setEntregaCodigo('')
       showActionToast('Entrega confirmada. ¡Gracias!', 'success')
+      // Notificación al Supervisor (rol).
       notificationService.add({
         type: 'otro',
         title: 'Entrega completada',
@@ -249,6 +271,16 @@ function ShipmentDetail() {
         recipientId: 'supervisor',
         navigateTo: `/shipment/${id}`,
       })
+      // Fase C: notificación al propio repartidor por cada parada entregada.
+      if (isRepartidor) {
+        notificationService.add({
+          type: 'otro',
+          title: 'Parada entregada',
+          message: `Entregaste el envío ${shipment.trackingId} a ${shipment.receiver.name}.`,
+          recipientId: user.id,
+          navigateTo: '/repartidor',
+        })
+      }
     } else {
       setEntregaError(result.error || 'No se pudo confirmar la entrega')
     }
@@ -847,6 +879,19 @@ function ShipmentDetail() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Fase B: prueba de voz de mitad de recorrido (gate antes de entregar). */}
+      <PruebaAcusticaDialog
+        open={openPruebaMitad}
+        umbral={umbralMitad}
+        momento={1}
+        onClose={() => setOpenPruebaMitad(false)}
+        onCompletado={(aprobada) => {
+          setOpenPruebaMitad(false)
+          // Gate estricto: solo si aprobó se concreta la entrega.
+          if (aprobada) void ejecutarEntrega()
+        }}
+      />
 
       {/* G1L-83: Dialog de asignación manual (Supervisor sobre envío pendiente). */}
       {canPrecalendarizar && (

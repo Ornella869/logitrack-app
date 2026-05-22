@@ -58,6 +58,8 @@ namespace Back.Domain.Models
         public DateTime? FechaCalendarizada { get; private set; }
         public Guid? RepartidorAsignadoId { get; private set; }
         public Ubicacion? UbicacionActual { get; set; }
+        // Épica D: sucursal responsable del envío (la que cubre la provincia de destino).
+        public Guid? SucursalId { get; set; }
 
 
         [JsonPropertyName("prioridad")]

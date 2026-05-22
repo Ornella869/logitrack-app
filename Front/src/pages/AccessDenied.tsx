@@ -66,6 +66,7 @@ function AccessDenied({ user }: AccessDeniedProps) {
                 <strong>
                   {{
                     administrador: 'Administrador',
+                    gerente: 'Gerente',
                     supervisor: 'Supervisor',
                     operador: 'Operador',
                     repartidor: 'Repartidor',

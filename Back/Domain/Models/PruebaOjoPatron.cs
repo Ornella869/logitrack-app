@@ -9,6 +9,13 @@ namespace Back.Domain.Models
         Rechazada = 2,
     }
 
+    // Fase B: momento en que se realiza la prueba durante la jornada.
+    public enum MomentoPruebaOjoPatron
+    {
+        Inicio = 0,
+        Mitad = 1,
+    }
+
     // G1L-60 / G1L-61: resultado de la prueba acústica del Ojo del Patrón.
     // NO se almacena el audio: solo los scores numéricos del análisis y el veredicto.
     public class PruebaOjoPatron
@@ -26,6 +33,7 @@ namespace Back.Domain.Models
         public double UmbralUsado { get; private set; }
         public int Intentos { get; private set; }
         public ResultadoPruebaOjoPatron Resultado { get; private set; }
+        public MomentoPruebaOjoPatron Momento { get; private set; } = MomentoPruebaOjoPatron.Inicio;
 
         private PruebaOjoPatron() { }
 
@@ -33,7 +41,7 @@ namespace Back.Domain.Models
             Guid usuarioId,
             double scoreNeu, double scoreHap, double scoreSad, double scoreAng,
             double alertnessScore, double umbralUsado, int intentos,
-            ResultadoPruebaOjoPatron resultado)
+            ResultadoPruebaOjoPatron resultado, MomentoPruebaOjoPatron momento)
         {
             UsuarioId = usuarioId;
             ScoreNeu = scoreNeu;
@@ -44,6 +52,7 @@ namespace Back.Domain.Models
             UmbralUsado = umbralUsado;
             Intentos = intentos;
             Resultado = resultado;
+            Momento = momento;
         }
     }
 }

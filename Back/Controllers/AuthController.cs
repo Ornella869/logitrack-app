@@ -403,9 +403,13 @@ namespace Back.Controllers
             Activo = u.Activo,
             Licencia = u is Repartidor t ? t.Licencia : null,
             Estado = u is Repartidor t2 ? t2.EstadoLabel : null,
+            // Épica D: ámbito del usuario para que el front gatee por sucursal/provincia.
+            SucursalId = u.SucursalId?.ToString(),
+            Provincia = u is Gerente ger ? ger.Provincia : null,
             Role = u switch
             {
                 Administrador => Roles.Administrador,
+                Gerente => Roles.Gerente,
                 Supervisor => Roles.Supervisor,
                 Operador => Roles.Operador,
                 Repartidor => Roles.Repartidor,
@@ -439,6 +443,9 @@ namespace Back.Controllers
         public string? Licencia { get; set; }
         public string? Estado { get; set; }
         public string? TemporaryPassword { get; set; }
+        // Épica D: ámbito del usuario.
+        public string? SucursalId { get; set; }
+        public string? Provincia { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse
@@ -459,6 +466,8 @@ namespace Back.Controllers
         [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
         [Required] public string Licencia { get; set; } = string.Empty;
+        // Épica D: sucursal a la que pertenece el repartidor.
+        public Guid? SucursalId { get; set; }
     }
 
     public class ActualizarLicenciaRepartidorRequest
@@ -495,6 +504,9 @@ namespace Back.Controllers
         [MinLength(8, ErrorMessage = "La contraseña temporal debe tener al menos 8 caracteres.")]
         public string PasswordTemporal { get; set; } = string.Empty;
         public string? Licencia { get; set; }
+        // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).
+        public Guid? SucursalId { get; set; }
+        public string? Provincia { get; set; }
     }
 
     public class ActualizarUsuarioRequest

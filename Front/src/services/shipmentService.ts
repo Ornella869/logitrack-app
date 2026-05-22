@@ -492,6 +492,26 @@ export const shipmentService = {
     }
   },
 
+  // Fase A: estado de jornada del repartidor (Disponible/EnRuta/Retornando).
+  getEstadoJornada: async (): Promise<string> => {
+    try {
+      const r = await api.get('/envios/estado-jornada')
+      return r.data?.estadoJornada ?? 'Disponible'
+    } catch {
+      return 'Disponible'
+    }
+  },
+
+  // Fase A: el repartidor cierra su jornada (volvió a la sucursal) y vuelve a estar disponible.
+  cerrarJornada: async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post('/envios/cerrar-jornada')
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.message ?? 'No se pudo cerrar la jornada' }
+    }
+  },
+
   // Lista de fechas con asignaciones del repartidor logueado.
   getMisFechasDeRuta: async (): Promise<string[]> => {
     try {

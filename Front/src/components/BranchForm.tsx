@@ -27,6 +27,8 @@ interface BranchFormProps {
   onSaved: (branch: Branch) => void
   mode?: 'create' | 'edit'
   initialData?: Branch
+  // Épica D: si se provee, el Gerente solo puede crear sucursales en su provincia.
+  lockedProvince?: string
 }
 
 const nameRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.-]{1,}$/
@@ -44,7 +46,7 @@ const EMPTY_FORM = {
   status: 'Activa' as BranchStatus,
 }
 
-function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: BranchFormProps) {
+function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lockedProvince }: BranchFormProps) {
   const isEdit = mode === 'edit'
   const [formData, setFormData] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -65,9 +67,9 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
         status: initialData.status,
       })
     } else {
-      setFormData(EMPTY_FORM)
+      setFormData({ ...EMPTY_FORM, province: lockedProvince ?? '' })
     }
-  }, [open, isEdit, initialData])
+  }, [open, isEdit, initialData, lockedProvince])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name } = e.target
@@ -91,7 +93,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
       // Cambio de CP → limpiamos la provincia auto-rellenada para que el blur
       // re-sugiera la del CP nuevo. Si el operador eligió manualmente una
       // provincia después, su elección se respeta (ver checkPostal).
-      if (name === 'postalCode' && value !== prev.postalCode) {
+      if (name === 'postalCode' && value !== prev.postalCode && !lockedProvince) {
         next.province = ''
       }
       return next
@@ -295,7 +297,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
             disabled={loading}
           />
 
-          <FormControl fullWidth required error={!!errors.province} disabled={loading}>
+          <FormControl fullWidth required error={!!errors.province} disabled={loading || !!lockedProvince}>
             <InputLabel>Provincia</InputLabel>
             <Select
               value={formData.province}
@@ -310,7 +312,9 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData }: Br
               ))}
             </Select>
             <FormHelperText>
-              {errors.province ?? 'Se pre-selecciona al validar el CP — verificá que sea correcta para CPs ambiguos.'}
+              {errors.province ?? (lockedProvince
+                ? `Como Gerente solo podés crear sucursales en tu provincia (${lockedProvince}).`
+                : 'Se pre-selecciona al validar el CP — verificá que sea correcta para CPs ambiguos.')}
             </FormHelperText>
           </FormControl>
 

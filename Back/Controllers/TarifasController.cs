@@ -20,26 +20,36 @@ namespace Back.Controllers
             _auditoria = auditoria;
         }
 
-        // ===== G1L-87: Configuración de tarifas =====
+        private Guid? CurrentUserId()
+        {
+            var s = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            return Guid.TryParse(s, out var id) ? id : null;
+        }
 
-        /// <summary>Configuración de tarifas vigente (Operador, Supervisor o Admin la leen para cotizar).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        // ===== G1L-87 / Épica D: Configuración de tarifas por provincia =====
+
+        /// <summary>Configuración de tarifas de la provincia del usuario logueado.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
         [HttpGet("configuracion")]
         public async Task<ActionResult<ConfiguracionTarifa>> GetConfiguracion()
-            => Ok(await _service.GetConfiguracionAsync());
+        {
+            var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
+            return Ok(await _service.GetConfiguracionAsync(provincia));
+        }
 
-        /// <summary>Actualiza los valores base de tarificación (solo Administrador).</summary>
-        [Authorize(Roles = Roles.Administrador)]
+        /// <summary>Actualiza los valores base de tarificación de la provincia del Gerente.</summary>
+        [Authorize(Roles = Roles.Gerente)]
         [HttpPut("configuracion")]
         public async Task<ActionResult<ConfiguracionTarifa>> ActualizarConfiguracion([FromBody] ConfiguracionTarifaRequest request)
         {
             try
             {
+                var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
                 var config = await _service.ActualizarConfiguracionAsync(
-                    request.PrecioPorKg, request.PrecioPorKm, request.PorcentajeRecargoZonaPeligrosa);
+                    provincia, request.PrecioPorKg, request.PrecioPorKm, request.PorcentajeRecargoZonaPeligrosa);
                 await _auditoria.RegistrarAsync(
                     TipoAccion.Otro,
-                    "Actualizó la configuración de tarifas",
+                    $"Actualizó la configuración de tarifas (provincia {provincia})",
                     contexto: $"$/kg={request.PrecioPorKg} | $/km={request.PrecioPorKm} | recargo={request.PorcentajeRecargoZonaPeligrosa}%");
                 return Ok(config);
             }
@@ -49,25 +59,29 @@ namespace Back.Controllers
             }
         }
 
-        // ===== G1L-86: Zonas peligrosas =====
+        // ===== G1L-86 / Épica D: Zonas peligrosas por provincia =====
 
-        /// <summary>Lista de zonas peligrosas (rectángulos en el mapa).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        /// <summary>Zonas peligrosas de la provincia del usuario logueado.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
         [HttpGet("zonas")]
         public async Task<ActionResult<List<ZonaPeligrosa>>> GetZonas()
-            => Ok(await _service.GetZonasAsync());
+        {
+            var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
+            return Ok(await _service.GetZonasAsync(provincia));
+        }
 
-        /// <summary>Crea una zona peligrosa delimitada por un rectángulo (solo Administrador).</summary>
-        [Authorize(Roles = Roles.Administrador)]
+        /// <summary>Crea una zona peligrosa en la provincia del Gerente.</summary>
+        [Authorize(Roles = Roles.Gerente)]
         [HttpPost("zonas")]
         public async Task<ActionResult<ZonaPeligrosa>> CrearZona([FromBody] ZonaPeligrosaRequest request)
         {
             try
             {
-                var zona = await _service.CrearZonaAsync(request.Nombre, request.LatMin, request.LatMax, request.LngMin, request.LngMax);
+                var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
+                var zona = await _service.CrearZonaAsync(request.Nombre, provincia, request.LatMin, request.LatMax, request.LngMin, request.LngMax);
                 await _auditoria.RegistrarAsync(
                     TipoAccion.Otro,
-                    $"Creó zona peligrosa '{zona.Nombre}'",
+                    $"Creó zona peligrosa '{zona.Nombre}' (provincia {provincia})",
                     recursoId: zona.Id.ToString());
                 return Ok(zona);
             }
@@ -77,8 +91,8 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>Elimina una zona peligrosa (solo Administrador).</summary>
-        [Authorize(Roles = Roles.Administrador)]
+        /// <summary>Elimina una zona peligrosa (Gerente).</summary>
+        [Authorize(Roles = Roles.Gerente)]
         [HttpDelete("zonas/{id:guid}")]
         public async Task<ActionResult> EliminarZona(Guid id)
         {

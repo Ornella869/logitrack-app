@@ -19,7 +19,7 @@ import type { User } from '../types'
 // G1L-61: configuración del umbral del Ojo del Patrón (Administrador).
 export default function OjoPatronConfigPage() {
   const user = useOutletContext<User>()
-  const isAdmin = user.role === 'administrador'
+  const isAdmin = user.role === 'gerente'
 
   const [umbral, setUmbral] = useState(0.4)
   const [loading, setLoading] = useState(true)
@@ -43,7 +43,7 @@ export default function OjoPatronConfigPage() {
       : { sev: 'error', text: res.error ?? 'Error al guardar' })
   }
 
-  if (!isAdmin) return <Alert severity="warning">Solo el Administrador.</Alert>
+  if (!isAdmin) return <Alert severity="warning">Solo el Gerente.</Alert>
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
 
   return (

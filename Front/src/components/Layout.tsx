@@ -462,7 +462,7 @@ function Layout({ user, onLogout }: LayoutProps) {
       </AppBar>
 
       {/* Tabs nav */}
-      {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador') && (
+      {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador' || user.role === 'gerente') && (
         <Box sx={{
           bgcolor: isDarkPremium ? '#1B2D42' : 'white',
           borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
@@ -520,13 +520,14 @@ function Layout({ user, onLogout }: LayoutProps) {
             {user.role === 'administrador' && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {user.role === 'administrador' && (
+            {/* Épica D: sucursales, tarifas y ojo del patrón los gestiona el Gerente */}
+            {user.role === 'gerente' && (
               <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Sucursales" value="/sucursales" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {user.role === 'administrador' && (
+            {user.role === 'gerente' && (
               <Tab icon={<PriceChangeIcon fontSize="small" />} iconPosition="start" label="Tarifas" value="/tarifas" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {user.role === 'administrador' && (
+            {user.role === 'gerente' && (
               <Tab icon={<GraphicEqIcon fontSize="small" />} iconPosition="start" label="Ojo del Patrón" value="/ojo-patron" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (

@@ -47,12 +47,15 @@ import KeyIcon from '@mui/icons-material/Key'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import CasinoIcon from '@mui/icons-material/Casino'
 import { generateTempPassword } from '../utils/passwordGenerator'
-import type { User, UserRole, UserEstado } from '../types'
+import type { User, UserRole, UserEstado, Branch } from '../types'
 import { authService } from '../services/authService'
+import { branchService } from '../services/branchService'
+import { AR_PROVINCIAS } from '../utils/provincias'
 import ConfirmDialog from './ConfirmDialog'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   administrador: 'Administrador',
+  gerente: 'Gerente',
   supervisor: 'Supervisor',
   operador: 'Operador',
   repartidor: 'Repartidor',
@@ -60,6 +63,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
   administrador: { bg: '#EDE7F6', color: '#4527A0' },
+  gerente: { bg: '#FFF3E0', color: '#E65100' },
   supervisor: { bg: '#FFEBEE', color: '#B71C1C' },
   operador: { bg: '#E3F2FD', color: '#0D47A1' },
   repartidor: { bg: '#E8F5E9', color: '#1B5E20' },
@@ -67,6 +71,7 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
 
 const ROLE_COLORS_DARK: Record<UserRole, { bg: string; color: string }> = {
   administrador: { bg: 'rgba(69,39,160,0.25)', color: '#CE93D8' },
+  gerente: { bg: 'rgba(230,81,0,0.25)', color: '#FFB74D' },
   supervisor: { bg: 'rgba(183,28,28,0.25)', color: '#EF9A9A' },
   operador: { bg: 'rgba(13,71,161,0.25)', color: '#90CAF9' },
   repartidor: { bg: 'rgba(27,94,32,0.25)', color: '#A5D6A7' },
@@ -144,6 +149,9 @@ const emptyForm = {
   role: 'operador' as UserRole,
   licencia: '',
   passwordTemporal: '',
+  // Épica D: vínculo de ámbito.
+  sucursalId: '',
+  provincia: '',
 }
 
 interface UsersManagementProps {
@@ -154,9 +162,14 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [users, setUsers] = useState<User[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    void branchService.getAllBranches().then(setBranches).catch(() => setBranches([]))
+  }, [])
 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
@@ -256,6 +269,9 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         role: formData.role,
         passwordTemporal: formData.passwordTemporal.trim(),
         ...(formData.role === 'repartidor' && formData.licencia ? { licencia: formData.licencia.trim() } : {}),
+        // Épica D: gerente lleva provincia; los demás roles operativos llevan sucursal.
+        ...(formData.role === 'gerente' && formData.provincia ? { provincia: formData.provincia } : {}),
+        ...(formData.role !== 'gerente' && formData.role !== 'administrador' && formData.sucursalId ? { sucursalId: formData.sucursalId } : {}),
       })
       await loadUsers()
       setOpenCreate(false)
@@ -282,6 +298,8 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       role: user.role,
       licencia: user.licencia ?? '',
       passwordTemporal: '',
+      sucursalId: user.sucursalId ?? '',
+      provincia: user.provincia ?? '',
     })
     setFormError('')
     setShowResetSection(false)
@@ -900,11 +918,41 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 value={formData.role}
                 onChange={(e) => setFormData((p) => ({ ...p, role: e.target.value as UserRole }))}
               >
+                <MenuItem value="gerente">Gerente</MenuItem>
                 <MenuItem value="supervisor">Supervisor</MenuItem>
                 <MenuItem value="operador">Operador</MenuItem>
                 <MenuItem value="repartidor">Repartidor</MenuItem>
               </Select>
             </FormControl>
+            {/* Épica D: el Gerente lleva provincia; los roles operativos, sucursal. */}
+            {formData.role === 'gerente' && (
+              <FormControl fullWidth>
+                <InputLabel>Provincia *</InputLabel>
+                <Select
+                  label="Provincia *"
+                  value={formData.provincia}
+                  onChange={(e) => setFormData((p) => ({ ...p, provincia: e.target.value }))}
+                >
+                  {AR_PROVINCIAS.map((prov) => (
+                    <MenuItem key={prov} value={prov}>{prov}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            {(formData.role === 'supervisor' || formData.role === 'operador' || formData.role === 'repartidor') && (
+              <FormControl fullWidth>
+                <InputLabel>Sucursal *</InputLabel>
+                <Select
+                  label="Sucursal *"
+                  value={formData.sucursalId}
+                  onChange={(e) => setFormData((p) => ({ ...p, sucursalId: e.target.value }))}
+                >
+                  {branches.map((b) => (
+                    <MenuItem key={b.id} value={b.id}>{b.name} {b.province ? `(${b.province})` : ''}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
             {formData.role === 'repartidor' && (
               <TextField
                 label="Licencia *"

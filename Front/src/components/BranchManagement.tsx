@@ -21,7 +21,11 @@ import { branchService } from '../services/branchService'
 import BranchForm from './BranchForm'
 import ConfirmDialog from './ConfirmDialog'
 
-function BranchManagement() {
+interface BranchManagementProps {
+  gerenteProvincia?: string
+}
+
+function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -77,18 +81,15 @@ function BranchManagement() {
     }
   }
 
-  const canCreate = branches.length === 0
-
   return (
     <Box sx={{ mt: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Mi Sucursal</Typography>
+        <Typography variant="h6">Mis Sucursales</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={openCreate}
-          disabled={!canCreate}
-          title={canCreate ? 'Crear sucursal' : 'Solo se permite una sucursal por ahora. Eliminá la actual para crear otra.'}
+          title="Crear sucursal"
         >
           Nueva sucursal
         </Button>
@@ -153,6 +154,7 @@ function BranchManagement() {
         onSaved={handleSaved}
         mode={editing ? 'edit' : 'create'}
         initialData={editing ?? undefined}
+        lockedProvince={gerenteProvincia}
       />
 
       <ConfirmDialog

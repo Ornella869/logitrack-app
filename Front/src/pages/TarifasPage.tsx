@@ -38,7 +38,7 @@ function ClickCapturer({ onClick }: { onClick: (p: LatLng) => void }) {
 
 export default function TarifasPage() {
   const user = useOutletContext<User>()
-  const isAdmin = user.role === 'administrador'
+  const isAdmin = user.role === 'gerente'
 
   const [config, setConfig] = useState<ConfiguracionTarifa | null>(null)
   const [kg, setKg] = useState('')
@@ -134,7 +134,7 @@ export default function TarifasPage() {
   }
 
   if (!isAdmin) {
-    return <Alert severity="warning">Solo el Administrador puede configurar tarifas.</Alert>
+    return <Alert severity="warning">Solo el Gerente puede configurar tarifas.</Alert>
   }
 
   if (loading) {

@@ -4,6 +4,8 @@ namespace Back.Domain.Models
     public class ConfiguracionTarifa
     {
         public Guid Id { get; init; } = Guid.NewGuid();
+        // Épica D: una configuración por provincia (antes era singleton global).
+        public string Provincia { get; private set; } = string.Empty;
         public double PrecioPorKg { get; private set; }
         public double PrecioPorKm { get; private set; }
         public double PorcentajeRecargoZonaPeligrosa { get; private set; }
@@ -11,8 +13,9 @@ namespace Back.Domain.Models
 
         private ConfiguracionTarifa() { }
 
-        public ConfiguracionTarifa(double precioPorKg, double precioPorKm, double porcentajeRecargo)
+        public ConfiguracionTarifa(string provincia, double precioPorKg, double precioPorKm, double porcentajeRecargo)
         {
+            Provincia = provincia;
             Actualizar(precioPorKg, precioPorKm, porcentajeRecargo);
         }
 

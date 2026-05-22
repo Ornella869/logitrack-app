@@ -13,10 +13,15 @@ namespace Back.Domain.Models
         public string Password { get; private set; }
         public string DNI { get; private set; }
         public bool Activo { get; private set; } = true;
+        // Épica D: sucursal a la que pertenece el usuario (Supervisor/Operador/Repartidor).
+        // El Gerente no usa SucursalId (su ámbito es la provincia); el Administrador es global.
+        public Guid? SucursalId { get; private set; }
 
         public Usuario()
         {
         }
+
+        public void AsignarSucursal(Guid? sucursalId) => SucursalId = sucursalId;
 
         public Usuario(string nombre, string apellido, string email, string password, string dni)
         {
@@ -80,6 +85,22 @@ namespace Back.Domain.Models
         }
     }
 
+    // Épica D: gerente a cargo de todas las sucursales de UNA provincia.
+    public class Gerente : Usuario
+    {
+        public string Provincia { get; private set; } = string.Empty;
+
+        public Gerente() { }
+
+        public Gerente(string nombre, string apellido, string email, string password, string dni, string provincia)
+            : base(nombre, apellido, email, password, dni)
+        {
+            Provincia = provincia;
+        }
+
+        public void AsignarProvincia(string provincia) => Provincia = provincia;
+    }
+
     public class Repartidor : Usuario
     {
         public enum EstadoRepartidor
@@ -89,8 +110,20 @@ namespace Back.Domain.Models
             Inhabilitado,
         }
 
+        // Estado operativo de la jornada (distinto del estado de cuenta):
+        //   Disponible  → puede recibir envíos calendarizados.
+        //   EnRuta      → ya inició la ruta del día (está en la calle).
+        //   Retornando  → entregó todo y vuelve a la sucursal; NO recibe nuevos envíos.
+        public enum EstadoJornadaRepartidor
+        {
+            Disponible,
+            EnRuta,
+            Retornando,
+        }
+
         public string Licencia { get; private set; }
         public EstadoRepartidor Estado { get; private set; } = EstadoRepartidor.Activo;
+        public EstadoJornadaRepartidor EstadoJornada { get; private set; } = EstadoJornadaRepartidor.Disponible;
 
         public Repartidor()
         {
@@ -115,9 +148,19 @@ namespace Back.Domain.Models
             Estado = estado;
         }
 
+        // Transiciones de jornada.
+        public void IniciarJornada() => EstadoJornada = EstadoJornadaRepartidor.EnRuta;
+        public void MarcarRetornando() => EstadoJornada = EstadoJornadaRepartidor.Retornando;
+        public void CerrarJornada() => EstadoJornada = EstadoJornadaRepartidor.Disponible;
+
         public bool PuedeSerAsignado => Estado == EstadoRepartidor.Activo;
 
+        // Para calendarización: no se le asignan envíos nuevos mientras está retornando.
+        public bool DisponibleParaCalendarizar => Estado == EstadoRepartidor.Activo
+            && EstadoJornada != EstadoJornadaRepartidor.Retornando;
+
         public string EstadoLabel => Estado.ToString();
+        public string EstadoJornadaLabel => EstadoJornada.ToString();
 
         public bool EstaSuspendido => Estado != EstadoRepartidor.Activo;
     }

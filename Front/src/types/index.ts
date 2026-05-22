@@ -1,4 +1,4 @@
-export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador'
+export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador' | 'gerente'
 export type UserEstado = 'Activo' | 'Inactivo'
 export type RepartidorEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
 
@@ -20,6 +20,9 @@ export interface User {
   activo?: boolean
   licencia?: string
   estado?: UserEstado | RepartidorEstado
+  // Épica D: ámbito del usuario.
+  sucursalId?: string | null
+  provincia?: string | null
 }
 
 export interface CreateRepartidorData {
@@ -38,6 +41,9 @@ export interface CreateUsuarioData {
   role: UserRole
   licencia?: string
   passwordTemporal: string
+  // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).
+  sucursalId?: string
+  provincia?: string
 }
 
 export interface Vehicle {

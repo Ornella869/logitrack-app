@@ -243,10 +243,16 @@ namespace Back.Controllers
         /// <summary>Repartidor: transición de estado (ListoParaSalir → EnTransito → Entregado/Cancelado).</summary>
         [Authorize(Roles = Roles.Repartidor)]
         [HttpPost("cambiar-estado-paquete/{paqueteId:guid}/estado/{status}")]
-        public async Task<ActionResult> CambiarEstadoPaquete(Guid paqueteId, PaqueteStatus status, [FromBody] CambiarEstadoRequest? request)
+        public async Task<ActionResult> CambiarEstadoPaquete(
+            Guid paqueteId, PaqueteStatus status, [FromBody] CambiarEstadoRequest? request,
+            [FromServices] Application.Services.OjoPatronService ojoPatron)
         {
             try
             {
+                // Fase B: gate de la prueba de voz a mitad de recorrido (al entregar).
+                if (status == PaqueteStatus.Entregado && await ojoPatron.RequierePruebaMitadAsync(paqueteId))
+                    return BadRequest(new { code = "PRUEBA_MITAD_REQUERIDA", message = "Debés completar la prueba de voz de mitad de recorrido antes de seguir entregando." });
+
                 await _enviosService.CambiarEstadoPorRepartidor(paqueteId, status, request?.Motivo, CurrentUserId());
                 await _context.SaveChangesAsync();
                 return Ok();
@@ -410,6 +416,36 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>Fase A: estado de jornada del repartidor logueado (Disponible/EnRuta/Retornando).</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpGet("estado-jornada")]
+        public async Task<ActionResult<object>> EstadoJornada([FromServices] IUserRepository userRepo)
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            var rep = await userRepo.GetUsuarioById(userId.Value) as Repartidor;
+            return Ok(new { estadoJornada = rep?.EstadoJornadaLabel ?? "Disponible" });
+        }
+
+        /// <summary>Fase A: el repartidor confirma que volvió a la sucursal (cierra su jornada).</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("cerrar-jornada")]
+        public async Task<ActionResult> CerrarJornada()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            try
+            {
+                await _enviosService.CerrarJornadaAsync(userId.Value);
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         // ============== G1L-28: Etiqueta ==============
 
         /// <summary>Datos de la etiqueta imprimible (Operador o Supervisor).</summary>
@@ -530,7 +566,7 @@ namespace Back.Controllers
             return Ok();
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor + "," + Roles.Operador)]
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor + "," + Roles.Operador + "," + Roles.Gerente)]
         [HttpGet("sucursales")]
         public async Task<ActionResult<List<Sucursal>>> GetSucursales()
         {
@@ -574,34 +610,54 @@ namespace Back.Controllers
             });
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        // Épica D: multi-sucursal. El Gerente crea sucursales (idealmente de su provincia).
+        [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpPost("sucursales/registrar-sucursal")]
-        public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
+        public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request, [FromServices] IUserRepository userRepo)
         {
-            // Por ahora se permite una única sucursal por empresa.
-            var existentes = await _enviosRepository.GetSucursales();
-            if (existentes.Count > 0)
-            {
-                return BadRequest(new { error = "Ya existe una sucursal registrada. Eliminala antes de crear otra." });
-            }
+            var error = await ValidarProvinciaGerente(request.Provincia, userRepo);
+            if (error is not null) return BadRequest(new { error });
+
             var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
+            if (request.ProvinciasCubiertas is not null)
+                sucursal.DefinirCobertura(request.ProvinciasCubiertas);
             await _enviosRepository.Add(sucursal);
             await _context.SaveChangesAsync();
             return Ok();
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        // Épica D: un Gerente solo puede crear/editar sucursales de su propia provincia.
+        // Devuelve un mensaje de error si la provincia no coincide; null si es válido (o Admin).
+        private async Task<string?> ValidarProvinciaGerente(string? provinciaSucursal, IUserRepository userRepo)
+        {
+            if (!User.IsInRole(Roles.Gerente)) return null; // Admin sin restricción
+            var userId = CurrentUserId();
+            if (userId is null) return "No se pudo identificar al usuario.";
+            var gerente = await userRepo.GetUsuarioById(userId.Value) as Gerente;
+            if (gerente is null) return "Usuario no es Gerente.";
+            if (!string.Equals(gerente.Provincia?.Trim(), provinciaSucursal?.Trim(), StringComparison.OrdinalIgnoreCase))
+                return $"Solo podés gestionar sucursales de tu provincia ({gerente.Provincia}).";
+            return null;
+        }
+
+        [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpPut("sucursales/{id:guid}")]
-        public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request)
+        public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request, [FromServices] IUserRepository userRepo)
         {
             var sucursal = await _enviosRepository.GetSucursalById(id);
             if (sucursal == null) return NotFound();
+            // Bloqueamos tanto la provincia destino como la actual (no permitir mover fuera del ámbito).
+            var error = await ValidarProvinciaGerente(request.Provincia, userRepo)
+                        ?? await ValidarProvinciaGerente(sucursal.Provincia, userRepo);
+            if (error is not null) return BadRequest(new { error });
             sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
+            if (request.ProvinciasCubiertas is not null)
+                sucursal.DefinirCobertura(request.ProvinciasCubiertas);
             await _context.SaveChangesAsync();
             return Ok();
         }
 
-        [Authorize(Roles = Roles.Administrador)]
+        [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpDelete("sucursales/{id:guid}")]
         public async Task<ActionResult> EliminarSucursal(Guid id)
         {
@@ -681,6 +737,8 @@ namespace Back.Controllers
         [Required] public string Telefono { get; set; } = string.Empty;
         // Opcional para no romper integraciones viejas; el front lo manda obligatorio.
         public string? Provincia { get; set; }
+        // Épica D: provincias adicionales (sin sucursal propia) que cubre esta sucursal.
+        public List<string>? ProvinciasCubiertas { get; set; }
     }
 
     public class EtiquetaResponse

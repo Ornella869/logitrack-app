@@ -57,6 +57,9 @@ namespace Back.Infrastructure.Database
         {
             DatabaseSeederConfiguration config = _configuration.GetSection("DatabaseSeederConfiguration").Get<DatabaseSeederConfiguration>() ?? new DatabaseSeederConfiguration();
 
+            // Épica D: aseguramos la cuenta demo de Gerente incluso si la BD ya tiene datos.
+            await AsegurarGerenteDemoAsync();
+
             // Guard de idempotencia: si ya hay datos, no duplicar.
             if (await _context.Usuarios.AnyAsync())
             {
@@ -117,6 +120,20 @@ namespace Back.Infrastructure.Database
             _context.Paquetes.AddRange([.. PaquetesGenerator.GenerarPaquetes(20)]);
             _context.Rutas.AddRange(rutas);
 
+            await _context.SaveChangesAsync();
+        }
+
+        // Épica D: crea (si no existe) un Gerente demo para probar el login.
+        private async Task AsegurarGerenteDemoAsync()
+        {
+            const string email = "gerente.bsas@logitrack.com";
+            if (await _context.Usuarios.AnyAsync(u => u.Email == email)) return;
+
+            var gerente = new Gerente(
+                "Gerardo", "Buenos Aires", email,
+                PasswordHasher.HashPassword("kjkszpj1234"),
+                "30111222", "Buenos Aires");
+            _context.Usuarios.Add(gerente);
             await _context.SaveChangesAsync();
         }
     }

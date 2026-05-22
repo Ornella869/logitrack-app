@@ -139,6 +139,8 @@ namespace Back.Application.Services
                 request.DNI.Trim(),
                 request.Licencia.Trim()
             );
+            // Épica D: vincular el repartidor a su sucursal.
+            if (request.SucursalId.HasValue) repartidor.AsignarSucursal(request.SucursalId);
 
             await _userRepository.Add(repartidor);
             return new RegistrarRepartidorResult
@@ -178,6 +180,8 @@ namespace Back.Application.Services
             Usuario nuevo = request.Role switch
             {
                 Roles.Administrador => new Administrador(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
+                // Épica D: Gerente con provincia a cargo.
+                Roles.Gerente => new Gerente(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), request.Provincia?.Trim() ?? string.Empty),
                 Roles.Supervisor => new Supervisor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
                 Roles.Operador => new Operador(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
                 Roles.Repartidor => new Repartidor(
@@ -189,6 +193,10 @@ namespace Back.Application.Services
                     string.IsNullOrWhiteSpace(request.Licencia) ? "No informada" : request.Licencia.Trim()),
                 _ => throw new InvalidOperationException("Rol no válido."),
             };
+
+            // Épica D: Supervisor/Operador/Repartidor se vinculan a una sucursal.
+            if (request.SucursalId.HasValue && nuevo is not Gerente && nuevo is not Administrador)
+                nuevo.AsignarSucursal(request.SucursalId);
 
             await _userRepository.Add(nuevo);
             return new CrearUsuarioResult { Usuario = nuevo, TemporaryPassword = request.PasswordTemporal };

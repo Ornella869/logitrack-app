@@ -3,6 +3,7 @@ using System;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Back.Infrastructure.Database
 {
     [DbContext(typeof(LogiTrackDbContext))]
-    partial class LogiTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260522000823_FaseAEstadoJornadaRepartidor")]
+    partial class FaseAEstadoJornadaRepartidor
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,10 +33,6 @@ namespace Back.Infrastructure.Database
 
                     b.Property<DateTime>("ActualizadoEn")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Provincia")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<double>("UmbralAlertness")
                         .HasColumnType("double precision");
@@ -60,10 +59,6 @@ namespace Back.Infrastructure.Database
 
                     b.Property<double>("PrecioPorKm")
                         .HasColumnType("double precision");
-
-                    b.Property<string>("Provincia")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -281,9 +276,6 @@ namespace Back.Infrastructure.Database
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid?>("SucursalId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("TipoEnvio")
                         .HasColumnType("integer");
 
@@ -310,9 +302,6 @@ namespace Back.Infrastructure.Database
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Intentos")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Momento")
                         .HasColumnType("integer");
 
                     b.Property<int>("Resultado")
@@ -452,10 +441,6 @@ namespace Back.Infrastructure.Database
                     b.Property<string>("Provincia")
                         .HasColumnType("text");
 
-                    b.Property<string>("ProvinciasCubiertas")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("Telefono")
                         .IsRequired()
                         .HasColumnType("text");
@@ -498,9 +483,6 @@ namespace Back.Infrastructure.Database
                     b.Property<string>("Password")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<Guid?>("SucursalId")
-                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -564,10 +546,6 @@ namespace Back.Infrastructure.Database
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Provincia")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
 
                     b.ToTable("ZonasPeligrosas");
@@ -578,17 +556,6 @@ namespace Back.Infrastructure.Database
                     b.HasBaseType("Back.Domain.Models.Usuario");
 
                     b.HasDiscriminator().HasValue("Administrador");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.Gerente", b =>
-                {
-                    b.HasBaseType("Back.Domain.Models.Usuario");
-
-                    b.Property<string>("Provincia")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasDiscriminator().HasValue("Gerente");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Operador", b =>

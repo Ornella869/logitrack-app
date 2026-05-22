@@ -27,6 +27,9 @@ export interface ConfiguracionOjoPatron {
 // 0 = Aprobada, 2 = Rechazada
 export type ResultadoPrueba = 0 | 2
 
+// 0 = Inicio de ruta, 1 = Mitad de recorrido
+export type MomentoPrueba = 0 | 1
+
 export interface RegistrarPruebaPayload {
   scoreNeu: number
   scoreHap: number
@@ -35,6 +38,7 @@ export interface RegistrarPruebaPayload {
   alertnessScore: number
   intentos: number
   resultado: ResultadoPrueba
+  momento?: MomentoPrueba
 }
 
 export const ojoPatronService = {
@@ -99,11 +103,22 @@ export const ojoPatronService = {
         AlertnessScore: payload.alertnessScore,
         Intentos: payload.intentos,
         Resultado: payload.resultado,
+        Momento: payload.momento ?? 0,
       })
       return { success: true }
     } catch (e) {
       console.error('Registrar prueba error:', e)
       return { success: false }
+    }
+  },
+
+  // Fase B: ¿al entregar este paquete se requiere la prueba de mitad de recorrido?
+  requierePruebaMitad: async (paqueteId: string): Promise<boolean> => {
+    try {
+      const r = await api.get(`/ojo-patron/prueba-mitad-requerida/${paqueteId}`)
+      return r.data?.requerida ?? false
+    } catch {
+      return false
     }
   },
 

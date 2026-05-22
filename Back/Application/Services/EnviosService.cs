@@ -63,14 +63,46 @@ namespace Back.Application.Services
             _tarifas = tarifas;
         }
 
-        // G1L-88: calcula y deja congelada la cotización del paquete con la ubicación ya geocodificada.
-        private async Task AplicarCotizacion(Paquete paquete, double peso, float distancia, Ubicacion? ubicacion)
+        // G1L-88 / Épica D: cotización con tarifas y zonas de la provincia de destino.
+        private async Task AplicarCotizacion(Paquete paquete, double peso, float distancia, Ubicacion? ubicacion, string? provinciaDestino)
         {
-            var config = await _tarifas.GetConfiguracionAsync();
+            var provincia = (provinciaDestino ?? string.Empty).Trim();
+            var config = await _tarifas.GetConfiguracionAsync(provincia);
             var esPeligrosa = ubicacion is not null
-                && await _tarifas.EsZonaPeligrosaAsync(ubicacion.Latitud, ubicacion.Longitud);
+                && await _tarifas.EsZonaPeligrosaAsync(provincia, ubicacion.Latitud, ubicacion.Longitud);
             var cotizacion = _tarifas.Calcular(peso, distancia, esPeligrosa, config);
             paquete.AsignarCotizacion(cotizacion.Total, cotizacion.CostoRecargo, esPeligrosa);
+        }
+
+        // Épica D: resuelve la sucursal responsable de un envío por la provincia de destino
+        // y aplica el ruteo estricto (un operador no puede crear envíos fuera de su sucursal).
+        private async Task<Sucursal?> ResolverSucursalDestinoAsync(string? provinciaDestino, Guid? usuarioId)
+        {
+            var sucursales = await _enviosRepository.GetSucursales();
+            if (sucursales.Count == 0) return null;
+
+            var responsable = sucursales.FirstOrDefault(s => s.Cubre(provinciaDestino));
+
+            // Ruteo estricto: si el operador tiene sucursal asignada, el destino debe estar
+            // dentro de su cobertura. (Los usuarios sin sucursal —datos previos/admin— no se bloquean.)
+            if (usuarioId.HasValue)
+            {
+                var operador = await _userRepository.GetUsuarioById(usuarioId.Value);
+                if (operador?.SucursalId is Guid opSucId)
+                {
+                    var miSucursal = sucursales.FirstOrDefault(s => s.Id == opSucId);
+                    if (miSucursal is not null && !miSucursal.Cubre(provinciaDestino))
+                    {
+                        var quien = responsable is not null ? $"la sucursal '{responsable.Nombre}'" : "otra sucursal";
+                        throw new InvalidOperationException(
+                            $"El destino ({provinciaDestino}) lo gestiona {quien}. No podés crear envíos fuera de la cobertura de tu sucursal.");
+                    }
+                    // Dentro de cobertura: la sucursal responsable es la del operador.
+                    return miSucursal;
+                }
+            }
+
+            return responsable;
         }
 
         // G1L-10
@@ -91,6 +123,9 @@ namespace Back.Application.Services
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
 
+            // Épica D: sucursal responsable por provincia de destino + ruteo estricto.
+            var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
+
             var paquete = new Paquete(
                 request.Peso,
                 0,
@@ -104,9 +139,10 @@ namespace Back.Application.Services
             {
                 TipoEnvio = request.TipoEnvio,
                 TipoPaquete = request.TipoPaquete,
+                SucursalId = sucursalDestino?.Id,
             };
 
-            await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario);
+            await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
 
             await _enviosRepository.Add(paquete);
 
@@ -176,7 +212,7 @@ namespace Back.Application.Services
                 distancia,
                 prioridad);
 
-            await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario);
+            await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
 
             await _historial.RegistrarCambioAsync(
                 paquete.Id,
@@ -258,6 +294,7 @@ namespace Back.Application.Services
                         throw new InvalidOperationException("Un envío En Tránsito o Demorado solo puede cancelarlo el repartidor (Entrega Fallida).");
                     paquete.Cancelar(motivo);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
+                    await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
 
                 default:
@@ -281,6 +318,7 @@ namespace Back.Application.Services
                 case PaqueteStatus.Entregado:
                     paquete.Entregar();
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, usuarioId, OrigenCambioEstado.Manual);
+                    await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
 
                 case PaqueteStatus.Cancelado:
@@ -291,6 +329,7 @@ namespace Back.Application.Services
                         throw new InvalidOperationException("Solo se puede cancelar una entrega en tránsito o demorada.");
                     paquete.Cancelar(motivo);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
+                    await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
 
                 default:
@@ -397,12 +436,47 @@ namespace Back.Application.Services
                     p.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.Manual, "Inicializar Ruta");
             }
 
+            // Fase A: el repartidor entra "EnRuta" (jornada activa).
+            if (await _userRepository.GetUsuarioById(repartidorId) is Repartidor rep)
+                rep.IniciarJornada();
+
             await _auditoria.RegistrarAsync(
                 Domain.Models.TipoAccion.CambioEstadoEnvio,
                 $"Inicializó la ruta del día: {listos.Count} envíos pasaron a 'En Tránsito'",
                 contexto: $"Repartidor {repartidorId} fecha {fecha:yyyy-MM-dd}");
 
             return listos.Count;
+        }
+
+        // Fase A: el repartidor confirma que volvió a la sucursal → queda disponible
+        // para recibir nuevos envíos calendarizados del día.
+        public async Task CerrarJornadaAsync(Guid repartidorId)
+        {
+            if (await _userRepository.GetUsuarioById(repartidorId) is not Repartidor rep)
+                throw new InvalidOperationException("Repartidor no encontrado.");
+            rep.CerrarJornada();
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CambioEstadoEnvio,
+                "Repartidor cerró su jornada (volvió a la sucursal)",
+                contexto: $"Repartidor {repartidorId}");
+        }
+
+        // Fase A: si todas las paradas del repartidor para esa fecha están finalizadas
+        // (Entregado/Cancelado), pasa a "Retornando" → deja de recibir envíos nuevos.
+        private async Task TalvezMarcarRetornandoAsync(Guid? repartidorId, DateTime? fecha)
+        {
+            if (!repartidorId.HasValue || !fecha.HasValue) return;
+            var paquetesDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId.Value, fecha.Value);
+            if (paquetesDia.Count == 0) return;
+            var todasFinalizadas = paquetesDia.All(p =>
+                p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado);
+            if (!todasFinalizadas) return;
+
+            if (await _userRepository.GetUsuarioById(repartidorId.Value) is Repartidor rep
+                && rep.EstadoJornada == Repartidor.EstadoJornadaRepartidor.EnRuta)
+            {
+                rep.MarcarRetornando();
+            }
         }
 
         // Cuando todos los paquetes del repartidor para esa fecha están "Cargados", pasa todos a "Listo para Salir".

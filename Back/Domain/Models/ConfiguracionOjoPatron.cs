@@ -5,13 +5,16 @@ namespace Back.Domain.Models
     public class ConfiguracionOjoPatron
     {
         public Guid Id { get; init; } = Guid.NewGuid();
+        // Épica D: umbral por provincia (lo configura el Gerente de esa provincia).
+        public string Provincia { get; private set; } = string.Empty;
         public double UmbralAlertness { get; private set; }
         public DateTime ActualizadoEn { get; private set; } = DateTime.UtcNow;
 
         private ConfiguracionOjoPatron() { }
 
-        public ConfiguracionOjoPatron(double umbralAlertness)
+        public ConfiguracionOjoPatron(string provincia, double umbralAlertness)
         {
+            Provincia = provincia;
             Actualizar(umbralAlertness);
         }
 

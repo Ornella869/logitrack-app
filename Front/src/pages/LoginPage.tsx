@@ -43,6 +43,7 @@ const DEMO_PASSWORD = 'kjkszpj1234'
 //   onExpired: () => void
 // }>
 const demoUsers = [
+  { label: 'Gerente · Buenos Aires', email: 'gerente.bsas@logitrack.com', color: 'warning' as const },
   { label: 'Supervisor · Carlos', email: 'carlos.rodriguez@logitrack.com', color: 'error' as const },
   { label: 'Supervisor · Ana', email: 'ana.martinez@logitrack.com', color: 'error' as const },
   { label: 'Operador · Juan', email: 'juan.perez@logitrack.com', color: 'primary' as const },

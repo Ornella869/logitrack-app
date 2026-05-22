@@ -193,7 +193,9 @@ function App() {
             path="/app"
             element={
               user && !isRepartidorRole(user.role) ? (
-                user.role === 'operador' ? <Navigate to="/envios" replace /> : <Dashboard />
+                user.role === 'operador' ? <Navigate to="/envios" replace />
+                  : user.role === 'gerente' ? <Navigate to="/sucursales" replace />
+                  : <Dashboard />
               ) : (
                 <Navigate to="/access-denied" replace />
               )
@@ -286,32 +288,33 @@ function App() {
               )
             }
           />
+          {/* Épica D: sucursales las gestiona el Gerente (por provincia) */}
           <Route
             path="/sucursales"
             element={
-              user && user.role === 'administrador' ? (
+              user && user.role === 'gerente' ? (
                 <SucursalesPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )
             }
           />
-          {/* G1L-86/87/88: Gestión de tarifas y zonas peligrosas (Admin) */}
+          {/* G1L-86/87/88 + Épica D: tarifas y zonas peligrosas las gestiona el Gerente */}
           <Route
             path="/tarifas"
             element={
-              user && user.role === 'administrador' ? (
+              user && user.role === 'gerente' ? (
                 <TarifasPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )
             }
           />
-          {/* G1L-61: Configuración del Ojo del Patrón (Admin) */}
+          {/* G1L-61 + Épica D: umbral del Ojo del Patrón lo gestiona el Gerente */}
           <Route
             path="/ojo-patron"
             element={
-              user && user.role === 'administrador' ? (
+              user && user.role === 'gerente' ? (
                 <OjoPatronConfigPage />
               ) : (
                 <Navigate to="/access-denied" replace />

@@ -97,24 +97,34 @@ namespace Back.Controllers
             await _service.RegistrarPruebaAsync(
                 userId.Value, "Repartidor",
                 request.ScoreNeu, request.ScoreHap, request.ScoreSad, request.ScoreAng,
-                request.AlertnessScore, request.Intentos, request.Resultado);
+                request.AlertnessScore, request.Intentos, request.Resultado, request.Momento);
             return Ok();
         }
 
-        /// <summary>Configuración del umbral (Administrador la edita; cualquier rol interno la lee).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        /// <summary>Fase B: indica si para entregar este paquete se requiere la prueba de mitad de recorrido.</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpGet("prueba-mitad-requerida/{paqueteId:guid}")]
+        public async Task<ActionResult<object>> PruebaMitadRequerida(Guid paqueteId)
+            => Ok(new { requerida = await _service.RequierePruebaMitadAsync(paqueteId) });
+
+        /// <summary>Configuración del umbral de la provincia del usuario logueado.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
         [HttpGet("configuracion")]
         public async Task<ActionResult<ConfiguracionOjoPatron>> GetConfiguracion()
-            => Ok(await _service.GetConfiguracionAsync());
+        {
+            var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
+            return Ok(await _service.GetConfiguracionAsync(provincia));
+        }
 
-        /// <summary>Ajusta el umbral mínimo de activación vocal (solo Administrador).</summary>
-        [Authorize(Roles = Roles.Administrador)]
+        /// <summary>Ajusta el umbral de activación vocal de la provincia del Gerente.</summary>
+        [Authorize(Roles = Roles.Gerente)]
         [HttpPut("configuracion")]
         public async Task<ActionResult<ConfiguracionOjoPatron>> ActualizarConfiguracion([FromBody] ConfiguracionOjoPatronRequest request)
         {
             try
             {
-                return Ok(await _service.ActualizarConfiguracionAsync(request.UmbralAlertness));
+                var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
+                return Ok(await _service.ActualizarConfiguracionAsync(provincia, request.UmbralAlertness));
             }
             catch (InvalidOperationException ex)
             {
@@ -132,6 +142,7 @@ namespace Back.Controllers
         public double AlertnessScore { get; set; }
         public int Intentos { get; set; }
         public Domain.Models.ResultadoPruebaOjoPatron Resultado { get; set; }
+        public Domain.Models.MomentoPruebaOjoPatron Momento { get; set; } = Domain.Models.MomentoPruebaOjoPatron.Inicio;
     }
 
     public class ConfiguracionOjoPatronRequest
