@@ -20,7 +20,7 @@ export default function SucursalesPage() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Gestioná las sucursales de tu provincia{user.provincia ? ` (${user.provincia})` : ''}
       </Typography>
-      <BranchManagement gerenteProvincia={user.provincia} />
+      <BranchManagement gerenteProvincia={user.provincia ?? undefined} />
     </Box>
   )
 }

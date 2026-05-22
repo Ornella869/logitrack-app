@@ -14,6 +14,7 @@ import ReportesPage from './pages/ReportesPage'
 import TarifasPage from './pages/TarifasPage'
 import OjoPatronConfigPage from './pages/OjoPatronConfigPage'
 import AlertasPage from './pages/AlertasPage'
+import IncidenciasPage from './pages/IncidenciasPage'
 import SucursalesPage from './pages/SucursalesPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
@@ -316,6 +317,18 @@ function App() {
             element={
               user && user.role === 'gerente' ? (
                 <OjoPatronConfigPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+
+          {/* G1L-91: Dashboard de incidencias (Supervisor) */}
+          <Route
+            path="/incidencias"
+            element={
+              user && user.role === 'supervisor' ? (
+                <IncidenciasPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

@@ -1,4 +1,19 @@
 import { useState, useEffect } from 'react'
+import axios from 'axios'
+
+function extractApiError(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data
+    if (typeof data === 'string' && data.trim()) return data.trim()
+    if (data && typeof data === 'object') {
+      const d = data as Record<string, unknown>
+      for (const key of ['mensaje', 'message', 'Mensaje', 'Message', 'detail', 'title', 'error']) {
+        if (typeof d[key] === 'string' && (d[key] as string).trim()) return (d[key] as string).trim()
+      }
+    }
+  }
+  return fallback
+}
 import {
   Dialog,
   DialogTitle,
@@ -48,6 +63,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   const isEdit = mode === 'edit'
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitError, setSubmitError] = useState('')
   const [postalChecking, setPostalChecking] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState<string>('')
@@ -266,6 +282,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   }
 
   const handleSubmit = async () => {
+    setSubmitError('')
     if (!(await validateForm())) return
     const origin = branches.find((b) => b.id === selectedBranchId)
     if (!origin) return
@@ -313,7 +330,12 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       })
       onClose()
     } catch (error) {
-      console.error('Error al crear envío:', error)
+      setSubmitError(
+        extractApiError(
+          error,
+          'No podés registrar envíos con destino en otra provincia. Solo se permiten envíos dentro de la provincia de tu sucursal.',
+        ),
+      )
     } finally {
       setLoading(false)
     }
@@ -329,6 +351,11 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
           {hasErrors && (
             <Alert severity="error" sx={{ mb: 1 }}>
               Revisá los campos marcados en rojo.
+            </Alert>
+          )}
+          {submitError && (
+            <Alert severity="error" sx={{ mb: 1 }} onClose={() => setSubmitError('')}>
+              {submitError}
             </Alert>
           )}
 

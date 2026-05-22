@@ -43,9 +43,11 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
 import { alertService } from '../services/alertService'
+import { incidenciaService } from '../services/incidenciaService'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import type { User } from '../types'
 import ChangePasswordDialog from './ChangePasswordDialog'
@@ -71,10 +73,20 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
   // G1L-84: contador de alertas para el badge del tab (solo Supervisor).
   const [alertasCount, setAlertasCount] = useState(0)
+  // G1L-91: contador de incidencias abiertas para el badge (solo Supervisor).
+  const [incidenciasCount, setIncidenciasCount] = useState(0)
 
   useEffect(() => {
     if (user.role !== 'supervisor') return
     void alertService.contar().then(setAlertasCount)
+  }, [user.role])
+
+  useEffect(() => {
+    if (user.role !== 'supervisor') return
+    setIncidenciasCount(incidenciaService.countAbiertas())
+    const handler = () => setIncidenciasCount(incidenciaService.countAbiertas())
+    window.addEventListener('logitrack:incidencias', handler)
+    return () => window.removeEventListener('logitrack:incidencias', handler)
   }, [user.role])
 
   const refreshNotifications = useCallback(() => {
@@ -511,6 +523,19 @@ function Layout({ user, onLogout }: LayoutProps) {
                 iconPosition="start"
                 label="Alertas"
                 value="/alertas"
+                sx={{ minHeight: 48, textTransform: 'none' }}
+              />
+            )}
+            {user.role === 'supervisor' && (
+              <Tab
+                icon={
+                  <Badge badgeContent={incidenciasCount > 0 ? incidenciasCount : undefined} color="error" max={9}>
+                    <ReportProblemIcon fontSize="small" />
+                  </Badge>
+                }
+                iconPosition="start"
+                label="Incidencias"
+                value="/incidencias"
                 sx={{ minHeight: 48, textTransform: 'none' }}
               />
             )}

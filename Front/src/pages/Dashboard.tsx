@@ -19,7 +19,9 @@ import Inventory2Icon from '@mui/icons-material/Inventory2'
 import GroupIcon from '@mui/icons-material/Group'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import { shipmentService } from '../services/shipmentService'
+import { incidenciaService } from '../services/incidenciaService'
 import type { Shipment, User } from '../types'
 import UsersManagement from '../components/UsersManagement'
 
@@ -36,10 +38,19 @@ function Dashboard() {
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [loading, setLoading] = useState(user.role === 'supervisor')
   const [error, setError] = useState('')
+  const [incidenciasAbiertas, setIncidenciasAbiertas] = useState(0)
 
   const isOperador = user.role === 'operador'
   const isSupervisor = user.role === 'supervisor'
   const isAdmin = user.role === 'administrador'
+
+  useEffect(() => {
+    if (!isSupervisor) return
+    setIncidenciasAbiertas(incidenciaService.countAbiertas())
+    const handler = () => setIncidenciasAbiertas(incidenciaService.countAbiertas())
+    window.addEventListener('logitrack:incidencias', handler)
+    return () => window.removeEventListener('logitrack:incidencias', handler)
+  }, [isSupervisor])
 
   useEffect(() => {
     if (!isSupervisor) {
@@ -109,6 +120,23 @@ function Dashboard() {
         <KpiCard label="En Tránsito" value={supervisorMetrics.enTransito.length} sub="Rutas activas" color="#2e7d32" icon={<LocalShippingIcon />} />
         <KpiCard label="Entregados (hoy)" value={supervisorMetrics.entregadosHoy.length} sub="Finalizados" color="#1565c0" icon={<CheckCircleIcon />} />
       </Grid>
+
+      {incidenciasAbiertas > 0 && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2, borderLeft: '4px solid #c62828' }}
+          icon={<ReportProblemIcon />}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/incidencias')}>
+              Ver incidencias
+            </Button>
+          }
+        >
+          <Typography variant="subtitle2" fontWeight={700}>
+            {incidenciasAbiertas === 1 ? 'Hay 1 incidencia abierta' : `Hay ${incidenciasAbiertas} incidencias abiertas`} reportadas por repartidores
+          </Typography>
+        </Alert>
+      )}
 
       {supervisorMetrics.pendientes.length > 0 && (
         <Alert severity="warning" sx={{ mb: 3, borderLeft: '4px solid #ed6c02' }} icon={<HourglassTopIcon />}>

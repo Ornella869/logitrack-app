@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Card,
@@ -14,7 +15,9 @@ import {
   DialogContentText,
   DialogTitle,
   Grid,
+  IconButton,
   MenuItem,
+  Paper,
   Select,
   Stack,
   Tab,
@@ -25,6 +28,7 @@ import {
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import RouteIcon from '@mui/icons-material/Route'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
@@ -37,6 +41,8 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import DirectionsIcon from '@mui/icons-material/Directions'
 import GavelIcon from '@mui/icons-material/Gavel'
+import ChatIcon from '@mui/icons-material/Chat'
+import SendIcon from '@mui/icons-material/Send'
 import { shipmentService } from '../../services/shipmentService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
 import { ojoPatronService } from '../../services/ojoPatronService'
@@ -45,6 +51,10 @@ import RouteMap from '../../components/RouteMap'
 import QrCameraScanner from '../../components/QrCameraScanner'
 import ConsentimientoOjoPatronDialog from '../../components/ConsentimientoOjoPatronDialog'
 import PruebaAcusticaDialog from '../../components/PruebaAcusticaDialog'
+import ReportarIncidenteDialog from '../../components/ReportarIncidenteDialog'
+import ParadaAccionDialog from '../../components/ParadaAccionDialog'
+import { incidenciaService } from '../../services/incidenciaService'
+import { mensajeIncidenciaService, type MensajeIncidencia } from '../../services/mensajeIncidenciaService'
 import { buildMapsUrl } from '../../utils/mapsUrl'
 import type { Shipment, User } from '../../types'
 
@@ -160,6 +170,82 @@ export default function RepartidorDashboard() {
   const [confirmInicioOpen, setConfirmInicioOpen] = useState(false)
   const [inicioFeedback, setInicioFeedback] = useState<{ severity: 'success' | 'error'; message: string } | null>(null)
   const [paradaEnCurso, setParadaEnCurso] = useState<{ id: string; address: string; name: string } | null>(null)
+
+  // Reportar incidente — chatbot Tracky
+  const [incidenteOpen, setIncidenteOpen] = useState(false)
+
+  // Parada acción dialog (QR + demora rápida para próxima parada)
+  const [paradaAccionOpen, setParadaAccionOpen] = useState(false)
+
+  // Mensajería interna: mensajes del supervisor sobre incidencias
+  const [mensajesOpen, setMensajesOpen] = useState(false)
+  const [mensajesUnread, setMensajesUnread] = useState(0)
+  const [mensajesIncidenciaId, setMensajesIncidenciaId] = useState<string | null>(null)
+  const [mensajesData, setMensajesData] = useState<MensajeIncidencia[]>([])
+  const [mensajesInput, setMensajesInput] = useState('')
+  const mensajesChatEndRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const computeUnread = () => {
+      const misIncidencias = incidenciaService.getAll()
+        .filter((i) => i.repartidorId === user.id)
+        .map((i) => i.id)
+      setMensajesUnread(mensajeIncidenciaService.countUnreadFromSupervisorForRepartidor(misIncidencias))
+    }
+    computeUnread()
+    window.addEventListener('logitrack:mensajes_incidencia', computeUnread)
+    window.addEventListener('logitrack:incidencias', computeUnread)
+    return () => {
+      window.removeEventListener('logitrack:mensajes_incidencia', computeUnread)
+      window.removeEventListener('logitrack:incidencias', computeUnread)
+    }
+  }, [user.id])
+
+  const openMensajes = () => {
+    const misIncidencias = incidenciaService.getAll().filter((i) => i.repartidorId === user.id)
+    const incConMensajes = misIncidencias.find((i) =>
+      mensajeIncidenciaService.getByIncidencia(i.id).length > 0,
+    ) ?? misIncidencias[0] ?? null
+    if (!incConMensajes) return
+    setMensajesIncidenciaId(incConMensajes.id)
+    const msgs = mensajeIncidenciaService.getByIncidencia(incConMensajes.id)
+    setMensajesData(msgs)
+    mensajeIncidenciaService.markReadByRole(incConMensajes.id, 'repartidor')
+    setMensajesOpen(true)
+  }
+
+  const handleSendMensajeRepartidor = () => {
+    const texto = mensajesInput.trim()
+    if (!texto || !mensajesIncidenciaId) return
+    mensajeIncidenciaService.send(
+      {
+        incidenciaId: mensajesIncidenciaId,
+        de: user.id,
+        deNombre: user.name,
+        deRol: 'repartidor',
+        texto,
+      },
+      'supervisor',
+    )
+    setMensajesInput('')
+    const msgs = mensajeIncidenciaService.getByIncidencia(mensajesIncidenciaId)
+    setMensajesData(msgs)
+  }
+
+  useEffect(() => {
+    if (!mensajesOpen || !mensajesIncidenciaId) return
+    const refresh = () => {
+      const msgs = mensajeIncidenciaService.getByIncidencia(mensajesIncidenciaId)
+      setMensajesData(msgs)
+      mensajeIncidenciaService.markReadByRole(mensajesIncidenciaId, 'repartidor')
+    }
+    window.addEventListener('logitrack:mensajes_incidencia', refresh)
+    return () => window.removeEventListener('logitrack:mensajes_incidencia', refresh)
+  }, [mensajesOpen, mensajesIncidenciaId])
+
+  useEffect(() => {
+    mensajesChatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [mensajesData])
 
   // G1L-59 / G1L-60 / G1L-61: Ojo del Patrón.
   const [consentimientoAceptado, setConsentimientoAceptado] = useState<boolean | null>(null)
@@ -461,6 +547,45 @@ export default function RepartidorDashboard() {
         </Alert>
       )}
 
+      {/* Barra de tabs — siempre visible, "Reportar Incidente" abre el chatbot */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, v: number) => {
+            if (v === 2) { setIncidenteOpen(true); return }
+            setTab(v)
+          }}
+        >
+          <Tab label="🗺️ Mapa" />
+          <Tab label="📋 Mis paradas" />
+          <Tab
+            label={
+              <Stack direction="row" alignItems="center" spacing={0.6}>
+                <WarningAmberIcon sx={{ fontSize: 15 }} />
+                <span>Reportar Incidente</span>
+              </Stack>
+            }
+            sx={{
+              ml: 'auto',
+              color: '#c62828',
+              '&:hover': { color: '#b71c1c', bgcolor: 'rgba(198,40,40,0.06)' },
+              '&.Mui-selected': { color: '#c62828' },
+            }}
+          />
+          {mensajesUnread > 0 && (
+            <IconButton
+              size="small"
+              onClick={openMensajes}
+              sx={{ ml: 0.5, color: '#1565C0' }}
+            >
+              <Badge badgeContent={mensajesUnread} color="error">
+                <ChatIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          )}
+        </Tabs>
+      </Box>
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
       ) : paradas.length === 0 ? (
@@ -484,13 +609,6 @@ export default function RepartidorDashboard() {
             />
             <KpiCard label="Paradas restantes" value={paradas.length - metrics.entregadas} color="#5e35b1" icon={<AccessTimeIcon />} />
           </Grid>
-
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-              <Tab label="🗺️ Mapa" />
-              <Tab label="📋 Mis paradas" />
-            </Tabs>
-          </Box>
 
           {tab === 0 && (
             <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden' }}>
@@ -538,7 +656,7 @@ export default function RepartidorDashboard() {
                     variant="contained"
                     startIcon={<NavigationIcon />}
                     disabled={!proxima}
-                    onClick={() => proxima && navigate(`/shipment/${proxima.id}`)}
+                    onClick={() => proxima && setParadaAccionOpen(true)}
                   >
                     Navegar a próxima parada
                   </Button>
@@ -693,6 +811,101 @@ export default function RepartidorDashboard() {
           )}
         </>
       )}
+
+      {/* Chatbot Tracky — Reportar Incidente */}
+      <ReportarIncidenteDialog
+        open={incidenteOpen}
+        onClose={() => setIncidenteOpen(false)}
+        user={user}
+      />
+
+      {/* Próxima parada: QR + demora rápida */}
+      <ParadaAccionDialog
+        open={paradaAccionOpen}
+        parada={proxima}
+        onClose={() => setParadaAccionOpen(false)}
+        onScanSuccess={(feedback) => {
+          setQrFeedback(feedback)
+          setTimeout(() => setQrFeedback(null), 5000)
+        }}
+        onReload={() => void load(fechaRuta ?? undefined)}
+      />
+
+      {/* Mensajería interna: el repartidor responde al supervisor */}
+      <Dialog open={mensajesOpen} onClose={() => setMensajesOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <ChatIcon color="primary" />
+            <Typography variant="subtitle1" fontWeight={700}>Mensajes del Supervisor</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 1.5 }}>
+          <Box
+            sx={{
+              minHeight: 160, maxHeight: 300, overflowY: 'auto',
+              bgcolor: isDark ? 'rgba(0,0,0,0.2)' : '#fafafa',
+              borderRadius: 1.5, p: 1, mb: 1.5,
+              border: '1px solid', borderColor: 'divider',
+            }}
+          >
+            {mensajesData.length === 0 ? (
+              <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                Sin mensajes aún.
+              </Typography>
+            ) : (
+              <Stack spacing={0.8}>
+                {mensajesData.map((m) => {
+                  const isMine = m.deRol === 'repartidor'
+                  return (
+                    <Stack key={m.id} direction={isMine ? 'row-reverse' : 'row'} spacing={0.8} alignItems="flex-end">
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          maxWidth: '80%', px: 1.3, py: 0.8,
+                          borderRadius: isMine ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
+                          bgcolor: isMine ? '#1565C0' : (isDark ? 'rgba(255,255,255,0.07)' : '#e3f2fd'),
+                          color: isMine ? '#fff' : 'text.primary',
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.texto}</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 10, display: 'block', textAlign: isMine ? 'right' : 'left' }}>
+                          {m.deNombre} · {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </Paper>
+                    </Stack>
+                  )
+                })}
+                <div ref={mensajesChatEndRef} />
+              </Stack>
+            )}
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Responder al supervisor…"
+              value={mensajesInput}
+              onChange={(e) => setMensajesInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMensajeRepartidor() } }}
+              multiline
+              maxRows={3}
+            />
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleSendMensajeRepartidor}
+              disabled={!mensajesInput.trim()}
+              startIcon={<SendIcon />}
+              sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 1.5 }}
+            >
+              Enviar
+            </Button>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMensajesOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* G1L-59: modal de consentimiento del Ojo del Patrón. */}
       <ConsentimientoOjoPatronDialog

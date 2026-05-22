@@ -1,0 +1,735 @@
+import { useEffect, useRef, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material'
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
+import SearchIcon from '@mui/icons-material/Search'
+import PersonIcon from '@mui/icons-material/Person'
+import HistoryIcon from '@mui/icons-material/History'
+import CommentIcon from '@mui/icons-material/Comment'
+import LocalShippingIcon from '@mui/icons-material/LocalShipping'
+import CancelIcon from '@mui/icons-material/Cancel'
+import RepeatIcon from '@mui/icons-material/Repeat'
+import ChatIcon from '@mui/icons-material/Chat'
+import SendIcon from '@mui/icons-material/Send'
+import {
+  incidenciaService,
+  type EstadoIncidencia,
+  type Incidencia,
+} from '../services/incidenciaService'
+import { mensajeIncidenciaService, type MensajeIncidencia } from '../services/mensajeIncidenciaService'
+import { shipmentService } from '../services/shipmentService'
+import type { Shipment, User } from '../types'
+
+const TIPO_INFO: Record<string, { label: string; emoji: string; color: string }> = {
+  accident: { label: 'Accidente de tráfico', emoji: '🚗', color: '#c62828' },
+  mechanical: { label: 'Problema mecánico', emoji: '🔧', color: '#e65100' },
+  danger: { label: 'Zona de riesgo', emoji: '⚠️', color: '#f57f17' },
+  health: { label: 'Problema de salud', emoji: '😷', color: '#6a1b9a' },
+  delivery: { label: 'Problema de entrega', emoji: '📦', color: '#1565c0' },
+  otro: { label: 'Otro', emoji: '📋', color: '#37474f' },
+}
+
+const ESTADO_INFO: Record<EstadoIncidencia, { color: string; bg: string; label: string }> = {
+  Abierta: { color: '#c62828', bg: '#fdecea', label: 'Abierta' },
+  'En Revisión': { color: '#e65100', bg: '#fff3e0', label: 'En Revisión' },
+  Resuelta: { color: '#2e7d32', bg: '#e8f5e9', label: 'Resuelta' },
+}
+
+function EstadoChip({ estado }: { estado: EstadoIncidencia }) {
+  const info = ESTADO_INFO[estado]
+  return (
+    <Chip
+      label={info.label}
+      size="small"
+      sx={{
+        bgcolor: info.bg,
+        color: info.color,
+        fontWeight: 700,
+        border: `1px solid ${info.color}`,
+        fontSize: 11,
+      }}
+    />
+  )
+}
+
+function formatFecha(iso: string): string {
+  return new Date(iso).toLocaleString('es-AR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+interface DetalleDialogProps {
+  incidencia: Incidencia
+  supervisor: User
+  onClose: () => void
+  onUpdated: (inc: Incidencia) => void
+}
+
+function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: DetalleDialogProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const [nuevoEstado, setNuevoEstado] = useState<EstadoIncidencia>(inc.estado)
+  const [observacion, setObservacion] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const [paradasData, setParadasData] = useState<Shipment[]>([])
+  const [paradasLoading, setParadasLoading] = useState(false)
+  const [paradasAccion, setParadasAccion] = useState<Record<string, 'loading' | 'done' | 'error'>>({})
+
+  const tipoInfo = TIPO_INFO[inc.tipo] ?? TIPO_INFO.otro!
+
+  useEffect(() => {
+    if (!inc.paradasAfectadas?.length) return
+    setParadasLoading(true)
+    Promise.all(inc.paradasAfectadas.map((id) => shipmentService.getShipmentTracking(id)))
+      .then((results) => setParadasData(results.filter((s): s is Shipment => s !== null)))
+      .catch(() => undefined)
+      .finally(() => setParadasLoading(false))
+  }, [inc.paradasAfectadas])
+
+  // Chat supervisor → repartidor
+  const [mensajes, setMensajes] = useState<MensajeIncidencia[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const load = () => {
+      const msgs = mensajeIncidenciaService.getByIncidencia(inc.id)
+      setMensajes(msgs)
+      mensajeIncidenciaService.markReadByRole(inc.id, 'supervisor')
+    }
+    load()
+    window.addEventListener('logitrack:mensajes_incidencia', load)
+    return () => window.removeEventListener('logitrack:mensajes_incidencia', load)
+  }, [inc.id])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [mensajes])
+
+  const handleSendMensaje = () => {
+    const texto = chatInput.trim()
+    if (!texto) return
+    mensajeIncidenciaService.send(
+      {
+        incidenciaId: inc.id,
+        de: supervisor.id,
+        deNombre: supervisor.name,
+        deRol: 'supervisor',
+        texto,
+      },
+      inc.repartidorId,
+    )
+    setChatInput('')
+  }
+
+  const handleReprogramar = async (shipmentId: string) => {
+    setParadasAccion((prev) => ({ ...prev, [shipmentId]: 'loading' }))
+    const result = await shipmentService.cancelShipment(shipmentId, 'Incidente del repartidor — reprogramado por supervisor', 'Reagendar')
+    setParadasAccion((prev) => ({ ...prev, [shipmentId]: result.success ? 'done' : 'error' }))
+    if (result.success) {
+      setParadasData((prev) => prev.map((p) => p.id === shipmentId ? { ...p, status: 'Pendiente de calendarización' as const } : p))
+    }
+  }
+
+  const handleCancelar = async (shipmentId: string) => {
+    setParadasAccion((prev) => ({ ...prev, [shipmentId]: 'loading' }))
+    const result = await shipmentService.cancelShipment(shipmentId, 'Incidente del repartidor — cancelado por supervisor', 'Definitivo')
+    setParadasAccion((prev) => ({ ...prev, [shipmentId]: result.success ? 'done' : 'error' }))
+    if (result.success) {
+      setParadasData((prev) => prev.map((p) => p.id === shipmentId ? { ...p, status: 'Cancelado' as const } : p))
+    }
+  }
+
+  const handleGuardarEstado = () => {
+    setGuardando(true)
+    const updated = incidenciaService.cambiarEstado(inc.id, nuevoEstado, {
+      id: supervisor.id,
+      nombre: supervisor.name,
+    })
+    setGuardando(false)
+    if (updated) {
+      onUpdated(updated)
+      setFeedback(`Estado actualizado a "${nuevoEstado}" por ${supervisor.name}`)
+    }
+  }
+
+  const handleAgregarObservacion = () => {
+    if (!observacion.trim()) return
+    const updated = incidenciaService.agregarObservacion(inc.id, observacion.trim(), {
+      id: supervisor.id,
+      nombre: supervisor.name,
+    })
+    if (updated) {
+      onUpdated(updated)
+      setObservacion('')
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Box sx={{ fontSize: 24 }}>{tipoInfo.emoji}</Box>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700}>
+              {tipoInfo.label}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formatFecha(inc.fechaReporte)} · ID: {inc.id.slice(-8)}
+            </Typography>
+          </Box>
+          <Box sx={{ ml: 'auto' }}>
+            <EstadoChip estado={inc.estado} />
+          </Box>
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent dividers>
+        <Stack spacing={2.5}>
+          {/* Datos del repartidor */}
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.5 }}>
+              <PersonIcon fontSize="small" color="action" />
+              <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
+                Repartidor
+              </Typography>
+            </Stack>
+            <Typography variant="body2" fontWeight={600}>{inc.repartidorNombre}</Typography>
+            <Typography variant="caption" color="text.secondary">ID: {inc.repartidorId}</Typography>
+          </Box>
+
+          {/* Descripción */}
+          <Box>
+            <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase" sx={{ display: 'block', mb: 0.5 }}>
+              Descripción del Incidente
+            </Typography>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.5,
+                bgcolor: isDark ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e0e0e0',
+              }}
+            >
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{inc.descripcion}</Typography>
+            </Paper>
+          </Box>
+
+          {/* Cambio de estado */}
+          <Box>
+            <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase" sx={{ display: 'block', mb: 1 }}>
+              Cambiar Estado
+            </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Nuevo estado</InputLabel>
+                <Select
+                  value={nuevoEstado}
+                  label="Nuevo estado"
+                  onChange={(e) => setNuevoEstado(e.target.value as EstadoIncidencia)}
+                >
+                  <MenuItem value="Abierta">🔴 Abierta</MenuItem>
+                  <MenuItem value="En Revisión">🟠 En Revisión</MenuItem>
+                  <MenuItem value="Resuelta">🟢 Resuelta</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleGuardarEstado}
+                disabled={guardando || nuevoEstado === inc.estado}
+              >
+                {guardando ? <CircularProgress size={16} color="inherit" /> : 'Guardar'}
+              </Button>
+            </Stack>
+            {feedback && (
+              <Alert severity="success" sx={{ mt: 1, py: 0.5 }} icon={<CheckCircleIcon fontSize="small" />}>
+                {feedback}
+              </Alert>
+            )}
+          </Box>
+
+          {/* Historial de estados */}
+          {inc.historialEstados.length > 0 && (
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
+                <HistoryIcon fontSize="small" color="action" />
+                <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
+                  Historial de Estados
+                </Typography>
+              </Stack>
+              <Stack spacing={0.8}>
+                {inc.historialEstados.map((h, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      px: 1.5, py: 0.8,
+                      borderRadius: 1.5,
+                      bgcolor: isDark ? 'rgba(255,255,255,0.04)' : '#f5f5f5',
+                      borderLeft: `3px solid ${ESTADO_INFO[h.estadoNuevo]?.color ?? '#757575'}`,
+                    }}
+                  >
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        → <strong>{h.estadoNuevo}</strong> · {h.porNombre}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatFecha(h.fecha)}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {/* Envíos afectados — G1L-92 */}
+          {(inc.paradasAfectadas?.length ?? 0) > 0 && (
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
+                <LocalShippingIcon fontSize="small" color="action" />
+                <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
+                  Envíos afectados ({inc.paradasAfectadas!.length})
+                </Typography>
+              </Stack>
+              {paradasLoading ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CircularProgress size={14} />
+                  <Typography variant="caption" color="text.secondary">Cargando envíos…</Typography>
+                </Stack>
+              ) : (
+                <Stack spacing={1}>
+                  {paradasData.map((p) => {
+                    const accion = paradasAccion[p.id]
+                    const isDone = accion === 'done'
+                    const isLoading = accion === 'loading'
+                    return (
+                      <Box
+                        key={p.id}
+                        sx={{
+                          px: 1.5, py: 1,
+                          borderRadius: 1.5,
+                          bgcolor: isDark ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
+                          border: '1px solid',
+                          borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e0e0e0',
+                        }}
+                      >
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={0.5}>
+                          <Box>
+                            <Typography variant="body2" fontWeight={600}>{p.receiver.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{p.receiver.address}, {p.receiver.city}</Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">Estado: {p.status}</Typography>
+                          </Box>
+                          {!isDone && (
+                            <Stack direction="row" spacing={0.7} flexWrap="wrap" useFlexGap>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                startIcon={isLoading ? <CircularProgress size={12} /> : <RepeatIcon />}
+                                disabled={isLoading || p.status === 'Pendiente de calendarización' || p.status === 'Cancelado'}
+                                onClick={() => void handleReprogramar(p.id)}
+                                sx={{ fontSize: 11 }}
+                              >
+                                Reprogramar
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                startIcon={isLoading ? <CircularProgress size={12} /> : <CancelIcon />}
+                                disabled={isLoading || p.status === 'Cancelado'}
+                                onClick={() => void handleCancelar(p.id)}
+                                sx={{ fontSize: 11 }}
+                              >
+                                Cancelar
+                              </Button>
+                            </Stack>
+                          )}
+                          {isDone && (
+                            <Chip label="Acción aplicada" size="small" color="success" />
+                          )}
+                          {accion === 'error' && (
+                            <Chip label="Error" size="small" color="error" />
+                          )}
+                        </Stack>
+                      </Box>
+                    )
+                  })}
+                </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* Observaciones */}
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
+              <CommentIcon fontSize="small" color="action" />
+              <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
+                Observaciones Internas ({inc.observaciones.length})
+              </Typography>
+            </Stack>
+            {inc.observaciones.length === 0 ? (
+              <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                Sin observaciones aún.
+              </Typography>
+            ) : (
+              <Stack spacing={0.8}>
+                {inc.observaciones.map((o, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      px: 1.5, py: 0.8,
+                      borderRadius: 1.5,
+                      bgcolor: isDark ? 'rgba(25,118,210,0.08)' : '#e3f2fd',
+                      border: '1px solid',
+                      borderColor: isDark ? 'rgba(25,118,210,0.2)' : '#bbdefb',
+                    }}
+                  >
+                    <Typography variant="body2">{o.texto}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {o.supervisorNombre} · {formatFecha(o.fecha)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+            <Stack direction="row" spacing={1} sx={{ mt: 1.2 }}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Agregar observación interna…"
+                value={observacion}
+                onChange={(e) => setObservacion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAgregarObservacion() } }}
+                multiline
+                maxRows={3}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleAgregarObservacion}
+                disabled={!observacion.trim()}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Agregar
+              </Button>
+            </Stack>
+          </Box>
+
+          {/* Mensajería interna supervisor ↔ repartidor */}
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
+              <ChatIcon fontSize="small" color="action" />
+              <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase">
+                Chat con repartidor
+              </Typography>
+            </Stack>
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#e0e0e0',
+                borderRadius: 2,
+                bgcolor: isDark ? 'rgba(0,0,0,0.2)' : '#fafafa',
+                maxHeight: 240,
+                overflowY: 'auto',
+                p: 1.2,
+                mb: 1,
+              }}
+            >
+              {mensajes.length === 0 ? (
+                <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                  Sin mensajes aún. Iniciá la conversación.
+                </Typography>
+              ) : (
+                <Stack spacing={0.8}>
+                  {mensajes.map((m) => {
+                    const isSuper = m.deRol === 'supervisor'
+                    return (
+                      <Stack key={m.id} direction={isSuper ? 'row-reverse' : 'row'} spacing={0.8} alignItems="flex-end">
+                        <Box
+                          sx={{
+                            maxWidth: '78%',
+                            px: 1.4,
+                            py: 0.8,
+                            borderRadius: isSuper ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
+                            bgcolor: isSuper
+                              ? (isDark ? '#0d47a1' : '#1565C0')
+                              : (isDark ? 'rgba(255,255,255,0.07)' : '#e8f5e9'),
+                            color: isSuper ? '#fff' : 'text.primary',
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                            {m.texto}
+                          </Typography>
+                          <Typography variant="caption" sx={{ opacity: 0.65, fontSize: 10, display: 'block', textAlign: isSuper ? 'right' : 'left' }}>
+                            {m.deNombre} · {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    )
+                  })}
+                  <div ref={chatEndRef} />
+                </Stack>
+              )}
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder={`Escribir a ${inc.repartidorNombre}…`}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMensaje() } }}
+                multiline
+                maxRows={3}
+              />
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleSendMensaje}
+                disabled={!chatInput.trim()}
+                startIcon={<SendIcon />}
+                sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 1.5 }}
+              >
+                Enviar
+              </Button>
+            </Stack>
+          </Box>
+        </Stack>
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={onClose}>Cerrar</Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+export default function IncidenciasPage() {
+  const user = useOutletContext<User>()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
+  const [incidencias, setIncidencias] = useState<Incidencia[]>([])
+  const [filtroEstado, setFiltroEstado] = useState<EstadoIncidencia | 'Todas'>('Todas')
+  const [busqueda, setBusqueda] = useState('')
+  const [detalle, setDetalle] = useState<Incidencia | null>(null)
+
+  const cargar = () => setIncidencias(incidenciaService.getAll())
+
+  useEffect(() => {
+    cargar()
+    const handler = () => cargar()
+    window.addEventListener('logitrack:incidencias', handler)
+    return () => window.removeEventListener('logitrack:incidencias', handler)
+  }, [])
+
+  const incidenciasFiltradas = incidencias.filter((inc) => {
+    const matchEstado = filtroEstado === 'Todas' || inc.estado === filtroEstado
+    const q = busqueda.toLowerCase()
+    const matchBusqueda = !q || inc.repartidorNombre.toLowerCase().includes(q) || inc.tipoLabel.toLowerCase().includes(q) || inc.descripcion.toLowerCase().includes(q)
+    return matchEstado && matchBusqueda
+  })
+
+  const counts = {
+    total: incidencias.length,
+    abiertas: incidencias.filter((i) => i.estado === 'Abierta').length,
+    enRevision: incidencias.filter((i) => i.estado === 'En Revisión').length,
+    resueltas: incidencias.filter((i) => i.estado === 'Resuelta').length,
+  }
+
+  return (
+    <Box>
+      {/* Header */}
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        sx={{ mb: 3, gap: 2 }}
+      >
+        <Box>
+          <Typography variant="h4" fontWeight={700}>
+            <ReportProblemIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#c62828' }} />
+            Gestión de Incidencias
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Panel centralizado de incidentes reportados por repartidores
+          </Typography>
+        </Box>
+      </Stack>
+
+      {/* KPIs */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={6} md={3}>
+          <Card variant="outlined" sx={{ borderLeft: '4px solid #757575' }}>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">Total</Typography>
+              <Typography variant="h4" fontWeight={700}>{counts.total}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={6} md={3}>
+          <Card variant="outlined" sx={{ borderLeft: '4px solid #c62828' }}>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">Abiertas</Typography>
+              <Typography variant="h4" fontWeight={700} color="#c62828">{counts.abiertas}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={6} md={3}>
+          <Card variant="outlined" sx={{ borderLeft: '4px solid #e65100' }}>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">En Revisión</Typography>
+              <Typography variant="h4" fontWeight={700} color="#e65100">{counts.enRevision}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={6} md={3}>
+          <Card variant="outlined" sx={{ borderLeft: '4px solid #2e7d32' }}>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">Resueltas</Typography>
+              <Typography variant="h4" fontWeight={700} color="#2e7d32">{counts.resueltas}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Filtros */}
+      <Card variant="outlined" sx={{ mb: 2.5 }}>
+        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+            <TextField
+              size="small"
+              placeholder="Buscar por repartidor, tipo o descripción…"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} /> }}
+              sx={{ flex: 1 }}
+            />
+            <Stack direction="row" spacing={0.8} flexWrap="wrap">
+              {(['Todas', 'Abierta', 'En Revisión', 'Resuelta'] as const).map((f) => (
+                <Chip
+                  key={f}
+                  label={f}
+                  size="small"
+                  onClick={() => setFiltroEstado(f)}
+                  variant={filtroEstado === f ? 'filled' : 'outlined'}
+                  color={filtroEstado === f ? 'primary' : 'default'}
+                  sx={{ cursor: 'pointer' }}
+                />
+              ))}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {/* Lista de incidencias */}
+      {incidenciasFiltradas.length === 0 ? (
+        <Alert severity="info" icon={<CheckCircleIcon />}>
+          {incidencias.length === 0
+            ? 'No hay incidencias reportadas aún. Aparecerán aquí cuando un repartidor use el asistente Tracky.'
+            : 'No hay incidencias que coincidan con el filtro actual.'}
+        </Alert>
+      ) : (
+        <Stack spacing={1.5}>
+          {incidenciasFiltradas.map((inc) => {
+            const tipoInfo = TIPO_INFO[inc.tipo] ?? TIPO_INFO.otro!
+            return (
+              <Card
+                key={inc.id}
+                variant="outlined"
+                sx={{
+                  borderLeft: `4px solid ${tipoInfo.color}`,
+                  cursor: 'pointer',
+                  transition: 'box-shadow 0.15s',
+                  '&:hover': { boxShadow: 3 },
+                  bgcolor: isDark ? (inc.estado === 'Abierta' ? 'rgba(198,40,40,0.06)' : 'transparent') : (inc.estado === 'Abierta' ? '#fff8f8' : 'white'),
+                }}
+                onClick={() => setDetalle(inc)}
+              >
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Stack direction="row" alignItems="flex-start" spacing={1.5}>
+                    <Box sx={{ fontSize: 26, lineHeight: 1, pt: 0.2 }}>{tipoInfo.emoji}</Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={0.5}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          {tipoInfo.label}
+                        </Typography>
+                        <EstadoChip estado={inc.estado} />
+                      </Stack>
+                      <Stack direction="row" spacing={2} sx={{ mt: 0.4 }} flexWrap="wrap">
+                        <Typography variant="caption" color="text.secondary">
+                          <PersonIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
+                          {inc.repartidorNombre}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          <AccessTimeIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
+                          {formatFecha(inc.fechaReporte)}
+                        </Typography>
+                        {inc.observaciones.length > 0 && (
+                          <Typography variant="caption" color="text.secondary">
+                            <CommentIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.3 }} />
+                            {inc.observaciones.length} obs.
+                          </Typography>
+                        )}
+                      </Stack>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 0.4, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {inc.descripcion}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </Stack>
+      )}
+
+      {/* Dialog de detalle */}
+      {detalle && (
+        <DetalleDialog
+          incidencia={detalle}
+          supervisor={user}
+          onClose={() => setDetalle(null)}
+          onUpdated={(updated) => {
+            setDetalle(updated)
+            cargar()
+          }}
+        />
+      )}
+    </Box>
+  )
+}

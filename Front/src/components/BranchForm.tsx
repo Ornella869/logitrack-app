@@ -1,4 +1,19 @@
 import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function extractApiError(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data
+    if (typeof data === 'string' && data.trim()) return data.trim()
+    if (data && typeof data === 'object') {
+      const d = data as Record<string, unknown>
+      for (const key of ['mensaje', 'message', 'Mensaje', 'Message', 'detail', 'title', 'error']) {
+        if (typeof d[key] === 'string' && (d[key] as string).trim()) return (d[key] as string).trim()
+      }
+    }
+  }
+  return fallback
+}
 import {
   Dialog,
   DialogTitle,
@@ -211,8 +226,16 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
       onSaved(saved)
       setFormData(EMPTY_FORM)
       onClose()
-    } catch {
-      setErrors((prev) => ({ ...prev, _generic: 'Error al guardar la sucursal' }))
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        _generic: extractApiError(
+          err,
+          isEdit
+            ? 'No se pudo actualizar la sucursal. Verificá los datos e intentá de nuevo.'
+            : 'No podés crear sucursales en una provincia distinta a la tuya. Solo se permiten sucursales dentro de tu provincia asignada.',
+        ),
+      }))
     } finally {
       setLoading(false)
     }

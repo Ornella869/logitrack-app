@@ -85,6 +85,15 @@ const ACCION_COLORS: Record<string, { bg: string; color: string }> = {
   Otro: { bg: '#f5f5f5', color: '#555' },
 }
 
+function parsePruebaContexto(contexto: string | null): Record<string, string> | null {
+  if (!contexto) return null
+  try {
+    const obj = JSON.parse(contexto) as Record<string, unknown>
+    if (typeof obj === 'object') return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, String(v)]))
+  } catch { /* plain string — not JSON */ }
+  return null
+}
+
 const ROL_COLORS: Record<string, string> = {
   Supervisor: '#ed6c02',
   Operador: '#0288d1',
@@ -271,11 +280,32 @@ export default function AuditoriaPage() {
                             )}
                           </Stack>
                           <Typography variant="body2" sx={{ mt: 0.3 }}>{log.descripcion}</Typography>
-                          {log.contexto && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
-                              {log.contexto}
-                            </Typography>
-                          )}
+                          {log.contexto && (() => {
+                            if (log.accion === 'PruebaOjoDelPatron') {
+                              const parsed = parsePruebaContexto(log.contexto)
+                              if (parsed) {
+                                const fields = [
+                                  parsed.AlertnessScore && `Activación vocal: ${(parseFloat(parsed.AlertnessScore) * 100).toFixed(0)}%`,
+                                  parsed.ScoreNeu && `Neu: ${(parseFloat(parsed.ScoreNeu) * 100).toFixed(0)}%`,
+                                  parsed.ScoreHap && `Ale: ${(parseFloat(parsed.ScoreHap) * 100).toFixed(0)}%`,
+                                  parsed.ScoreSad && `Tri: ${(parseFloat(parsed.ScoreSad) * 100).toFixed(0)}%`,
+                                  parsed.ScoreAng && `Eno: ${(parseFloat(parsed.ScoreAng) * 100).toFixed(0)}%`,
+                                  parsed.Resultado && `Resultado: ${parsed.Resultado === '0' ? 'Aprobada' : 'Rechazada'}`,
+                                  parsed.Intentos && `Intentos: ${parsed.Intentos}`,
+                                ].filter(Boolean).join(' · ')
+                                return (
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3, fontFamily: 'monospace' }}>
+                                    {fields || log.contexto}
+                                  </Typography>
+                                )
+                              }
+                            }
+                            return (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
+                                {log.contexto}
+                              </Typography>
+                            )
+                          })()}
                         </Box>
                       </Stack>
                     )

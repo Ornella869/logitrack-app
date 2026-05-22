@@ -656,6 +656,13 @@ function ShipmentDetail() {
         </Card>
       )}
 
+      {/* Aviso de solo lectura para el Operador cuando el envío ya fue asignado a un vehículo */}
+      {isOperador && shipment.status === 'Asignado a vehículo' && !canEdit && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          El envío ya fue asignado a un vehículo y no puede modificarse.
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
         {/* Información general */}
         <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 3 : undefined }}>
