@@ -62,8 +62,11 @@ namespace Back.Infrastructure.Database
             // Portal cliente: cuenta demo para probar el flujo de incidencias públicas.
             await AsegurarClientePortalDemoAsync();
 
-            // Guard de idempotencia: si ya hay datos, no duplicar.
-            if (await _context.Usuarios.AnyAsync())
+            // Guard de idempotencia: verificamos si el bulk seed ya corrió comprobando
+            // la existencia de Operadores (solo se crean en la fase masiva de abajo).
+            // NO usamos AnyAsync() sobre todos los Usuarios porque el Gerente y UsuarioPortal
+            // ya se crearon arriba y harían que el guard siempre cortara el seeder.
+            if (await _context.Usuarios.OfType<Operador>().AnyAsync())
             {
                 return;
             }
@@ -73,54 +76,54 @@ namespace Back.Infrastructure.Database
             _context.Usuarios.AddRange(usuariosEspecificos);
 
             // Generar usuarios aleatorios adicionales
-            List<Operador> operadores = UsuarioGenerator.GenerarOperadores(config.CantidadOperadores);
-            List<Supervisor> supervisores = UsuarioGenerator.GenerarSupervisores(config.CantidadSupervisores);
-            List<Repartidor> repartidores = UsuarioGenerator.GenerarRepartidores(config.CantidadRepartidores);
+            List<Operador> operadores = UsuarioGenerator.GenerarOperadores(3);
+            List<Supervisor> supervisores = UsuarioGenerator.GenerarSupervisores(3);
+            List<Repartidor> repartidores = UsuarioGenerator.GenerarRepartidores(3);
 
             _context.Usuarios.AddRange([.. operadores, .. supervisores, .. repartidores]);
 
-            // Por ahora una única sucursal de demo. El admin puede eliminarla y crear la suya.
-            _context.Sucursales.Add(new Sucursal(
-                "Sucursal Centro",
-                "Av. Corrientes 1234",
-                "CABA",
-                "1043",
-                "011-4000-0000"
-            ));
+            // // Por ahora una única sucursal de demo. El admin puede eliminarla y crear la suya.
+            // _context.Sucursales.Add(new Sucursal(
+            //     "Sucursal Centro",
+            //     "Av. Corrientes 1234",
+            //     "CABA",
+            //     "1043",
+            //     "011-4000-0000"
+            // ));
 
-            // Generar vehículos específicos (establecidos)
-            var vehiculosEspecificos = PaquetesGenerator.GenerarVehiculosEspecificos();
-            _context.Vehiculos.AddRange(vehiculosEspecificos);
+            // // Generar vehículos específicos (establecidos)
+            // var vehiculosEspecificos = PaquetesGenerator.GenerarVehiculosEspecificos();
+            // _context.Vehiculos.AddRange(vehiculosEspecificos);
 
-            // Generar vehículos aleatorios adicionales
-            var vehiculos = PaquetesGenerator.GenerarVehiculos(config.CantidadVehiculos);
+            // // Generar vehículos aleatorios adicionales
+            // var vehiculos = PaquetesGenerator.GenerarVehiculos(config.CantidadVehiculos);
 
-            var paquetes = PaquetesGenerator.GenerarPaquetes(config.CantidadPaquetes);
+            // var paquetes = PaquetesGenerator.GenerarPaquetes(config.CantidadPaquetes);
 
-            var rutas = RutasGenerator.GenerarRutas(paquetes, repartidores, vehiculos);
+            // var rutas = RutasGenerator.GenerarRutas(paquetes, repartidores, vehiculos);
 
-            RutaRandomizerManager.Randomizar(rutas);
+            // RutaRandomizerManager.Randomizar(rutas);
 
-            // Generar paquetes específicos y crear una ruta con ellos
-            var paquetesEspecificos = PaquetesGenerator.GenerarPaquetesEspecificos();
-            _context.Paquetes.AddRange(paquetesEspecificos);
+            // // Generar paquetes específicos y crear una ruta con ellos
+            // var paquetesEspecificos = PaquetesGenerator.GenerarPaquetesEspecificos();
+            // _context.Paquetes.AddRange(paquetesEspecificos);
 
-            // Asignar ruta específica al repartidor luis.lopez con vehículo específico
-            var repartidorLuis = usuariosEspecificos.FirstOrDefault(u => u.Email == "luis.lopez@logitrack.com") as Repartidor;
-            var vehiculoEspecifico = vehiculosEspecificos.FirstOrDefault(v => v.Patente == "ABC123"); // Usar el primer vehículo específico
+            // // Asignar ruta específica al repartidor luis.lopez con vehículo específico
+            // var repartidorLuis = usuariosEspecificos.FirstOrDefault(u => u.Email == "luis.lopez@logitrack.com") as Repartidor;
+            // var vehiculoEspecifico = vehiculosEspecificos.FirstOrDefault(v => v.Patente == "ABC123"); // Usar el primer vehículo específico
 
-            if (repartidorLuis != null && vehiculoEspecifico != null)
-            {
-                var rutaEspecifica = new Ruta(repartidorLuis, vehiculoEspecifico);
-                var paquetesPendientes = paquetesEspecificos.Where(p => p.EstaPendienteDeCalendarizacion).ToList();
-                var fechaRuta = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
-                paquetesPendientes.ForEach(p => p.AsignarParaCalendarizacion(repartidorLuis.Id, fechaRuta));
-                rutaEspecifica.AgregarPaquetes(paquetesPendientes);
-                rutas.Add(rutaEspecifica);
-            }
+            // if (repartidorLuis != null && vehiculoEspecifico != null)
+            // {
+            //     var rutaEspecifica = new Ruta(repartidorLuis, vehiculoEspecifico);
+            //     var paquetesPendientes = paquetesEspecificos.Where(p => p.EstaPendienteDeCalendarizacion).ToList();
+            //     var fechaRuta = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+            //     paquetesPendientes.ForEach(p => p.AsignarParaCalendarizacion(repartidorLuis.Id, fechaRuta));
+            //     rutaEspecifica.AgregarPaquetes(paquetesPendientes);
+            //     rutas.Add(rutaEspecifica);
+            // }
 
-            _context.Paquetes.AddRange([.. PaquetesGenerator.GenerarPaquetes(20)]);
-            _context.Rutas.AddRange(rutas);
+            // _context.Paquetes.AddRange([.. PaquetesGenerator.GenerarPaquetes(20)]);
+            // _context.Rutas.AddRange(rutas);
 
             await _context.SaveChangesAsync();
         }
@@ -326,7 +329,7 @@ namespace Back.Infrastructure.Database
                     destino,
                     PrioridadCalculator.CalcularPrioridad(peso, DistanciasService.CalcularDistancia(destino.Direccion.Ciudad)), // Prioridad calculada
                     DistanciasService.CalcularDistancia(GenerarCliente().Direccion.Ciudad)
-                    ,descripciones[_random.Next(descripciones.Count)]
+                    , descripciones[_random.Next(descripciones.Count)]
                 );
 
                 result.Add(paquete);
