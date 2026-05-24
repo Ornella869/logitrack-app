@@ -46,6 +46,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import KeyIcon from '@mui/icons-material/Key'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import CasinoIcon from '@mui/icons-material/Casino'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { generateTempPassword } from '../utils/passwordGenerator'
 import type { User, UserRole, UserEstado, Branch } from '../types'
 import { authService } from '../services/authService'
@@ -210,6 +211,12 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
     message: string
     severity: 'success' | 'error' | 'info' | 'warning'
   }>({ open: false, message: '', severity: 'success' })
+
+  const handleCopyEmail = (email: string) => {
+    void navigator.clipboard.writeText(email).then(() => {
+      showToast('Email copiado al portapapeles', 'info')
+    })
+  }
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [openBulkConfirm, setOpenBulkConfirm] = useState(false)
@@ -643,6 +650,19 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             >
               Repartidores
             </ToggleButton>
+            <ToggleButton
+              value="gerente"
+              sx={{
+                '&.Mui-selected': {
+                  color: isDark ? '#FFB74D' : '#E65100',
+                  bgcolor: isDark ? 'rgba(230,81,0,0.25)' : '#FFF3E0',
+                  borderColor: isDark ? '#FFB74D' : '#FFB74D',
+                },
+                '&.Mui-selected:hover': { bgcolor: isDark ? 'rgba(230,81,0,0.35)' : '#ffe0b2' },
+              }}
+            >
+              Gerentes
+            </ToggleButton>
           </ToggleButtonGroup>
 
           <ToggleButtonGroup
@@ -757,6 +777,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 <TableCell>Email</TableCell>
                 <TableCell>DNI</TableCell>
                 <TableCell>Rol</TableCell>
+                <TableCell>Sucursal / Provincia</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell align="center">Acciones</TableCell>
               </TableRow>
@@ -804,14 +825,32 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                        {user.email}
-                      </Typography>
+                      <Stack direction="row" alignItems="center" spacing={0.5}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                          {user.email}
+                        </Typography>
+                        <Tooltip title="Copiar email">
+                          <IconButton size="small" onClick={() => handleCopyEmail(user.email)} sx={{ p: 0.3, opacity: 0.5, '&:hover': { opacity: 1 } }}>
+                            <ContentCopyIcon sx={{ fontSize: 13 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{user.dni}</Typography>
                     </TableCell>
                     <TableCell><RoleChip role={user.role} /></TableCell>
+                    <TableCell>
+                      {user.role === 'gerente' && user.provincia ? (
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{user.provincia}</Typography>
+                      ) : user.sucursalId ? (
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                          {branches.find((b) => b.id === user.sucursalId)?.name ?? '—'}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.disabled" sx={{ fontSize: '0.8rem' }}>—</Typography>
+                      )}
+                    </TableCell>
                     <TableCell><EstadoChip activo={user.activo} estado={user.estado} /></TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">

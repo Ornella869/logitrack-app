@@ -53,14 +53,16 @@ namespace Back.Infrastructure.Database
 
         }
 
+        // Llamado siempre al arrancar (independiente de EnableDatabaseSeeder).
+        public async Task AsegurarUsuariosDemoAsync()
+        {
+            await AsegurarGerenteDemoAsync();
+            await AsegurarClientePortalDemoAsync();
+        }
+
         public async Task SeedAsync()
         {
             DatabaseSeederConfiguration config = _configuration.GetSection("DatabaseSeederConfiguration").Get<DatabaseSeederConfiguration>() ?? new DatabaseSeederConfiguration();
-
-            // Épica D: aseguramos la cuenta demo de Gerente incluso si la BD ya tiene datos.
-            await AsegurarGerenteDemoAsync();
-            // Portal cliente: cuenta demo para probar el flujo de incidencias públicas.
-            await AsegurarClientePortalDemoAsync();
 
             // Guard de idempotencia: verificamos si el bulk seed ya corrió comprobando
             // la existencia de Operadores (solo se crean en la fase masiva de abajo).
@@ -141,15 +143,25 @@ namespace Back.Infrastructure.Database
             await _context.SaveChangesAsync();
         }
 
-        // Épica D: crea (si no existe) un Gerente demo para probar el login.
+        // Épica D: crea o resetea el Gerente demo para que siempre pueda hacer login.
         private async Task AsegurarGerenteDemoAsync()
         {
             const string email = "gerente.bsas@logitrack.com";
-            if (await _context.Usuarios.AnyAsync(u => u.Email == email)) return;
+            const string password = "kjkszpj1234";
+
+            var existente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Email == email);
+            if (existente is not null)
+            {
+                // Resetea la contraseña demo por si cambió en una versión anterior del seeder.
+                existente.CambiarPassword(PasswordHasher.HashPassword(password));
+                if (!existente.Activo) existente.Activar();
+                await _context.SaveChangesAsync();
+                return;
+            }
 
             var gerente = new Gerente(
                 "Gerardo", "Buenos Aires", email,
-                PasswordHasher.HashPassword("kjkszpj1234"),
+                PasswordHasher.HashPassword(password),
                 "30111222", "Buenos Aires");
             _context.Usuarios.Add(gerente);
             await _context.SaveChangesAsync();

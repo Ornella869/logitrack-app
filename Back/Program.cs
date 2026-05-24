@@ -157,10 +157,13 @@ using (var scope = app.Services.CreateScope())
         var empresaService = services.GetRequiredService<EmpresaService>();
         await empresaService.GetOrCreateSingletonAsync();
 
+        // Garantizar usuarios demo siempre (independiente del flag del seeder).
+        var seeder = services.GetRequiredService<DatabaseSeeder>();
+        await seeder.AsegurarUsuariosDemoAsync();
+
         var configuration = services.GetRequiredService<IConfiguration>();
         if (configuration.GetValue<bool>("EnableDatabaseSeeder"))
         {
-            var seeder = services.GetRequiredService<DatabaseSeeder>();
             await seeder.SeedAsync();
         }
     }

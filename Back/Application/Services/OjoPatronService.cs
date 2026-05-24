@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
@@ -159,9 +160,18 @@ namespace Back.Application.Services
                 .ToListAsync();
 
             var total = delDia.Count;
-            if (total < 2) return false; // con 1 sola parada no hay "mitad".
+            if (total == 0) return false;
 
             var finalizadas = delDia.Count(p => p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado);
+
+            // Caso especial: un solo envío → la "mitad" es cuando el paquete está en tránsito.
+            if (total == 1)
+            {
+                var enTransito = delDia.Any(p => p.Status == PaqueteStatus.EnTransito);
+                if (!enTransito) return false;
+                return !await TienePruebaAprobadaHoyAsync(repartidorId, MomentoPruebaOjoPatron.Mitad);
+            }
+
             var umbralMitad = (int)Math.Ceiling(total / 2.0);
 
             // Si todavía no llegó a la mitad, o ya no quedan pendientes, no aplica.
@@ -199,11 +209,24 @@ namespace Back.Application.Services
 
             // G1L-61: cada prueba (aprobada o rechazada) queda en el log de auditoría.
             var momentoLabel = momento == MomentoPruebaOjoPatron.Mitad ? "Mitad de recorrido" : "Inicio de ruta";
+            var contextoJson = JsonSerializer.Serialize(new
+            {
+                AlertnessScore = alertnessScore,
+                ScoreNeu = scoreNeu,
+                ScoreHap = scoreHap,
+                ScoreSad = scoreSad,
+                ScoreAng = scoreAng,
+                Resultado = (int)resultado,
+                Intentos = intentos,
+                Momento = momentoLabel,
+                Rol = rolUsuario,
+                Umbral = config.UmbralAlertness,
+            });
             await _auditoria.RegistrarAsync(
                 TipoAccion.PruebaOjoDelPatron,
                 $"Prueba Ojo del Patrón ({momentoLabel}): {(resultado == ResultadoPruebaOjoPatron.Aprobada ? "Aprobada" : "Rechazada")}",
                 recursoId: usuarioId.ToString(),
-                contexto: $"Rol: {rolUsuario} | Momento: {momentoLabel} | Alertness: {alertnessScore:0.###} | Umbral: {config.UmbralAlertness:0.###} | Intento: {intentos}");
+                contexto: contextoJson);
         }
     }
 }

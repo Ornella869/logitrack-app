@@ -24,6 +24,7 @@ namespace Back.Application.Services
         public required string Nombre { get; init; }
         public required int LimiteCuentas { get; init; }
         public required string PrecioMock { get; init; }
+        public required string PrecioMockAnual { get; init; }
         public required List<string> Funcionalidades { get; init; }
     }
 
@@ -57,7 +58,8 @@ namespace Back.Application.Services
                 Plan = PlanEmpresa.Basico,
                 Nombre = "Básico",
                 LimiteCuentas = 50,
-                PrecioMock = "$50.000 / mes",
+                PrecioMock = "$49.900 / mes",
+                PrecioMockAnual = "$479.000 / año",
                 Funcionalidades = new List<string>
                 {
                     "Hasta 50 cuentas activas",
@@ -71,7 +73,8 @@ namespace Back.Application.Services
                 Plan = PlanEmpresa.Premium,
                 Nombre = "Premium",
                 LimiteCuentas = 100,
-                PrecioMock = "$180.000 / mes",
+                PrecioMock = "$189.900 / mes",
+                PrecioMockAnual = "$1.819.000 / año",
                 Funcionalidades = new List<string>
                 {
                     "Hasta 100 cuentas activas",

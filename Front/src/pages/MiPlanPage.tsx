@@ -18,6 +18,8 @@ import {
   Snackbar,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -165,6 +167,7 @@ export default function MiPlanPage() {
     return () => window.removeEventListener('miPlanDarkModeChange', onDarkChange)
   }, [])
 
+  const [facturacion, setFacturacion] = useState<'mensual' | 'anual'>('mensual')
   const [, setPlanSeleccionado] = useState<PlanEmpresa | null>(null)
   const [codigoEmitido, setCodigoEmitido] = useState<string | null>(null)
   const [codigoInput, setCodigoInput] = useState('')
@@ -444,10 +447,38 @@ export default function MiPlanPage() {
       </Card>
 
       {/* Planes disponibles */}
-      <Typography variant="h6" sx={{ mb: 2 }} color={textColor}>Planes disponibles</Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 2.5 }}>
+        <Typography variant="h6" color={textColor}>Planes disponibles</Typography>
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <ToggleButtonGroup
+            value={facturacion}
+            exclusive
+            onChange={(_e, v) => { if (v) setFacturacion(v) }}
+            size="small"
+          >
+            <ToggleButton value="mensual" sx={{ px: 2, py: 0.5, fontSize: '0.78rem', textTransform: 'none' }}>
+              Mensual
+            </ToggleButton>
+            <ToggleButton value="anual" sx={{ px: 2, py: 0.5, fontSize: '0.78rem', textTransform: 'none' }}>
+              Anual
+            </ToggleButton>
+          </ToggleButtonGroup>
+          {facturacion === 'anual' && (
+            <Chip
+              label="2 meses gratis"
+              size="small"
+              sx={{ bgcolor: '#e8f5e9', color: '#2e7d32', fontWeight: 700, fontSize: '0.72rem' }}
+            />
+          )}
+        </Stack>
+      </Stack>
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {catalogo.map((p) => {
           const esActual = p.plan === plan.plan
+          const precio = facturacion === 'anual' ? p.precioMockAnual : p.precioMock
+          const precioSecundario = facturacion === 'anual'
+            ? (p.plan === 'Basico' ? 'equiv. $39.917/mes' : 'equiv. $151.583/mes')
+            : null
           return (
             <Grid item xs={12} md={6} key={p.plan}>
               <Card
@@ -460,8 +491,19 @@ export default function MiPlanPage() {
                   borderColor: esActual ? '#1976d2' : borderCol,
                   borderWidth: esActual ? 2 : 1,
                   transition: 'all 0.5s ease',
+                  position: 'relative',
                 }}
               >
+                {facturacion === 'anual' && (
+                  <Box sx={{
+                    position: 'absolute', top: 12, right: 12,
+                    bgcolor: '#2e7d32', color: 'white',
+                    fontSize: '0.68rem', fontWeight: 700,
+                    px: 1, py: 0.3, borderRadius: 1,
+                  }}>
+                    20% OFF
+                  </Box>
+                )}
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
                     <Box>
@@ -469,9 +511,14 @@ export default function MiPlanPage() {
                       <Typography variant="h5" fontWeight={700} color={textColor}>
                         {p.plan === 'Premium' ? '⭐ ' : ''}{p.nombre}
                       </Typography>
-                      <Typography variant="body2" color={subColor}>{p.precioMock}</Typography>
+                      <Typography variant="h6" fontWeight={700} color={dk ? '#42A5F5' : '#1565C0'}>
+                        {precio}
+                      </Typography>
+                      {precioSecundario && (
+                        <Typography variant="caption" color={subColor}>{precioSecundario}</Typography>
+                      )}
                     </Box>
-                    {esActual && <Chip label="Tu plan actual" color="primary" size="small" />}
+                    {esActual && <Chip label="Tu plan actual" color="primary" size="small" sx={{ mt: 0.5 }} />}
                   </Stack>
                   <Stack spacing={0.5}>
                     {p.funcionalidades.filter((f) => !f.toLowerCase().includes('gps')).map((f) => (

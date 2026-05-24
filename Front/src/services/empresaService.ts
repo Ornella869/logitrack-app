@@ -20,6 +20,7 @@ export interface PlanCatalogo {
   nombre: string
   limiteCuentas: number
   precioMock: string
+  precioMockAnual: string
   funcionalidades: string[]
 }
 
