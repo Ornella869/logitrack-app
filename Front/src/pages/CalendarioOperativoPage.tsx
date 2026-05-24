@@ -28,6 +28,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SearchIcon from '@mui/icons-material/Search'
 import api from '../services/api'
 import type { User } from '../types'
+import { dateOnlyForDisplay, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
 
@@ -61,6 +62,8 @@ type CalendarioOperativo = {
 }
 
 const DIAS_VISIBLES = 7
+
+const dateForDisplay = dateOnlyForDisplay
 
 export default function CalendarioOperativoPage() {
   const user = useOutletContext<User>()
@@ -157,9 +160,9 @@ export default function CalendarioOperativoPage() {
               <Typography variant="subtitle1" fontWeight={600} sx={{ minWidth: 240, textAlign: 'center' }}>
                 {visible.dias.length > 0 && (
                   <>
-                    {new Date(visible.dias[0]).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                    {dateForDisplay(visible.dias[0]).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
                     {' — '}
-                    {new Date(visible.dias[visible.dias.length - 1]).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {dateForDisplay(visible.dias[visible.dias.length - 1]).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </>
                 )}
               </Typography>
@@ -188,8 +191,8 @@ export default function CalendarioOperativoPage() {
                 Repartidor
               </Box>
               {visible.dias.map((d) => {
-                const date = new Date(d)
-                const isHoy = date.toDateString() === new Date().toDateString()
+                const date = dateForDisplay(d)
+                const isHoy = isTodayArgentina(d)
                 return (
                   <Box
                     key={d}
@@ -314,7 +317,7 @@ export default function CalendarioOperativoPage() {
             <>
               {detalleCelda.repartidorNombre}
               <Typography variant="caption" display="block" color="text.secondary">
-                {new Date(detalleCelda.fecha).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                {formatDateOnlyEs(detalleCelda.fecha, { weekday: 'long', day: '2-digit', month: 'long' })}
                 {' · '}
                 {detalleCelda.pesoTotal.toFixed(0)} / 500 kg
               </Typography>

@@ -1,3 +1,4 @@
+using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -27,16 +28,17 @@ namespace Back.Application.Services
             _context = context;
         }
 
-        public async Task<List<AlertaPaqueteSinEstadoFinal>> GetPaquetesSinEstadoFinalAsync()
+        public async Task<List<AlertaPaqueteSinEstadoFinal>> GetPaquetesSinEstadoFinalAsync(Guid? sucursalId = null)
         {
-            var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+            var hoy = OperationalClock.TodayUtcDate;
 
             // Activos no terminales con fecha prevista vencida. Incluye Demorado:
             // no es estado final, así que igual debe alertar (G1L-84 sin falsos negativos).
             var paquetes = await _context.Paquetes
                 .Where(p => (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado)
                             && p.FechaCalendarizada != null
-                            && p.FechaCalendarizada < hoy)
+                            && p.FechaCalendarizada < hoy
+                            && (sucursalId == null || p.SucursalId == sucursalId))
                 .ToListAsync();
 
             if (paquetes.Count == 0) return new List<AlertaPaqueteSinEstadoFinal>();
@@ -70,7 +72,7 @@ namespace Back.Application.Services
                 .ToList();
         }
 
-        public async Task<int> ContarAsync()
-            => (await GetPaquetesSinEstadoFinalAsync()).Count;
+        public async Task<int> ContarAsync(Guid? sucursalId = null)
+            => (await GetPaquetesSinEstadoFinalAsync(sucursalId)).Count;
     }
 }

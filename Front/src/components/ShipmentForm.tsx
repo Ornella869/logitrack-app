@@ -34,6 +34,7 @@ import {
   InputAdornment,
 } from '@mui/material'
 import type { Shipment, TipoEnvio, TipoPaquete, Branch } from '../types'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import { postalCodeService } from '../services/postalCodeService'
 import { branchService } from '../services/branchService'
 import { tarifaService, type Cotizacion } from '../services/tarifaService'
@@ -313,7 +314,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         status: 'Pendiente de calendarización',
         tipoEnvio: formData.tipoEnvio,
         tipoPaquete: formData.tipoPaquete,
-        createdDate: new Date().toISOString().split('T')[0],
+        createdDate: formatArgentinaDateInput(),
       })
 
       setFormData({

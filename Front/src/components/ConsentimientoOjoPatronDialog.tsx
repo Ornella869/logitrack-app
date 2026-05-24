@@ -14,6 +14,7 @@ import {
 } from '@mui/material'
 import GavelIcon from '@mui/icons-material/Gavel'
 import { ojoPatronService, type EstadoConsentimiento, type TextoLegal } from '../services/ojoPatronService'
+import { formatInstantArgentina } from '../utils/argentinaDate'
 
 interface Props {
   open: boolean
@@ -75,7 +76,7 @@ export default function ConsentimientoOjoPatronDialog({ open, modo, onClose, onA
             {estado?.aceptado && (
               <Alert severity="success">
                 Consentimiento vigente (v{estado.versionVigente})
-                {estado.aceptadoEn ? ` · aceptado el ${new Date(estado.aceptadoEn).toLocaleString('es-AR')}` : ''}
+                {estado.aceptadoEn ? ` · aceptado el ${formatInstantArgentina(estado.aceptadoEn)}` : ''}
               </Alert>
             )}
             {modo === 'requerido' && !estado?.aceptado && (

@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import type { Vehicle } from '../types'
 import { vehicleService } from '../services/vehicleService'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 
 interface VehicleFormProps {
   open: boolean
@@ -79,7 +80,7 @@ function VehicleForm({ open, onClose, onSubmit, operatorId }: VehicleFormProps) 
         marca: formData.marca,
         capacidadCarga: Number(formData.capacidadCarga),
         estado: 'Disponible',
-        createdDate: new Date().toISOString().split('T')[0],
+        createdDate: formatArgentinaDateInput(),
         operator: operatorId,
       })
 

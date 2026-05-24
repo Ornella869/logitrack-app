@@ -20,10 +20,10 @@ import CancelIcon from '@mui/icons-material/Cancel'
 import PercentIcon from '@mui/icons-material/Percent'
 import { reportService, type ReporteVolumen } from '../services/reportService'
 import type { User } from '../types'
+import { addArgentinaDays, formatArgentinaDateInput } from '../utils/argentinaDate'
 
-const fmt = (d: Date) => d.toISOString().split('T')[0]
-const today = () => fmt(new Date())
-const daysAgo = (n: number) => fmt(new Date(Date.now() - n * 86400000))
+const today = () => formatArgentinaDateInput()
+const daysAgo = (n: number) => addArgentinaDays(-n)
 
 export default function ReportesPage() {
   const user = useOutletContext<User>()
@@ -34,7 +34,7 @@ export default function ReportesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const canAccess = user.role === 'supervisor' || user.role === 'administrador'
+  const canAccess = user.role === 'supervisor'
 
   useEffect(() => {
     if (canAccess) void load()
@@ -76,7 +76,7 @@ export default function ReportesPage() {
   }
 
   if (!canAccess) {
-    return <Alert severity="warning">Solo Supervisor o Administrador.</Alert>
+    return <Alert severity="warning">Solo Supervisor.</Alert>
   }
 
   return (

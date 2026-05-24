@@ -10,6 +10,7 @@ import HistoryEduIcon from '@mui/icons-material/HistoryEdu'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import SettingsIcon from '@mui/icons-material/Settings'
 import { shipmentService, type HistorialEstadoEnvio } from '../services/shipmentService'
+import { formatInstantArgentina } from '../utils/argentinaDate'
 
 // G1L-15: Línea de tiempo del historial de estados.
 // Cronológica descendente (lo más reciente arriba), color/ícono por estado y origen.
@@ -89,7 +90,7 @@ export default function ShipmentTimeline({ paqueteId }: Props) {
         const date = new Date(item.fechaHora)
         const dateStr = isNaN(date.getTime())
           ? item.fechaHora
-          : date.toLocaleString('es-AR')
+          : formatInstantArgentina(date)
         return (
           <Box key={item.id} sx={{ display: 'flex', gap: 2 }}>
             {/* Ícono y línea conectora */}

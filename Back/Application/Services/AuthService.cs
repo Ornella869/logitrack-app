@@ -64,7 +64,9 @@ namespace Back.Application.Services
                     nombre = user.Nombre,
                     apellido = user.Apellido,
                     email = user.Email,
-                    role = user.GetType().Name
+                    role = user.GetType().Name,
+                    sucursalId = user.SucursalId?.ToString(),
+                    provincia = user is Gerente gerente ? gerente.Provincia : null
                 }
             };
         }

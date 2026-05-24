@@ -6,6 +6,7 @@ using Back.Domain.Repositories;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Back.Controllers
 {
@@ -46,6 +47,77 @@ namespace Back.Controllers
             return Guid.TryParse(userIdStr, out var id) ? id : null;
         }
 
+        private async Task<Usuario?> CurrentUserAsync()
+        {
+            var userId = CurrentUserId();
+            return userId is null ? null : await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        }
+
+        private async Task<Guid?> CurrentSucursalScopeAsync()
+        {
+            if (User.IsInRole(Roles.Administrador) || User.IsInRole(Roles.Gerente)) return null;
+            return (await CurrentUserAsync())?.SucursalId;
+        }
+
+        private async Task<bool> PuedeVerPaqueteAsync(Paquete paquete)
+        {
+            if (User.IsInRole(Roles.Administrador)) return true;
+            var user = await CurrentUserAsync();
+            if (user is null) return false;
+            if (User.IsInRole(Roles.Repartidor))
+                return paquete.RepartidorAsignadoId == user.Id
+                    && paquete.FechaCalendarizada?.Date == OperationalClock.TodayUtcDate;
+            return user.SucursalId is null || paquete.SucursalId == user.SucursalId;
+        }
+
+        private static double DistanciaKm(Ubicacion a, Ubicacion b)
+        {
+            const double radioTierraKm = 6371;
+            static double Rad(double deg) => deg * Math.PI / 180;
+            var dLat = Rad(b.Latitud - a.Latitud);
+            var dLng = Rad(b.Longitud - a.Longitud);
+            var lat1 = Rad(a.Latitud);
+            var lat2 = Rad(b.Latitud);
+            var h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                + Math.Cos(lat1) * Math.Cos(lat2) * Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+            return 2 * radioTierraKm * Math.Asin(Math.Sqrt(h));
+        }
+
+        private async Task<List<Paquete>> OrdenarParadasDesdeSucursalAsync(List<Paquete> paquetes, GeocodingService geocoding)
+        {
+            var user = await CurrentUserAsync();
+            if (user?.SucursalId is not Guid sucursalId) return paquetes;
+
+            var sucursal = await _enviosRepository.GetSucursalById(sucursalId);
+            if (sucursal is null) return paquetes;
+
+            var origen = await geocoding.GeocodeAsync(sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal, sucursal.Provincia);
+            if (origen is null) return paquetes;
+
+            var pendientes = paquetes
+                .Where(p => p.Destinatario.Direccion.Ubicacion is not null)
+                .ToList();
+            var sinCoords = paquetes
+                .Where(p => p.Destinatario.Direccion.Ubicacion is null)
+                .ToList();
+
+            var ordenadas = new List<Paquete>();
+            var actual = origen;
+            while (pendientes.Count > 0)
+            {
+                var siguiente = pendientes
+                    .OrderBy(p => DistanciaKm(actual, p.Destinatario.Direccion.Ubicacion!))
+                    .ThenBy(p => p.CreadoEn)
+                    .First();
+                ordenadas.Add(siguiente);
+                pendientes.Remove(siguiente);
+                actual = siguiente.Destinatario.Direccion.Ubicacion!;
+            }
+
+            ordenadas.AddRange(sinCoords);
+            return ordenadas;
+        }
+
         // ============== G1L-10: Alta de envío ==============
 
         /// <summary>Registra un nuevo paquete (Operador).</summary>
@@ -56,6 +128,22 @@ namespace Back.Controllers
             try
             {
                 var result = await _enviosService.RegistrarPaquete(request, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = Roles.Operador)]
+        [HttpPost("generar-lote-demo")]
+        public async Task<ActionResult<GenerarLoteDemoResult>> GenerarLoteDemo([FromBody] GenerarLoteDemoRequest request)
+        {
+            try
+            {
+                var result = await _enviosService.GenerarLoteDemoAsync(request.Cantidad, CurrentUserId());
                 await _context.SaveChangesAsync();
                 return Ok(result);
             }
@@ -114,7 +202,34 @@ namespace Back.Controllers
         {
             var normalizedPage = PaginationDefaults.NormalizePage(page);
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
-            var paquetes = await _enviosRepository.Buscar(search, estados, from, to, normalizedPage, normalizedPageSize);
+            if (User.IsInRole(Roles.Repartidor))
+            {
+                var userId = CurrentUserId();
+                if (userId is null) return Unauthorized();
+                var asignados = await _enviosRepository.GetPaquetesAsignadosARepartidor(userId.Value);
+                var query = asignados.AsEnumerable();
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var s = search.Trim().ToLowerInvariant();
+                    query = query.Where(p =>
+                        p.CodigoSeguimiento.ToLowerInvariant().Contains(s)
+                        || p.Remitente.Nombre.ToLowerInvariant().Contains(s)
+                        || p.Remitente.Apellido.ToLowerInvariant().Contains(s)
+                        || p.Destinatario.Nombre.ToLowerInvariant().Contains(s)
+                        || p.Destinatario.Apellido.ToLowerInvariant().Contains(s));
+                }
+                if (estados is { Count: > 0 }) query = query.Where(p => estados.Contains(p.Status));
+                if (from.HasValue) query = query.Where(p => p.CreadoEn >= DateTime.SpecifyKind(from.Value, DateTimeKind.Utc));
+                if (to.HasValue) query = query.Where(p => p.CreadoEn <= DateTime.SpecifyKind(to.Value, DateTimeKind.Utc));
+                var filtered = query.OrderByDescending(p => p.CreadoEn).ToList();
+                return Ok(PagedResponse<Paquete>.Create(
+                    filtered.Skip((normalizedPage - 1) * normalizedPageSize).Take(normalizedPageSize).ToList(),
+                    normalizedPage,
+                    normalizedPageSize,
+                    filtered.Count));
+            }
+
+            var paquetes = await _enviosRepository.Buscar(search, estados, from, to, normalizedPage, normalizedPageSize, await CurrentSucursalScopeAsync());
             return Ok(paquetes);
         }
 
@@ -123,44 +238,23 @@ namespace Back.Controllers
         [HttpGet("paquetes-pendientes")]
         public async Task<ActionResult<List<Paquete>>> GetPaquetesPendientesDeCalendarizacion()
         {
-            var paquetes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion();
+            var paquetes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion(await CurrentSucursalScopeAsync());
             return Ok(paquetes);
         }
 
         // ============== G1L-23: Ruta del día (Repartidor) ==============
 
-        /// <summary>Paquetes asignados al repartidor logueado. Si no se pasa fecha y no hay paradas hoy,
-        /// devuelve la próxima fecha futura con asignaciones. Ordenados por CP.</summary>
+        /// <summary>Paquetes asignados al repartidor logueado para el día actual.</summary>
         [Authorize(Roles = Roles.Repartidor)]
         [HttpGet("mi-ruta-del-dia")]
-        public async Task<ActionResult<object>> GetMiRutaDelDia([FromQuery] DateTime? fecha)
+        public async Task<ActionResult<object>> GetMiRutaDelDia([FromQuery] DateTime? fecha, [FromServices] GeocodingService geocoding)
         {
             var userId = CurrentUserId();
             if (userId is null) return Unauthorized();
 
-            DateTime dia;
-            if (fecha.HasValue)
-            {
-                dia = fecha.Value.Date;
-            }
-            else
-            {
-                var hoy = DateTime.UtcNow.Date;
-                var paquetesHoy = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, hoy);
-                if (paquetesHoy.Count > 0)
-                {
-                    return Ok(new { fecha = DateTime.SpecifyKind(hoy, DateTimeKind.Utc), paradas = paquetesHoy });
-                }
-                var proxima = await _enviosRepository.GetProximaFechaConAsignacionDeRepartidor(userId.Value, hoy);
-                if (proxima is null)
-                {
-                    return Ok(new { fecha = (DateTime?)null, paradas = new List<Paquete>() });
-                }
-                dia = proxima.Value.Date;
-            }
-
-            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, dia);
-            return Ok(new { fecha = DateTime.SpecifyKind(dia, DateTimeKind.Utc), paradas = paquetes });
+            var hoy = OperationalClock.TodayUtcDate;
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, hoy);
+            return Ok(new { fecha = DateTime.SpecifyKind(hoy, DateTimeKind.Utc), paradas = await OrdenarParadasDesdeSucursalAsync(paquetes, geocoding) });
         }
 
         /// <summary>G1L-42: Repartidor asignado al paquete (vista Supervisor).</summary>
@@ -170,7 +264,7 @@ namespace Back.Controllers
             Guid paqueteId,
             [FromServices] RepartidoresMetricsService metrics)
         {
-            var info = await metrics.GetRepartidorDePaqueteAsync(paqueteId);
+            var info = await metrics.GetRepartidorDePaqueteAsync(paqueteId, await CurrentSucursalScopeAsync());
             if (info is null) return NoContent();
             return Ok(info);
         }
@@ -197,13 +291,11 @@ namespace Back.Controllers
         {
             var userId = CurrentUserId();
             if (userId is null) return Unauthorized();
-            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidor(userId.Value);
-            var fechas = paquetes
-                .Where(p => p.FechaCalendarizada.HasValue)
-                .Select(p => DateTime.SpecifyKind(p.FechaCalendarizada!.Value.Date, DateTimeKind.Utc))
-                .Distinct()
-                .OrderBy(f => f)
-                .ToList();
+            var hoy = OperationalClock.TodayUtcDate;
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, hoy);
+            var fechas = paquetes.Count == 0
+                ? new List<DateTime>()
+                : new List<DateTime> { DateTime.SpecifyKind(hoy, DateTimeKind.Utc) };
             return Ok(fechas);
         }
 
@@ -216,6 +308,7 @@ namespace Back.Controllers
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             return Ok(paquete);
         }
 
@@ -329,6 +422,7 @@ namespace Back.Controllers
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound("Paquete no encontrado");
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             try
             {
                 paquete.ReEnviar();
@@ -351,6 +445,7 @@ namespace Back.Controllers
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             var historial = await _historialService.GetHistorialPorPaqueteAsync(paqueteId);
             return Ok(historial);
         }
@@ -364,6 +459,7 @@ namespace Back.Controllers
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             var bytes = _qrService.GenerarPng(paquete.CodigoSeguimiento);
             return File(bytes, "image/png");
         }
@@ -405,7 +501,10 @@ namespace Back.Controllers
                 return BadRequest(new { message = "Debés completar la prueba acústica del Ojo del Patrón antes de iniciar la ruta." });
             try
             {
-                var dia = (fecha ?? DateTime.UtcNow).Date;
+                var hoy = OperationalClock.TodayUtcDate;
+                var dia = (fecha ?? hoy).Date;
+                if (dia != hoy)
+                    return BadRequest(new { message = "Solo podés iniciar la ruta del día actual." });
                 var cantidad = await _enviosService.IniciarRutaDelDiaAsync(userId.Value, dia, userId);
                 await _context.SaveChangesAsync();
                 return Ok(new { cantidad });
@@ -455,6 +554,7 @@ namespace Back.Controllers
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
 
             var dto = new EtiquetaResponse
             {
@@ -494,6 +594,9 @@ namespace Back.Controllers
         {
             var ruta = await _rutasRepository.GetRutaById(rutaId);
             if (ruta is null) return NotFound();
+            var paquete = await _enviosRepository.GetPaquete(paqueteId);
+            if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             try
             {
                 ruta.EntregarPaquete(paqueteId);
@@ -570,7 +673,10 @@ namespace Back.Controllers
         [HttpGet("sucursales")]
         public async Task<ActionResult<List<Sucursal>>> GetSucursales()
         {
-            var sucursales = await _enviosRepository.GetSucursales();
+            var user = await CurrentUserAsync();
+            var sucursales = await _enviosRepository.GetSucursales(
+                provincia: user is Gerente gerente ? gerente.Provincia : null,
+                sucursalId: user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null);
             return Ok(sucursales);
         }
 
@@ -580,7 +686,10 @@ namespace Back.Controllers
         [HttpGet("sucursal-origen")]
         public async Task<ActionResult<object>> GetSucursalOrigen([FromServices] GeocodingService geocoding)
         {
-            var sucursales = await _enviosRepository.GetSucursales();
+            var user = await CurrentUserAsync();
+            var sucursales = await _enviosRepository.GetSucursales(
+                provincia: user is Gerente gerente ? gerente.Provincia : null,
+                sucursalId: user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null);
             var sucursal = sucursales.FirstOrDefault(s => s.Estado == SucursalStatus.Activa)
                 ?? sucursales.FirstOrDefault();
             if (sucursal is null) return NoContent();
@@ -659,10 +768,12 @@ namespace Back.Controllers
 
         [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpDelete("sucursales/{id:guid}")]
-        public async Task<ActionResult> EliminarSucursal(Guid id)
+        public async Task<ActionResult> EliminarSucursal(Guid id, [FromServices] IUserRepository userRepo)
         {
             var sucursal = await _enviosRepository.GetSucursalById(id);
             if (sucursal == null) return NotFound();
+            var error = await ValidarProvinciaGerente(sucursal.Provincia, userRepo);
+            if (error is not null) return BadRequest(new { error });
             _enviosRepository.DeleteSucursal(sucursal);
             await _context.SaveChangesAsync();
             return NoContent();
@@ -728,6 +839,11 @@ namespace Back.Controllers
         public TipoPaquete TipoPaquete { get; set; } = TipoPaquete.Comun;
         [Required] public RegistrarClienteRequest Remitente { get; set; }
         [Required] public RegistrarClienteRequest Destinatario { get; set; }
+    }
+
+    public class GenerarLoteDemoRequest
+    {
+        [Required] public int Cantidad { get; set; }
     }
 
     public class RegistrarClienteRequest

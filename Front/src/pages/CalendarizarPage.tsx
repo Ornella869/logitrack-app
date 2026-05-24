@@ -35,6 +35,7 @@ import { shipmentService, calendarizacionService, type CalendarizacionResultado,
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
+import { formatDateOnlyEs } from '../utils/argentinaDate'
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
 
@@ -539,7 +540,7 @@ export default function CalendarizarPage() {
                           </Stack>
                         </TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.email}</TableCell>
-                        <TableCell>{new Date(dia.fecha).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}</TableCell>
+                        <TableCell>{formatDateOnlyEs(dia.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}</TableCell>
                         <TableCell align="right">{r.cantidad}</TableCell>
                         <TableCell align="right">{r.pesoTotal.toFixed(0)} / 500 kg</TableCell>
                       </TableRow>

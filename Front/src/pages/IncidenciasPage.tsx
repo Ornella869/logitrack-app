@@ -48,6 +48,7 @@ import {
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../services/mensajeIncidenciaService'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
+import { formatInstantArgentina, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 const TIPO_INFO: Record<string, { label: string; emoji: string; color: string }> = {
   accident: { label: 'Accidente de tráfico', emoji: '🚗', color: '#c62828' },
@@ -85,7 +86,7 @@ function EstadoChip({ estado }: { estado: EstadoIncidencia }) {
 }
 
 function formatFecha(iso: string): string {
-  return new Date(iso).toLocaleString('es-AR', {
+  return formatInstantArgentina(iso, {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -559,7 +560,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                             {m.texto}
                           </Typography>
                           <Typography variant="caption" sx={{ opacity: 0.65, fontSize: 10, display: 'block', textAlign: isSuper ? 'right' : 'left' }}>
-                            {m.deNombre} · {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                            {m.deNombre} · {formatInstantArgentinaTime(m.fecha, { hour: '2-digit', minute: '2-digit' })}
                           </Typography>
                         </Box>
                       </Stack>

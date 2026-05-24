@@ -19,6 +19,7 @@ import HistoryIcon from '@mui/icons-material/History'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import api from '../services/api'
 import type { User } from '../types'
+import { formatInstantArgentinaDate, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 type LogAuditoria = {
   id: string
@@ -166,7 +167,7 @@ export default function AuditoriaPage() {
 
   const grouped = useMemo(() => {
     return logs.reduce<Record<string, LogAuditoria[]>>((acc, log) => {
-      const date = new Date(log.timestamp).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
+      const date = formatInstantArgentinaDate(log.timestamp, { day: '2-digit', month: 'long', year: 'numeric' })
       if (!acc[date]) acc[date] = []
       acc[date].push(log)
       return acc
@@ -253,7 +254,7 @@ export default function AuditoriaPage() {
                   {items.map((log) => {
                     const accionColor = ACCION_COLORS[log.accion] ?? ACCION_COLORS.Otro
                     const rolColor = ROL_COLORS[log.usuarioRol] ?? '#777'
-                    const time = new Date(log.timestamp).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                    const time = formatInstantArgentinaTime(log.timestamp, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                     return (
                       <Stack
                         key={log.id}

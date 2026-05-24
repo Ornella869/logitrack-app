@@ -1,4 +1,5 @@
 import type { PagedResult, Shipment, TipoEnvio, TipoPaquete } from '../types'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import api from './api'
 
 // Tipos para requests al backend
@@ -61,6 +62,14 @@ const mapStatusToBackend = (status: string): string => {
   }
 }
 
+export interface GenerarLoteDemoResultado {
+  solicitados: number
+  creados: number
+  fallidos: number
+  trackingIds: string[]
+  errores: string[]
+}
+
 // Convertir respuesta del backend a tipo Shipment
 const mapToShipment = (paquete: any): Shipment => ({
   id: paquete.id,
@@ -85,8 +94,8 @@ const mapToShipment = (paquete: any): Shipment => ({
   isEditable: paquete.isEditable ?? false,
   origin: paquete.remitente?.direccion?.ciudad ?? paquete.remitente?.ciudad ?? 'No disponible',
   destination: paquete.destinatario?.direccion?.ciudad ?? paquete.destinatario?.ciudad ?? 'No disponible',
-  createdDate: paquete.creadoEn ? new Date(paquete.creadoEn).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-  lastUpdate: new Date().toISOString().split('T')[0],
+  createdDate: formatArgentinaDateInput(paquete.creadoEn ? new Date(paquete.creadoEn) : new Date()),
+  lastUpdate: formatArgentinaDateInput(),
   estimatedDelivery: '',
   weight: paquete.peso,
   description: paquete.descripcion || '',
@@ -183,6 +192,18 @@ export const shipmentService = {
     } catch (error) {
       console.error('Register shipment error:', error)
       return null
+    }
+  },
+
+  generarLoteDemo: async (cantidad: number): Promise<GenerarLoteDemoResultado> => {
+    try {
+      const response = await api.post('/envios/generar-lote-demo', { cantidad })
+      return response.data
+    } catch (error: any) {
+      const message = typeof error?.response?.data === 'string'
+        ? error.response.data
+        : 'No se pudo generar la carga masiva'
+      throw new Error(message)
     }
   },
 
@@ -471,8 +492,7 @@ export const shipmentService = {
     }
   },
 
-  // G1L-23: Ruta del día del repartidor logueado, ordenada por CP.
-  // Si no se pasa fecha y no hay paradas hoy, devuelve la próxima fecha futura con asignaciones.
+  // G1L-23: Ruta del día actual del repartidor logueado.
   getMiRutaDelDia: async (fecha?: string): Promise<{ fecha: string | null; paradas: Shipment[] }> => {
     try {
       const response = await api.get('/envios/mi-ruta-del-dia', { params: fecha ? { fecha } : undefined })

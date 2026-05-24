@@ -1,4 +1,5 @@
 import type { Route } from '../types'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import api from './api'
 
 // Tipos para requests al backend
@@ -45,7 +46,7 @@ const mapToRoute = (ruta: any): Route => {
     vehicleId: String(getValue<string>(vehiculo, 'id', 'Id') ?? getValue<string>(ruta, 'vehiculoId', 'VehiculoId') ?? ''),
     repartidorId: String(getValue<string>(repartidor, 'id', 'Id') ?? getValue<string>(ruta, 'repartidorId', 'RepartidorId') ?? ''),
     status: mapStatus(estado),
-    createdDate: iniciadoEn ? new Date(iniciadoEn).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    createdDate: formatArgentinaDateInput(iniciadoEn ? new Date(iniciadoEn) : new Date()),
     startDate: iniciadoEn ? new Date(iniciadoEn).toISOString() : undefined,
     endDate: finalizadoEn ? new Date(finalizadoEn).toISOString() : undefined,
     origin: getValue<string>(ruta, 'origin', 'Origin') || `${getValue<string>(vehiculo, 'marca', 'Marca') || 'Vehículo'} - Transporte`,
@@ -101,8 +102,8 @@ export const routeService = {
       return {
         ...route,
         id: Date.now().toString(),
-        routeId: `R-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Date.now()}`,
-        createdDate: new Date().toISOString().split('T')[0]
+        routeId: `R-${formatArgentinaDateInput().replace(/-/g, '')}-${Date.now()}`,
+        createdDate: formatArgentinaDateInput()
       }
     } catch (error) {
       console.error('Create route error:', error)

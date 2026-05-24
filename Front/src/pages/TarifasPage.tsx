@@ -23,6 +23,7 @@ import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt'
 import { tarifaService, type ConfiguracionTarifa, type ZonaPeligrosa } from '../services/tarifaService'
 import { branchService } from '../services/branchService'
 import type { User } from '../types'
+import { formatInstantArgentina } from '../utils/argentinaDate'
 
 type LatLng = { lat: number; lng: number }
 
@@ -176,7 +177,7 @@ export default function TarifasPage() {
                 </Button>
                 {config && (
                   <Typography variant="caption" color="text.secondary">
-                    Última actualización: {new Date(config.actualizadoEn).toLocaleString('es-AR')}
+                    Última actualización: {formatInstantArgentina(config.actualizadoEn)}
                   </Typography>
                 )}
               </Stack>

@@ -24,6 +24,7 @@ import { shipmentService } from '../services/shipmentService'
 import { incidenciaService, type Incidencia } from '../services/incidenciaService'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment } from '../types'
+import { formatInstantArgentinaDate } from '../utils/argentinaDate'
 
 const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; bg: string }> = {
   'Pendiente de calendarización': { label: 'En preparación', color: '#7B5E00', bg: '#FFF3CD' },
@@ -61,7 +62,7 @@ function canReport(s: Shipment): boolean {
 
 function fmt(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(iso))
+  return formatInstantArgentinaDate(iso, { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 export default function PortalClientePublico() {

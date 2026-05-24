@@ -5,23 +5,32 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
+  MenuItem,
   Snackbar,
   Stack,
   TablePagination,
+  TextField,
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
-import { shipmentService } from '../services/shipmentService'
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd'
+import { shipmentService, type GenerarLoteDemoResultado } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
 import ShipmentForm from '../components/ShipmentForm'
 import SearchBar from '../components/SearchBar'
 import ShipmentFilters, { type ShipmentFiltersValue } from '../components/ShipmentFilters'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 
 const EMPTY_FILTERS: ShipmentFiltersValue = { status: [], from: '', to: '' }
+const BULK_OPTIONS = [100, 250, 500, 1000]
 
 type Severity = 'success' | 'info' | 'warning' | 'error'
 
@@ -45,6 +54,10 @@ export default function EnviosPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [openShipmentForm, setOpenShipmentForm] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkCantidad, setBulkCantidad] = useState(100)
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkResult, setBulkResult] = useState<GenerarLoteDemoResultado | null>(null)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<ShipmentFiltersValue>(EMPTY_FILTERS)
   const [hasQuery, setHasQuery] = useState(false)
@@ -123,6 +136,22 @@ export default function EnviosPage() {
     }
   }
 
+  const handleGenerateBulkDemo = async () => {
+    setBulkLoading(true)
+    setBulkResult(null)
+    try {
+      const result = await shipmentService.generarLoteDemo(bulkCantidad)
+      setBulkResult(result)
+      setPage(1)
+      void loadShipments(search, filters, 1, pageSize)
+      showActionToast(`Carga masiva lista: ${result.creados} envios creados`, result.fallidos ? 'warning' : 'success')
+    } catch (error: any) {
+      showActionToast(error?.message || 'Error al generar la carga masiva', 'error')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   const handleDownloadShipments = async () => {
     const exportShipments = await shipmentService.getAllShipments(
       search || undefined,
@@ -152,7 +181,7 @@ export default function EnviosPage() {
     const csvContent = '﻿' + [headers.join(';'), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(';'))].join('\n')
     const element = document.createElement('a')
     element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent))
-    element.setAttribute('download', `envios_${new Date().toISOString().split('T')[0]}.csv`)
+    element.setAttribute('download', `envios_${formatArgentinaDateInput()}.csv`)
     element.style.display = 'none'
     document.body.appendChild(element)
     element.click()
@@ -199,7 +228,12 @@ export default function EnviosPage() {
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          {showCreateButton && (
+            <Button variant="outlined" startIcon={<PlaylistAddIcon />} onClick={() => { setBulkResult(null); setBulkOpen(true) }}>
+              Carga masiva
+            </Button>
+          )}
           {showCreateButton && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenShipmentForm(true)}>
               Nuevo envío
@@ -259,6 +293,46 @@ export default function EnviosPage() {
       )}
 
       <ShipmentForm open={openShipmentForm} onClose={() => setOpenShipmentForm(false)} onSubmit={handleCreateShipment} />
+
+      <Dialog open={bulkOpen} onClose={() => !bulkLoading && setBulkOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Carga masiva demo</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              select
+              label="Cantidad"
+              value={bulkCantidad}
+              onChange={(event) => setBulkCantidad(Number(event.target.value))}
+              disabled={bulkLoading}
+              fullWidth
+            >
+              {BULK_OPTIONS.map((option) => (
+                <MenuItem key={option} value={option}>{option} envios</MenuItem>
+              ))}
+            </TextField>
+            <Alert severity="info">
+              Se generan envios pendientes con direcciones reales dentro de la cobertura de tu sucursal.
+            </Alert>
+            {bulkResult && (
+              <Alert severity={bulkResult.fallidos ? 'warning' : 'success'}>
+                Creados: {bulkResult.creados} / {bulkResult.solicitados}
+                {bulkResult.fallidos ? ` - Fallidos: ${bulkResult.fallidos}` : ''}
+              </Alert>
+            )}
+            {bulkResult?.errores?.length ? (
+              <Alert severity="warning">
+                {bulkResult.errores.slice(0, 3).join(' | ')}
+              </Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkOpen(false)} disabled={bulkLoading}>Cerrar</Button>
+          <Button variant="contained" onClick={handleGenerateBulkDemo} disabled={bulkLoading}>
+            {bulkLoading ? 'Generando...' : 'Generar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={actionToast.open}

@@ -66,8 +66,10 @@ namespace Back.Controllers
         [HttpGet("zonas")]
         public async Task<ActionResult<List<ZonaPeligrosa>>> GetZonas()
         {
-            var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
-            return Ok(await _service.GetZonasAsync(provincia));
+            var provincias = CurrentUserId() is Guid uid
+                ? await _service.ResolverProvinciasVisiblesUsuarioAsync(uid)
+                : new List<string>();
+            return Ok(await _service.GetZonasAsync(provincias));
         }
 
         /// <summary>Crea una zona peligrosa en la provincia del Gerente.</summary>
@@ -96,9 +98,17 @@ namespace Back.Controllers
         [HttpDelete("zonas/{id:guid}")]
         public async Task<ActionResult> EliminarZona(Guid id)
         {
-            await _service.EliminarZonaAsync(id);
-            await _auditoria.RegistrarAsync(TipoAccion.Otro, "Eliminó zona peligrosa", recursoId: id.ToString());
-            return NoContent();
+            try
+            {
+                var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
+                await _service.EliminarZonaAsync(id, provincia);
+                await _auditoria.RegistrarAsync(TipoAccion.Otro, "Eliminó zona peligrosa", recursoId: id.ToString());
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // ===== G1L-88: Cotización =====

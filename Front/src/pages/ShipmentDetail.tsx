@@ -50,6 +50,7 @@ import QrCameraScanner from '../components/QrCameraScanner'
 import PrecalendarizarDialog from '../components/PrecalendarizarDialog'
 import PruebaAcusticaDialog from '../components/PruebaAcusticaDialog'
 import { ojoPatronService } from '../services/ojoPatronService'
+import { formatDateOnlyEs, formatInstantArgentina } from '../utils/argentinaDate'
 
 // Motivos predefinidos de cancelación según G1L-13 AC3
 const CANCEL_REASONS = [
@@ -691,7 +692,7 @@ function ShipmentDetail() {
                     shipment.status === 'Listo para salir') && (
                     <TextField
                       label="Fecha de despacho prevista"
-                      value={new Date(shipment.fechaCalendarizada).toLocaleDateString('es-AR')}
+                      value={formatDateOnlyEs(shipment.fechaCalendarizada)}
                       fullWidth
                       disabled
                     />
@@ -700,7 +701,7 @@ function ShipmentDetail() {
                 {ultimoEscaneoCarga && (
                   <TextField
                     label="Cargado por"
-                    value={`${ultimoEscaneoCarga.usuarioNombre ?? 'Repartidor'} · ${new Date(ultimoEscaneoCarga.fechaHora).toLocaleString('es-AR')}`}
+                    value={`${ultimoEscaneoCarga.usuarioNombre ?? 'Repartidor'} · ${formatInstantArgentina(ultimoEscaneoCarga.fechaHora)}`}
                     fullWidth
                     disabled
                   />

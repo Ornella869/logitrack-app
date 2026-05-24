@@ -16,9 +16,7 @@ import {
   DialogTitle,
   Grid,
   IconButton,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Tab,
   Tabs,
@@ -55,14 +53,12 @@ import ReportarIncidenteDialog from '../../components/ReportarIncidenteDialog'
 import ParadaAccionDialog from '../../components/ParadaAccionDialog'
 import { incidenciaService } from '../../services/incidenciaService'
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../../services/mensajeIncidenciaService'
+import { dateOnly, dateOnlyForDisplay, formatArgentinaDateInput, formatInstantArgentinaTime } from '../../utils/argentinaDate'
 import { buildMapsUrl } from '../../utils/mapsUrl'
 import type { Shipment, User } from '../../types'
 
-// G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy,
-// ordenados por CP. El mapa pinta la sucursal de origen y las paradas en orden.
-
-// Clave para recordar el día seleccionado al navegar entre pantallas.
-const FECHA_STORAGE_KEY = 'repartidor_fecha_ruta'
+// G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy.
+// El backend devuelve las paradas ordenadas desde la sucursal por cercanía.
 
 function getGreeting(name: string) {
   const h = new Date().getHours()
@@ -84,6 +80,8 @@ const stopsForMaps = (paradas: Shipment[]) =>
 const originForMaps = (origen: BranchOrigin | null) =>
   origen ? { direccion: origen.address, ciudad: origen.city, codigoPostal: origen.postalCode } : null
 
+const routeDateForDisplay = dateOnlyForDisplay
+
 export default function RepartidorDashboard() {
   const navigate = useNavigate()
   const user = useOutletContext<User>()
@@ -91,7 +89,6 @@ export default function RepartidorDashboard() {
   const isDark = theme.palette.mode === 'dark'
   const [paradas, setParadas] = useState<Shipment[]>([])
   const [fechaRuta, setFechaRuta] = useState<string | null>(null)
-  const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([])
   const [origen, setOrigen] = useState<BranchOrigin | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -114,19 +111,15 @@ export default function RepartidorDashboard() {
     setLoading(true)
     setError('')
     try {
-      const [data, fechas, sucursal, jornada] = await Promise.all([
+      const [data, sucursal, jornada] = await Promise.all([
         shipmentService.getMiRutaDelDia(fecha),
-        shipmentService.getMisFechasDeRuta(),
         // origen sólo se pide en la primera carga; cacheamos.
         origen ? Promise.resolve(origen) : branchService.getSucursalOrigen(),
         shipmentService.getEstadoJornada(),
       ])
       setParadas(data.paradas)
       setFechaRuta(data.fecha)
-      setFechasDisponibles(fechas)
       setEstadoJornada(jornada)
-      // Persistimos el día elegido para que sobreviva al salir/entrar de la vista.
-      if (data.fecha) sessionStorage.setItem(FECHA_STORAGE_KEY, data.fecha)
       if (!origen) setOrigen(sucursal)
     } catch {
       setError('No se pudo cargar tu ruta del día')
@@ -136,18 +129,7 @@ export default function RepartidorDashboard() {
   }
 
   useEffect(() => {
-    // Si veníamos de otra pantalla, restauramos el día que estaba seleccionado.
-    // Pero si ese día ya pasó (sesión vieja), lo descartamos para mostrar hoy/próximo.
-    const guardada = sessionStorage.getItem(FECHA_STORAGE_KEY)
-    let fechaInicial = guardada ?? undefined
-    if (guardada) {
-      const inicioHoy = new Date(new Date().toDateString()).getTime()
-      if (new Date(guardada).getTime() < inicioHoy) {
-        fechaInicial = undefined
-        sessionStorage.removeItem(FECHA_STORAGE_KEY)
-      }
-    }
-    load(fechaInicial)
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -301,15 +283,13 @@ export default function RepartidorDashboard() {
     void load(fechaRuta ?? undefined)
   }
 
-  const fechaActual = fechaRuta ? new Date(fechaRuta) : new Date()
+  const fechaActual = fechaRuta ? routeDateForDisplay(fechaRuta) : new Date()
   const fechaHoy = fechaActual.toLocaleDateString('es-AR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
   })
-  const esHoy = fechaRuta ? new Date(fechaRuta).toDateString() === new Date().toDateString() : false
-  const esFutura = fechaRuta ? new Date(fechaRuta).getTime() > new Date(new Date().toDateString()).getTime() : false
-
+  const esHoy = fechaRuta ? dateOnly(fechaRuta) === formatArgentinaDateInput() : false
   const proxima = metrics.proximaIdx >= 0 ? paradas[metrics.proximaIdx] : null
 
   const todasEntregadas =
@@ -399,7 +379,7 @@ export default function RepartidorDashboard() {
         <Box>
           <Typography variant="h4" fontWeight={700}>
             <RouteIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            {esHoy ? 'Mi Ruta del Día' : esFutura ? 'Mi Próxima Ruta' : 'Mi Ruta'}
+            {esHoy ? 'Mi Ruta del Día' : 'Mi Ruta'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
             {fechaHoy} · {paradas.length} paradas{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
@@ -416,19 +396,6 @@ export default function RepartidorDashboard() {
           )}
         </Box>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-          {fechasDisponibles.length > 1 && (
-            <Select
-              size="small"
-              value={fechaRuta ?? ''}
-              onChange={(e) => load(String(e.target.value))}
-            >
-              {fechasDisponibles.map((f) => (
-                <MenuItem key={f} value={f}>
-                  {new Date(f).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
-                </MenuItem>
-              ))}
-            </Select>
-          )}
           <Box sx={{ textAlign: 'right' }}>
             <Typography variant="caption" color="text.secondary">Avance</Typography>
             <Typography variant="h5" fontWeight={700} sx={{ color: '#2e7d32' }}>
@@ -485,12 +452,6 @@ export default function RepartidorDashboard() {
           </Button>
         </Stack>
       </Stack>
-
-      {esFutura && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Tu próxima ruta está programada para el <strong>{fechaHoy}</strong>. Hoy no tenés paradas asignadas.
-        </Alert>
-      )}
 
       {origen && (origen.latitud == null || origen.longitud == null) && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -626,7 +587,7 @@ export default function RepartidorDashboard() {
                       ? `Seguí la línea violeta para volver a ${origen?.name ?? 'la sucursal'}`
                       : origen
                         ? `Salida desde ${origen.name} · ${paradas.length} paradas en orden`
-                        : `Orden automático por código postal y FIFO · ${paradas.length} paradas`}
+                        : `Orden automático por cercanía · ${paradas.length} paradas`}
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -871,7 +832,7 @@ export default function RepartidorDashboard() {
                       >
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.texto}</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 10, display: 'block', textAlign: isMine ? 'right' : 'left' }}>
-                          {m.deNombre} · {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                          {m.deNombre} · {formatInstantArgentinaTime(m.fecha, { hour: '2-digit', minute: '2-digit' })}
                         </Typography>
                       </Paper>
                     </Stack>

@@ -21,6 +21,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { alertService, type AlertaPaqueteSinEstadoFinal } from '../services/alertService'
 import type { User } from '../types'
+import { formatDateOnlyEs } from '../utils/argentinaDate'
 
 // G1L-84: panel de alertas de paquetes sin estado final (Supervisor).
 export default function AlertasPage() {
@@ -81,7 +82,7 @@ export default function AlertasPage() {
                 <TableRow key={a.paqueteId} hover>
                   <TableCell sx={{ fontFamily: 'monospace' }}>{a.trackingId}</TableCell>
                   <TableCell>{a.repartidorNombre}</TableCell>
-                  <TableCell>{new Date(a.fechaPrevista).toLocaleDateString('es-AR')}</TableCell>
+                  <TableCell>{formatDateOnlyEs(a.fechaPrevista)}</TableCell>
                   <TableCell align="center">
                     <Chip
                       size="small"

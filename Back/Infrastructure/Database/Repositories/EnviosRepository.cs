@@ -40,9 +40,14 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Paquetes.FirstOrDefaultAsync(p => p.CodigoSeguimiento == codigoSeguimiento);
         }
 
-        public async Task<PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize)
+        public async Task<PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize, Guid? sucursalId = null)
         {
             var query = _context.Paquetes.AsQueryable();
+
+            if (sucursalId.HasValue)
+            {
+                query = query.Where(p => p.SucursalId == sucursalId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -87,9 +92,12 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Paquetes.Where(p => paqueteIds.Contains(p.Id)).ToListAsync();
         }
 
-        public async Task<List<Paquete>> GetPaquetesPendientesDeCalendarizacion()
+        public async Task<List<Paquete>> GetPaquetesPendientesDeCalendarizacion(Guid? sucursalId = null)
         {
-            return await _context.Paquetes.Where(p => p.Status == PaqueteStatus.PendienteDeCalendarizacion).ToListAsync();
+            return await _context.Paquetes
+                .Where(p => p.Status == PaqueteStatus.PendienteDeCalendarizacion
+                            && (!sucursalId.HasValue || p.SucursalId == sucursalId.Value))
+                .ToListAsync();
         }
 
         public async Task<List<Paquete>> GetPaquetesConAsignacionActiva()
@@ -156,9 +164,18 @@ namespace Back.Infrastructure.Database.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<Sucursal>> GetSucursales()
+        public async Task<List<Sucursal>> GetSucursales(string? provincia = null, Guid? sucursalId = null)
         {
-            return await _context.Sucursales.ToListAsync();
+            var query = _context.Sucursales.AsQueryable();
+            if (sucursalId.HasValue)
+            {
+                query = query.Where(s => s.Id == sucursalId.Value);
+            }
+            if (!string.IsNullOrWhiteSpace(provincia))
+            {
+                query = query.Where(s => s.Provincia == provincia);
+            }
+            return await query.ToListAsync();
         }
 
         public async Task<Sucursal?> GetSucursalById(Guid id)

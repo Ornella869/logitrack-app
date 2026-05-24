@@ -31,6 +31,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import api from '../services/api'
 import type { PagedResult, User } from '../types'
+import { dateOnly, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
 
@@ -191,19 +192,17 @@ export default function RutasActivasPage() {
                 const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                 const completas = r.entregadas + r.canceladas
                 const pct = r.totalParadas > 0 ? Math.round((completas / r.totalParadas) * 100) : 0
-                const fecha = new Date(r.fecha)
-                const hoyStr = new Date().toDateString()
-                const esHoy = fecha.toDateString() === hoyStr
-                const fechaIso = fecha.toISOString().split('T')[0]
+                const esHoy = isTodayArgentina(r.fecha)
+                const fechaIso = dateOnly(r.fecha)
                 return (
                   <TableRow key={`${r.repartidorId}-${fechaIso}`} sx={r.esDemorada ? { bgcolor: isDark ? 'rgba(237,108,2,0.1)' : '#fff8f0' } : {}}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={600} sx={{ textTransform: 'capitalize' }}>
-                        {esHoy ? 'Hoy' : fecha.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                        {esHoy ? 'Hoy' : formatDateOnlyEs(r.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}
                       </Typography>
                       {!esHoy && (
                         <Typography variant="caption" color="text.secondary">
-                          {fecha.toLocaleDateString('es-AR')}
+                          {formatDateOnlyEs(r.fecha)}
                         </Typography>
                       )}
                     </TableCell>

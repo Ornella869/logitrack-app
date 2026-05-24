@@ -33,6 +33,7 @@ import ElectricBoltRoundedIcon from '@mui/icons-material/ElectricBoltRounded'
 import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded'
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded'
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded'
+import { formatInstantArgentinaDate } from '../../utils/argentinaDate'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded'
 import RouteRoundedIcon from '@mui/icons-material/RouteRounded'
@@ -394,7 +395,7 @@ export default function LandingPage() {
         category: reviewForm.category,
         rating: reviewForm.rating,
         comment: reviewForm.comment.trim(),
-        date: new Date().toLocaleDateString('es-AR'),
+        date: formatInstantArgentinaDate(new Date()),
       },
       ...current,
     ])

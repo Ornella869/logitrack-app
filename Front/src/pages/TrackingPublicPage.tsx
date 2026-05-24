@@ -23,6 +23,7 @@ import { shipmentService } from '../services/shipmentService'
 import ShipmentMap from '../components/ShipmentMap'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment } from '../types'
+import { formatInstantArgentinaDate } from '../utils/argentinaDate'
 
 type TimelineStep = {
   key: string
@@ -133,11 +134,11 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
 
 const formatDate = (date: string) => {
   if (!date) return 'No disponible'
-  return new Intl.DateTimeFormat('es-AR', {
+  return formatInstantArgentinaDate(date, {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
-  }).format(new Date(date))
+  })
 }
 
 // G1L-17: copy de la fecha estimada según el estado del envío.

@@ -1,3 +1,4 @@
+using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -25,14 +26,17 @@ namespace Back.Application.Services
             _context = context;
         }
 
-        public async Task<ReporteVolumen> GetReporteVolumenAsync(DateTime? from, DateTime? to)
+        public async Task<ReporteVolumen> GetReporteVolumenAsync(DateTime? from, DateTime? to, Guid? sucursalId = null)
         {
-            var fromUtc = DateTime.SpecifyKind((from ?? DateTime.UtcNow.AddDays(-30)).Date, DateTimeKind.Utc);
-            var toUtc = DateTime.SpecifyKind((to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            var now = OperationalClock.Now;
+            var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
+            var toUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
 
             // CA: se filtran todos los paquetes cuya fecha de creación cae en el rango.
             var paquetes = await _context.Paquetes
-                .Where(p => p.CreadoEn >= fromUtc && p.CreadoEn <= toUtc)
+                .Where(p => p.CreadoEn >= fromUtc
+                            && p.CreadoEn <= toUtc
+                            && (sucursalId == null || p.SucursalId == sucursalId))
                 .Select(p => p.Status)
                 .ToListAsync();
 

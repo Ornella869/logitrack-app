@@ -24,6 +24,7 @@ import {
   type CalendarioOperativo,
 } from '../services/shipmentService'
 import type { Shipment } from '../types'
+import { dateOnly, formatDateOnlyEs } from '../utils/argentinaDate'
 
 interface Props {
   open: boolean
@@ -33,6 +34,13 @@ interface Props {
 }
 
 const CAPACIDAD_KG = 500
+
+const displayDate = (value: string) =>
+  formatDateOnlyEs(value, {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+  })
 
 // G1L-83: asignación manual de un envío pendiente a un repartidor y día.
 export default function PrecalendarizarDialog({ open, shipment, onClose, onSuccess }: Props) {
@@ -57,22 +65,13 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
       setLoading(true)
       const cal = await calendarizacionService.getCalendario(14)
       setCalendario(cal)
-      // Días hábiles próximos (excluye sábado y domingo).
-      const habiles = (cal?.dias ?? []).filter((d) => {
-        const dow = new Date(d).getDay()
-        return dow !== 0 && dow !== 6
-      })
-      setFecha(habiles[0] ?? cal?.dias?.[0] ?? '')
+      setFecha(cal?.dias?.[0] ? dateOnly(cal.dias[0]) : '')
       setLoading(false)
     })()
   }, [open])
 
-  const diasHabiles = useMemo(
-    () =>
-      (calendario?.dias ?? []).filter((d) => {
-        const dow = new Date(d).getDay()
-        return dow !== 0 && dow !== 6
-      }),
+  const diasDisponibles = useMemo(
+    () => [...new Set((calendario?.dias ?? []).map(dateOnly))],
     [calendario],
   )
 
@@ -81,7 +80,7 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
     const map = new Map<string, { cantidad: number; peso: number }>()
     if (!calendario || !fecha) return map
     for (const rep of calendario.repartidores) {
-      const celda = rep.celdas.find((c) => c.fecha.split('T')[0] === fecha.split('T')[0])
+      const celda = rep.celdas.find((c) => dateOnly(c.fecha) === fecha)
       map.set(rep.repartidorId, {
         cantidad: celda?.paquetes.length ?? 0,
         peso: celda?.pesoTotal ?? 0,
@@ -138,9 +137,9 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                 label="Día"
                 onChange={(e) => { setFecha(e.target.value); setWarnSobrecarga(null) }}
               >
-                {diasHabiles.map((d) => (
+                {diasDisponibles.map((d) => (
                   <MenuItem key={d} value={d}>
-                    {new Date(d).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'short' })}
+                    {displayDate(d)}
                   </MenuItem>
                 ))}
               </Select>

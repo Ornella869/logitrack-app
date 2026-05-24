@@ -96,13 +96,13 @@ namespace Back.Application.Services
         // Épica D: si se pasa sucursalId, todo se filtra a esa sucursal (envíos y repartidores).
         public async Task<int> ContarPendientesAsync(Guid? sucursalId = null)
         {
-            var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion();
-            return pendientes.Count(p => sucursalId == null || p.SucursalId == sucursalId);
+            var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion(sucursalId);
+            return pendientes.Count;
         }
 
         public async Task<CalendarioOperativo> GetCalendarioOperativoAsync(int dias = 14, Guid? sucursalId = null)
         {
-            var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+            var hoy = OperationalClock.TodayUtcDate;
             var diasList = Enumerable.Range(0, dias).Select(i => hoy.AddDays(i)).ToList();
 
             var repartidores = (await _userRepository.GetRepartidores())
@@ -210,6 +210,13 @@ namespace Back.Application.Services
 
             var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                 ?? throw new InvalidOperationException("Repartidor no encontrado.");
+            if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup && sup.SucursalId.HasValue)
+            {
+                if (paquete.SucursalId != sup.SucursalId)
+                    throw new InvalidOperationException("No podés calendarizar envíos de otra sucursal.");
+                if (rep.SucursalId != sup.SucursalId)
+                    throw new InvalidOperationException("No podés asignar envíos a repartidores de otra sucursal.");
+            }
             if (!rep.Activo || !rep.PuedeSerAsignado)
                 throw new InvalidOperationException("El repartidor está suspendido o inhabilitado y no puede recibir asignaciones.");
             // Fase A: si está retornando a la sucursal, no puede recibir envíos nuevos hasta cerrar la jornada.
@@ -287,9 +294,7 @@ namespace Back.Application.Services
             if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
                 sucursalId = sup.SucursalId;
 
-            var pendientes = (await _enviosRepository.GetPaquetesPendientesDeCalendarizacion())
-                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
-                .ToList();
+            var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion(sucursalId);
 
             if (pendientes.Count == 0)
             {
@@ -315,7 +320,9 @@ namespace Back.Application.Services
             //  2) Inicializar la matriz `carga` con sus asignaciones existentes,
             //     para que el algoritmo respete la capacidad real y la cercanía
             //     a su CP actual del día.
-            var existentes = await _enviosRepository.GetPaquetesConAsignacionActiva();
+            var existentes = (await _enviosRepository.GetPaquetesConAsignacionActiva())
+                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
+                .ToList();
 
             var enTransito = existentes
                 .Where(p => p.Status == PaqueteStatus.EnTransito && p.RepartidorAsignadoId.HasValue)
@@ -352,7 +359,7 @@ namespace Back.Application.Services
                 r => r.Id,
                 r => existentes.Count(p => p.RepartidorAsignadoId == r.Id));
 
-            var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+            var hoy = OperationalClock.TodayUtcDate;
             int sinAsignar = 0;
 
             // Mantenemos un mapa de quién recibió un paquete recién calendarizado

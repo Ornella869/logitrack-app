@@ -24,6 +24,7 @@ import { shipmentService } from '../services/shipmentService'
 import { incidenciaService } from '../services/incidenciaService'
 import type { Shipment, User } from '../types'
 import UsersManagement from '../components/UsersManagement'
+import { formatArgentinaDateInput, formatDateOnlyEs } from '../utils/argentinaDate'
 
 function getGreeting(name: string) {
   const h = new Date().getHours()
@@ -79,7 +80,7 @@ function Dashboard() {
       (shipment) => shipment.status === 'Asignado a vehículo' || shipment.status === 'Cargado en vehículo' || shipment.status === 'Listo para salir',
     )
     const enTransito = shipments.filter((shipment) => shipment.status === 'En tránsito')
-    const hoyStr = new Date().toISOString().split('T')[0]
+    const hoyStr = formatArgentinaDateInput()
     const entregadosHoy = shipments.filter((shipment) => shipment.status === 'Entregado' && shipment.lastUpdate === hoyStr)
     const oldestPending = pendientes.length
       ? pendientes.reduce((a, b) => (a.createdDate < b.createdDate ? a : b))
@@ -145,7 +146,7 @@ function Dashboard() {
           </Typography>
           {supervisorMetrics.oldestPending && (
             <Typography variant="body2">
-              El más antiguo fue cargado el {new Date(supervisorMetrics.oldestPending.createdDate).toLocaleDateString('es-AR')}.
+              El más antiguo fue cargado el {formatDateOnlyEs(supervisorMetrics.oldestPending.createdDate)}.
               Ejecutá la calendarización automática para asignarlos a repartidores.
             </Typography>
           )}

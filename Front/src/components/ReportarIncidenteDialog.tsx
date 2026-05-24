@@ -25,6 +25,7 @@ import { notificationService } from '../services/notificationService'
 import { incidenciaService, type TipoIncidencia } from '../services/incidenciaService'
 import { shipmentService } from '../services/shipmentService'
 import type { User } from '../types'
+import { formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 interface ChatMessage {
   id: string
@@ -82,7 +83,7 @@ const FOLLOW_UP_OPTS = [
 const WELLBEING_RESPONSE = 'Qué bueno saberlo! 😊\n\nRecordá que podés contactarme en cualquier momento si surge algo durante la jornada. ¡Cuídate y buena ruta!'
 
 function nowTime(): string {
-  return new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  return formatInstantArgentinaTime(new Date(), { hour: '2-digit', minute: '2-digit' })
 }
 
 function welcomeMsg(): ChatMessage {

@@ -1,3 +1,4 @@
+using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
 using Back.Infrastructure.Database;
@@ -40,10 +41,11 @@ namespace Back.Application.Services
             _userRepository = userRepository;
         }
 
-        public async Task<RepartidorAsignadoInfo?> GetRepartidorDePaqueteAsync(Guid paqueteId)
+        public async Task<RepartidorAsignadoInfo?> GetRepartidorDePaqueteAsync(Guid paqueteId, Guid? sucursalId = null)
         {
             var paquete = await _context.Paquetes.FindAsync(paqueteId);
             if (paquete is null || !paquete.RepartidorAsignadoId.HasValue) return null;
+            if (sucursalId.HasValue && paquete.SucursalId != sucursalId) return null;
             var rep = await _userRepository.GetUsuarioById(paquete.RepartidorAsignadoId.Value) as Repartidor;
             if (rep is null) return null;
             return new RepartidorAsignadoInfo
@@ -56,13 +58,16 @@ namespace Back.Application.Services
             };
         }
 
-        public async Task<RendimientoRepartidor> GetRendimientoAsync(Guid repartidorId, DateTime? from, DateTime? to)
+        public async Task<RendimientoRepartidor> GetRendimientoAsync(Guid repartidorId, DateTime? from, DateTime? to, Guid? sucursalId = null)
         {
             var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                 ?? throw new InvalidOperationException("Repartidor no encontrado.");
+            if (sucursalId.HasValue && rep.SucursalId != sucursalId)
+                throw new InvalidOperationException("Repartidor no encontrado.");
 
-            var fromUtc = DateTime.SpecifyKind((from ?? DateTime.UtcNow.AddDays(-30)).Date, DateTimeKind.Utc);
-            var toUtc = DateTime.SpecifyKind((to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            var now = OperationalClock.Now;
+            var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
+            var toUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
 
             // Paquetes cuya FechaCalendarizada cae en el rango, más cualquier paquete
             // que haya sido entregado dentro del rango aunque haya sido calendarizado antes.
@@ -76,6 +81,7 @@ namespace Back.Application.Services
 
             var paquetes = await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
+                            && (sucursalId == null || p.SucursalId == sucursalId)
                             && ((p.FechaCalendarizada.HasValue
                                     && p.FechaCalendarizada >= fromUtc
                                     && p.FechaCalendarizada <= toUtc)

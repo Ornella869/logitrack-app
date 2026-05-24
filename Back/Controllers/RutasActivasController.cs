@@ -1,5 +1,7 @@
 using Back.Application.Common;
 using Back.Application.Services;
+using Back.Domain.Models;
+using Back.Domain.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,10 +12,20 @@ namespace Back.Controllers
     public class RutasActivasController : ControllerBase
     {
         private readonly RutasActivasService _service;
+        private readonly IUserRepository _userRepository;
 
-        public RutasActivasController(RutasActivasService service)
+        public RutasActivasController(RutasActivasService service, IUserRepository userRepository)
         {
             _service = service;
+            _userRepository = userRepository;
+        }
+
+        private async Task<Guid?> CurrentSucursalScopeAsync()
+        {
+            if (User.IsInRole(Roles.Administrador)) return null;
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdStr, out var userId)) return null;
+            return (await _userRepository.GetUsuarioById(userId))?.SucursalId;
         }
 
         /// <summary>G1L-70: Listado de rutas del día con progreso, capacidad y demoras.</summary>
@@ -26,7 +38,7 @@ namespace Back.Controllers
         {
             var normalizedPage = PaginationDefaults.NormalizePage(page);
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
-            var items = await _service.GetRutasDeHoyPaginadasAsync(search, normalizedPage, normalizedPageSize);
+            var items = await _service.GetRutasDeHoyPaginadasAsync(search, normalizedPage, normalizedPageSize, await CurrentSucursalScopeAsync());
             return Ok(items);
         }
 
@@ -35,8 +47,8 @@ namespace Back.Controllers
         [HttpGet("{repartidorId:guid}")]
         public async Task<ActionResult<DetalleRutaResponse>> Detalle(Guid repartidorId, [FromQuery] DateTime? fecha)
         {
-            var dia = (fecha ?? DateTime.UtcNow).Date;
-            var detalle = await _service.GetDetalleRutaAsync(repartidorId, dia);
+            var dia = (fecha ?? OperationalClock.TodayUtcDate).Date;
+            var detalle = await _service.GetDetalleRutaAsync(repartidorId, dia, await CurrentSucursalScopeAsync());
             if (detalle is null) return NotFound();
             return Ok(detalle);
         }

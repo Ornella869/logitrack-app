@@ -1,3 +1,4 @@
+using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -131,8 +132,8 @@ namespace Back.Application.Services
         // Gate estricto: solo una prueba APROBADA hoy (del momento indicado) habilita continuar.
         public async Task<bool> TienePruebaAprobadaHoyAsync(Guid usuarioId, MomentoPruebaOjoPatron momento = MomentoPruebaOjoPatron.Inicio)
         {
-            var hoy = DateTime.UtcNow.Date;
-            var manana = hoy.AddDays(1);
+            var hoy = OperationalClock.TodayStartUtc;
+            var manana = OperationalClock.TomorrowStartUtc;
             return await _context.PruebasOjoPatron.AnyAsync(p =>
                 p.UsuarioId == usuarioId && p.FechaHora >= hoy && p.FechaHora < manana
                 && p.Resultado == ResultadoPruebaOjoPatron.Aprobada

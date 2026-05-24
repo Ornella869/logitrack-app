@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Back.Application.Abstractions;
+using Back.Application.Common;
 using Back.Application.Util;
 using Back.Controllers;
 using Back.Domain.Models;
@@ -27,6 +28,15 @@ namespace Back.Application.Services
         public required string CodigoSeguimiento { get; init; }
         public required PaqueteStatus Status { get; init; }
         public required string QrBase64 { get; init; }
+    }
+
+    public class GenerarLoteDemoResult
+    {
+        public int Solicitados { get; init; }
+        public int Creados { get; init; }
+        public int Fallidos { get; init; }
+        public List<string> TrackingIds { get; init; } = new();
+        public List<string> Errores { get; init; } = new();
     }
 
     public class EnviosService
@@ -72,6 +82,22 @@ namespace Back.Application.Services
                 && await _tarifas.EsZonaPeligrosaAsync(provincia, ubicacion.Latitud, ubicacion.Longitud);
             var cotizacion = _tarifas.Calcular(peso, distancia, esPeligrosa, config);
             paquete.AsignarCotizacion(cotizacion.Total, cotizacion.CostoRecargo, esPeligrosa);
+        }
+
+        private async Task ValidarAccesoPaqueteAsync(Paquete paquete, Guid? usuarioId)
+        {
+            if (!usuarioId.HasValue) return;
+            var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
+            if (usuario is null || usuario is Administrador) return;
+            if (usuario is Repartidor)
+            {
+                if (paquete.RepartidorAsignadoId != usuario.Id)
+                    throw new InvalidOperationException("No podés operar envíos asignados a otro repartidor.");
+                if (paquete.FechaCalendarizada?.Date != OperationalClock.TodayUtcDate)
+                    throw new InvalidOperationException("Solo podés operar envíos calendarizados para hoy.");
+            }
+            if (usuario is not Repartidor && usuario.SucursalId.HasValue && paquete.SucursalId != usuario.SucursalId)
+                throw new InvalidOperationException("No podés operar envíos de otra sucursal.");
         }
 
         // Épica D: resuelve la sucursal responsable de un envío por la provincia de destino
@@ -167,6 +193,79 @@ namespace Back.Application.Services
             };
         }
 
+        public async Task<GenerarLoteDemoResult> GenerarLoteDemoAsync(int cantidad, Guid? usuarioId)
+        {
+            if (!new[] { 100, 250, 500, 1000 }.Contains(cantidad))
+                throw new InvalidOperationException("La cantidad debe ser 100, 250, 500 o 1000.");
+
+            var direcciones = await ObtenerDireccionesDemoHabilitadasAsync(usuarioId);
+            if (direcciones.Count == 0)
+                throw new InvalidOperationException("No hay direcciones demo para la cobertura de tu sucursal.");
+
+            var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId);
+            var creados = new List<string>();
+            var errores = new List<string>();
+
+            for (var i = 0; i < cantidad; i++)
+            {
+                try
+                {
+                    var destino = direcciones[i % direcciones.Count];
+                    var remitente = CrearRemitenteDemo(sucursalOrigen, destino);
+                    var peso = Math.Round(1.5 + (i * 3.7 % 38), 1);
+                    var distancia = DistanciasService.CalcularDistancia(destino.Localidad);
+                    var prioridad = await _mlPrioridadPrediction.Predecir((float)peso, distancia);
+                    var sucursalDestino = await ResolverSucursalDestinoAsync(destino.Provincia, usuarioId);
+
+                    var paquete = new Paquete(
+                        peso,
+                        0,
+                        0,
+                        new Cliente(
+                            remitente.Item1,
+                            remitente.Item2,
+                            new Direccion(remitente.Item3, remitente.Item4, remitente.Item5),
+                            remitente.Item6),
+                        new Cliente(
+                            destino.Nombre,
+                            destino.Apellido,
+                            new Direccion(destino.Direccion, destino.Localidad, destino.CP, ubicacion: new Ubicacion(destino.Latitud, destino.Longitud)),
+                            destino.Telefono),
+                        prioridad,
+                        distancia,
+                        $"Carga demo #{i + 1}")
+                    {
+                        TipoEnvio = i % 8 == 0 ? TipoEnvio.Prioritario : TipoEnvio.Comun,
+                        TipoPaquete = i % 11 == 0 ? TipoPaquete.Fragil : TipoPaquete.Comun,
+                        SucursalId = sucursalDestino?.Id,
+                    };
+
+                    await AplicarCotizacion(paquete, peso, distancia, paquete.Destinatario.Direccion.Ubicacion, destino.Provincia);
+                    await _enviosRepository.Add(paquete);
+                    await _historial.RegistrarCambioAsync(paquete.Id, paquete.Status, usuarioId, OrigenCambioEstado.Sistema, "Alta masiva demo");
+                    creados.Add(paquete.CodigoSeguimiento);
+                }
+                catch (Exception ex)
+                {
+                    errores.Add($"Fila {i + 1}: {ex.Message}");
+                }
+            }
+
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CreacionEnvio,
+                $"Carga masiva demo: {creados.Count} envios creados",
+                contexto: $"Solicitados: {cantidad} | Fallidos: {errores.Count}");
+
+            return new GenerarLoteDemoResult
+            {
+                Solicitados = cantidad,
+                Creados = creados.Count,
+                Fallidos = errores.Count,
+                TrackingIds = creados.Take(20).ToList(),
+                Errores = errores.Take(20).ToList(),
+            };
+        }
+
         // G1L-12 / G1L-80
         public async Task EditarPaquete(Guid paqueteId, RegistrarPaqueteRequest request, Guid? usuarioId)
         {
@@ -174,6 +273,7 @@ namespace Back.Application.Services
 
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             if (paquete.Status != PaqueteStatus.PendienteDeCalendarizacion)
             {
@@ -201,6 +301,7 @@ namespace Back.Application.Services
 
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
+            var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
 
             paquete.ActualizarDatos(
                 new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono),
@@ -211,6 +312,7 @@ namespace Back.Application.Services
                 request.Comentarios,
                 distancia,
                 prioridad);
+            paquete.SucursalId = sucursalDestino?.Id;
 
             await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
 
@@ -237,6 +339,7 @@ namespace Back.Application.Services
 
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             switch (paquete.Status)
             {
@@ -257,7 +360,8 @@ namespace Back.Application.Services
                     // restantes pueden avanzar a "Listo para Salir".
                     var repartidorParaRecalculo = paquete.RepartidorAsignadoId;
                     var fechaParaRecalculo = paquete.FechaCalendarizada;
-                    var debeRecalcular = paquete.Status == PaqueteStatus.CargadoEnVehiculo;
+                    var debeRecalcular = paquete.Status == PaqueteStatus.AsignadoAVehiculo
+                        || paquete.Status == PaqueteStatus.CargadoEnVehiculo;
 
                     if (mode == CancelarEnvioMode.Reagendar)
                     {
@@ -311,6 +415,7 @@ namespace Back.Application.Services
 
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            await ValidarAccesoPaqueteAsync(paquete, supervisorId);
 
             if (paquete.Status == PaqueteStatus.Entregado)
                 throw new InvalidOperationException("No se puede actuar sobre un envío ya entregado.");
@@ -345,6 +450,7 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             switch (destino)
             {
@@ -356,6 +462,11 @@ namespace Back.Application.Services
                 case PaqueteStatus.Entregado:
                     paquete.Entregar();
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, usuarioId, OrigenCambioEstado.Manual);
+                    await _auditoria.RegistrarAsync(
+                        Domain.Models.TipoAccion.Otro,
+                        $"Notificacion al repartidor: parada entregada {paquete.CodigoSeguimiento}",
+                        recursoId: paquete.CodigoSeguimiento,
+                        contexto: "Rol destino: Repartidor");
                     await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
 
@@ -380,6 +491,7 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             paquete.MarcarDemorado(motivo);
             await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Demorado, usuarioId, OrigenCambioEstado.Manual, motivo);
@@ -395,6 +507,7 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             paquete.ContinuarTransito();
             await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.Manual, "Continuación de ruta tras demora");
@@ -409,6 +522,7 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento)
                 ?? throw new InvalidOperationException("No se encontró un envío con ese código.");
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             switch (paquete.Status)
             {
@@ -459,6 +573,9 @@ namespace Back.Application.Services
         // Se queda como responsable él mismo (ya está asignado por la calendarización).
         public async Task<int> IniciarRutaDelDiaAsync(Guid repartidorId, DateTime fecha, Guid? usuarioId)
         {
+            if (fecha.Date != OperationalClock.TodayUtcDate)
+                throw new InvalidOperationException("Solo podés iniciar la ruta del día actual.");
+
             var paquetesDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fecha);
             var listos = paquetesDia.Where(p => p.Status == PaqueteStatus.ListoParaSalir).ToList();
 
@@ -567,6 +684,60 @@ namespace Back.Application.Services
         }
 
         // G1L-80: mensajes específicos según el estado bloqueado.
+        private async Task<List<DemoAddress>> ObtenerDireccionesDemoHabilitadasAsync(Guid? usuarioId)
+        {
+            var disponibles = DireccionesDemo();
+            var sucursal = await ObtenerSucursalUsuarioAsync(usuarioId);
+            if (sucursal is null) return disponibles;
+
+            return disponibles.Where(d => sucursal.Cubre(d.Provincia)).ToList();
+        }
+
+        private async Task<Sucursal?> ObtenerSucursalUsuarioAsync(Guid? usuarioId)
+        {
+            if (!usuarioId.HasValue) return null;
+
+            var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
+            if (usuario?.SucursalId is not Guid sucursalId) return null;
+
+            return (await _enviosRepository.GetSucursales()).FirstOrDefault(s => s.Id == sucursalId);
+        }
+
+        private static (string, string, string, string, string, string) CrearRemitenteDemo(Sucursal? sucursal, DemoAddress destino)
+        {
+            if (sucursal is not null)
+                return ("Sucursal", sucursal.Nombre, sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal, sucursal.Telefono);
+
+            return ("Centro", "Logistico", destino.Direccion, destino.Localidad, destino.CP, destino.Telefono);
+        }
+
+        private static List<DemoAddress> DireccionesDemo() => new()
+        {
+            new("Buenos Aires", "La Plata", "1900", "Calle 12 800", -34.9214, -57.9544, "Camila", "Torres", "2214551200"),
+            new("Buenos Aires", "Hurlingham", "1686", "Av. Vergara 2400", -34.5885, -58.6324, "Martin", "Rios", "114551201"),
+            new("Buenos Aires", "Mar del Plata", "7600", "Av. Luro 3050", -38.0023, -57.5575, "Lucia", "Mendez", "2234551202"),
+            new("Catamarca", "San Fernando del Valle de Catamarca", "4700", "Av. Guemes 650", -28.4696, -65.7795, "Sofia", "Herrera", "3834551203"),
+            new("Catamarca", "Valle Viejo", "4707", "Av. Presidente Castillo 1200", -28.4691, -65.7206, "Diego", "Nunez", "3834551204"),
+            new("Cordoba", "Cordoba", "5000", "Av. Colon 500", -31.4135, -64.1888, "Julian", "Acosta", "3514551205"),
+            new("Santa Fe", "Santa Fe", "3000", "Bv. Pellegrini 2500", -31.6333, -60.7000, "Valentina", "Molina", "3424551206"),
+            new("Mendoza", "Mendoza", "5500", "San Martin 1200", -32.8895, -68.8458, "Pablo", "Sosa", "2614551207"),
+            new("Tucuman", "San Miguel de Tucuman", "4000", "24 de Septiembre 600", -26.8241, -65.2226, "Natalia", "Paz", "3814551208"),
+            new("Salta", "Salta", "4400", "Caseros 900", -24.7897, -65.4105, "Bruno", "Vega", "3874551209"),
+            new("Neuquen", "Neuquen", "8300", "Av. Argentina 400", -38.9516, -68.0591, "Rocio", "Luna", "2994551210"),
+            new("Entre Rios", "Parana", "3100", "Urquiza 950", -31.7413, -60.5115, "Emilia", "Castro", "3434551211"),
+        };
+
+        private sealed record DemoAddress(
+            string Provincia,
+            string Localidad,
+            string CP,
+            string Direccion,
+            double Latitud,
+            double Longitud,
+            string Nombre,
+            string Apellido,
+            string Telefono);
+
         private static string MensajeBloqueoEdicion(PaqueteStatus status) => status switch
         {
             PaqueteStatus.AsignadoAVehiculo => "El envío ya fue asignado a un vehículo y no puede modificarse.",

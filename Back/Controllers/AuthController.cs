@@ -41,6 +41,28 @@ namespace Back.Controllers
             _auditoria = auditoria;
         }
 
+        private Guid? CurrentUserId()
+        {
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            return Guid.TryParse(userIdStr, out var id) ? id : null;
+        }
+
+        private async Task<Usuario?> CurrentUserAsync()
+        {
+            var userId = CurrentUserId();
+            return userId is null ? null : await _userRepository.GetUsuarioById(userId.Value);
+        }
+
+        private async Task<ActionResult?> ValidarRepartidorEnSucursalDelSupervisor(Guid repartidorId)
+        {
+            if (!User.IsInRole(Roles.Supervisor)) return null;
+            var supervisor = await CurrentUserAsync();
+            if (supervisor?.SucursalId is null) return null;
+            var repartidor = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
+            if (repartidor is null) return NotFound("Repartidor no encontrado.");
+            return repartidor.SucursalId == supervisor.SucursalId ? null : Forbid();
+        }
+
         /// <summary>Login con email + contraseña + reCAPTCHA. Devuelve JWT.</summary>
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -121,8 +143,14 @@ namespace Back.Controllers
             var normalizedPage = PaginationDefaults.NormalizePage(page);
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
 
-            var repartidores = await _userRepository.GetRepartidores();
-            var asignados = await _enviosRepository.GetPaquetesConAsignacionActiva();
+            var currentUser = await CurrentUserAsync();
+            var sucursalScope = User.IsInRole(Roles.Administrador) ? null : currentUser?.SucursalId;
+            var repartidores = (await _userRepository.GetRepartidores())
+                .Where(r => sucursalScope == null || r.SucursalId == sucursalScope)
+                .ToList();
+            var asignados = (await _enviosRepository.GetPaquetesConAsignacionActiva())
+                .Where(p => sucursalScope == null || p.SucursalId == sucursalScope)
+                .ToList();
             var paquetesActivosPorRepartidor = asignados
                 .GroupBy(p => p.RepartidorAsignadoId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
@@ -219,6 +247,12 @@ namespace Back.Controllers
         {
             try
             {
+                if (User.IsInRole(Roles.Supervisor))
+                {
+                    var supervisor = await CurrentUserAsync();
+                    if (supervisor?.SucursalId is null) return BadRequest("El supervisor no tiene sucursal asignada.");
+                    request.SucursalId = supervisor.SucursalId;
+                }
                 var result = await _authService.RegistrarRepartidor(request);
                 var repartidor = result.Repartidor;
 
@@ -250,6 +284,8 @@ namespace Back.Controllers
         {
             try
             {
+                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                if (scopeError is not null) return scopeError;
                 var repartidor = await _authService.ActualizarLicenciaRepartidor(repartidorId, request.Licencia);
                 await _context.SaveChangesAsync();
                 return Ok(MapRepartidor(repartidor));
@@ -266,6 +302,8 @@ namespace Back.Controllers
         {
             try
             {
+                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                if (scopeError is not null) return scopeError;
                 var repartidor = await _authService.CambiarEstadoRepartidor(repartidorId, request.Estado);
                 await _context.SaveChangesAsync();
                 return Ok(MapRepartidor(repartidor));
@@ -279,6 +317,7 @@ namespace Back.Controllers
         // ============== G1L-30 / G1L-47: CRUD Usuarios + credenciales (Administrador) ==============
 
         /// <summary>Listado de usuarios con búsqueda parcial por nombre, apellido, email o DNI.</summary>
+        [Authorize(Roles = Roles.Administrador)]
         [HttpGet("usuarios")]
         public async Task<ActionResult<PagedResponse<UserInfoResponse>>> GetUsuarios(
             [FromQuery] string? search,
@@ -428,7 +467,8 @@ namespace Back.Controllers
             Activo = r.Activo,
             Role = Roles.Repartidor,
             Licencia = r.Licencia,
-            Estado = r.EstadoLabel
+            Estado = r.EstadoLabel,
+            SucursalId = r.SucursalId?.ToString()
         };
     }
 
@@ -558,6 +598,8 @@ namespace Back.Controllers
         public string Apellido { get; set; }
         public string Email { get; set; }
         public string Role { get; set; }
+        public string? SucursalId { get; set; }
+        public string? Provincia { get; set; }
     }
 
     public class RegisterRequest

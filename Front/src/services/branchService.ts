@@ -1,4 +1,5 @@
 import type { Branch } from '../types'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import api from './api'
 
 // Tipos para requests al backend
@@ -8,6 +9,7 @@ interface RegistarSucursalRequest {
   Ciudad: string
   CodigoPostal: string
   Provincia?: string
+  ProvinciasCubiertas?: string[]
   Telefono: string
 }
 
@@ -29,8 +31,9 @@ const mapToBranch = (sucursal: any): Branch => ({
   city: sucursal.ciudad,
   postalCode: sucursal.codigoPostal ?? '',
   province: sucursal.provincia ?? undefined,
+  coveredProvinces: sucursal.provinciasCubiertas ?? sucursal.ProvinciasCubiertas ?? [],
   phone: sucursal.telefono,
-  createdDate: new Date().toISOString().split('T')[0],
+  createdDate: formatArgentinaDateInput(),
   status: mapStatus(sucursal.estado)
 })
 
@@ -67,6 +70,7 @@ export const branchService = {
         Ciudad: branchData.city,
         CodigoPostal: branchData.postalCode,
         Provincia: branchData.province,
+        ProvinciasCubiertas: branchData.coveredProvinces ?? [],
         Telefono: branchData.phone,
       }
 
@@ -75,7 +79,7 @@ export const branchService = {
       return {
         ...branchData,
         id: Date.now().toString(),
-        createdDate: new Date().toISOString().split('T')[0]
+        createdDate: formatArgentinaDateInput()
       }
     } catch (error) {
       console.error('Create branch error:', error)
@@ -92,13 +96,14 @@ export const branchService = {
         Ciudad: branchData.city,
         CodigoPostal: branchData.postalCode,
         Provincia: branchData.province,
+        ProvinciasCubiertas: branchData.coveredProvinces ?? [],
         Telefono: branchData.phone,
       }
       await api.put(`/envios/sucursales/${id}`, request)
       return {
         ...branchData,
         id,
-        createdDate: new Date().toISOString().split('T')[0],
+        createdDate: formatArgentinaDateInput(),
       }
     } catch (error) {
       console.error('Update branch error:', error)

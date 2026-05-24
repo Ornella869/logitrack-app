@@ -1,4 +1,5 @@
 import type { Vehicle } from '../types'
+import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import api from './api'
 
 // Tipos para requests al backend
@@ -37,7 +38,7 @@ const mapToVehicle = (vehiculo: any): Vehicle => ({
   marca: vehiculo.marca,
   capacidadCarga: vehiculo.capacidadCarga,
   estado: mapEstado(vehiculo.estado),
-  createdDate: vehiculo.createdDate || new Date().toISOString().split('T')[0],
+  createdDate: vehiculo.createdDate || formatArgentinaDateInput(),
   operator: vehiculo.operator,
   assignedRouteIds: vehiculo.assignedRouteIds || []
 })

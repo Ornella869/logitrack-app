@@ -58,21 +58,25 @@ namespace Back.Application.Services
             _userRepository = userRepository;
         }
 
-        public async Task<List<RutaActivaItem>> GetRutasDeHoyAsync()
+        public async Task<List<RutaActivaItem>> GetRutasDeHoyAsync(Guid? sucursalId = null)
         {
             // Mostramos rutas activas de hoy y futuras: la calendarización empieza
             // en mañana hábil (G1L-54) así que filtrar sólo "hoy" dejaba la pantalla
             // siempre vacía. Cada repartidor puede aparecer una vez por fecha.
-            var hoy = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+            var hoy = OperationalClock.TodayUtcDate;
             var asignados = await _enviosRepository.GetPaquetesConAsignacionActiva();
             var paquetesActivos = asignados
-                .Where(p => p.FechaCalendarizada.HasValue && p.FechaCalendarizada.Value.Date >= hoy)
+                .Where(p => p.FechaCalendarizada.HasValue
+                            && p.FechaCalendarizada.Value.Date >= hoy
+                            && (sucursalId == null || p.SucursalId == sucursalId))
                 .ToList();
 
-            var repartidoresAll = await _userRepository.GetRepartidores();
+            var repartidoresAll = (await _userRepository.GetRepartidores())
+                .Where(r => sucursalId == null || r.SucursalId == sucursalId)
+                .ToList();
             var repIndex = repartidoresAll.ToDictionary(r => r.Id);
 
-            var ahora = DateTime.UtcNow;
+            var ahora = OperationalClock.Now;
             var pasoMediodia = ahora.Hour >= 12;
 
             var items = paquetesActivos
@@ -131,9 +135,9 @@ namespace Back.Application.Services
             return items;
         }
 
-        public async Task<ListadoRutasActivasResponse> GetRutasDeHoyPaginadasAsync(string? search, int page, int pageSize)
+        public async Task<ListadoRutasActivasResponse> GetRutasDeHoyPaginadasAsync(string? search, int page, int pageSize, Guid? sucursalId = null)
         {
-            var allItems = await GetRutasDeHoyAsync();
+            var allItems = await GetRutasDeHoyAsync(sucursalId);
 
             var totalParadas = allItems.Sum(r => r.TotalParadas);
             var totalEntregadas = allItems.Sum(r => r.Entregadas);
@@ -178,12 +182,15 @@ namespace Back.Application.Services
             };
         }
 
-        public async Task<DetalleRutaResponse?> GetDetalleRutaAsync(Guid repartidorId, DateTime fecha)
+        public async Task<DetalleRutaResponse?> GetDetalleRutaAsync(Guid repartidorId, DateTime fecha, Guid? sucursalId = null)
         {
             var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
             if (rep is null) return null;
+            if (sucursalId.HasValue && rep.SucursalId != sucursalId) return null;
 
-            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fecha);
+            var paquetes = (await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fecha))
+                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
+                .ToList();
 
             return new DetalleRutaResponse
             {

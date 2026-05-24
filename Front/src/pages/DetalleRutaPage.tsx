@@ -23,6 +23,7 @@ import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import RouteMap from '../components/RouteMap'
 import { branchService, type BranchOrigin } from '../services/branchService'
+import { formatDateOnlyEs } from '../utils/argentinaDate'
 import { buildMapsUrl } from '../utils/mapsUrl'
 import type { User } from '../types'
 
@@ -157,7 +158,7 @@ export default function DetalleRutaPage() {
             Ruta de {detalle.repartidorNombre}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-            {new Date(detalle.fecha).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'long' })}
+            {formatDateOnlyEs(detalle.fecha, { weekday: 'long', day: '2-digit', month: 'long' })}
             {' · '}{detalle.paradas.length} paradas{' · '}{pesoTotal.toFixed(0)} kg
           </Typography>
         </Box>

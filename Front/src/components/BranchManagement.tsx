@@ -81,6 +81,10 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
     }
   }
 
+  const visibleBranches = gerenteProvincia
+    ? branches.filter((b) => b.province === gerenteProvincia)
+    : branches
+
   return (
     <Box sx={{ mt: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -103,7 +107,7 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      {!loading && !error && branches.length === 0 && (
+      {!loading && !error && visibleBranches.length === 0 && (
         <Alert severity="info">
           No hay sucursales registradas. Creá la primera para que los operadores puedan registrar
           envíos.
@@ -111,7 +115,7 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
       )}
 
       <Stack spacing={2}>
-        {branches.map((b) => (
+        {visibleBranches.map((b) => (
           <Card key={b.id} variant="outlined">
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -130,6 +134,12 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
               <Typography variant="body2" color="text.secondary">
                 Tel: {b.phone}
               </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                <Chip label={`Provincia: ${b.province ?? '-'}`} size="small" />
+                {(b.coveredProvinces ?? []).map((p) => (
+                  <Chip key={p} label={`Cubre: ${p}`} size="small" variant="outlined" />
+                ))}
+              </Stack>
             </CardContent>
             <CardActions>
               <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(b)}>

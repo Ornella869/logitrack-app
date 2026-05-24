@@ -22,6 +22,8 @@ import {
   TextField,
   Button,
   Alert,
+  Box,
+  Chip,
   CircularProgress,
   Stack,
   InputAdornment,
@@ -59,6 +61,7 @@ const EMPTY_FORM = {
   province: '',
   phone: '',
   status: 'Activa' as BranchStatus,
+  coveredProvinces: [] as string[],
 }
 
 function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lockedProvince }: BranchFormProps) {
@@ -80,6 +83,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
         province: initialData.province ?? '',
         phone: initialData.phone,
         status: initialData.status,
+        coveredProvinces: initialData.coveredProvinces ?? [],
       })
     } else {
       setFormData({ ...EMPTY_FORM, province: lockedProvince ?? '' })
@@ -219,6 +223,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
         province: formData.province.trim() || undefined,
         phone: formData.phone.trim(),
         status: formData.status,
+        coveredProvinces: formData.coveredProvinces,
       }
       const saved = isEdit && initialData
         ? await branchService.updateBranch(initialData.id, payload)
@@ -326,7 +331,11 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
               value={formData.province}
               label="Provincia"
               onChange={(e) => {
-                setFormData((prev) => ({ ...prev, province: e.target.value }))
+                setFormData((prev) => ({
+                  ...prev,
+                  province: e.target.value,
+                  coveredProvinces: prev.coveredProvinces.filter((p) => p !== e.target.value),
+                }))
                 if (errors.province) setErrors((prev) => ({ ...prev, province: '' }))
               }}
             >
@@ -339,6 +348,35 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
                 ? `Como Gerente solo podés crear sucursales en tu provincia (${lockedProvince}).`
                 : 'Se pre-selecciona al validar el CP — verificá que sea correcta para CPs ambiguos.')}
             </FormHelperText>
+          </FormControl>
+
+          <FormControl fullWidth disabled={loading}>
+            <InputLabel>Cobertura adicional</InputLabel>
+            <Select
+              multiple
+              value={formData.coveredProvinces}
+              label="Cobertura adicional"
+              onChange={(e) => {
+                const value = e.target.value
+                setFormData((prev) => ({
+                  ...prev,
+                  coveredProvinces: (typeof value === 'string' ? value.split(',') : value)
+                    .filter((p) => p !== prev.province),
+                }))
+              }}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selected.map((value) => (
+                    <Chip key={value} label={value} size="small" />
+                  ))}
+                </Box>
+              )}
+            >
+              {AR_PROVINCIAS.filter((p) => p !== formData.province).map((p) => (
+                <MenuItem key={p} value={p}>{p}</MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>La provincia propia siempre queda cubierta.</FormHelperText>
           </FormControl>
 
           <TextField

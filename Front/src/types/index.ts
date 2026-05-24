@@ -80,6 +80,7 @@ export interface Branch {
   city: string
   postalCode: string
   province?: string
+  coveredProvinces?: string[]
   phone: string
   createdDate: string
   status: BranchStatus

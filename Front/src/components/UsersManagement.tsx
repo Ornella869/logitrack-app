@@ -51,6 +51,7 @@ import type { User, UserRole, UserEstado, Branch } from '../types'
 import { authService } from '../services/authService'
 import { branchService } from '../services/branchService'
 import { AR_PROVINCIAS } from '../utils/provincias'
+import { formatInstantArgentina } from '../utils/argentinaDate'
 import ConfirmDialog from './ConfirmDialog'
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -547,7 +548,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                      {new Date(req.requestedAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                      {formatInstantArgentina(req.requestedAt, { dateStyle: 'short', timeStyle: 'short' })}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">

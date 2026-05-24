@@ -26,6 +26,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import api from '../services/api'
 import type { User } from '../types'
+import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs } from '../utils/argentinaDate'
 
 type Rendimiento = {
   repartidorId: string
@@ -41,12 +42,12 @@ type Rendimiento = {
   tieneActividad: boolean
 }
 
-const fmt = (d: Date) => d.toISOString().split('T')[0]
-const today = () => fmt(new Date())
-const daysAgo = (n: number) => fmt(new Date(Date.now() - n * 86400000))
+const today = () => formatArgentinaDateInput()
+const daysAgo = (n: number) => addArgentinaDays(-n)
 const startOfMonth = () => {
-  const d = new Date()
-  return fmt(new Date(d.getFullYear(), d.getMonth(), 1))
+  const d = dateOnlyForDisplay(today())
+  d.setDate(1)
+  return formatArgentinaDateInput(d)
 }
 
 const PRESETS = [
@@ -57,11 +58,11 @@ const PRESETS = [
 
 /** Devuelve el período anterior de igual duración */
 function prevPeriod(from: string, to: string) {
-  const msFrom = new Date(from).getTime()
-  const msTo = new Date(to).getTime()
+  const msFrom = dateOnlyForDisplay(from).getTime()
+  const msTo = dateOnlyForDisplay(to).getTime()
   const duration = msTo - msFrom
-  const prevTo = fmt(new Date(msFrom - 86400000))
-  const prevFrom = fmt(new Date(msFrom - 86400000 - duration))
+  const prevTo = formatArgentinaDateInput(new Date(msFrom - 86400000))
+  const prevFrom = formatArgentinaDateInput(new Date(msFrom - 86400000 - duration))
   return { from: prevFrom, to: prevTo }
 }
 
@@ -339,7 +340,7 @@ function ComparisonChart({ data, prevData, from, to }: ComparisonChartProps) {
             Comparativa visual vs período anterior
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Anterior: {new Date(prevFrom).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} — {new Date(prevTo).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+            Anterior: {formatDateOnlyEs(prevFrom, { day: '2-digit', month: 'short' })} — {formatDateOnlyEs(prevTo, { day: '2-digit', month: 'short' })}
           </Typography>
         </Stack>
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-around', flexWrap: 'wrap' }}>

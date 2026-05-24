@@ -23,6 +23,7 @@ import type { SelectChangeEvent } from '@mui/material'
 import type { Review } from './landingData'
 import { MOCK_REVIEWS, avatarColor, categoryLabel, categoryColor } from './landingData'
 import { RevealBox } from './landingUtils'
+import { formatInstantArgentinaDate } from '../../utils/argentinaDate'
 
 interface ReviewsSectionProps {
   reviewsRef: React.RefObject<HTMLElement | null>
@@ -62,7 +63,7 @@ export default function ReviewsSection({ reviewsRef }: ReviewsSectionProps) {
       category: nr.category,
       rating: nr.rating,
       comment: nr.comment.trim(),
-      date: new Date().toLocaleDateString('es-AR'),
+      date: formatInstantArgentinaDate(new Date()),
       avatar: initials,
     }
     setReviews((prev) => [review, ...prev])
