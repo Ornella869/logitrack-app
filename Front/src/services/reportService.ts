@@ -9,6 +9,11 @@ export interface ReporteVolumen {
   cancelados: number
   enProceso: number
   efectividadPct: number
+  totalEnviosADomicilio: number
+  enviosADomicilioPorProvincia: Array<{
+    provinciaDestino: string
+    cantidad: number
+  }>
 }
 
 export const reportService = {

@@ -83,8 +83,9 @@ function Layout({ user, onLogout }: LayoutProps) {
 
   useEffect(() => {
     if (user.role !== 'supervisor') return
-    setIncidenciasCount(incidenciaService.countAbiertas())
-    const handler = () => setIncidenciasCount(incidenciaService.countAbiertas())
+    const refresh = () => void incidenciaService.countAbiertas().then(setIncidenciasCount).catch(() => setIncidenciasCount(0))
+    refresh()
+    const handler = () => refresh()
     window.addEventListener('logitrack:incidencias', handler)
     return () => window.removeEventListener('logitrack:incidencias', handler)
   }, [user.role])
@@ -539,10 +540,10 @@ function Layout({ user, onLogout }: LayoutProps) {
                 sx={{ minHeight: 48, textTransform: 'none' }}
               />
             )}
-            {user.role === 'supervisor' && (
+            {(user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') && (
               <Tab icon={<BarChartIcon fontSize="small" />} iconPosition="start" label="Reportes" value="/reportes" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {user.role === 'administrador' && (
+            {(user.role === 'administrador' || user.role === 'supervisor') && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {/* Épica D: sucursales, tarifas y ojo del patrón los gestiona el Gerente */}

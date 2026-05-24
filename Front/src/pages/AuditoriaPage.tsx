@@ -48,6 +48,7 @@ const ACCIONES = [
   'LoginFallido',
   'ConsentimientoOjoPatron',
   'PruebaOjoDelPatron',
+  'Notificacion',
   'Otro',
 ] as const
 
@@ -66,6 +67,7 @@ const ACCION_LABELS: Record<string, string> = {
   LoginFallido: 'Login Fallido',
   ConsentimientoOjoPatron: 'Consentimiento Ojo del Patrón',
   PruebaOjoDelPatron: 'Prueba Ojo del Patrón',
+  Notificacion: 'Notificacion',
   Otro: 'Otro',
 }
 
@@ -83,8 +85,11 @@ const ACCION_COLORS: Record<string, { bg: string; color: string }> = {
   LoginFallido: { bg: '#ffebee', color: '#c62828' },
   ConsentimientoOjoPatron: { bg: '#ede7f6', color: '#4527a0' },
   PruebaOjoDelPatron: { bg: '#e0f2f1', color: '#00695c' },
+  Notificacion: { bg: '#e3f2fd', color: '#1565c0' },
   Otro: { bg: '#f5f5f5', color: '#555' },
 }
+
+const ROLES = ['Todos', 'Supervisor', 'Operador', 'Repartidor', 'Gerente', 'Administrador'] as const
 
 function parsePruebaContexto(contexto: string | null): Record<string, string> | null {
   if (!contexto) return null
@@ -98,6 +103,7 @@ function parsePruebaContexto(contexto: string | null): Record<string, string> | 
 const ROL_COLORS: Record<string, string> = {
   Supervisor: '#ed6c02',
   Operador: '#0288d1',
+  Gerente: '#6d4c41',
   Administrador: '#7b1fa2',
   Repartidor: '#2e7d32',
 }
@@ -109,18 +115,19 @@ export default function AuditoriaPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [accion, setAccion] = useState<string>('Todas')
+  const [rol, setRol] = useState<string>('Todos')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [totalItems, setTotalItems] = useState(0)
 
-  const isAdmin = user.role === 'administrador'
+  const canAccess = user.role === 'administrador' || user.role === 'supervisor'
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!canAccess) return
     void load(page, pageSize)
-  }, [isAdmin, page, pageSize])
+  }, [canAccess, page, pageSize])
 
   const load = async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true)
@@ -129,6 +136,7 @@ export default function AuditoriaPage() {
       const params: any = {}
       if (search.trim()) params.search = search.trim()
       if (accion && accion !== 'Todas') params.accion = accion
+      if (rol && rol !== 'Todos') params.rol = rol
       if (from) params.from = from
       if (to) params.to = to
       params.page = nextPage
@@ -146,6 +154,7 @@ export default function AuditoriaPage() {
   const limpiar = () => {
     setSearch('')
     setAccion('Todas')
+    setRol('Todos')
     setFrom('')
     setTo('')
     setPage(1)
@@ -174,7 +183,7 @@ export default function AuditoriaPage() {
     }, {})
   }, [logs])
 
-  if (!isAdmin) {
+  if (!canAccess) {
     return <Alert severity="warning">El log de auditoría es exclusivo del Administrador.</Alert>
   }
 
@@ -220,6 +229,18 @@ export default function AuditoriaPage() {
             >
               {ACCIONES.map((a) => (
                 <MenuItem key={a} value={a}>{ACCION_LABELS[a] ?? a}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              size="small"
+              select
+              label="Rol"
+              value={rol}
+              onChange={(e) => setRol(e.target.value)}
+              sx={{ minWidth: 170 }}
+            >
+              {ROLES.map((r) => (
+                <MenuItem key={r} value={r}>{r}</MenuItem>
               ))}
             </TextField>
             <TextField

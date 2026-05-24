@@ -23,9 +23,9 @@ import { incidenciaService, type TipoIncidencia } from '../services/incidenciaSe
 import type { Shipment } from '../types'
 
 const MOTIVOS: { value: TipoIncidencia; label: string }[] = [
-  { value: 'no_llego', label: 'No llegó' },
-  { value: 'llego_danado', label: 'Llegó dañado' },
-  { value: 'llego_tarde', label: 'Llegó tarde' },
+  { value: 'no_llego', label: 'No llego' },
+  { value: 'llego_danado', label: 'Llego danado' },
+  { value: 'llego_tarde', label: 'Llego tarde' },
   { value: 'otro', label: 'Otro' },
 ]
 
@@ -63,37 +63,31 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
     onClose()
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!motivo || !descripcion.trim()) {
-      setError('El motivo y la descripción son obligatorios.')
+      setError('El motivo y la descripcion son obligatorios.')
       return
     }
 
     setLoading(true)
     setError('')
 
-    if (incidenciaService.checkDuplicateCliente(shipment.id, motivo)) {
-      setError('Ya existe una incidencia abierta de este tipo para tu envío en las últimas 24 horas. Por favor esperá a que sea revisada.')
-      setLoading(false)
-      return
-    }
-
     const motivoLabel = MOTIVOS.find((m) => m.value === motivo)?.label ?? motivo
-    const nueva = incidenciaService.create({
-      repartidorId: `cliente_${shipment.trackingId}`,
-      repartidorNombre: `Cliente (${shipment.trackingId})`,
-      tipo: motivo,
-      tipoLabel: motivoLabel,
-      descripcion: descripcion.trim(),
-      estado: 'Abierta',
-      origen: 'cliente',
-      envioId: shipment.id,
-      emailContacto: email.trim() || undefined,
-    })
-
-    setIncidenciaId(nueva.id)
-    setSubmitted(true)
-    setLoading(false)
+    try {
+      const nueva = await incidenciaService.createCliente({
+        trackingId: shipment.trackingId,
+        tipo: motivo,
+        tipoLabel: motivoLabel,
+        descripcion: descripcion.trim(),
+        emailContacto: email.trim() || undefined,
+      })
+      setIncidenciaId(nueva.id)
+      setSubmitted(true)
+    } catch (err: any) {
+      setError(err.response?.data ?? 'No se pudo registrar la incidencia.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -109,14 +103,14 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
           </IconButton>
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, ml: 4 }}>
-          Envío {shipment.trackingId}
+          Envio {shipment.trackingId}
         </Typography>
       </DialogTitle>
 
       <DialogContent dividers>
         {isBlocked ? (
           <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            Solo se pueden reportar incidencias sobre envíos en tránsito, entregados o cancelados.
+            Solo se pueden reportar incidencias sobre envios en transito, entregados o cancelados.
           </Alert>
         ) : submitted ? (
           <Stack spacing={2} alignItems="center" sx={{ py: 2 }}>
@@ -125,7 +119,7 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
               Incidencia registrada
             </Typography>
             <Typography variant="body2" color="text.secondary" textAlign="center">
-              Tu reporte fue recibido y será revisado por nuestro equipo.
+              Tu reporte fue recibido y sera revisado por nuestro equipo.
             </Typography>
             <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0', width: '100%', textAlign: 'center' }}>
               <Typography variant="caption" color="text.secondary">ID de seguimiento de la incidencia</Typography>
@@ -152,14 +146,14 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
             </FormControl>
 
             <TextField
-              label="Descripción"
+              label="Descripcion"
               multiline
               minRows={3}
               fullWidth
               required
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Describí el problema con tu envío..."
+              placeholder="Describi el problema con tu envio..."
               inputProps={{ maxLength: 500 }}
               helperText={`${descripcion.length}/500`}
             />
@@ -170,7 +164,7 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Para que te contactemos si necesitamos más información"
+              placeholder="Para que te contactemos si necesitamos mas informacion"
             />
           </Stack>
         )}

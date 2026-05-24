@@ -168,23 +168,24 @@ export default function RepartidorDashboard() {
   const mensajesChatEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const computeUnread = () => {
-      const misIncidencias = incidenciaService.getAll()
+    const computeUnread = async () => {
+      const misIncidencias = (await incidenciaService.getAll())
         .filter((i) => i.repartidorId === user.id)
         .map((i) => i.id)
       setMensajesUnread(mensajeIncidenciaService.countUnreadFromSupervisorForRepartidor(misIncidencias))
     }
-    computeUnread()
-    window.addEventListener('logitrack:mensajes_incidencia', computeUnread)
-    window.addEventListener('logitrack:incidencias', computeUnread)
+    void computeUnread()
+    const handler = () => void computeUnread()
+    window.addEventListener('logitrack:mensajes_incidencia', handler)
+    window.addEventListener('logitrack:incidencias', handler)
     return () => {
-      window.removeEventListener('logitrack:mensajes_incidencia', computeUnread)
-      window.removeEventListener('logitrack:incidencias', computeUnread)
+      window.removeEventListener('logitrack:mensajes_incidencia', handler)
+      window.removeEventListener('logitrack:incidencias', handler)
     }
   }, [user.id])
 
-  const openMensajes = () => {
-    const misIncidencias = incidenciaService.getAll().filter((i) => i.repartidorId === user.id)
+  const openMensajes = async () => {
+    const misIncidencias = (await incidenciaService.getAll()).filter((i) => i.repartidorId === user.id)
     const incConMensajes = misIncidencias.find((i) =>
       mensajeIncidenciaService.getByIncidencia(i.id).length > 0,
     ) ?? misIncidencias[0] ?? null

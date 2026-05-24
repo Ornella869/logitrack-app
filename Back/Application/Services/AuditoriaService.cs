@@ -63,15 +63,46 @@ namespace Back.Application.Services
         public async Task<PagedResponse<LogAuditoria>> ListarAsync(
             Guid? usuarioId,
             TipoAccion? accion,
+            string? rol,
             DateTime? from,
             DateTime? to,
             string? search,
+            bool limitarASucursalSupervisor,
             int page,
             int pageSize)
         {
             var query = _context.LogsAuditoria.AsQueryable();
+            if (limitarASucursalSupervisor)
+            {
+                var sucursalId = await ResolverSucursalUsuarioActualAsync();
+                if (!sucursalId.HasValue)
+                {
+                    return PagedResponse<LogAuditoria>.Create(new List<LogAuditoria>(), page, pageSize, 0);
+                }
+
+                var rolesOperativos = new[] { nameof(Supervisor), nameof(Operador), nameof(Repartidor) };
+                var usuariosSucursalIds = await _context.Usuarios
+                    .Where(u => u.SucursalId == sucursalId.Value
+                        && rolesOperativos.Contains(EF.Property<string>(u, "Discriminator")))
+                    .Select(u => u.Id)
+                    .ToListAsync();
+
+                query = query.Where(l => l.UsuarioId.HasValue && usuariosSucursalIds.Contains(l.UsuarioId.Value));
+            }
             if (usuarioId.HasValue) query = query.Where(l => l.UsuarioId == usuarioId);
             if (accion.HasValue) query = query.Where(l => l.Accion == accion);
+            if (limitarASucursalSupervisor && false)
+            {
+                query = query.Where(l => l.Accion == TipoAccion.Notificacion
+                    || EF.Functions.ILike(l.Descripcion, "%Notificacion%")
+                    || EF.Functions.ILike(l.Descripcion, "%Notificación%"));
+            }
+            if (!string.IsNullOrWhiteSpace(rol))
+            {
+                var r = rol.Trim();
+                query = query.Where(l => l.UsuarioRol == r
+                    || (l.Contexto != null && EF.Functions.ILike(l.Contexto, $"%Rol destino: {r}%")));
+            }
             if (from.HasValue)
             {
                 var f = DateTime.SpecifyKind(from.Value, DateTimeKind.Utc);
@@ -97,6 +128,15 @@ namespace Back.Application.Services
                 .Take(pageSize)
                 .ToListAsync();
             return PagedResponse<LogAuditoria>.Create(items, page, pageSize, totalItems);
+        }
+
+        private async Task<Guid?> ResolverSucursalUsuarioActualAsync()
+        {
+            var idStr = _httpContext.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(idStr, out var id)) return null;
+
+            var usuario = await _userRepository.GetUsuarioById(id);
+            return usuario?.SucursalId;
         }
     }
 }

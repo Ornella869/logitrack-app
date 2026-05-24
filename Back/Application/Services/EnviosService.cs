@@ -131,6 +131,14 @@ namespace Back.Application.Services
             return responsable;
         }
 
+        private async Task<bool> EsEnvioADomicilioAsync(string? provinciaDestino, Sucursal? sucursalDestino)
+        {
+            if (sucursalDestino is null || string.IsNullOrWhiteSpace(provinciaDestino)) return false;
+            var destino = provinciaDestino.Trim();
+            var sucursales = await _enviosRepository.GetSucursales();
+            return !sucursales.Any(s => string.Equals(s.Provincia?.Trim(), destino, StringComparison.OrdinalIgnoreCase));
+        }
+
         // G1L-10
         public async Task<RegistrarPaqueteResult> RegistrarPaquete(RegistrarPaqueteRequest request, Guid? usuarioId)
         {
@@ -152,6 +160,8 @@ namespace Back.Application.Services
             // Épica D: sucursal responsable por provincia de destino + ruteo estricto.
             var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
 
+            var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);
+
             var paquete = new Paquete(
                 request.Peso,
                 0,
@@ -166,6 +176,8 @@ namespace Back.Application.Services
                 TipoEnvio = request.TipoEnvio,
                 TipoPaquete = request.TipoPaquete,
                 SucursalId = sucursalDestino?.Id,
+                ProvinciaDestino = request.Destinatario.Provincia?.Trim(),
+                EsEnvioADomicilio = esEnvioADomicilio,
             };
 
             await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
@@ -216,6 +228,7 @@ namespace Back.Application.Services
                     var distancia = DistanciasService.CalcularDistancia(destino.Localidad);
                     var prioridad = await _mlPrioridadPrediction.Predecir((float)peso, distancia);
                     var sucursalDestino = await ResolverSucursalDestinoAsync(destino.Provincia, usuarioId);
+                    var esEnvioADomicilio = await EsEnvioADomicilioAsync(destino.Provincia, sucursalDestino);
 
                     var paquete = new Paquete(
                         peso,
@@ -238,6 +251,8 @@ namespace Back.Application.Services
                         TipoEnvio = i % 8 == 0 ? TipoEnvio.Prioritario : TipoEnvio.Comun,
                         TipoPaquete = i % 11 == 0 ? TipoPaquete.Fragil : TipoPaquete.Comun,
                         SucursalId = sucursalDestino?.Id,
+                        ProvinciaDestino = destino.Provincia,
+                        EsEnvioADomicilio = esEnvioADomicilio,
                     };
 
                     await AplicarCotizacion(paquete, peso, distancia, paquete.Destinatario.Direccion.Ubicacion, destino.Provincia);
@@ -302,6 +317,7 @@ namespace Back.Application.Services
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
             var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
+            var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);
 
             paquete.ActualizarDatos(
                 new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono),
@@ -313,6 +329,8 @@ namespace Back.Application.Services
                 distancia,
                 prioridad);
             paquete.SucursalId = sucursalDestino?.Id;
+            paquete.ProvinciaDestino = request.Destinatario.Provincia?.Trim();
+            paquete.EsEnvioADomicilio = esEnvioADomicilio;
 
             await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
 
@@ -463,7 +481,7 @@ namespace Back.Application.Services
                     paquete.Entregar();
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, usuarioId, OrigenCambioEstado.Manual);
                     await _auditoria.RegistrarAsync(
-                        Domain.Models.TipoAccion.Otro,
+                        Domain.Models.TipoAccion.Notificacion,
                         $"Notificacion al repartidor: parada entregada {paquete.CodigoSeguimiento}",
                         recursoId: paquete.CodigoSeguimiento,
                         contexto: "Rol destino: Repartidor");

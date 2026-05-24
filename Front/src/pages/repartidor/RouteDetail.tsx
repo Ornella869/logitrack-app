@@ -41,6 +41,7 @@ import ScaleIcon from '@mui/icons-material/Scale'
 import type { Route, Shipment } from '../../types'
 import { routeService } from '../../services/routeService'
 import { shipmentService } from '../../services/shipmentService'
+import { notificationService } from '../../services/notificationService'
 import { useRepartidorState } from '../../hooks/useRepartidorState'
 import StatusBadge from '../../components/StatusBadge'
 import LoadingState from '../../components/LoadingState'
@@ -56,6 +57,18 @@ export default function RouteDetail() {
 
   const [route, setRoute] = useState<Route | null>(null)
   const [routeShipments, setRouteShipments] = useState<Shipment[]>([])
+
+  const notifyDelivered = (shipment: Shipment) => {
+    const storedUser = JSON.parse(localStorage.getItem('user') ?? 'null') as { id?: string } | null
+    if (!storedUser?.id) return
+    notificationService.add({
+      type: 'otro',
+      title: 'Parada entregada',
+      message: `Entregaste el envio ${shipment.trackingId} a ${shipment.receiver.name}.`,
+      recipientId: storedUser.id,
+      navigateTo: '/repartidor',
+    })
+  }
 
   // Scan input
   const [scanInput, setScanInput] = useState('')
@@ -111,6 +124,7 @@ export default function RouteDetail() {
       const result = await shipmentService.changeShipmentStatus(shipment.id, 'Entregado')
       if (result.success) {
         await loadData()
+        notifyDelivered(shipment)
         showSnackbar(`✓ ${shipment.trackingId} marcado como Entregado`, 'success')
         highlightRow(shipment.id, 'delivered')
       } else {
@@ -180,6 +194,7 @@ export default function RouteDetail() {
     if (result.success) {
       await loadData()
       showSnackbar(`📦 ${trackingId} escaneado y marcado como Entregado`, 'success')
+      notifyDelivered(found)
       setScanInput('')
       highlightRow(found.id, 'delivered')
       scanRef.current?.focus()

@@ -50,6 +50,7 @@ namespace Back.Infrastructure.Database.Repositories
                     "supervisor" => query.OfType<Supervisor>(),
                     "operador" => query.OfType<Operador>(),
                     "repartidor" => query.OfType<Repartidor>(),
+                    "gerente" => query.OfType<Gerente>(),
                     _ => query,
                 };
             }

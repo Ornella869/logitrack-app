@@ -60,6 +60,8 @@ namespace Back.Domain.Models
         public Ubicacion? UbicacionActual { get; set; }
         // Épica D: sucursal responsable del envío (la que cubre la provincia de destino).
         public Guid? SucursalId { get; set; }
+        public string? ProvinciaDestino { get; set; }
+        public bool EsEnvioADomicilio { get; set; }
 
 
         [JsonPropertyName("prioridad")]

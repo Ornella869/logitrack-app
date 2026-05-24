@@ -1,3 +1,5 @@
+import api from './api'
+
 export type EstadoIncidencia = 'Abierta' | 'En Revisión' | 'Resuelta'
 export type TipoIncidencia = 'accident' | 'mechanical' | 'danger' | 'health' | 'delivery' | 'otro' | 'no_llego' | 'llego_danado' | 'llego_tarde'
 
@@ -30,128 +32,117 @@ export interface Incidencia {
   paradasAfectadas?: string[]
   origen?: 'repartidor' | 'cliente'
   envioId?: string
+  codigoSeguimiento?: string
   emailContacto?: string
   chatFinalizado?: boolean
 }
 
-const STORAGE_KEY = 'logitrack_incidencias'
-const MAX_STORED = 500
+const normalizeEstado = (estado: string): EstadoIncidencia =>
+  estado === 'En Revision' || estado === 'EnRevision' || estado === 'En RevisiÃ³n' ? 'En Revisión' : estado as EstadoIncidencia
 
-function loadAll(): Incidencia[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as Incidencia[]
-  } catch {
-    return []
-  }
-}
+const mapIncidencia = (raw: any): Incidencia => ({
+  id: raw.id,
+  repartidorId: raw.repartidorId,
+  repartidorNombre: raw.repartidorNombre,
+  tipo: raw.tipo,
+  tipoLabel: raw.tipoLabel,
+  descripcion: raw.descripcion,
+  estado: normalizeEstado(raw.estado),
+  fechaReporte: raw.fechaReporte,
+  observaciones: raw.observaciones ?? [],
+  historialEstados: (raw.historialEstados ?? []).map((h: any) => ({
+    ...h,
+    estadoAnterior: normalizeEstado(h.estadoAnterior),
+    estadoNuevo: normalizeEstado(h.estadoNuevo),
+  })),
+  paradasAfectadas: raw.paradasAfectadas ?? [],
+  origen: raw.origen,
+  envioId: raw.envioId ?? raw.codigoSeguimiento,
+  codigoSeguimiento: raw.codigoSeguimiento,
+  emailContacto: raw.emailContacto,
+  chatFinalizado: raw.chatFinalizado,
+})
 
-function saveAll(items: Incidencia[]): void {
-  const trimmed = items.length > MAX_STORED ? items.slice(items.length - MAX_STORED) : items
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
+function dispatch(): void {
   window.dispatchEvent(new Event('logitrack:incidencias'))
 }
 
 export const incidenciaService = {
-  getAll(): Incidencia[] {
-    return loadAll().sort(
-      (a, b) => new Date(b.fechaReporte).getTime() - new Date(a.fechaReporte).getTime(),
-    )
+  async getAll(): Promise<Incidencia[]> {
+    const response = await api.get('/incidencias')
+    return (response.data ?? []).map(mapIncidencia)
   },
 
-  getById(id: string): Incidencia | null {
-    return loadAll().find((i) => i.id === id) ?? null
+  async countAbiertas(): Promise<number> {
+    const items = await incidenciaService.getAll()
+    return items.filter((i) => i.estado === 'Abierta').length
   },
 
-  countByEstado(estado: EstadoIncidencia): number {
-    return loadAll().filter((i) => i.estado === estado).length
-  },
-
-  countAbiertas(): number {
-    return loadAll().filter((i) => i.estado === 'Abierta').length
-  },
-
-  create(data: Omit<Incidencia, 'id' | 'fechaReporte' | 'observaciones' | 'historialEstados'>): Incidencia {
-    const all = loadAll()
-    const nueva: Incidencia = {
-      ...data,
-      id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      fechaReporte: new Date().toISOString(),
-      observaciones: [],
-      historialEstados: [
-        {
-          estadoAnterior: 'Abierta',
-          estadoNuevo: 'Abierta',
-          porNombre: data.repartidorNombre,
-          porId: data.repartidorId,
-          fecha: new Date().toISOString(),
-        },
-      ],
-    }
-    all.push(nueva)
-    saveAll(all)
-    return nueva
-  },
-
-  cambiarEstado(
-    id: string,
-    nuevoEstado: EstadoIncidencia,
-    supervisor: { id: string; nombre: string },
-  ): Incidencia | null {
-    const all = loadAll()
-    const idx = all.findIndex((i) => i.id === id)
-    if (idx < 0) return null
-    const inc = all[idx]!
-    inc.historialEstados.push({
-      estadoAnterior: inc.estado,
-      estadoNuevo: nuevoEstado,
-      porNombre: supervisor.nombre,
-      porId: supervisor.id,
-      fecha: new Date().toISOString(),
+  async createRepartidor(data: {
+    tipo: TipoIncidencia
+    tipoLabel: string
+    descripcion: string
+    paradasAfectadas?: string[]
+  }): Promise<Incidencia> {
+    const response = await api.post('/incidencias/repartidor', {
+      tipo: data.tipo,
+      tipoLabel: data.tipoLabel,
+      descripcion: data.descripcion,
+      paradasAfectadas: data.paradasAfectadas ?? [],
     })
-    inc.estado = nuevoEstado
-    all[idx] = inc
-    saveAll(all)
-    return inc
+    dispatch()
+    return mapIncidencia(response.data)
   },
 
-  checkDuplicateCliente(envioId: string, tipo: string): boolean {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    return loadAll().some(
-      (i) => i.envioId === envioId && i.tipo === tipo && i.estado !== 'Resuelta' && i.fechaReporte >= cutoff,
-    )
+  checkDuplicateCliente(..._args: unknown[]): boolean {
+    return false
   },
 
-  finalizarChat(id: string): Incidencia | null {
-    const all = loadAll()
-    const idx = all.findIndex((i) => i.id === id)
-    if (idx < 0) return null
-    all[idx]!.chatFinalizado = true
-    saveAll(all)
-    return all[idx]!
+  checkDuplicateRepartidor(..._args: unknown[]): boolean {
+    return false
   },
 
-  checkDuplicateRepartidor(repartidorId: string, tipo: string): boolean {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    return loadAll().some(
-      (i) => i.repartidorId === repartidorId && i.tipo === tipo && i.estado !== 'Resuelta' && i.fechaReporte >= cutoff,
-    )
+  async create(data: {
+    repartidorId?: string
+    repartidorNombre?: string
+    tipo: TipoIncidencia
+    tipoLabel: string
+    descripcion: string
+    estado?: EstadoIncidencia
+    origen?: 'repartidor' | 'cliente'
+    envioId?: string
+    emailContacto?: string
+    paradasAfectadas?: string[]
+  }): Promise<Incidencia> {
+    return incidenciaService.createRepartidor(data)
   },
 
-  agregarObservacion(
-    id: string,
-    texto: string,
-    supervisor: { id: string; nombre: string },
-  ): Incidencia | null {
-    const all = loadAll()
-    const idx = all.findIndex((i) => i.id === id)
-    if (idx < 0) return null
-    all[idx]!.observaciones.push({
-      texto,
-      supervisorNombre: supervisor.nombre,
-      supervisorId: supervisor.id,
-      fecha: new Date().toISOString(),
-    })
-    saveAll(all)
-    return all[idx]!
+  async createCliente(data: {
+    trackingId: string
+    tipo: TipoIncidencia
+    tipoLabel: string
+    descripcion: string
+    emailContacto?: string
+  }): Promise<Incidencia> {
+    const response = await api.post('/incidencias/publica', data)
+    return mapIncidencia(response.data)
+  },
+
+  async cambiarEstado(id: string, nuevoEstado: EstadoIncidencia): Promise<Incidencia | null> {
+    const response = await api.put(`/incidencias/${id}/estado`, { estado: nuevoEstado })
+    dispatch()
+    return mapIncidencia(response.data)
+  },
+
+  async agregarObservacion(id: string, texto: string): Promise<Incidencia | null> {
+    const response = await api.post(`/incidencias/${id}/observaciones`, { texto })
+    dispatch()
+    return mapIncidencia(response.data)
+  },
+
+  async finalizarChat(id: string): Promise<Incidencia | null> {
+    const response = await api.put(`/incidencias/${id}/finalizar-chat`)
+    dispatch()
+    return mapIncidencia(response.data)
   },
 }

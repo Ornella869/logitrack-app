@@ -181,25 +181,22 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
     setCancelarMotivo('')
   }
 
-  const handleGuardarEstado = () => {
+  const handleGuardarEstado = async () => {
     setGuardando(true)
-    const updated = incidenciaService.cambiarEstado(inc.id, nuevoEstado, {
-      id: supervisor.id,
-      nombre: supervisor.name,
-    })
-    setGuardando(false)
-    if (updated) {
-      onUpdated(updated)
-      setFeedback(`Estado actualizado a "${nuevoEstado}" por ${supervisor.name}`)
+    try {
+      const updated = await incidenciaService.cambiarEstado(inc.id, nuevoEstado)
+      if (updated) {
+        onUpdated(updated)
+        setFeedback(`Estado actualizado a "${nuevoEstado}" por ${supervisor.name}`)
+      }
+    } finally {
+      setGuardando(false)
     }
   }
 
-  const handleAgregarObservacion = () => {
+  const handleAgregarObservacion = async () => {
     if (!observacion.trim()) return
-    const updated = incidenciaService.agregarObservacion(inc.id, observacion.trim(), {
-      id: supervisor.id,
-      nombre: supervisor.name,
-    })
+    const updated = await incidenciaService.agregarObservacion(inc.id, observacion.trim())
     if (updated) {
       onUpdated(updated)
       setObservacion('')
@@ -457,14 +454,14 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                 placeholder="Agregar observación interna…"
                 value={observacion}
                 onChange={(e) => setObservacion(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAgregarObservacion() } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgregarObservacion() } }}
                 multiline
                 maxRows={3}
               />
               <Button
                 variant="outlined"
                 size="small"
-                onClick={handleAgregarObservacion}
+                onClick={() => void handleAgregarObservacion()}
                 disabled={!observacion.trim()}
                 sx={{ whiteSpace: 'nowrap' }}
               >
@@ -599,8 +596,8 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                   color="error"
                   size="small"
                   fullWidth
-                  onClick={() => {
-                    const updated = incidenciaService.finalizarChat(inc.id)
+                  onClick={async () => {
+                    const updated = await incidenciaService.finalizarChat(inc.id)
                     if (updated) onUpdated(updated)
                   }}
                   sx={{ fontWeight: 600, borderStyle: 'dashed' }}
@@ -662,10 +659,10 @@ export default function IncidenciasPage() {
   const [detalle, setDetalle] = useState<Incidencia | null>(null)
   const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
 
-  const cargar = () => setIncidencias(incidenciaService.getAll())
+  const cargar = async () => setIncidencias(await incidenciaService.getAll())
 
-  const refreshChats = () => {
-    const all = incidenciaService.getAll().filter((inc) => inc.estado !== 'Resuelta' && inc.origen !== 'cliente' && !inc.chatFinalizado)
+  const refreshChats = async () => {
+    const all = (await incidenciaService.getAll()).filter((inc) => inc.estado !== 'Resuelta' && inc.origen !== 'cliente' && !inc.chatFinalizado)
     setActiveChats(
       all
         .map((inc) => ({
@@ -680,15 +677,15 @@ export default function IncidenciasPage() {
   }
 
   useEffect(() => {
-    cargar()
-    const handler = () => cargar()
+    void cargar()
+    const handler = () => void cargar()
     window.addEventListener('logitrack:incidencias', handler)
     return () => window.removeEventListener('logitrack:incidencias', handler)
   }, [])
 
   useEffect(() => {
-    refreshChats()
-    const handler = () => refreshChats()
+    void refreshChats()
+    const handler = () => void refreshChats()
     window.addEventListener('logitrack:mensajes_incidencia', handler)
     window.addEventListener('logitrack:incidencias', handler)
     return () => {
@@ -937,7 +934,7 @@ export default function IncidenciasPage() {
           onClose={() => setDetalle(null)}
           onUpdated={(updated) => {
             setDetalle(updated)
-            cargar()
+            void cargar()
           }}
         />
       )}

@@ -18,6 +18,7 @@ import InventoryIcon from '@mui/icons-material/Inventory2'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
 import PercentIcon from '@mui/icons-material/Percent'
+import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import { reportService, type ReporteVolumen } from '../services/reportService'
 import type { User } from '../types'
 import { addArgentinaDays, formatArgentinaDateInput } from '../utils/argentinaDate'
@@ -34,7 +35,7 @@ export default function ReportesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const canAccess = user.role === 'supervisor'
+  const canAccess = user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador'
 
   useEffect(() => {
     if (canAccess) void load()
@@ -63,9 +64,10 @@ export default function ReportesPage() {
 
   const handleExportCsv = () => {
     if (!data) return
-    const headers = ['Desde', 'Hasta', 'Total de envíos', 'Entregados', 'Cancelados', 'En proceso', 'Efectividad (%)']
-    const row = [from, to, data.totalEnvios, data.entregados, data.cancelados, data.enProceso, data.efectividadPct]
-    const csv = '﻿' + [headers.join(';'), row.map((c) => `"${c}"`).join(';')].join('\n')
+    const headers = ['Desde', 'Hasta', 'Total de envios', 'Entregados', 'Cancelados', 'En proceso', 'Efectividad (%)', 'Envios a domicilio']
+    const row = [from, to, data.totalEnvios, data.entregados, data.cancelados, data.enProceso, data.efectividadPct, data.totalEnviosADomicilio]
+    const domicilioRows = data.enviosADomicilioPorProvincia.map((item) => ['', '', `A domicilio ${item.provinciaDestino}`, item.cantidad, '', '', '', ''])
+    const csv = '\uFEFF' + [headers.join(';'), row.map((c) => `"${c}"`).join(';'), ...domicilioRows.map((r) => r.map((c) => `"${c}"`).join(';'))].join('\n')
     const el = document.createElement('a')
     el.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv))
     el.setAttribute('download', `reporte_volumen_${from}_${to}.csv`)
@@ -76,7 +78,7 @@ export default function ReportesPage() {
   }
 
   if (!canAccess) {
-    return <Alert severity="warning">Solo Supervisor.</Alert>
+    return <Alert severity="warning">Solo Supervisor o Gerente.</Alert>
   }
 
   return (
@@ -129,12 +131,16 @@ export default function ReportesPage() {
             <Metric label="Entregados" value={data.entregados} sub="estado final entregado" color="#2e7d32" icon={<CheckCircleIcon />} />
             <Metric label="Incidencias / Cancelados" value={data.cancelados} sub="estado final cancelado" color="#c62828" icon={<CancelIcon />} />
             <Metric label="Efectividad" value={`${data.efectividadPct.toFixed(1)}%`} sub="entregados / total" color="#1976d2" icon={<PercentIcon />} />
+            <Metric label="A domicilio" value={data.totalEnviosADomicilio} sub="destinos sin sucursal propia" color="#6d4c41" icon={<HomeWorkIcon />} />
           </Grid>
 
           {data.totalEnvios === 0 ? (
             <Alert severity="info">No hay envíos registrados en el período seleccionado.</Alert>
           ) : (
-            <VolumeChart data={data} />
+            <Stack spacing={2}>
+              <VolumeChart data={data} />
+              <HomeDeliveryReport data={data} />
+            </Stack>
           )}
         </>
       )}
@@ -183,6 +189,37 @@ function VolumeChart({ data }: { data: ReporteVolumen }) {
             )
           })}
         </Box>
+      </CardContent>
+    </Card>
+  )
+}
+
+function HomeDeliveryReport({ data }: { data: ReporteVolumen }) {
+  if (data.enviosADomicilioPorProvincia.length === 0) {
+    return (
+      <Alert severity="info">
+        No hay envios a domicilio hacia provincias sin sucursal propia en este periodo.
+      </Alert>
+    )
+  }
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+          Envios a domicilio por provincia destino
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          Indica demanda en provincias donde todavia no hay sucursal propia.
+        </Typography>
+        <Stack spacing={1}>
+          {data.enviosADomicilioPorProvincia.map((item) => (
+            <Stack key={item.provinciaDestino} direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" fontWeight={600}>{item.provinciaDestino}</Typography>
+              <Typography variant="body2">{item.cantidad}</Typography>
+            </Stack>
+          ))}
+        </Stack>
       </CardContent>
     </Card>
   )

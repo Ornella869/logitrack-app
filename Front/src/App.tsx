@@ -287,7 +287,7 @@ function App() {
           <Route
             path="/auditoria"
             element={
-              user && user.role === 'administrador' ? (
+              user && (user.role === 'administrador' || user.role === 'supervisor') ? (
                 <AuditoriaPage />
               ) : (
                 <Navigate to="/access-denied" replace />
@@ -362,11 +362,11 @@ function App() {
             }
           />
 
-          {/* G1L-26: Reportes de volumen (Supervisor) */}
+          {/* G1L-26: Reportes de volumen (Supervisor / Gerente) */}
           <Route
             path="/reportes"
             element={
-              user && user.role === 'supervisor' ? (
+              user && (user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') ? (
                 <ReportesPage />
               ) : (
                 <Navigate to="/access-denied" replace />

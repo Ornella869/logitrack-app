@@ -23,6 +23,7 @@ namespace Back.Infrastructure.Database
         public DbSet<ConsentimientoOjoPatron> ConsentimientosOjoPatron { get; set; }
         public DbSet<PruebaOjoPatron> PruebasOjoPatron { get; set; }
         public DbSet<ConfiguracionOjoPatron> ConfiguracionesOjoPatron { get; set; }
+        public DbSet<Incidencia> Incidencias { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -131,6 +132,22 @@ namespace Back.Infrastructure.Database
                 s.Property(x => x.CreadoEn);
                 s.HasIndex(x => x.CreadoEn);
                 s.HasIndex(x => x.Email);
+            });
+
+            modelBuilder.Entity<Incidencia>(i =>
+            {
+                i.HasKey(x => x.Id);
+                i.Property(x => x.Origen).HasMaxLength(40);
+                i.Property(x => x.Tipo).HasMaxLength(60);
+                i.Property(x => x.TipoLabel).HasMaxLength(120);
+                i.Property(x => x.Estado).HasMaxLength(40);
+                i.Property(x => x.CodigoSeguimiento).HasMaxLength(80);
+                i.Property(x => x.EmailContacto).HasMaxLength(160);
+                i.Property(x => x.RepartidorNombre).HasMaxLength(160);
+                i.Property(x => x.Descripcion).HasMaxLength(1000);
+                i.HasIndex(x => x.SucursalId);
+                i.HasIndex(x => x.PaqueteId);
+                i.HasIndex(x => x.FechaReporte);
             });
         }
 

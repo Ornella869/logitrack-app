@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -79,9 +79,17 @@ export default function ClienteDashboard() {
   const [notFound, setNotFound] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const misIncidencias: Incidencia[] = incidenciaService
-    .getAll()
-    .filter((i) => i.origen === 'cliente' && i.repartidorId === `cliente_${shipment?.trackingId ?? '_impossible_'}`)
+  const [misIncidencias, setMisIncidencias] = useState<Incidencia[]>([])
+
+  useEffect(() => {
+    if (!shipment) {
+      setMisIncidencias([])
+      return
+    }
+    void incidenciaService.getAll()
+      .then((items) => setMisIncidencias(items.filter((i) => i.origen === 'cliente' && i.repartidorId === `cliente_${shipment.trackingId}`)))
+      .catch(() => setMisIncidencias([]))
+  }, [shipment])
 
   const handleSearch = async () => {
     const trackingId = query.trim()

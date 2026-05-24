@@ -47,8 +47,9 @@ function Dashboard() {
 
   useEffect(() => {
     if (!isSupervisor) return
-    setIncidenciasAbiertas(incidenciaService.countAbiertas())
-    const handler = () => setIncidenciasAbiertas(incidenciaService.countAbiertas())
+    const refresh = () => void incidenciaService.countAbiertas().then(setIncidenciasAbiertas).catch(() => setIncidenciasAbiertas(0))
+    refresh()
+    const handler = () => refresh()
     window.addEventListener('logitrack:incidencias', handler)
     return () => window.removeEventListener('logitrack:incidencias', handler)
   }, [isSupervisor])
