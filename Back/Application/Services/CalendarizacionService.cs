@@ -58,18 +58,21 @@ namespace Back.Application.Services
         public required Guid RepartidorId { get; init; }
         public required string Nombre { get; init; }
         public required string Email { get; init; }
+        /// <summary>"Disponible", "EnRuta" o "Retornando".</summary>
+        public required string EstadoJornada { get; init; }
         public required List<CalendarioCelda> Celdas { get; init; }
     }
 
     // G1L-83: resultado de la precalendarización manual.
     public class PrecalendarizacionResultado
     {
-        public required bool RequiereConfirmacion { get; init; }
         public required double PesoActual { get; init; }
         public required double PesoResultante { get; init; }
         public required double CapacidadKg { get; init; }
         public required bool HuboReversion { get; init; }
         public string? Mensaje { get; init; }
+        /// <summary>Fecha real en la que quedó agendado el envío.</summary>
+        public DateTime? FechaAsignada { get; init; }
     }
 
     public class CalendarizacionService
@@ -150,6 +153,7 @@ namespace Back.Application.Services
                     RepartidorId = r.Id,
                     Nombre = $"{r.Nombre} {r.Apellido}",
                     Email = r.Email,
+                    EstadoJornada = r.EstadoJornada.ToString(),
                     Celdas = celdas,
                 };
             }).ToList();
@@ -200,7 +204,7 @@ namespace Back.Application.Services
 
         // G1L-83: Precalendarización manual de un envío a un repartidor y día específicos.
         public async Task<PrecalendarizacionResultado> PrecalendarizarManualAsync(
-            Guid paqueteId, Guid repartidorId, DateTime fecha, bool confirmarSobrecarga, Guid? supervisorId)
+            Guid paqueteId, Guid repartidorId, DateTime fecha, Guid? supervisorId)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
@@ -219,60 +223,39 @@ namespace Back.Application.Services
             }
             if (!rep.Activo || !rep.PuedeSerAsignado)
                 throw new InvalidOperationException("El repartidor está suspendido o inhabilitado y no puede recibir asignaciones.");
-            // Fase A: si está retornando a la sucursal, no puede recibir envíos nuevos hasta cerrar la jornada.
+            // Si está retornando, no puede recibir envíos hasta cerrar la jornada.
             if (rep.EstadoJornada == Repartidor.EstadoJornadaRepartidor.Retornando)
                 throw new InvalidOperationException("El repartidor está retornando a la sucursal. Debe cerrar su jornada antes de recibir nuevos envíos.");
 
             var fechaUtc = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
+
+            // Si el repartidor está en ruta HOY y el supervisor eligió hoy, bloqueamos:
+            // no se puede agregar al viaje en curso. El supervisor debe elegir otro día.
+            if (rep.EstadoJornada == Repartidor.EstadoJornadaRepartidor.EnRuta
+                && fechaUtc.Date == OperationalClock.TodayUtcDate)
+            {
+                throw new InvalidOperationException(
+                    $"El repartidor {rep.Nombre} {rep.Apellido} está actualmente en tránsito. " +
+                    "Esperá a que regrese a la sucursal o elegí otro día.");
+            }
+
             var delDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fechaUtc);
 
-            // Exclude finalized packages from weight sum so repartidores who closed their
-            // jornada and have already-delivered packages don't get blocked from same-day reassignments.
+            // Excluir paquetes ya finalizados del cálculo de peso.
             var pesoActual = delDia
                 .Where(p => p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado)
                 .Sum(p => p.Peso);
             var pesoResultante = pesoActual + paquete.Peso;
 
-            // CA Validación de Capacidad: si supera CAPACIDAD_REPARTIDOR_KG = 500,
-            // devolvemos la advertencia y NO asignamos hasta confirmación explícita.
-            if (pesoResultante > Capacidad.RepartidorKg && !confirmarSobrecarga)
+            // Capacidad superada: bloqueamos la asignación; el supervisor debe elegir otro día.
+            if (pesoResultante > Capacidad.RepartidorKg)
             {
-                return new PrecalendarizacionResultado
-                {
-                    RequiereConfirmacion = true,
-                    PesoActual = pesoActual,
-                    PesoResultante = pesoResultante,
-                    CapacidadKg = Capacidad.RepartidorKg,
-                    HuboReversion = false,
-                    Mensaje = $"El peso acumulado ({pesoResultante:0.##} kg) supera la capacidad de {Capacidad.RepartidorKg} kg. Confirmá para continuar igualmente.",
-                };
+                throw new InvalidOperationException(
+                    $"El repartidor {rep.Nombre} {rep.Apellido} ya tiene la capacidad máxima para este día " +
+                    $"({pesoActual:0.#}/{Capacidad.RepartidorKg} kg). Elegí otro día.");
             }
 
             paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
-
-            // Si el repartidor ya está en ruta (jornada activa), el paquete entra directo
-            // a EnTransito — no puede escanear desde la calle y no hay nada que "bajar".
-            if (rep.EstadoJornada == Repartidor.EstadoJornadaRepartidor.EnRuta)
-            {
-                paquete.CambiarEstado(PaqueteStatus.EnTransito);
-                await _historial.RegistrarCambioAsync(
-                    paquete.Id, PaqueteStatus.EnTransito, supervisorId, OrigenCambioEstado.Manual,
-                    "Precalendarización manual: ruta ya iniciada, entra directo en tránsito");
-                await _auditoria.RegistrarAsync(
-                    TipoAccion.Calendarizacion,
-                    $"Asignación manual de {paquete.CodigoSeguimiento} a {rep.Nombre} {rep.Apellido} ({fechaUtc:yyyy-MM-dd}) — ruta ya iniciada",
-                    recursoId: paquete.CodigoSeguimiento,
-                    contexto: $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd} | Entró directo a EnTransito");
-                return new PrecalendarizacionResultado
-                {
-                    RequiereConfirmacion = false,
-                    PesoActual = pesoActual,
-                    PesoResultante = pesoResultante,
-                    CapacidadKg = Capacidad.RepartidorKg,
-                    HuboReversion = false,
-                    Mensaje = "El repartidor ya está en ruta. El envío fue agregado directamente en tránsito.",
-                };
-            }
 
             // Recálculo post-asignación manual: si el repartidor ya estaba "Listo para
             // Salir", entra carga nueva → el vehículo deja de estar completo. Los paquetes
@@ -305,11 +288,11 @@ namespace Back.Application.Services
 
             return new PrecalendarizacionResultado
             {
-                RequiereConfirmacion = false,
                 PesoActual = pesoActual,
                 PesoResultante = pesoResultante,
                 CapacidadKg = Capacidad.RepartidorKg,
                 HuboReversion = huboReversion,
+                FechaAsignada = fechaUtc,
                 Mensaje = huboReversion
                     ? "El repartidor estaba listo para salir. Debe escanear el nuevo envío antes de iniciar la ruta; los ya cargados siguen en el vehículo."
                     : null,
@@ -358,15 +341,15 @@ namespace Back.Application.Services
                 .Select(p => p.RepartidorAsignadoId!.Value)
                 .ToHashSet();
 
+            // Solo excluir los que están retornando: no pueden recibir envíos nuevos.
+            // Los que están EnRuta SÍ se incluyen: sus nuevos envíos irán al día siguiente.
             var repartidores = todosRepartidores
-                .Where(r => !enTransito.Contains(r.Id))
-                // Fase A: excluir a los que están retornando a la sucursal (no reciben envíos nuevos).
                 .Where(r => r.EstadoJornada != Repartidor.EstadoJornadaRepartidor.Retornando)
                 .ToList();
 
             if (repartidores.Count == 0)
                 throw new InvalidOperationException(
-                    "Todos los repartidores activos están En Tránsito. Esperá a que vuelvan para calendarizar nuevos envíos.");
+                    "Todos los repartidores activos están retornando a la sucursal. Esperá a que cierren su jornada para calendarizar nuevos envíos.");
 
             // Orden requerido: Prioritarios primero, luego Comunes; ambos por orden de creación.
             var cola = pendientes
@@ -378,7 +361,8 @@ namespace Back.Application.Services
             foreach (var existente in existentes)
             {
                 if (!existente.RepartidorAsignadoId.HasValue || !existente.FechaCalendarizada.HasValue) continue;
-                if (enTransito.Contains(existente.RepartidorAsignadoId.Value)) continue;
+                // Paquetes ya en tránsito no cuentan para la carga futura (están en el viaje actual).
+                if (existente.Status == PaqueteStatus.EnTransito) continue;
                 AsignarEnMemoria(carga, existente.RepartidorAsignadoId.Value, existente.FechaCalendarizada.Value.Date, existente);
             }
 
@@ -527,7 +511,7 @@ namespace Back.Application.Services
             await _auditoria.RegistrarAsync(
                 TipoAccion.Calendarizacion,
                 $"Calendarización ejecutada: {resultado.TotalCalendarizados} envíos asignados, {resultado.TotalSinAsignar} sin asignar",
-                contexto: $"Días: {resumen.Count} | Repartidores afectados: {resumen.SelectMany(d => d.Repartidores.Select(r => r.RepartidorId)).Distinct().Count()} | Excluidos por En Tránsito: {enTransito.Count}");
+                contexto: $"Días: {resumen.Count} | Repartidores afectados: {resumen.SelectMany(d => d.Repartidores.Select(r => r.RepartidorId)).Distinct().Count()} | En ruta hoy: {enTransito.Count}");
 
             return resultado;
 

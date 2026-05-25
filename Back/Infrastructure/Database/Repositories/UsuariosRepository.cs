@@ -21,7 +21,7 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Usuarios.ToListAsync();
         }
 
-        public async Task<PagedResponse<Usuario>> GetPaged(string? search, string? role, bool? active, int page, int pageSize)
+        public async Task<PagedResponse<Usuario>> GetPaged(string? search, string? role, bool? active, Guid? sucursalId, int page, int pageSize)
         {
             var query = _context.Usuarios.AsQueryable();
 
@@ -58,6 +58,11 @@ namespace Back.Infrastructure.Database.Repositories
             if (active.HasValue)
             {
                 query = query.Where(u => u.Activo == active.Value);
+            }
+
+            if (sucursalId.HasValue)
+            {
+                query = query.Where(u => u.SucursalId == sucursalId.Value);
             }
 
             var totalItems = await query.CountAsync();

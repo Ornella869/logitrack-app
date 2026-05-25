@@ -14,11 +14,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { PagedResult } from '../types'
+import type { Branch, PagedResult } from '../types'
 import HistoryIcon from '@mui/icons-material/History'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import api from '../services/api'
 import type { User } from '../types'
+import { branchService } from '../services/branchService'
 import { formatInstantArgentinaDate, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 type LogAuditoria = {
@@ -116,6 +117,8 @@ export default function AuditoriaPage() {
   const [search, setSearch] = useState('')
   const [accion, setAccion] = useState<string>('Todas')
   const [rol, setRol] = useState<string>('Todos')
+  const [sucursalId, setSucursalId] = useState<string>('Todas')
+  const [branches, setBranches] = useState<Branch[]>([])
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [page, setPage] = useState(1)
@@ -123,11 +126,17 @@ export default function AuditoriaPage() {
   const [totalItems, setTotalItems] = useState(0)
 
   const canAccess = user.role === 'administrador' || user.role === 'supervisor'
+  const isAdmin = user.role === 'administrador'
 
   useEffect(() => {
     if (!canAccess) return
     void load(page, pageSize)
   }, [canAccess, page, pageSize])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    void branchService.getAllBranches().then(setBranches)
+  }, [isAdmin])
 
   const load = async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true)
@@ -137,6 +146,7 @@ export default function AuditoriaPage() {
       if (search.trim()) params.search = search.trim()
       if (accion && accion !== 'Todas') params.accion = accion
       if (rol && rol !== 'Todos') params.rol = rol
+      if (isAdmin && sucursalId && sucursalId !== 'Todas') params.sucursalId = sucursalId
       if (from) params.from = from
       if (to) params.to = to
       params.page = nextPage
@@ -155,6 +165,7 @@ export default function AuditoriaPage() {
     setSearch('')
     setAccion('Todas')
     setRol('Todos')
+    setSucursalId('Todas')
     setFrom('')
     setTo('')
     setPage(1)
@@ -243,6 +254,21 @@ export default function AuditoriaPage() {
                 <MenuItem key={r} value={r}>{r}</MenuItem>
               ))}
             </TextField>
+            {isAdmin && (
+              <TextField
+                size="small"
+                select
+                label="Sucursal"
+                value={sucursalId}
+                onChange={(e) => setSucursalId(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="Todas">Todas las sucursales</MenuItem>
+                {branches.map((b) => (
+                  <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField
               size="small" type="date" label="Desde" InputLabelProps={{ shrink: true }}
               value={from} onChange={(e) => setFrom(e.target.value)}

@@ -623,20 +623,17 @@ export const calendarizacionService = {
     }
   },
 
-  // G1L-83: precalendarización manual. Si requiereConfirmacion=true, no se asignó nada
-  // (hay sobrecarga de peso) y hay que reintentar con confirmarSobrecarga=true.
+  // G1L-83: precalendarización manual.
   precalendarizar: async (
     paqueteId: string,
     repartidorId: string,
     fecha: string,
-    confirmarSobrecarga = false,
   ): Promise<{ success: boolean; data?: PrecalendarizacionResultado; error?: string }> => {
     try {
       const response = await api.post('/calendarizacion/precalendarizar', {
         PaqueteId: paqueteId,
         RepartidorId: repartidorId,
         Fecha: fecha,
-        ConfirmarSobrecarga: confirmarSobrecarga,
       })
       return { success: true, data: response.data as PrecalendarizacionResultado }
     } catch (error: any) {
@@ -668,6 +665,7 @@ export interface CalendarioRepartidor {
   repartidorId: string
   nombre: string
   email: string
+  estadoJornada?: string
   celdas: CalendarioCelda[]
 }
 
@@ -677,12 +675,12 @@ export interface CalendarioOperativo {
 }
 
 export interface PrecalendarizacionResultado {
-  requiereConfirmacion: boolean
   pesoActual: number
   pesoResultante: number
   capacidadKg: number
   huboReversion: boolean
   mensaje?: string | null
+  fechaAsignada?: string | null
 }
 
 export interface HistorialEstadoEnvio {

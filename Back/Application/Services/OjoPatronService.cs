@@ -65,12 +65,11 @@ namespace Back.Application.Services
 
             var consentimiento = new ConsentimientoOjoPatron(usuarioId, VersionTextoVigente);
             _context.ConsentimientosOjoPatron.Add(consentimiento);
-            await _context.SaveChangesAsync();
-
             await _auditoria.RegistrarAsync(
                 TipoAccion.ConsentimientoOjoPatron,
                 $"Aceptó el consentimiento del Ojo del Patrón (v{VersionTextoVigente})",
                 recursoId: usuarioId.ToString());
+            await _context.SaveChangesAsync();
         }
 
         public async Task RevocarAsync(Guid usuarioId)
@@ -80,12 +79,11 @@ namespace Back.Application.Services
                 .ToListAsync();
 
             foreach (var c in vigentes) c.Revocar();
-            await _context.SaveChangesAsync();
-
             await _auditoria.RegistrarAsync(
                 TipoAccion.ConsentimientoOjoPatron,
                 "Revocó el consentimiento del Ojo del Patrón",
                 recursoId: usuarioId.ToString());
+            await _context.SaveChangesAsync();
         }
 
         // ===== G1L-61 / Épica D: configuración del umbral por provincia =====
@@ -121,10 +119,10 @@ namespace Back.Application.Services
         {
             var config = await GetConfiguracionAsync(provincia);
             config.Actualizar(umbral);
-            await _context.SaveChangesAsync();
             await _auditoria.RegistrarAsync(
                 TipoAccion.Otro,
                 $"Actualizó el umbral del Ojo del Patrón a {umbral:0.##} (provincia {provincia})");
+            await _context.SaveChangesAsync();
             return config;
         }
 
@@ -205,7 +203,6 @@ namespace Back.Application.Services
                 usuarioId, scoreNeu, scoreHap, scoreSad, scoreAng,
                 alertnessScore, config.UmbralAlertness, intentos, resultado, momento);
             _context.PruebasOjoPatron.Add(prueba);
-            await _context.SaveChangesAsync();
 
             // G1L-61: cada prueba (aprobada o rechazada) queda en el log de auditoría.
             var momentoLabel = momento == MomentoPruebaOjoPatron.Mitad ? "Mitad de recorrido" : "Inicio de ruta";
@@ -227,6 +224,7 @@ namespace Back.Application.Services
                 $"Prueba Ojo del Patrón ({momentoLabel}): {(resultado == ResultadoPruebaOjoPatron.Aprobada ? "Aprobada" : "Rechazada")}",
                 recursoId: usuarioId.ToString(),
                 contexto: contextoJson);
+            await _context.SaveChangesAsync();
         }
     }
 }

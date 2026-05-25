@@ -323,12 +323,13 @@ namespace Back.Controllers
             [FromQuery] string? search,
             [FromQuery] string? role,
             [FromQuery] bool? active,
+            [FromQuery] Guid? sucursalId,
             [FromQuery] int? page,
             [FromQuery] int? pageSize)
         {
             var normalizedPage = PaginationDefaults.NormalizePage(page);
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
-            var usuarios = await _userRepository.GetPaged(search, role, active, normalizedPage, normalizedPageSize);
+            var usuarios = await _userRepository.GetPaged(search, role, active, sucursalId, normalizedPage, normalizedPageSize);
             return Ok(PagedResponse<UserInfoResponse>.Create(
                 usuarios.Items.Select(MapUsuario).ToList(),
                 usuarios.Page,

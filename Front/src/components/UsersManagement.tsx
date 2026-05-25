@@ -179,6 +179,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('all')
+  const [sucursalFilter, setSucursalFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [totalItems, setTotalItems] = useState(0)
@@ -233,11 +234,11 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   useEffect(() => {
     void loadUsers()
     loadPendingResets()
-  }, [page, pageSize, search, roleFilter, estadoFilter])
+  }, [page, pageSize, search, roleFilter, estadoFilter, sucursalFilter])
 
   useEffect(() => {
     setSelectedIds(new Set())
-  }, [page, pageSize, search, roleFilter, estadoFilter])
+  }, [page, pageSize, search, roleFilter, estadoFilter, sucursalFilter])
 
   const loadUsers = async () => {
     setLoading(true)
@@ -249,6 +250,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         search: search.trim() || undefined,
         role: roleFilter === 'all' ? undefined : roleFilter,
         active: estadoFilter === 'all' ? undefined : estadoFilter === 'active',
+        sucursalId: sucursalFilter === 'all' ? undefined : sucursalFilter,
       })
       setUsers(result.items)
       setTotalItems(result.totalItems)
@@ -511,7 +513,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const filtersApplied = Boolean(search.trim() || roleFilter !== 'all' || estadoFilter !== 'all')
+  const filtersApplied = Boolean(search.trim() || roleFilter !== 'all' || estadoFilter !== 'all' || sucursalFilter !== 'all')
   const selectableUsers = users.filter((u) => !(currentUserId && u.id === currentUserId))
   const allSelected = selectableUsers.length > 0 && selectableUsers.every((u) => selectedIds.has(u.id))
   const someSelected = selectableUsers.some((u) => selectedIds.has(u.id))
@@ -715,6 +717,23 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             </ToggleButton>
           </ToggleButtonGroup>
 
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Sucursal</InputLabel>
+            <Select
+              label="Sucursal"
+              value={sucursalFilter}
+              onChange={(e) => {
+                setSucursalFilter(e.target.value)
+                setPage(1)
+              }}
+            >
+              <MenuItem value="all">Todas las sucursales</MenuItem>
+              {branches.map((b) => (
+                <MenuItem key={b.id} value={b.id}>{b.name}{b.province ? ` (${b.province})` : ''}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           {filtersApplied && (
             <Button
               size="small"
@@ -723,6 +742,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 setSearch('')
                 setRoleFilter('all')
                 setEstadoFilter('all')
+                setSucursalFilter('all')
                 setPage(1)
               }}
               sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, textTransform: 'none' }}

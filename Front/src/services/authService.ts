@@ -324,12 +324,14 @@ export const authService = {
     search,
     role,
     active,
+    sucursalId,
   }: {
     page: number
     pageSize: number
     search?: string
     role?: UserRole
     active?: boolean
+    sucursalId?: string
   }): Promise<PagedResult<User>> => {
     try {
       const params = new URLSearchParams()
@@ -338,6 +340,7 @@ export const authService = {
       if (search) params.set('search', search)
       if (role) params.set('role', role)
       if (typeof active === 'boolean') params.set('active', String(active))
+      if (sucursalId) params.set('sucursalId', sucursalId)
       const response = await api.get(`/auth/usuarios?${params.toString()}`)
       return mapPagedUsuarios(response.data)
     } catch (error) {

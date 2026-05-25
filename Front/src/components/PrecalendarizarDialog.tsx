@@ -16,9 +16,11 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike'
 import {
   calendarizacionService,
   type CalendarioOperativo,
@@ -50,15 +52,11 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
   const [repartidorId, setRepartidorId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  // Cuando el backend avisa sobrecarga, guardamos el mensaje y habilitamos confirmación.
-  const [warnSobrecarga, setWarnSobrecarga] = useState<string | null>(null)
-  // Buscador de repartidor: filtro local sobre la lista ya cargada (no pega al backend).
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!open) return
     setError('')
-    setWarnSobrecarga(null)
     setRepartidorId('')
     setSearch('')
     void (async () => {
@@ -74,6 +72,8 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
     () => [...new Set((calendario?.dias ?? []).map(dateOnly))],
     [calendario],
   )
+
+  const hoy = dateOnly(new Date().toISOString())
 
   // Carga de cada repartidor para el día elegido.
   const cargaPorRepartidor = useMemo(() => {
@@ -91,27 +91,22 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
 
   const pesoActual = repartidorId ? cargaPorRepartidor.get(repartidorId)?.peso ?? 0 : 0
   const pesoResultante = pesoActual + (shipment.weight ?? 0)
-  const excede = pesoResultante > CAPACIDAD_KG
 
-  const handleConfirm = async (confirmarSobrecarga = false) => {
+  const handleConfirm = async () => {
     if (!repartidorId || !fecha) {
       setError('Elegí un repartidor y un día.')
       return
     }
     setSubmitting(true)
     setError('')
-    const res = await calendarizacionService.precalendarizar(shipment.id, repartidorId, fecha, confirmarSobrecarga)
+    const res = await calendarizacionService.precalendarizar(shipment.id, repartidorId, fecha)
     setSubmitting(false)
     if (!res.success) {
       setError(res.error ?? 'No se pudo asignar manualmente')
       return
     }
-    if (res.data?.requiereConfirmacion) {
-      setWarnSobrecarga(res.data.mensaje ?? 'El peso supera la capacidad. Confirmá para continuar.')
-      return
-    }
-    const reversionMsg = res.data?.huboReversion ? ` ${res.data.mensaje}` : ''
-    onSuccess(`Envío asignado manualmente.${reversionMsg}`)
+    const extraMsg = res.data?.mensaje ? ` ${res.data.mensaje}` : ''
+    onSuccess(`Envío asignado manualmente.${extraMsg}`)
   }
 
   return (
@@ -162,33 +157,61 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                   const carga = cargaPorRepartidor.get(rep.repartidorId) ?? { cantidad: 0, peso: 0 }
                   const seleccionado = repartidorId === rep.repartidorId
                   const quedaExcedido = carga.peso + (shipment.weight ?? 0) > CAPACIDAD_KG
+                  const enTransitoHoy = fecha === hoy && rep.estadoJornada === 'EnRuta'
+                  const bloqueado = enTransitoHoy || quedaExcedido
+                  const tooltipTitle = enTransitoHoy
+                    ? 'Está en tránsito. Elegí otro día para asignarle un envío.'
+                    : quedaExcedido
+                    ? 'No hay capacidad para este envío en este día. Elegí otro día.'
+                    : ''
                   return (
-                    <Box
-                      key={rep.repartidorId}
-                      onClick={() => { setRepartidorId(rep.repartidorId); setWarnSobrecarga(null) }}
-                      sx={{
-                        display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: 1, cursor: 'pointer',
-                        border: '1px solid', borderColor: seleccionado ? 'primary.main' : 'divider',
-                        bgcolor: seleccionado ? 'action.selected' : 'transparent',
-                      }}
-                    >
-                      <Radio checked={seleccionado} size="small" />
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" fontWeight={600}>{rep.nombre}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {carga.cantidad} envíos · {carga.peso.toFixed(1)} kg acumulados
-                        </Typography>
-                      </Box>
-                      <Chip
-                        size="small"
-                        label={`${carga.peso.toFixed(0)}/${CAPACIDAD_KG} kg`}
+                    <Tooltip key={rep.repartidorId} title={tooltipTitle} placement="top">
+                      <Box
+                        onClick={() => { if (!bloqueado) setRepartidorId(rep.repartidorId) }}
                         sx={{
-                          bgcolor: quedaExcedido ? '#ffebee' : '#e8f5e9',
-                          color: quedaExcedido ? '#c62828' : '#2e7d32',
-                          fontWeight: 600,
+                          display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: 1,
+                          cursor: bloqueado ? 'not-allowed' : 'pointer',
+                          border: '1px solid',
+                          borderColor: bloqueado ? 'warning.main' : seleccionado ? 'primary.main' : 'divider',
+                          bgcolor: bloqueado ? 'rgba(255,152,0,0.08)' : seleccionado ? 'action.selected' : 'transparent',
+                          opacity: bloqueado ? 0.75 : 1,
                         }}
-                      />
-                    </Box>
+                      >
+                        <Radio checked={seleccionado} size="small" disabled={bloqueado} />
+                        <Box sx={{ flex: 1 }}>
+                          <Stack direction="row" alignItems="center" spacing={0.5}>
+                            <Typography variant="body2" fontWeight={600}>{rep.nombre}</Typography>
+                            {enTransitoHoy && (
+                              <Chip
+                                icon={<DirectionsBikeIcon sx={{ fontSize: '12px !important' }} />}
+                                label="En tránsito hoy"
+                                size="small"
+                                sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                              />
+                            )}
+                            {quedaExcedido && !enTransitoHoy && (
+                              <Chip
+                                label="Capacidad llena"
+                                size="small"
+                                sx={{ bgcolor: '#ffebee', color: '#c62828', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                              />
+                            )}
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">
+                            {carga.cantidad} envíos · {carga.peso.toFixed(1)} kg acumulados
+                          </Typography>
+                        </Box>
+                        <Chip
+                          size="small"
+                          label={`${carga.peso.toFixed(0)}/${CAPACIDAD_KG} kg`}
+                          sx={{
+                            bgcolor: quedaExcedido ? '#ffebee' : '#e8f5e9',
+                            color: quedaExcedido ? '#c62828' : '#2e7d32',
+                            fontWeight: 600,
+                          }}
+                        />
+                      </Box>
+                    </Tooltip>
                   )
                 })}
                 {(calendario?.repartidores ?? []).filter((rep) => rep.nombre.toLowerCase().includes(search.trim().toLowerCase())).length === 0 && (
@@ -200,36 +223,24 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
             </Box>
 
             {repartidorId && (
-              <Alert severity={excede ? 'warning' : 'info'}>
+              <Alert severity="info">
                 Peso resultante: {pesoResultante.toFixed(1)} kg de {CAPACIDAD_KG} kg.
-                {excede && ' Supera la capacidad del repartidor.'}
               </Alert>
             )}
 
-            {warnSobrecarga && <Alert severity="warning">{warnSobrecarga}</Alert>}
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={submitting}>Cancelar</Button>
-        {warnSobrecarga ? (
-          <Button
-            variant="contained" color="warning"
-            onClick={() => void handleConfirm(true)}
-            disabled={submitting}
-          >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : 'Confirmar igualmente'}
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            onClick={() => void handleConfirm(false)}
-            disabled={submitting || !repartidorId || !fecha}
-          >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : 'Asignar'}
-          </Button>
-        )}
+        <Button
+          variant="contained"
+          onClick={() => void handleConfirm()}
+          disabled={submitting || !repartidorId || !fecha}
+        >
+          {submitting ? <CircularProgress size={20} color="inherit" /> : 'Asignar'}
+        </Button>
       </DialogActions>
     </Dialog>
   )

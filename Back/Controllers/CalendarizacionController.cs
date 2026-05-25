@@ -69,10 +69,8 @@ namespace Back.Controllers
             try
             {
                 var resultado = await _service.PrecalendarizarManualAsync(
-                    request.PaqueteId, request.RepartidorId, request.Fecha, request.ConfirmarSobrecarga, CurrentUserId());
-                // Si requiere confirmación no persistimos cambios (no se asignó nada).
-                if (!resultado.RequiereConfirmacion)
-                    await _context.SaveChangesAsync();
+                    request.PaqueteId, request.RepartidorId, request.Fecha, CurrentUserId());
+                await _context.SaveChangesAsync();
                 return Ok(resultado);
             }
             catch (InvalidOperationException ex)
@@ -105,6 +103,5 @@ namespace Back.Controllers
         public Guid PaqueteId { get; set; }
         public Guid RepartidorId { get; set; }
         public DateTime Fecha { get; set; }
-        public bool ConfirmarSobrecarga { get; set; }
     }
 }

@@ -68,17 +68,18 @@ namespace Back.Application.Services
             DateTime? to,
             string? search,
             bool limitarASucursalSupervisor,
+            Guid? filtroSucursalId,
             int page,
             int pageSize)
         {
             var query = _context.LogsAuditoria.AsQueryable();
+
+            // Supervisor: scope automático a su propia sucursal.
             if (limitarASucursalSupervisor)
             {
                 var sucursalId = await ResolverSucursalUsuarioActualAsync();
                 if (!sucursalId.HasValue)
-                {
                     return PagedResponse<LogAuditoria>.Create(new List<LogAuditoria>(), page, pageSize, 0);
-                }
 
                 var rolesOperativos = new[] { nameof(Supervisor), nameof(Operador), nameof(Repartidor) };
                 var usuariosSucursalIds = await _context.Usuarios
@@ -89,14 +90,21 @@ namespace Back.Application.Services
 
                 query = query.Where(l => l.UsuarioId.HasValue && usuariosSucursalIds.Contains(l.UsuarioId.Value));
             }
+            // Administrador: filtro explícito por sucursal (opcional).
+            else if (filtroSucursalId.HasValue)
+            {
+                var rolesOperativos = new[] { nameof(Supervisor), nameof(Operador), nameof(Repartidor) };
+                var usuariosSucursalIds = await _context.Usuarios
+                    .Where(u => u.SucursalId == filtroSucursalId.Value
+                        && rolesOperativos.Contains(EF.Property<string>(u, "Discriminator")))
+                    .Select(u => u.Id)
+                    .ToListAsync();
+
+                query = query.Where(l => l.UsuarioId.HasValue && usuariosSucursalIds.Contains(l.UsuarioId.Value));
+            }
+
             if (usuarioId.HasValue) query = query.Where(l => l.UsuarioId == usuarioId);
             if (accion.HasValue) query = query.Where(l => l.Accion == accion);
-            if (limitarASucursalSupervisor && false)
-            {
-                query = query.Where(l => l.Accion == TipoAccion.Notificacion
-                    || EF.Functions.ILike(l.Descripcion, "%Notificacion%")
-                    || EF.Functions.ILike(l.Descripcion, "%Notificación%"));
-            }
             if (!string.IsNullOrWhiteSpace(rol))
             {
                 var r = rol.Trim();
