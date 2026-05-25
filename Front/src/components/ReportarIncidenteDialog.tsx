@@ -327,6 +327,7 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
       title: '🚨 Incidente reportado',
       message: `${user.name} reportó: ${tipoLabel}. Revisá la sección de Incidencias.`,
       recipientId: 'supervisor',
+      sucursalId: user.sucursalId ?? undefined,
       navigateTo: '/incidencias',
     })
 

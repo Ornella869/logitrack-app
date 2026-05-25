@@ -132,6 +132,16 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
         setErrors((prev) => ({ ...prev, postalCode: result.error ?? 'CP inválido' }))
         return
       }
+      const normalizedProvince = normalizeProvincia(result.province)
+      // Si hay provincia bloqueada (Gerente), el CP debe pertenecer a esa misma provincia.
+      if (lockedProvince && normalizedProvince &&
+          normalizedProvince.toLowerCase() !== lockedProvince.toLowerCase()) {
+        setErrors((prev) => ({
+          ...prev,
+          postalCode: `Este CP pertenece a ${normalizedProvince}, no a ${lockedProvince}`,
+        }))
+        return
+      }
       setErrors((prev) => {
         const next = { ...prev }
         delete next.postalCode
@@ -139,7 +149,6 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
       })
       // Pre-rellena provincia solo si está vacía. Si el operador la eligió
       // manualmente (CPs ambiguos como 9420), respetamos su elección.
-      const normalizedProvince = normalizeProvincia(result.province)
       setFormData((prev) => ({
         ...prev,
         city: result.city ?? prev.city,
@@ -198,6 +207,11 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
       const cpResult = await postalCodeService.validate(formData.postalCode)
       if (!cpResult.valid) {
         newErrors.postalCode = cpResult.error ?? 'CP inválido'
+      } else if (lockedProvince && cpResult.province) {
+        const normalizedCpProvince = normalizeProvincia(cpResult.province)
+        if (normalizedCpProvince && normalizedCpProvince.toLowerCase() !== lockedProvince.toLowerCase()) {
+          newErrors.postalCode = `Este CP pertenece a ${normalizedCpProvince}, no a ${lockedProvince}`
+        }
       }
     }
 

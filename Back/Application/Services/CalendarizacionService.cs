@@ -248,6 +248,32 @@ namespace Back.Application.Services
                 };
             }
 
+            paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
+
+            // Si el repartidor ya está en ruta (jornada activa), el paquete entra directo
+            // a EnTransito — no puede escanear desde la calle y no hay nada que "bajar".
+            if (rep.EstadoJornada == Repartidor.EstadoJornadaRepartidor.EnRuta)
+            {
+                paquete.CambiarEstado(PaqueteStatus.EnTransito);
+                await _historial.RegistrarCambioAsync(
+                    paquete.Id, PaqueteStatus.EnTransito, supervisorId, OrigenCambioEstado.Manual,
+                    "Precalendarización manual: ruta ya iniciada, entra directo en tránsito");
+                await _auditoria.RegistrarAsync(
+                    TipoAccion.Calendarizacion,
+                    $"Asignación manual de {paquete.CodigoSeguimiento} a {rep.Nombre} {rep.Apellido} ({fechaUtc:yyyy-MM-dd}) — ruta ya iniciada",
+                    recursoId: paquete.CodigoSeguimiento,
+                    contexto: $"Repartidor: {repartidorId} | Día: {fechaUtc:yyyy-MM-dd} | Entró directo a EnTransito");
+                return new PrecalendarizacionResultado
+                {
+                    RequiereConfirmacion = false,
+                    PesoActual = pesoActual,
+                    PesoResultante = pesoResultante,
+                    CapacidadKg = Capacidad.RepartidorKg,
+                    HuboReversion = false,
+                    Mensaje = "El repartidor ya está en ruta. El envío fue agregado directamente en tránsito.",
+                };
+            }
+
             // Recálculo post-asignación manual: si el repartidor ya estaba "Listo para
             // Salir", entra carga nueva → el vehículo deja de estar completo. Los paquetes
             // que ya estaban cargados NO se bajan: bajan de "Listo para Salir" a "Cargado
@@ -265,7 +291,6 @@ namespace Back.Application.Services
                     "Vuelve a Cargado: ingresó un envío nuevo al reparto");
             }
 
-            paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
             await _historial.RegistrarCambioAsync(
                 paquete.Id, PaqueteStatus.AsignadoAVehiculo, supervisorId, OrigenCambioEstado.Manual,
                 "Precalendarización manual por Supervisor");

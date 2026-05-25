@@ -9,6 +9,8 @@ export interface AppNotification {
   message: string
   /** userId específico O nombre de rol ('supervisor', 'repartidor', etc.) para broadcast */
   recipientId: string
+  /** Cuando está presente en un broadcast de rol, limita la visibilidad a esa sucursal */
+  sucursalId?: string
   createdAt: string
   navigateTo?: string
 }
@@ -52,15 +54,24 @@ export const notificationService = {
     return loadAll().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   },
 
-  /** Devuelve todas las notificaciones dirigidas a este usuario (por id o por rol) */
-  getForUser(userId: string, role: UserRole): AppNotification[] {
+  /** Devuelve todas las notificaciones dirigidas a este usuario (por id o por rol).
+   *  sucursalId: cuando se provee, los broadcasts de rol con sucursalId solo se muestran si coinciden. */
+  getForUser(userId: string, role: UserRole, sucursalId?: string): AppNotification[] {
     return loadAll()
-      .filter((n) => n.recipientId === userId || n.recipientId === role)
+      .filter((n) => {
+        if (n.recipientId === userId) return true
+        if (n.recipientId === role) {
+          // Sin sucursalId en la notificación → broadcast global (compatible con datos viejos)
+          if (!n.sucursalId) return true
+          return n.sucursalId === sucursalId
+        }
+        return false
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   },
 
-  getUnreadCount(userId: string, role: UserRole): number {
-    const notifs = notificationService.getForUser(userId, role)
+  getUnreadCount(userId: string, role: UserRole, sucursalId?: string): number {
+    const notifs = notificationService.getForUser(userId, role, sucursalId)
     const readIds = loadReadIds(userId)
     return notifs.filter((n) => !readIds.has(n.id)).length
   },
@@ -89,8 +100,8 @@ export const notificationService = {
     dispatch()
   },
 
-  markAllRead(userId: string, role: UserRole): void {
-    const notifs = notificationService.getForUser(userId, role)
+  markAllRead(userId: string, role: UserRole, sucursalId?: string): void {
+    const notifs = notificationService.getForUser(userId, role, sucursalId)
     const ids = loadReadIds(userId)
     notifs.forEach((n) => ids.add(n.id))
     saveReadIds(userId, ids)

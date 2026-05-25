@@ -117,12 +117,12 @@ function Layout({ user, onLogout }: LayoutProps) {
   }, [user.role])
 
   const refreshNotifications = useCallback(() => {
-    const notifs = notificationService.getForUser(user.id, user.role)
+    const notifs = notificationService.getForUser(user.id, user.role, user.sucursalId ?? undefined)
     setNotifications(notifs)
     const ids = new Set<string>()
     notifs.forEach((n) => { if (notificationService.isRead(user.id, n.id)) ids.add(n.id) })
     setReadIds(ids)
-  }, [user.id, user.role])
+  }, [user.id, user.role, user.sucursalId])
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !readIds.has(n.id)).length,
@@ -207,7 +207,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   }
 
   const handleMarkAllRead = () => {
-    notificationService.markAllRead(user.id, user.role)
+    notificationService.markAllRead(user.id, user.role, user.sucursalId ?? undefined)
     refreshNotifications()
   }
 

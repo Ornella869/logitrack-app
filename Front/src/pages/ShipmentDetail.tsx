@@ -264,12 +264,13 @@ function ShipmentDetail() {
       setOpenEntregaDialog(false)
       setEntregaCodigo('')
       showActionToast('Entrega confirmada. ¡Gracias!', 'success')
-      // Notificación al Supervisor (rol).
+      // Notificación al Supervisor (rol), acotada a la sucursal del repartidor.
       notificationService.add({
         type: 'otro',
         title: 'Entrega completada',
         message: `Envío ${shipment.trackingId} entregado a ${shipment.receiver.name}`,
         recipientId: 'supervisor',
+        sucursalId: user.sucursalId ?? undefined,
         navigateTo: `/shipment/${id}`,
       })
       // Fase C: notificación al propio repartidor por cada parada entregada.
