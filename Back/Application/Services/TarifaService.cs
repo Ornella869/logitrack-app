@@ -128,9 +128,9 @@ namespace Back.Application.Services
 
         public async Task<List<ZonaPeligrosa>> GetZonasAsync(string provincia)
         {
-            provincia = (provincia ?? string.Empty).Trim();
+            var pNorm = (provincia ?? string.Empty).Trim().ToLowerInvariant();
             return await _context.ZonasPeligrosas
-                .Where(z => z.Provincia == provincia)
+                .Where(z => z.Provincia.ToLower() == pNorm)
                 .OrderByDescending(z => z.CreadoEn).ToListAsync();
         }
 
@@ -192,8 +192,10 @@ namespace Back.Application.Services
         // G1L-86: una ubicación es peligrosa si cae dentro de alguna zona activa de su provincia.
         public async Task<bool> EsZonaPeligrosaAsync(string provincia, double lat, double lng)
         {
-            provincia = (provincia ?? string.Empty).Trim();
-            var zonas = await _context.ZonasPeligrosas.Where(z => z.Activa && z.Provincia == provincia).ToListAsync();
+            var pNorm = (provincia ?? string.Empty).Trim().ToLowerInvariant();
+            var zonas = await _context.ZonasPeligrosas
+                .Where(z => z.Activa && z.Provincia.ToLower() == pNorm)
+                .ToListAsync();
             return zonas.Any(z => z.Contiene(lat, lng));
         }
 

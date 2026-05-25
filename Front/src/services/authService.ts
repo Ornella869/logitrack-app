@@ -72,6 +72,8 @@ const mapUsuario = (usuario: any): User => ({
   activo: usuario.activo ?? true,
   licencia: usuario.licencia,
   estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
+  sucursalId: usuario.sucursalId ?? usuario.SucursalId ?? null,
+  provincia: usuario.provincia ?? usuario.Provincia ?? null,
 })
 
 const mapPagedUsuarios = (data: any): PagedResult<User> => ({

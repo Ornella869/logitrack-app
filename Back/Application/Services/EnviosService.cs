@@ -121,7 +121,7 @@ namespace Back.Application.Services
                     {
                         var quien = responsable is not null ? $"la sucursal '{responsable.Nombre}'" : "otra sucursal";
                         throw new InvalidOperationException(
-                            $"El destino ({provinciaDestino}) lo gestiona {quien}. No podés crear envíos fuera de la cobertura de tu sucursal.");
+                            $"El destino ({provinciaDestino}) lo gestiona {quien}. No podés registrar envíos con destino en otra provincia. Solo se permiten envíos dentro de la provincia de tu sucursal o de las que cubra tu sucursal.");
                     }
                     // Dentro de cobertura: la sucursal responsable es la del operador.
                     return miSucursal;

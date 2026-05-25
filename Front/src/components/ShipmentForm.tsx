@@ -334,7 +334,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       setSubmitError(
         extractApiError(
           error,
-          'No podés registrar envíos con destino en otra provincia. Solo se permiten envíos dentro de la provincia de tu sucursal.',
+          'No podés registrar envíos con destino en otra provincia. Solo se permiten envíos dentro de la provincia de tu sucursal o de las que cubra tu sucursal.',
         ),
       )
     } finally {
@@ -591,14 +591,16 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
               <Box>
                 <Row label={`Peso (${cotizacion.peso} kg × $${cotizacion.precioPorKg}/kg)`} value={cotizacion.costoPeso} />
                 <Row label={`Distancia (${cotizacion.distanciaKm} km × $${cotizacion.precioPorKm}/km)`} value={cotizacion.costoDistancia} />
-                {cotizacion.esZonaPeligrosa && (
+                {cotizacion.esZonaPeligrosa ? (
                   <>
                     <Alert severity="warning" sx={{ my: 1, py: 0 }}>
                       Destino en zona peligrosa: recargo por seguridad del {cotizacion.porcentajeRecargo}%.
                     </Alert>
                     <Row label={`Costo extra por seguridad (${cotizacion.porcentajeRecargo}%)`} value={cotizacion.costoRecargo} highlight />
                   </>
-                )}
+                ) : cotizacion.geocodificado ? (
+                  <Row label="Recargo zona peligrosa" value={0} />
+                ) : null}
                 <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1, pt: 1, display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="subtitle1" fontWeight={700}>Total</Typography>
                   <Typography variant="subtitle1" fontWeight={700}>${cotizacion.total.toLocaleString('es-AR')}</Typography>
