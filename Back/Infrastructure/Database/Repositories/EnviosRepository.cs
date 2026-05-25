@@ -143,9 +143,20 @@ namespace Back.Infrastructure.Database.Repositories
 
         public async Task<List<Paquete>> GetPaquetesAsignadosARepartidor(Guid repartidorId)
         {
+            var estadosVisibles = new[]
+            {
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.CargadoEnVehiculo,
+                PaqueteStatus.ListoParaSalir,
+                PaqueteStatus.EnTransito,
+                PaqueteStatus.Demorado,
+                PaqueteStatus.Entregado,
+                PaqueteStatus.Cancelado,
+            };
             return await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
-                            && p.FechaCalendarizada != null)
+                            && p.FechaCalendarizada != null
+                            && estadosVisibles.Contains(p.Status))
                 .OrderBy(p => p.FechaCalendarizada)
                 .ThenBy(p => p.Destinatario.Direccion.CP)
                 .ToListAsync();
@@ -153,12 +164,23 @@ namespace Back.Infrastructure.Database.Repositories
 
         public async Task<List<Paquete>> GetPaquetesAsignadosARepartidorEnFecha(Guid repartidorId, DateTime fecha)
         {
+            var estadosVisibles = new[]
+            {
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.CargadoEnVehiculo,
+                PaqueteStatus.ListoParaSalir,
+                PaqueteStatus.EnTransito,
+                PaqueteStatus.Demorado,
+                PaqueteStatus.Entregado,
+                PaqueteStatus.Cancelado,
+            };
             var dia = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
             var diaSiguiente = dia.AddDays(1);
             return await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
                             && p.FechaCalendarizada >= dia
-                            && p.FechaCalendarizada < diaSiguiente)
+                            && p.FechaCalendarizada < diaSiguiente
+                            && estadosVisibles.Contains(p.Status))
                 .OrderBy(p => p.Destinatario.Direccion.CP)
                 .ThenBy(p => p.CreadoEn)
                 .ToListAsync();

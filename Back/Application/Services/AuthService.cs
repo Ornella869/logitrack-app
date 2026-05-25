@@ -126,6 +126,9 @@ namespace Back.Application.Services
             if (existingByDni is not null)
                 throw new InvalidOperationException("El DNI ya está registrado.");
 
+            if (!request.SucursalId.HasValue)
+                throw new InvalidOperationException("La sucursal es obligatoria para repartidores.");
+
             var existingByEmail = await _userRepository.GetUsuarioByEmail(request.Email.Trim());
             if (existingByEmail is not null)
                 throw new InvalidOperationException("El email ya está registrado.");
@@ -168,6 +171,13 @@ namespace Back.Application.Services
 
             if (string.IsNullOrWhiteSpace(request.PasswordTemporal) || request.PasswordTemporal.Length < 8)
                 throw new InvalidOperationException("La contraseña temporal debe tener al menos 8 caracteres.");
+
+            if (request.Role == Roles.Gerente && string.IsNullOrWhiteSpace(request.Provincia))
+                throw new InvalidOperationException("La provincia es obligatoria para gerentes.");
+
+            if ((request.Role == Roles.Supervisor || request.Role == Roles.Operador || request.Role == Roles.Repartidor)
+                && !request.SucursalId.HasValue)
+                throw new InvalidOperationException("La sucursal es obligatoria para supervisores, operadores y repartidores.");
 
             var existingByEmail = await _userRepository.GetUsuarioByEmail(request.Email.Trim());
             if (existingByEmail is not null)

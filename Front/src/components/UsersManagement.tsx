@@ -489,6 +489,17 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         setFormError('La contraseña temporal debe tener al menos 8 caracteres.')
         return false
       }
+      if (formData.role === 'gerente' && !formData.provincia) {
+        setFormError('La provincia es obligatoria para gerentes.')
+        return false
+      }
+      if (
+        (formData.role === 'supervisor' || formData.role === 'operador' || formData.role === 'repartidor')
+        && !formData.sucursalId
+      ) {
+        setFormError('La sucursal es obligatoria para supervisores, operadores y repartidores.')
+        return false
+      }
       if (formData.role === 'repartidor' && !formData.licencia.trim()) {
         setFormError('La licencia es obligatoria para repartidores.')
         return false
@@ -959,7 +970,13 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               <Select
                 label="Rol *"
                 value={formData.role}
-                onChange={(e) => setFormData((p) => ({ ...p, role: e.target.value as UserRole }))}
+                onChange={(e) => setFormData((p) => ({
+                  ...p,
+                  role: e.target.value as UserRole,
+                  provincia: '',
+                  sucursalId: '',
+                  licencia: '',
+                }))}
               >
                 <MenuItem value="gerente">Gerente</MenuItem>
                 <MenuItem value="supervisor">Supervisor</MenuItem>

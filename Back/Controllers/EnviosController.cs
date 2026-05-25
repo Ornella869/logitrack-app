@@ -428,6 +428,7 @@ namespace Back.Controllers
             try
             {
                 paquete.ReEnviar();
+                paquete.LiberarAsignacion();
                 await _historialService.RegistrarCambioAsync(paquete.Id, paquete.Status, CurrentUserId(), OrigenCambioEstado.Manual, "Reenvío del paquete");
                 await _context.SaveChangesAsync();
                 return Ok();
