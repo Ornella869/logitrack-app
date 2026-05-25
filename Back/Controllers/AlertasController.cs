@@ -23,7 +23,8 @@ namespace Back.Controllers
         {
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdStr, out var userId)) return null;
-            return (await _userRepository.GetUsuarioById(userId))?.SucursalId;
+            // Supervisor sin sucursal asignada → Guid.Empty no coincide con ninguna sucursal real.
+            return (await _userRepository.GetUsuarioById(userId))?.SucursalId ?? Guid.Empty;
         }
 
         /// <summary>G1L-84: paquetes sin estado final con fecha prevista vencida (Supervisor).</summary>

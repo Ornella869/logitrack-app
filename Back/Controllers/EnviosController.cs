@@ -56,18 +56,20 @@ namespace Back.Controllers
         private async Task<Guid?> CurrentSucursalScopeAsync()
         {
             if (User.IsInRole(Roles.Administrador) || User.IsInRole(Roles.Gerente)) return null;
-            return (await CurrentUserAsync())?.SucursalId;
+            // Supervisor/Operador sin sucursal asignada → Guid.Empty no coincide con ninguna sucursal real.
+            return (await CurrentUserAsync())?.SucursalId ?? Guid.Empty;
         }
 
         private async Task<bool> PuedeVerPaqueteAsync(Paquete paquete)
         {
-            if (User.IsInRole(Roles.Administrador)) return true;
+            if (User.IsInRole(Roles.Administrador) || User.IsInRole(Roles.Gerente)) return true;
             var user = await CurrentUserAsync();
             if (user is null) return false;
             if (User.IsInRole(Roles.Repartidor))
                 return paquete.RepartidorAsignadoId == user.Id
                     && paquete.FechaCalendarizada?.Date == OperationalClock.TodayUtcDate;
-            return user.SucursalId is null || paquete.SucursalId == user.SucursalId;
+            // Supervisor/Operador: debe pertenecer a la misma sucursal. Sin sucursal → sin acceso.
+            return user.SucursalId.HasValue && paquete.SucursalId == user.SucursalId;
         }
 
         private static double DistanciaKm(Ubicacion a, Ubicacion b)

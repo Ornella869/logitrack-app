@@ -94,6 +94,8 @@ export default function RepartidorDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState(0)
+  const [filtroEstado, setFiltroEstado] = useState<string | null>(null)
+
   // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
   const [estadoJornada, setEstadoJornada] = useState('Disponible')
   const [cerrandoJornada, setCerrandoJornada] = useState(false)
@@ -133,6 +135,13 @@ export default function RepartidorDashboard() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const paradasFiltradas = useMemo(() => {
+    if (!filtroEstado) return paradas
+    if (filtroEstado === 'Pendientes')
+      return paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+    return paradas.filter((p) => p.status === filtroEstado)
+  }, [paradas, filtroEstado])
 
   const metrics = useMemo(() => {
     const entregadas = paradas.filter((p) => p.status === 'Entregado').length
@@ -697,9 +706,45 @@ export default function RepartidorDashboard() {
 
           {tab === 1 && (
           <Stack spacing={1.5}>
-            {paradas.map((p, idx) => {
+            {/* Filtro por estado */}
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {[
+                { label: 'Todos', value: null },
+                { label: 'Pendientes', value: 'Pendientes' },
+                { label: 'En tránsito', value: 'En tránsito' },
+                { label: 'Demorado', value: 'Demorado' },
+                { label: 'Entregado', value: 'Entregado' },
+              ].map(({ label, value }) => {
+                const count = value === null
+                  ? paradas.length
+                  : value === 'Pendientes'
+                    ? paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado').length
+                    : paradas.filter((p) => p.status === value).length
+                const selected = filtroEstado === value
+                return (
+                  <Chip
+                    key={label}
+                    label={`${label} (${count})`}
+                    size="small"
+                    onClick={() => setFiltroEstado(value)}
+                    color={selected ? 'primary' : 'default'}
+                    variant={selected ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: selected ? 700 : 400 }}
+                  />
+                )
+              })}
+            </Box>
+
+            {paradasFiltradas.length === 0 && (
+              <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 3 }}>
+                No hay paradas con estado "{filtroEstado}".
+              </Typography>
+            )}
+
+            {paradasFiltradas.map((p) => {
               const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
-              const isCurrent = idx === metrics.proximaIdx
+              const isCurrent = p.id === proxima?.id
+              const numeroParada = paradas.indexOf(p) + 1
               return (
                 <Card
                   key={p.id}
@@ -725,7 +770,7 @@ export default function RepartidorDashboard() {
                           color: 'white', fontWeight: 700, fontSize: 16,
                         }}
                       >
-                        {idx + 1}
+                        {numeroParada}
                       </Box>
                       <Box sx={{ flex: 1 }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
