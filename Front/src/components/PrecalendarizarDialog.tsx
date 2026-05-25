@@ -130,7 +130,7 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
               <Select
                 value={fecha}
                 label="Día"
-                onChange={(e) => { setFecha(e.target.value); setWarnSobrecarga(null) }}
+                onChange={(e) => setFecha(e.target.value)}
               >
                 {diasDisponibles.map((d) => (
                   <MenuItem key={d} value={d}>
