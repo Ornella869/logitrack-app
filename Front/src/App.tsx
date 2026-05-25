@@ -9,6 +9,7 @@ import CalendarioOperativoPage from './pages/CalendarioOperativoPage'
 import RutasActivasPage from './pages/RutasActivasPage'
 import DetalleRutaPage from './pages/DetalleRutaPage'
 import AuditoriaPage from './pages/AuditoriaPage'
+import NotificacionesAuditoriaPage from './pages/NotificacionesAuditoriaPage'
 import MiPlanPage from './pages/MiPlanPage'
 import ReportesPage from './pages/ReportesPage'
 import TarifasPage from './pages/TarifasPage'
@@ -289,6 +290,16 @@ function App() {
             element={
               user && (user.role === 'administrador' || user.role === 'supervisor') ? (
                 <AuditoriaPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
+            path="/auditoria-notificaciones"
+            element={
+              user && user.role === 'administrador' ? (
+                <NotificacionesAuditoriaPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

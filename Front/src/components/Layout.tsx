@@ -30,6 +30,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
 import GroupIcon from '@mui/icons-material/Group'
 import HistoryIcon from '@mui/icons-material/History'
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import BarChartIcon from '@mui/icons-material/BarChart'
 import PriceChangeIcon from '@mui/icons-material/PriceChange'
 import GraphicEqIcon from '@mui/icons-material/GraphicEq'
@@ -79,7 +80,32 @@ function Layout({ user, onLogout }: LayoutProps) {
   useEffect(() => {
     if (user.role !== 'supervisor') return
     void alertService.contar().then(setAlertasCount)
-  }, [user.role])
+
+    // UH-84: generar notificaciones in-app al inicio de jornada por paquetes sin estado final
+    const ALERTA_NOTIF_KEY = 'logitrack_alertas_notificadas'
+    const getNotificadas = (): Set<string> => {
+      try { return new Set(JSON.parse(localStorage.getItem(ALERTA_NOTIF_KEY) ?? '[]') as string[]) }
+      catch { return new Set() }
+    }
+    void alertService.getPaquetesSinEstadoFinal().then((data) => {
+      const notificadas = getNotificadas()
+      let huboNuevas = false
+      data.forEach((a) => {
+        if (!notificadas.has(a.paqueteId)) {
+          notificadas.add(a.paqueteId)
+          huboNuevas = true
+          notificationService.add({
+            type: 'incidencia',
+            title: 'Paquete sin estado final',
+            message: `${a.trackingId} — ${a.repartidorNombre} — ${a.diasDemora} día${a.diasDemora === 1 ? '' : 's'} de demora (${a.estadoActual})`,
+            recipientId: user.id,
+            navigateTo: `/shipment/${a.paqueteId}`,
+          })
+        }
+      })
+      if (huboNuevas) localStorage.setItem(ALERTA_NOTIF_KEY, JSON.stringify([...notificadas]))
+    })
+  }, [user.role, user.id])
 
   useEffect(() => {
     if (user.role !== 'supervisor') return
@@ -140,8 +166,15 @@ function Layout({ user, onLogout }: LayoutProps) {
 
   useEffect(() => {
     refreshNotifications()
+    const storageHandler = (e: StorageEvent) => {
+      if (e.key === 'logitrack_notifications') refreshNotifications()
+    }
     window.addEventListener('logitrack:notification', refreshNotifications)
-    return () => window.removeEventListener('logitrack:notification', refreshNotifications)
+    window.addEventListener('storage', storageHandler)
+    return () => {
+      window.removeEventListener('logitrack:notification', refreshNotifications)
+      window.removeEventListener('storage', storageHandler)
+    }
   }, [refreshNotifications])
 
   useEffect(() => {
@@ -249,6 +282,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/rutas-activas')) return '/rutas-activas'
     if (pathname.startsWith('/alertas')) return '/alertas'
     if (pathname.startsWith('/reportes')) return '/reportes'
+    if (pathname.startsWith('/auditoria-notificaciones')) return '/auditoria-notificaciones'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
@@ -555,6 +589,9 @@ function Layout({ user, onLogout }: LayoutProps) {
             )}
             {user.role === 'gerente' && (
               <Tab icon={<GraphicEqIcon fontSize="small" />} iconPosition="start" label="Ojo del Patrón" value="/ojo-patron" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'administrador' && (
+              <Tab icon={<NotificationsActiveIcon fontSize="small" />} iconPosition="start" label="Notif. Auditoría" value="/auditoria-notificaciones" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (
               <Tab icon={<WorkspacePremiumIcon fontSize="small" />} iconPosition="start" label="Mi Plan" value="/mi-plan" sx={{ minHeight: 48, textTransform: 'none' }} />

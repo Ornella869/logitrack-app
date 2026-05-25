@@ -31,7 +31,7 @@ import BoltIcon from '@mui/icons-material/Bolt'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
-import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen } from '../services/shipmentService'
+import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
@@ -70,6 +70,7 @@ export default function CalendarizarPage() {
   const [exec, setExec] = useState<{ ok: boolean; error?: string } | null>(null)
 
   const [estadoActual, setEstadoActual] = useState<DiaResumen[]>([])
+  const [calendarData, setCalendarData] = useState<CalendarioOperativo | null>(null)
 
   useEffect(() => {
     if (user.role !== 'supervisor') return
@@ -80,13 +81,15 @@ export default function CalendarizarPage() {
     setLoading(true)
     setError('')
     try {
-      const [pend, reps, estado] = await Promise.all([
+      const [pend, reps, estado, cal] = await Promise.all([
         shipmentService.getPendingShipments(),
         authService.getRepartidores(),
         calendarizacionService.getEstadoActual(),
+        calendarizacionService.getCalendario(30),
       ])
       setPendientes(pend)
       setEstadoActual(estado)
+      setCalendarData(cal)
       setRepartidores(
         (reps as any[]).map((r) => ({
           id: r.id,
@@ -121,6 +124,37 @@ export default function CalendarizarPage() {
       return acc
     }, {})
   }, [estadoActual])
+
+  // Próxima fecha disponible: usa los mismos datos que el Calendario Operativo (30 días).
+  // Un día se considera "disponible" cuando el repartidor tiene < 450 kg asignados ese día
+  // (mismo umbral que el color naranja/rojo del calendario — ≥ 450 kg es prácticamente lleno).
+  // Si todos los días tienen ≥ 450 kg, muestra el día con menor carga.
+  const proximaFechaDisponible = useMemo(() => {
+    const result: Record<string, { fecha: string; pesoTotal: number } | null> = {}
+
+    repartidoresActivos.forEach((r) => {
+      if (!calendarData) { result[r.id] = null; return }
+
+      const repCal = calendarData.repartidores.find((cr) => cr.repartidorId === r.id)
+      if (!repCal) { result[r.id] = null; return }
+
+      const hoyStr = new Date().toISOString().substring(0, 10)
+      // Solo días futuros (no hoy)
+      const celdas = repCal.celdas.filter((c) => c.fecha.substring(0, 10) > hoyStr)
+
+      const libre = celdas.find((c) => c.pesoTotal < 450)
+      if (libre) {
+        result[r.id] = { fecha: libre.fecha, pesoTotal: libre.pesoTotal }
+      } else {
+        // Fallback: día con menor carga
+        const menorCarga = celdas.reduce<typeof celdas[0] | null>(
+          (best, c) => (!best || c.pesoTotal < best.pesoTotal ? c : best), null,
+        )
+        result[r.id] = menorCarga ? { fecha: menorCarga.fecha, pesoTotal: menorCarga.pesoTotal } : null
+      }
+    })
+    return result
+  }, [calendarData, repartidoresActivos])
 
   const repartidoresDisponibles = useMemo(() => {
     const q = repartidorSearch.trim().toLowerCase()
@@ -360,34 +394,33 @@ export default function CalendarizarPage() {
                     {repartidoresDisponiblesVisibles.map((r, idx) => {
                       const initials = `${r.nombre[0] ?? ''}${r.apellido[0] ?? ''}`.toUpperCase()
                       const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                      const carga = cargaActualPorRepartidor[r.id] ?? { cantidad: 0, pesoTotal: 0 }
+                      const info = proximaFechaDisponible[r.id]
+                      const libre = info ? Math.max(0, 500 - info.pesoTotal) : 0
+                      const esCargado = info ? info.pesoTotal >= 450 : false
                       return (
-                        <Stack
-                          key={r.id}
-                          direction="row"
-                          alignItems="center"
-                          justifyContent="space-between"
-                          sx={{ py: 1 }}
-                        >
-                          <Stack direction="row" spacing={1.5} alignItems="center">
-                            <Avatar sx={{ bgcolor: color, width: 32, height: 32, fontSize: 12 }}>
-                              {initials}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="body2" fontWeight={600}>
-                                {r.nombre} {r.apellido}
+                        <Stack key={r.id} direction="row" alignItems="center" spacing={1.5} sx={{ py: 1 }}>
+                          <Avatar sx={{ bgcolor: color, width: 32, height: 32, fontSize: 12 }}>
+                            {initials}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" fontWeight={600}>
+                              {r.nombre} {r.apellido}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace' }}>
+                              {r.email}
+                            </Typography>
+                            {info ? (
+                              <Typography variant="caption" sx={{ color: esCargado ? 'warning.main' : 'success.main' }}>
+                                {esCargado ? 'Parcial · ' : 'Disponible · '}
+                                {formatDateOnlyEs(info.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}
+                                {' · '}{libre.toFixed(0)} kg libres
                               </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace' }}>
-                                {r.email}
+                            ) : (
+                              <Typography variant="caption" color="error.main">
+                                Sin disponibilidad (30 días)
                               </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                Capacidad: 500 kg
-                              </Typography>
-                            </Box>
-                          </Stack>
-                          <Typography variant="caption" color="text.secondary">
-                            {carga.pesoTotal.toFixed(0)} / 500 kg
-                          </Typography>
+                            )}
+                          </Box>
                         </Stack>
                       )
                     })}

@@ -73,6 +73,11 @@ export const incidenciaService = {
     return (response.data ?? []).map(mapIncidencia)
   },
 
+  async getMisIncidencias(): Promise<Incidencia[]> {
+    const response = await api.get('/incidencias/mis-incidencias')
+    return (response.data ?? []).map(mapIncidencia)
+  },
+
   async countAbiertas(): Promise<number> {
     const items = await incidenciaService.getAll()
     return items.filter((i) => i.estado === 'Abierta').length

@@ -24,6 +24,7 @@ namespace Back.Infrastructure.Database
         public DbSet<PruebaOjoPatron> PruebasOjoPatron { get; set; }
         public DbSet<ConfiguracionOjoPatron> ConfiguracionesOjoPatron { get; set; }
         public DbSet<Incidencia> Incidencias { get; set; }
+        public DbSet<MensajeIncidencia> MensajesIncidencia { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {

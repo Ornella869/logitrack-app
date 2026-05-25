@@ -47,6 +47,11 @@ function dispatch(): void {
 }
 
 export const notificationService = {
+  /** Devuelve todas las notificaciones del sistema (para auditoría) */
+  getAllForAudit(): AppNotification[] {
+    return loadAll().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  },
+
   /** Devuelve todas las notificaciones dirigidas a este usuario (por id o por rol) */
   getForUser(userId: string, role: UserRole): AppNotification[] {
     return loadAll()

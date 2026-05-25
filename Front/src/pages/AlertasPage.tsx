@@ -20,8 +20,20 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { alertService, type AlertaPaqueteSinEstadoFinal } from '../services/alertService'
+import { notificationService } from '../services/notificationService'
 import type { User } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
+
+const ALERTA_NOTIF_KEY = 'logitrack_alertas_notificadas'
+
+function getNotificadasIds(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(ALERTA_NOTIF_KEY) ?? '[]') as string[]) }
+  catch { return new Set() }
+}
+
+function saveNotificadasIds(ids: Set<string>): void {
+  localStorage.setItem(ALERTA_NOTIF_KEY, JSON.stringify([...ids]))
+}
 
 // G1L-84: panel de alertas de paquetes sin estado final (Supervisor).
 export default function AlertasPage() {
@@ -32,8 +44,27 @@ export default function AlertasPage() {
 
   const load = async () => {
     setLoading(true)
-    setAlertas(await alertService.getPaquetesSinEstadoFinal())
+    const data = await alertService.getPaquetesSinEstadoFinal()
+    setAlertas(data)
     setLoading(false)
+
+    // UH-84: generar notificaciones in-app para alertas nuevas (evitar duplicados)
+    const notificadas = getNotificadasIds()
+    let huboNuevas = false
+    data.forEach((a) => {
+      if (!notificadas.has(a.paqueteId)) {
+        notificadas.add(a.paqueteId)
+        huboNuevas = true
+        notificationService.add({
+          type: 'incidencia',
+          title: 'Paquete sin estado final',
+          message: `${a.trackingId} — ${a.repartidorNombre} — ${a.diasDemora} día${a.diasDemora === 1 ? '' : 's'} de demora (${a.estadoActual})`,
+          recipientId: user.id,
+          navigateTo: `/shipment/${a.paqueteId}`,
+        })
+      }
+    })
+    if (huboNuevas) saveNotificadasIds(notificadas)
   }
 
   useEffect(() => {

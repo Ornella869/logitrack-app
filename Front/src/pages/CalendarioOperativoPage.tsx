@@ -62,6 +62,7 @@ type CalendarioOperativo = {
 }
 
 const DIAS_VISIBLES = 7
+const DIAS_TOTAL = 30
 
 const dateForDisplay = dateOnlyForDisplay
 
@@ -73,7 +74,7 @@ export default function CalendarioOperativoPage() {
   const [data, setData] = useState<CalendarioOperativo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [pageOffset, setPageOffset] = useState(0) // 0 = días 0-6, 1 = 7-13
+  const [pageOffset, setPageOffset] = useState(0)
   const [detalleCelda, setDetalleCelda] = useState<CalendarioCelda | null>(null)
   const [searchRepartidor, setSearchRepartidor] = useState('')
 
@@ -86,7 +87,7 @@ export default function CalendarioOperativoPage() {
     setLoading(true)
     setError('')
     try {
-      const response = await api.get('/calendarizacion/calendario', { params: { dias: 14 } })
+      const response = await api.get('/calendarizacion/calendario', { params: { dias: DIAS_TOTAL } })
       setData(response.data)
     } catch {
       setError('No se pudo cargar el calendario operativo')
@@ -94,6 +95,10 @@ export default function CalendarioOperativoPage() {
       setLoading(false)
     }
   }
+
+  const totalPages = data ? Math.ceil(data.dias.length / DIAS_VISIBLES) : 1
+  const canGoPrev = pageOffset > 0
+  const canGoNext = pageOffset < totalPages - 1
 
   const visible = useMemo(() => {
     if (!data) return null
@@ -154,10 +159,10 @@ export default function CalendarioOperativoPage() {
             sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#e3f2fd', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#ddd'}` }}
           >
             <Stack direction="row" spacing={1} alignItems="center">
-              <IconButton size="small" onClick={() => setPageOffset(0)} disabled={pageOffset === 0}>
+              <IconButton size="small" onClick={() => setPageOffset((p) => p - 1)} disabled={!canGoPrev}>
                 <ChevronLeftIcon />
               </IconButton>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ minWidth: 240, textAlign: 'center' }}>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ minWidth: 260, textAlign: 'center' }}>
                 {visible.dias.length > 0 && (
                   <>
                     {dateForDisplay(visible.dias[0]).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
@@ -165,8 +170,11 @@ export default function CalendarioOperativoPage() {
                     {dateForDisplay(visible.dias[visible.dias.length - 1]).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </>
                 )}
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  ({pageOffset + 1}/{totalPages})
+                </Typography>
               </Typography>
-              <IconButton size="small" onClick={() => setPageOffset(1)} disabled={pageOffset === 1}>
+              <IconButton size="small" onClick={() => setPageOffset((p) => p + 1)} disabled={!canGoNext}>
                 <ChevronRightIcon />
               </IconButton>
             </Stack>
@@ -179,7 +187,7 @@ export default function CalendarioOperativoPage() {
                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
                 sx={{ width: 200 }}
               />
-              <Button size="small" onClick={() => setPageOffset(0)}>Hoy</Button>
+              <Button size="small" onClick={() => setPageOffset(0)} disabled={!canGoPrev}>Hoy</Button>
             </Stack>
           </Stack>
 

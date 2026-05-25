@@ -42,6 +42,7 @@ import GavelIcon from '@mui/icons-material/Gavel'
 import ChatIcon from '@mui/icons-material/Chat'
 import SendIcon from '@mui/icons-material/Send'
 import { shipmentService } from '../../services/shipmentService'
+import { notificationService } from '../../services/notificationService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
 import { ojoPatronService } from '../../services/ojoPatronService'
 import StatusBadge from '../../components/StatusBadge'
@@ -51,7 +52,7 @@ import ConsentimientoOjoPatronDialog from '../../components/ConsentimientoOjoPat
 import PruebaAcusticaDialog from '../../components/PruebaAcusticaDialog'
 import ReportarIncidenteDialog from '../../components/ReportarIncidenteDialog'
 import ParadaAccionDialog from '../../components/ParadaAccionDialog'
-import { incidenciaService } from '../../services/incidenciaService'
+import { incidenciaService, type Incidencia } from '../../services/incidenciaService'
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../../services/mensajeIncidenciaService'
 import { dateOnly, dateOnlyForDisplay, formatArgentinaDateInput, formatInstantArgentinaTime } from '../../utils/argentinaDate'
 import { buildMapsUrl } from '../../utils/mapsUrl'
@@ -166,64 +167,65 @@ export default function RepartidorDashboard() {
   const [mensajesData, setMensajesData] = useState<MensajeIncidencia[]>([])
   const [mensajesInput, setMensajesInput] = useState('')
   const mensajesChatEndRef = useRef<HTMLDivElement | null>(null)
+  const [misIncidencias, setMisIncidencias] = useState<Incidencia[]>([])
+
+  const hasActiveIncidencias = misIncidencias.some((i) => i.estado !== 'Resuelta')
 
   useEffect(() => {
     const computeUnread = async () => {
-      const misIncidencias = (await incidenciaService.getAll())
-        .filter((i) => i.repartidorId === user.id)
-        .map((i) => i.id)
-      setMensajesUnread(mensajeIncidenciaService.countUnreadFromSupervisorForRepartidor(misIncidencias))
+      const incidencias = await incidenciaService.getMisIncidencias()
+      setMisIncidencias(incidencias)
+      const count = await mensajeIncidenciaService.countMisNoLeidos()
+      setMensajesUnread(count)
     }
     void computeUnread()
-    const handler = () => void computeUnread()
-    window.addEventListener('logitrack:mensajes_incidencia', handler)
-    window.addEventListener('logitrack:incidencias', handler)
+    const poll = setInterval(() => void computeUnread(), 10000)
+    window.addEventListener('logitrack:incidencias', () => void computeUnread())
     return () => {
-      window.removeEventListener('logitrack:mensajes_incidencia', handler)
-      window.removeEventListener('logitrack:incidencias', handler)
+      clearInterval(poll)
     }
   }, [user.id])
 
   const openMensajes = async () => {
-    const misIncidencias = (await incidenciaService.getAll()).filter((i) => i.repartidorId === user.id)
-    const incConMensajes = misIncidencias.find((i) =>
-      mensajeIncidenciaService.getByIncidencia(i.id).length > 0,
-    ) ?? misIncidencias[0] ?? null
-    if (!incConMensajes) return
-    setMensajesIncidenciaId(incConMensajes.id)
-    const msgs = mensajeIncidenciaService.getByIncidencia(incConMensajes.id)
-    setMensajesData(msgs)
-    mensajeIncidenciaService.markReadByRole(incConMensajes.id, 'repartidor')
+    const activeInc = misIncidencias.find((i) => i.estado !== 'Resuelta') ?? misIncidencias[0] ?? null
+    let incTarget = activeInc
+    // Prefer one that already has messages
+    for (const inc of misIncidencias) {
+      const msgs = await mensajeIncidenciaService.getByIncidencia(inc.id)
+      if (msgs.length > 0) { incTarget = inc; break }
+    }
+    if (incTarget) {
+      const msgs = await mensajeIncidenciaService.getByIncidencia(incTarget.id)
+      setMensajesIncidenciaId(incTarget.id)
+      setMensajesData(msgs)
+      void mensajeIncidenciaService.markRead(incTarget.id)
+      setMensajesUnread(0)
+    } else {
+      setMensajesIncidenciaId(null)
+      setMensajesData([])
+    }
     setMensajesOpen(true)
   }
 
-  const handleSendMensajeRepartidor = () => {
+  const handleSendMensajeRepartidor = async () => {
     const texto = mensajesInput.trim()
     if (!texto || !mensajesIncidenciaId) return
-    mensajeIncidenciaService.send(
-      {
-        incidenciaId: mensajesIncidenciaId,
-        de: user.id,
-        deNombre: user.name,
-        deRol: 'repartidor',
-        texto,
-      },
-      'supervisor',
-    )
     setMensajesInput('')
-    const msgs = mensajeIncidenciaService.getByIncidencia(mensajesIncidenciaId)
+    await mensajeIncidenciaService.send(mensajesIncidenciaId, texto)
+    const msgs = await mensajeIncidenciaService.getByIncidencia(mensajesIncidenciaId)
     setMensajesData(msgs)
   }
 
   useEffect(() => {
     if (!mensajesOpen || !mensajesIncidenciaId) return
-    const refresh = () => {
-      const msgs = mensajeIncidenciaService.getByIncidencia(mensajesIncidenciaId)
+    const refresh = async () => {
+      const msgs = await mensajeIncidenciaService.getByIncidencia(mensajesIncidenciaId)
       setMensajesData(msgs)
-      mensajeIncidenciaService.markReadByRole(mensajesIncidenciaId, 'repartidor')
+      void mensajeIncidenciaService.markRead(mensajesIncidenciaId)
     }
-    window.addEventListener('logitrack:mensajes_incidencia', refresh)
-    return () => window.removeEventListener('logitrack:mensajes_incidencia', refresh)
+    void refresh()
+    const poll = setInterval(() => void refresh(), 2000)
+    return () => clearInterval(poll)
   }, [mensajesOpen, mensajesIncidenciaId])
 
   useEffect(() => {
@@ -345,6 +347,19 @@ export default function RepartidorDashboard() {
       setQrCode('')
       navigate(`/shipment/${result.data.paqueteId}`)
       return
+    }
+    // UH-96: notificación in-app por parada entregada vía QR
+    if (accion === 'Entregado' && result.data?.paqueteId) {
+      const paqueteEntregado = paradas.find((p) => p.id === result.data!.paqueteId)
+      notificationService.add({
+        type: 'otro',
+        title: 'Parada entregada',
+        message: paqueteEntregado
+          ? `Entregaste el envío ${paqueteEntregado.trackingId} a ${paqueteEntregado.receiver.name}.`
+          : 'Parada marcada como entregada.',
+        recipientId: user.id,
+        navigateTo: '/repartidor',
+      })
     }
     setQrFeedback({
       severity: 'success',
@@ -536,13 +551,13 @@ export default function RepartidorDashboard() {
               }}
             />
           )}
-          {mensajesUnread > 0 && (
+          {hasActiveIncidencias && (
             <IconButton
               size="small"
-              onClick={openMensajes}
-              sx={{ ml: 0.5, color: '#1565C0' }}
+              onClick={() => void openMensajes()}
+              sx={{ ml: 0.5, color: mensajesUnread > 0 ? '#1565C0' : 'text.secondary' }}
             >
-              <Badge badgeContent={mensajesUnread} color="error">
+              <Badge badgeContent={mensajesUnread > 0 ? mensajesUnread : undefined} color="error">
                 <ChatIcon fontSize="small" />
               </Badge>
             </IconButton>
@@ -850,14 +865,14 @@ export default function RepartidorDashboard() {
               placeholder="Responder al supervisor…"
               value={mensajesInput}
               onChange={(e) => setMensajesInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMensajeRepartidor() } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSendMensajeRepartidor() } }}
               multiline
               maxRows={3}
             />
             <Button
               variant="contained"
               size="small"
-              onClick={handleSendMensajeRepartidor}
+              onClick={() => void handleSendMensajeRepartidor()}
               disabled={!mensajesInput.trim()}
               startIcon={<SendIcon />}
               sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 1.5 }}

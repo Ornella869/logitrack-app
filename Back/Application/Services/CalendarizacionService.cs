@@ -226,7 +226,11 @@ namespace Back.Application.Services
             var fechaUtc = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
             var delDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, fechaUtc);
 
-            var pesoActual = delDia.Sum(p => p.Peso);
+            // Exclude finalized packages from weight sum so repartidores who closed their
+            // jornada and have already-delivered packages don't get blocked from same-day reassignments.
+            var pesoActual = delDia
+                .Where(p => p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado)
+                .Sum(p => p.Peso);
             var pesoResultante = pesoActual + paquete.Peso;
 
             // CA Validación de Capacidad: si supera CAPACIDAD_REPARTIDOR_KG = 500,
@@ -371,45 +375,66 @@ namespace Back.Application.Services
                 bool asignado = false;
                 var cpPaquete = ParseCp(paquete.Destinatario.Direccion.CP);
 
+                // Solo se usan repartidores de la misma sucursal que el paquete.
+                // Si el paquete no tiene sucursal asignada, se usan todos los disponibles.
+                var repsElegibles = paquete.SucursalId.HasValue
+                    ? repartidores.Where(r => r.SucursalId == paquete.SucursalId).ToList()
+                    : repartidores;
+
+                if (repsElegibles.Count == 0) { sinAsignar++; continue; }
+
                 for (int offset = 1; offset <= MaxDiasParaProgramar && !asignado; offset++)
                 {
                     var fecha = hoy.AddDays(offset);
 
-                    // 1) Match exacto de CP — el ideal para batching de zona.
-                    var matchCp = repartidores
+                    // 1) Match exacto de CP con control de equidad.
+                    //    Solo agrupa por zona si el repartidor con ese CP no tiene más de 1 paquete
+                    //    extra respecto al menos cargado ese día. Esto evita que todos los paquetes
+                    //    del mismo CP terminen en un solo repartidor.
+                    var candidatosCP = repsElegibles
                         .Where(r =>
                         {
                             if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0) return false;
                             var coincide = lista.Any(p => p.Destinatario.Direccion.CP == paquete.Destinatario.Direccion.CP);
                             return coincide && (lista.Sum(p => p.Peso) + paquete.Peso) <= Capacidad.RepartidorKg;
                         })
-                        .OrderBy(r => carga[(r.Id, fecha)].Sum(p => p.Peso))
-                        .FirstOrDefault();
-                    if (matchCp is not null)
+                        .ToList();
+                    if (candidatosCP.Count > 0)
                     {
-                        Asignar(matchCp, fecha, paquete);
-                        asignado = true;
-                        break;
+                        var minCargaDia = repsElegibles
+                            .Select(r => carga.TryGetValue((r.Id, fecha), out var l) ? l.Count : 0)
+                            .Min();
+                        var matchCp = candidatosCP
+                            .Where(r => (carga.TryGetValue((r.Id, fecha), out var l2) ? l2.Count : 0) <= minCargaDia + 1)
+                            .OrderBy(r => carga[(r.Id, fecha)].Sum(p => p.Peso))
+                            .FirstOrDefault();
+                        if (matchCp is not null)
+                        {
+                            Asignar(matchCp, fecha, paquete);
+                            asignado = true;
+                            break;
+                        }
                     }
 
-                    // 2) Repartidor libre ese día (round-robin: el menos usado en total).
-                    //    Esto rota la carga entre repartidores y evita que siempre
-                    //    caiga el mismo cuando no hay match de CP.
-                    var libre = repartidores
-                        .Where(r => !carga.TryGetValue((r.Id, fecha), out var l) || l.Count == 0)
-                        .OrderBy(r => totalHistorico[r.Id])
-                        .ThenBy(r => r.Id) // tie-break determinístico
+                    // 2) Repartidor con menor carga ese día (round-robin equitativo).
+                    //    Ya no exige "libre" (0 paquetes): distribuye entre todos los disponibles
+                    //    ordenando por cantidad de paquetes asignados, garantizando reparto parejo.
+                    var menosCargado = repsElegibles
+                        .Where(r => (carga.TryGetValue((r.Id, fecha), out var lista2) ? lista2.Sum(p => p.Peso) : 0) + paquete.Peso <= Capacidad.RepartidorKg)
+                        .OrderBy(r => carga.TryGetValue((r.Id, fecha), out var l3) ? l3.Count : 0)
+                        .ThenBy(r => totalHistorico[r.Id])
+                        .ThenBy(r => r.Id)
                         .FirstOrDefault();
-                    if (libre is not null)
+                    if (menosCargado is not null)
                     {
-                        Asignar(libre, fecha, paquete);
+                        Asignar(menosCargado, fecha, paquete);
                         asignado = true;
                         break;
                     }
 
                     // 3) Sin libres → al repartidor con CP más cercano en su carga del día.
                     //    Si no hay ninguno con capacidad, avanzamos al siguiente día.
-                    var cercano = repartidores
+                    var cercano = repsElegibles
                         .Where(r => carga.TryGetValue((r.Id, fecha), out var lista) && lista.Count > 0
                                     && (lista.Sum(p => p.Peso) + paquete.Peso) <= Capacidad.RepartidorKg)
                         .Select(r => new

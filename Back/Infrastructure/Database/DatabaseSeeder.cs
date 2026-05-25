@@ -58,6 +58,7 @@ namespace Back.Infrastructure.Database
         {
             await AsegurarGerenteDemoAsync();
             await AsegurarClientePortalDemoAsync();
+            await AsegurarSucursalesMultiProvinciaAsync();
         }
 
         public async Task SeedAsync()
@@ -141,6 +142,189 @@ namespace Back.Infrastructure.Database
                 "99999999");
             _context.Usuarios.Add(cliente);
             await _context.SaveChangesAsync();
+        }
+
+        // Crea sucursales demo para múltiples provincias con sus gerentes, supervisores y
+        // repartidores, permitiendo pruebas masivas de calendarización sin configuración manual.
+        private async Task AsegurarSucursalesMultiProvinciaAsync()
+        {
+            const string pwd = "kjkszpj1234";
+
+            var provincias = new List<(
+                string provincia,
+                string ciudad,
+                string cp,
+                string telefono,
+                string gerenteEmail,
+                string gerenteNombre,
+                string gerenteApellido,
+                string gerenteDni,
+                (string email, string nombre, string apellido, string dni)[] supervisores,
+                (string email, string nombre, string apellido, string dni, string licencia)[] repartidores,
+                (string email, string nombre, string apellido, string dni)[] operadores
+            )>
+            {
+                (
+                    "Córdoba", "Córdoba Capital", "5000", "0351-400-0001",
+                    "gerente.cba@logitrack.com", "Germán", "Córdoba", "20111001",
+                    new[] {
+                        ("supervisor.cba1@logitrack.com", "Paula", "Suárez", "27222001"),
+                        ("supervisor.cba2@logitrack.com", "Marcos", "Villalba", "28333001"),
+                    },
+                    new[] {
+                        ("repartidor.cba1@logitrack.com", "Rodrigo", "Aguirre",  "33444001", "LIC-CB01"),
+                        ("repartidor.cba2@logitrack.com", "Florencia","Molina",   "34555001", "LIC-CB02"),
+                        ("repartidor.cba3@logitrack.com", "Esteban",  "Peralta",  "35666001", "LIC-CB03"),
+                        ("repartidor.cba4@logitrack.com", "Natalia",  "Romano",   "36777001", "LIC-CB04"),
+                    },
+                    new[] {
+                        ("operador.cba1@logitrack.com", "Silvana", "Ríos", "22888001"),
+                    }
+                ),
+                (
+                    "Santa Fe", "Rosario", "2000", "0341-400-0002",
+                    "gerente.sf@logitrack.com", "Sandra", "Fontana", "20111002",
+                    new[] {
+                        ("supervisor.sf1@logitrack.com", "Leandro", "Ramos", "27222002"),
+                        ("supervisor.sf2@logitrack.com", "Valeria", "Ibáñez", "28333002"),
+                    },
+                    new[] {
+                        ("repartidor.sf1@logitrack.com",  "Agustín",  "Benítez",  "33444002", "LIC-SF01"),
+                        ("repartidor.sf2@logitrack.com",  "Luciana",  "Medina",   "34555002", "LIC-SF02"),
+                        ("repartidor.sf3@logitrack.com",  "Nicolás",  "Ponce",    "35666002", "LIC-SF03"),
+                        ("repartidor.sf4@logitrack.com",  "Carolina", "Vega",     "36777002", "LIC-SF04"),
+                    },
+                    new[] {
+                        ("operador.sf1@logitrack.com", "Ignacio", "Salas", "22888002"),
+                    }
+                ),
+                (
+                    "Mendoza", "Mendoza Capital", "5500", "0261-400-0003",
+                    "gerente.mdz@logitrack.com", "Miguel", "Andino", "20111003",
+                    new[] {
+                        ("supervisor.mdz1@logitrack.com", "Cecilia", "Luna", "27222003"),
+                        ("supervisor.mdz2@logitrack.com", "Hernán",  "Sosa", "28333003"),
+                    },
+                    new[] {
+                        ("repartidor.mdz1@logitrack.com", "Claudio",  "Ojeda",    "33444003", "LIC-MZ01"),
+                        ("repartidor.mdz2@logitrack.com", "Lorena",   "Quiroga",  "34555003", "LIC-MZ02"),
+                        ("repartidor.mdz3@logitrack.com", "Emiliano", "Aranda",   "35666003", "LIC-MZ03"),
+                        ("repartidor.mdz4@logitrack.com", "Mariela",  "Blanco",   "36777003", "LIC-MZ04"),
+                    },
+                    new[] {
+                        ("operador.mdz1@logitrack.com", "Gustavo", "Vera", "22888003"),
+                    }
+                ),
+                (
+                    "Tucumán", "San Miguel de Tucumán", "4000", "0381-400-0004",
+                    "gerente.tuc@logitrack.com", "Tomás", "Cáceres", "20111004",
+                    new[] {
+                        ("supervisor.tuc1@logitrack.com", "Romina", "Paz",    "27222004"),
+                        ("supervisor.tuc2@logitrack.com", "Darío",  "Álvarez","28333004"),
+                    },
+                    new[] {
+                        ("repartidor.tuc1@logitrack.com", "Sebastián","Chávez",   "33444004", "LIC-TU01"),
+                        ("repartidor.tuc2@logitrack.com", "Mariana",  "Acosta",   "34555004", "LIC-TU02"),
+                        ("repartidor.tuc3@logitrack.com", "Facundo",  "Rivero",   "35666004", "LIC-TU03"),
+                        ("repartidor.tuc4@logitrack.com", "Yanina",   "Campos",   "36777004", "LIC-TU04"),
+                    },
+                    new[] {
+                        ("operador.tuc1@logitrack.com", "Ramiro", "Toledo", "22888004"),
+                    }
+                ),
+                (
+                    "Catamarca", "San Fernando del Valle de Catamarca", "4700", "0383-400-0005",
+                    "gerente.cat@logitrack.com", "Carmen", "Figueroa", "20111005",
+                    new[] {
+                        ("supervisor.cat1@logitrack.com", "Alberto", "Navarro", "27222005"),
+                        ("supervisor.cat2@logitrack.com", "Graciela","Ruiz",    "28333005"),
+                    },
+                    new[] {
+                        ("repartidor.cat1@logitrack.com", "Oscar",   "Heredia",  "33444005", "LIC-CA01"),
+                        ("repartidor.cat2@logitrack.com", "Paola",   "Juárez",   "34555005", "LIC-CA02"),
+                        ("repartidor.cat3@logitrack.com", "Ezequiel","Valdez",   "35666005", "LIC-CA03"),
+                        ("repartidor.cat4@logitrack.com", "Micaela", "Giménez",  "36777005", "LIC-CA04"),
+                    },
+                    new[] {
+                        ("operador.cat1@logitrack.com", "Hector", "Mansilla", "22888005"),
+                    }
+                ),
+                (
+                    "Salta", "Salta Capital", "4400", "0387-400-0006",
+                    "gerente.sal@logitrack.com", "Gloria", "Torino", "20111006",
+                    new[] {
+                        ("supervisor.sal1@logitrack.com", "Fernando", "Díaz",    "27222006"),
+                        ("supervisor.sal2@logitrack.com", "Miriam",   "Correa",  "28333006"),
+                    },
+                    new[] {
+                        ("repartidor.sal1@logitrack.com", "Diego",    "Flores",   "33444006", "LIC-SA01"),
+                        ("repartidor.sal2@logitrack.com", "Karina",   "Vargas",   "34555006", "LIC-SA02"),
+                        ("repartidor.sal3@logitrack.com", "Walter",   "Morales",  "35666006", "LIC-SA03"),
+                        ("repartidor.sal4@logitrack.com", "Silvina",  "Castillo", "36777006", "LIC-SA04"),
+                    },
+                    new[] {
+                        ("operador.sal1@logitrack.com", "Edgardo", "Palacios", "22888006"),
+                    }
+                ),
+            };
+
+            foreach (var p in provincias)
+            {
+                // Gerente
+                if (!await _context.Usuarios.AnyAsync(u => u.Email == p.gerenteEmail))
+                {
+                    _context.Usuarios.Add(new Gerente(
+                        p.gerenteNombre, p.gerenteApellido, p.gerenteEmail,
+                        PasswordHasher.HashPassword(pwd), p.gerenteDni, p.provincia));
+                }
+
+                // Sucursal (una por provincia, idempotente por provincia)
+                var sucursal = await _context.Sucursales
+                    .FirstOrDefaultAsync(s => s.Provincia == p.provincia);
+                if (sucursal is null)
+                {
+                    sucursal = new Sucursal(
+                        $"Sucursal {p.provincia}", $"Av. Principal 100",
+                        p.ciudad, p.cp, p.telefono, p.provincia);
+                    _context.Sucursales.Add(sucursal);
+                    await _context.SaveChangesAsync(); // necesario para obtener el Id
+                }
+
+                // Supervisores
+                foreach (var (email, nombre, apellido, dni) in p.supervisores)
+                {
+                    if (!await _context.Usuarios.AnyAsync(u => u.Email == email))
+                    {
+                        var sup = new Supervisor(nombre, apellido, email, PasswordHasher.HashPassword(pwd), dni);
+                        sup.AsignarSucursal(sucursal.Id);
+                        _context.Usuarios.Add(sup);
+                    }
+                }
+
+                // Repartidores
+                foreach (var (email, nombre, apellido, dni, licencia) in p.repartidores)
+                {
+                    if (!await _context.Usuarios.AnyAsync(u => u.Email == email))
+                    {
+                        var rep = new Repartidor(nombre, apellido, email, PasswordHasher.HashPassword(pwd), dni, licencia);
+                        rep.AsignarSucursal(sucursal.Id);
+                        _context.Usuarios.Add(rep);
+                    }
+                }
+
+                // Operadores
+                foreach (var (email, nombre, apellido, dni) in p.operadores)
+                {
+                    if (!await _context.Usuarios.AnyAsync(u => u.Email == email))
+                    {
+                        var op = new Operador(nombre, apellido, email, PasswordHasher.HashPassword(pwd), dni);
+                        op.AsignarSucursal(sucursal.Id);
+                        _context.Usuarios.Add(op);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+            }
         }
 
         // Épica D: crea o resetea el Gerente demo para que siempre pueda hacer login.

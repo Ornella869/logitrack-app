@@ -129,34 +129,27 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const load = () => {
-      const msgs = mensajeIncidenciaService.getByIncidencia(inc.id)
+    const load = async () => {
+      const msgs = await mensajeIncidenciaService.getByIncidencia(inc.id)
       setMensajes(msgs)
-      mensajeIncidenciaService.markReadByRole(inc.id, 'supervisor')
+      void mensajeIncidenciaService.markRead(inc.id)
     }
-    load()
-    window.addEventListener('logitrack:mensajes_incidencia', load)
-    return () => window.removeEventListener('logitrack:mensajes_incidencia', load)
+    void load()
+    const poll = setInterval(() => void load(), 2000)
+    return () => clearInterval(poll)
   }, [inc.id])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensajes])
 
-  const handleSendMensaje = () => {
+  const handleSendMensaje = async () => {
     const texto = chatInput.trim()
     if (!texto) return
-    mensajeIncidenciaService.send(
-      {
-        incidenciaId: inc.id,
-        de: supervisor.id,
-        deNombre: supervisor.name,
-        deRol: 'supervisor',
-        texto,
-      },
-      inc.repartidorId,
-    )
     setChatInput('')
+    await mensajeIncidenciaService.send(inc.id, texto)
+    const msgs = await mensajeIncidenciaService.getByIncidencia(inc.id)
+    setMensajes(msgs)
   }
 
   const handleReprogramar = async (shipmentId: string) => {
@@ -576,14 +569,14 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                     placeholder={`Escribir a ${inc.repartidorNombre}…`}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMensaje() } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSendMensaje() } }}
                     multiline
                     maxRows={3}
                   />
                   <Button
                     variant="contained"
                     size="small"
-                    onClick={handleSendMensaje}
+                    onClick={() => void handleSendMensaje()}
                     disabled={!chatInput.trim()}
                     startIcon={<SendIcon />}
                     sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 1.5 }}
@@ -662,16 +655,18 @@ export default function IncidenciasPage() {
   const cargar = async () => setIncidencias(await incidenciaService.getAll())
 
   const refreshChats = async () => {
-    const all = (await incidenciaService.getAll()).filter((inc) => inc.estado !== 'Resuelta' && inc.origen !== 'cliente' && !inc.chatFinalizado)
+    const all = (await incidenciaService.getAll()).filter(
+      (inc) => inc.estado !== 'Resuelta' && inc.origen !== 'cliente' && !inc.chatFinalizado,
+    )
+    const withData = await Promise.all(
+      all.map(async (inc) => {
+        const msgs = await mensajeIncidenciaService.getByIncidencia(inc.id)
+        return { incidencia: inc, unread: mensajeIncidenciaService.countUnreadFromRepartidor(msgs), hasMsgs: msgs.length > 0 }
+      }),
+    )
     setActiveChats(
-      all
-        .map((inc) => ({
-          incidencia: inc,
-          unread: mensajeIncidenciaService.countUnreadForSupervisorInIncidencia(inc.id),
-        }))
-        .filter(({ incidencia, unread }) =>
-          unread > 0 || mensajeIncidenciaService.getByIncidencia(incidencia.id).length > 0,
-        )
+      withData
+        .filter(({ hasMsgs, unread }) => hasMsgs || unread > 0)
         .sort((a, b) => b.unread - a.unread),
     )
   }
@@ -685,13 +680,8 @@ export default function IncidenciasPage() {
 
   useEffect(() => {
     void refreshChats()
-    const handler = () => void refreshChats()
-    window.addEventListener('logitrack:mensajes_incidencia', handler)
-    window.addEventListener('logitrack:incidencias', handler)
-    return () => {
-      window.removeEventListener('logitrack:mensajes_incidencia', handler)
-      window.removeEventListener('logitrack:incidencias', handler)
-    }
+    const poll = setInterval(() => void refreshChats(), 5000)
+    return () => clearInterval(poll)
   }, [])
 
   const incidenciasDeRepartidor = incidencias.filter((i) => i.origen !== 'cliente')

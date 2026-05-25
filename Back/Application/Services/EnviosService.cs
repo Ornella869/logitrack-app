@@ -702,13 +702,37 @@ namespace Back.Application.Services
         }
 
         // G1L-80: mensajes específicos según el estado bloqueado.
+        // Solo genera hacia provincias cubiertas por sucursales activas en el sistema.
         private async Task<List<DemoAddress>> ObtenerDireccionesDemoHabilitadasAsync(Guid? usuarioId)
         {
             var disponibles = DireccionesDemo();
-            var sucursal = await ObtenerSucursalUsuarioAsync(usuarioId);
-            if (sucursal is null) return disponibles;
+            var sucursales = (await _enviosRepository.GetSucursales())
+                .Where(s => s.Estado == SucursalStatus.Activa)
+                .ToList();
 
-            return disponibles.Where(d => sucursal.Cubre(d.Provincia)).ToList();
+            if (sucursales.Count == 0) return disponibles; // fallback si no hay ninguna
+
+            return disponibles
+                .Where(d => sucursales.Any(s => CubreAcentoInsensible(s, d.Provincia)))
+                .ToList();
+        }
+
+        private static bool CubreAcentoInsensible(Sucursal sucursal, string provinciaAddress)
+        {
+            var norm = NormalizarProvincia(provinciaAddress);
+            if (NormalizarProvincia(sucursal.Provincia) == norm) return true;
+            return sucursal.ProvinciasCubiertas.Any(p => NormalizarProvincia(p) == norm);
+        }
+
+        private static string NormalizarProvincia(string? p)
+        {
+            if (string.IsNullOrWhiteSpace(p)) return string.Empty;
+            var normalized = p.Trim().ToLowerInvariant();
+            // Strip common accents
+            normalized = normalized
+                .Replace('á', 'a').Replace('é', 'e').Replace('í', 'i')
+                .Replace('ó', 'o').Replace('ú', 'u').Replace('ü', 'u').Replace('ñ', 'n');
+            return normalized;
         }
 
         private async Task<Sucursal?> ObtenerSucursalUsuarioAsync(Guid? usuarioId)
@@ -729,20 +753,199 @@ namespace Back.Application.Services
             return ("Centro", "Logistico", destino.Direccion, destino.Localidad, destino.CP, destino.Telefono);
         }
 
+        // Direcciones demo por provincia — cubre todas las sucursales seeded.
+        // El generador masivo cicla con i % Count, así que con 8+ por provincia
+        // los 1000 envíos tienen buena variedad de destinos.
         private static List<DemoAddress> DireccionesDemo() => new()
         {
-            new("Buenos Aires", "La Plata", "1900", "Calle 12 800", -34.9214, -57.9544, "Camila", "Torres", "2214551200"),
-            new("Buenos Aires", "Hurlingham", "1686", "Av. Vergara 2400", -34.5885, -58.6324, "Martin", "Rios", "114551201"),
-            new("Buenos Aires", "Mar del Plata", "7600", "Av. Luro 3050", -38.0023, -57.5575, "Lucia", "Mendez", "2234551202"),
-            new("Catamarca", "San Fernando del Valle de Catamarca", "4700", "Av. Guemes 650", -28.4696, -65.7795, "Sofia", "Herrera", "3834551203"),
-            new("Catamarca", "Valle Viejo", "4707", "Av. Presidente Castillo 1200", -28.4691, -65.7206, "Diego", "Nunez", "3834551204"),
-            new("Cordoba", "Cordoba", "5000", "Av. Colon 500", -31.4135, -64.1888, "Julian", "Acosta", "3514551205"),
-            new("Santa Fe", "Santa Fe", "3000", "Bv. Pellegrini 2500", -31.6333, -60.7000, "Valentina", "Molina", "3424551206"),
-            new("Mendoza", "Mendoza", "5500", "San Martin 1200", -32.8895, -68.8458, "Pablo", "Sosa", "2614551207"),
-            new("Tucuman", "San Miguel de Tucuman", "4000", "24 de Septiembre 600", -26.8241, -65.2226, "Natalia", "Paz", "3814551208"),
-            new("Salta", "Salta", "4400", "Caseros 900", -24.7897, -65.4105, "Bruno", "Vega", "3874551209"),
-            new("Neuquen", "Neuquen", "8300", "Av. Argentina 400", -38.9516, -68.0591, "Rocio", "Luna", "2994551210"),
-            new("Entre Rios", "Parana", "3100", "Urquiza 950", -31.7413, -60.5115, "Emilia", "Castro", "3434551211"),
+            // ── Buenos Aires ─────────────────────────────────────────────────
+            new("Buenos Aires", "La Plata",            "1900", "Calle 12 800",           -34.9214, -57.9544, "Camila",    "Torres",   "2214551200"),
+            new("Buenos Aires", "Hurlingham",           "1686", "Av. Vergara 2400",        -34.5885, -58.6324, "Martin",    "Rios",     "1145512001"),
+            new("Buenos Aires", "Mar del Plata",        "7600", "Av. Luro 3050",           -38.0023, -57.5575, "Lucia",     "Mendez",   "2234551202"),
+            new("Buenos Aires", "Quilmes",              "1878", "Rivadavia 450",           -34.7224, -58.2526, "Sebastian", "Flores",   "1145512003"),
+            new("Buenos Aires", "Lomas de Zamora",      "1832", "San Martin 1234",         -34.7592, -58.4021, "Valentina", "Cruz",     "1145512004"),
+            new("Buenos Aires", "Avellaneda",           "1870", "Mitre 567",              -34.6641, -58.3617, "Diego",     "Mendez",   "1145512005"),
+            new("Buenos Aires", "Lanús",                "1824", "Rivadavia 2340",          -34.7046, -58.3974, "Lucia",     "Herrera",  "1145512006"),
+            new("Buenos Aires", "Florencio Varela",     "1888", "Corrientes 890",          -34.8074, -58.2771, "Facundo",   "Torres",   "1145512007"),
+            new("Buenos Aires", "Berazategui",          "1880", "Moreno 456",             -34.7600, -58.2109, "Gabriela",  "Sanchez",  "1145512008"),
+            new("Buenos Aires", "Tigre",                "1648", "Av. Cazón 1200",          -34.4260, -58.5797, "Ramiro",    "Blanco",   "1145512009"),
+            new("Buenos Aires", "Morón",                "1708", "Av. Rivadavia 8800",      -34.6524, -58.6193, "Beatriz",   "Gomez",    "1145512010"),
+            new("Buenos Aires", "San Isidro",           "1642", "Av. del Libertador 1500", -34.4727, -58.5302, "Pablo",     "Ibarra",   "1145512011"),
+
+            // ── Córdoba ──────────────────────────────────────────────────────
+            new("Córdoba", "Córdoba Capital",    "5000", "Av. Colón 500",          -31.4135, -64.1888, "Julian",    "Acosta",   "3514551205"),
+            new("Córdoba", "Córdoba Capital",    "5000", "Bv. San Juan 1100",      -31.4251, -64.1817, "Marcela",   "Peralta",  "3514551206"),
+            new("Córdoba", "Río Cuarto",         "5800", "Av. Hipólito Yrigoyen 900", -33.1234, -64.3493, "Ariel",  "Dominguez","3584551207"),
+            new("Córdoba", "Villa María",        "5900", "Av. Sabattini 450",       -32.4075, -63.2435, "Daniela",   "Ruiz",     "3534551208"),
+            new("Córdoba", "Villa Carlos Paz",   "5152", "Av. San Martín 600",      -31.4221, -64.4979, "Gustavo",   "Soto",     "3544551209"),
+            new("Córdoba", "Alta Gracia",        "5186", "Urquiza 300",             -31.6557, -64.4299, "Florencia", "Vega",     "3547551210"),
+            new("Córdoba", "San Francisco",      "2400", "9 de Julio 800",          -31.4261, -62.0806, "Rodrigo",   "Cano",     "3564551211"),
+            new("Córdoba", "Bell Ville",         "2550", "Av. Vélez Sarsfield 200", -32.6267, -62.6884, "Lorena",    "Medina",   "3537551212"),
+
+            // ── Santa Fe ─────────────────────────────────────────────────────
+            new("Santa Fe", "Rosario",           "2000", "Bv. Oroño 1100",          -32.9442, -60.6505, "Valentina", "Molina",   "3414551206"),
+            new("Santa Fe", "Rosario",           "2000", "San Lorenzo 800",         -32.9468, -60.6357, "Agustin",   "Benitez",  "3414551207"),
+            new("Santa Fe", "Santa Fe Capital",  "3000", "Bv. Pellegrini 2500",     -31.6333, -60.7000, "Carolina",  "Vega",     "3424551208"),
+            new("Santa Fe", "Santa Fe Capital",  "3000", "Av. Freyre 1200",         -31.6277, -60.6989, "Nicolas",   "Ponce",    "3424551209"),
+            new("Santa Fe", "Rafaela",           "2300", "Bv. Santa Fe 800",        -31.2519, -61.4874, "Luciana",   "Gimenez",  "3492551210"),
+            new("Santa Fe", "Venado Tuerto",     "2600", "Av. Presidente Perón 600",-33.7463, -61.9653, "Ezequiel",  "Herrera",  "3462551211"),
+            new("Santa Fe", "Reconquista",       "3560", "Av. Rivadavia 400",       -29.1449, -59.6430, "Paola",     "Ibañez",   "3482551212"),
+            new("Santa Fe", "Santo Tomé",        "3016", "San Martín 700",          -31.6604, -60.7671, "Fernando",  "Salas",    "3422551213"),
+
+            // ── Mendoza ──────────────────────────────────────────────────────
+            new("Mendoza", "Mendoza Capital",    "5500", "San Martín 1200",         -32.8895, -68.8458, "Pablo",     "Sosa",     "2614551207"),
+            new("Mendoza", "Mendoza Capital",    "5500", "Av. Las Heras 600",       -32.8833, -68.8500, "Claudio",   "Ojeda",    "2614551208"),
+            new("Mendoza", "Godoy Cruz",         "5501", "Av. San Martín 3800",     -32.9272, -68.8448, "Lorena",    "Quiroga",  "2614551209"),
+            new("Mendoza", "San Rafael",         "5600", "Av. Hipólito Yrigoyen 350",-34.6178,-68.3298,"Emiliano",   "Aranda",   "2604551210"),
+            new("Mendoza", "Luján de Cuyo",      "5507", "Av. San Martín 1100",     -33.0566, -68.8784, "Mariela",   "Blanco",   "2614551211"),
+            new("Mendoza", "Guaymallén",         "5521", "Av. Acceso Este 1800",    -32.8937, -68.7862, "Santiago",  "Castro",   "2614551212"),
+            new("Mendoza", "Maipú",              "5515", "Urquiza 900",             -32.9786, -68.7878, "Veronica",  "Ramos",    "2614551213"),
+            new("Mendoza", "Las Heras",          "5539", "Av. Champagnat 1500",     -32.8421, -68.8318, "Roberto",   "Diaz",     "2614551214"),
+
+            // ── Tucumán ──────────────────────────────────────────────────────
+            new("Tucumán", "San Miguel de Tucumán", "4000", "24 de Septiembre 600",  -26.8241, -65.2226, "Natalia",   "Paz",      "3814551208"),
+            new("Tucumán", "San Miguel de Tucumán", "4000", "Congreso 1200",         -26.8291, -65.2170, "Sebastian", "Chavez",   "3814551209"),
+            new("Tucumán", "Yerba Buena",           "4107", "Av. Aconquija 3500",    -26.8162, -65.2751, "Mariana",   "Acosta",   "3814551210"),
+            new("Tucumán", "Tafí Viejo",            "4103", "Alem 800",              -26.7277, -65.2582, "Facundo",   "Rivero",   "3814551211"),
+            new("Tucumán", "Concepción",            "4100", "Av. Belgrano 600",      -27.3355, -65.5940, "Yanina",    "Campos",   "3865551212"),
+            new("Tucumán", "Banda del Río Salí",    "4006", "Av. 25 de Mayo 1000",   -26.8388, -65.1740, "Ernesto",   "Gutierrez","3814551213"),
+            new("Tucumán", "Aguilares",             "4200", "San Martín 400",        -27.4325, -65.6124, "Cecilia",   "Lopez",    "3865551214"),
+            new("Tucumán", "Monteros",              "4142", "Belgrano 700",          -27.1654, -65.4934, "Alberto",   "Perez",    "3863551215"),
+
+            // ── Catamarca ────────────────────────────────────────────────────
+            new("Catamarca", "San Fernando del Valle de Catamarca", "4700", "Av. Güemes 650",       -28.4696, -65.7795, "Sofia",     "Herrera",  "3834551203"),
+            new("Catamarca", "Valle Viejo",          "4707", "Av. Presidente Castillo 1200", -28.4691, -65.7206, "Diego",  "Nunez",    "3834551204"),
+            new("Catamarca", "San Fernando del Valle de Catamarca", "4700", "Sarmiento 900",         -28.4723, -65.7868, "Oscar",     "Heredia",  "3834551205"),
+            new("Catamarca", "San Fernando del Valle de Catamarca", "4700", "República 400",          -28.4660, -65.7805, "Paola",     "Juarez",   "3834551206"),
+            new("Catamarca", "Recreo",               "4650", "Av. del Bicentenario 200", -29.2807, -65.0618, "Ezequiel","Valdez",    "3837551207"),
+            new("Catamarca", "Tinogasta",            "5340", "Av. San Martín 600",     -28.0644, -67.5699, "Micaela",   "Gimenez",  "3835551208"),
+            new("Catamarca", "Belén",                "4750", "General Roca 300",       -27.6491, -67.0271, "Hector",    "Mansilla",  "3835551209"),
+            new("Catamarca", "Santa María",          "4163", "Buenos Aires 450",       -26.6823, -66.0392, "Graciela",  "Ruiz",     "3838551210"),
+
+            // ── Salta ─────────────────────────────────────────────────────────
+            new("Salta", "Salta Capital",       "4400", "Caseros 900",              -24.7897, -65.4105, "Bruno",     "Vega",     "3874551209"),
+            new("Salta", "Salta Capital",       "4400", "España 600",               -24.7921, -65.4071, "Diego",     "Flores",   "3874551210"),
+            new("Salta", "San Ramón de la Nueva Orán", "4530", "Alvarado 700",      -23.1333, -64.3253, "Karina",    "Vargas",   "3878551211"),
+            new("Salta", "Tartagal",            "4560", "Av. 9 de Julio 1200",      -22.5233, -63.8000, "Walter",    "Morales",  "3876551212"),
+            new("Salta", "General Güemes",      "4450", "Belgrano 400",             -24.6707, -65.0509, "Silvina",   "Castillo", "3876551213"),
+            new("Salta", "Rosario de la Frontera", "4760", "San Martín 800",        -25.8058, -64.9715, "Edgardo",   "Palacios", "3876551214"),
+            new("Salta", "Embarcación",         "4550", "Urquiza 300",              -23.2167, -64.1000, "Ramira",    "Saenz",    "3877551215"),
+            new("Salta", "Metán",               "4530", "9 de Julio 600",           -25.4931, -64.9722, "Ignacio",   "Torino",   "3876551216"),
+
+            // ── Neuquén ──────────────────────────────────────────────────────
+            new("Neuquén", "Neuquén Capital",   "8300", "Av. Argentina 400",        -38.9516, -68.0591, "Rocio",     "Luna",     "2994551210"),
+            new("Neuquén", "Neuquén Capital",   "8300", "Roca 1200",                -38.9540, -68.0628, "Ariel",     "Cano",     "2994551211"),
+            new("Neuquén", "Cipolletti",        "8324", "Av. Roca 600",             -38.9370, -67.9910, "Mariana",   "Diaz",     "2994551212"),
+            new("Neuquén", "Centenario",        "8309", "San Martín 450",           -38.8292, -68.1310, "Javier",    "Gomez",    "2994551213"),
+
+            // ── Entre Ríos ───────────────────────────────────────────────────
+            new("Entre Ríos", "Paraná",         "3100", "Urquiza 950",              -31.7413, -60.5115, "Emilia",    "Castro",   "3434551211"),
+            new("Entre Ríos", "Paraná",         "3100", "San Martín 1200",          -31.7385, -60.5146, "Rodrigo",   "Suarez",   "3434551212"),
+            new("Entre Ríos", "Concordia",      "3200", "Av. Urquiza 1800",         -31.3932, -58.0223, "Lucia",     "Fernandez","3454551213"),
+            new("Entre Ríos", "Gualeguaychú",   "2820", "Andrade 600",              -33.0052, -58.5153, "Pablo",     "Mendez",   "3446551214"),
+
+            // ── Misiones ─────────────────────────────────────────────────────
+            new("Misiones", "Posadas",           "3300", "Av. Roque Pérez 1200",     -27.3671, -55.8962, "Veronica",  "Alderete", "3764551300"),
+            new("Misiones", "Posadas",           "3300", "Bolívar 800",              -27.3710, -55.8972, "Carlos",    "Bejarano", "3764551301"),
+            new("Misiones", "Oberá",             "3360", "Av. Libertad 600",         -27.4869, -55.1196, "Liliana",   "Gimenez",  "3755551302"),
+            new("Misiones", "Eldorado",          "3380", "Av. San Martín 1100",      -26.4044, -54.6269, "Marcos",    "Rueda",    "3751551303"),
+            new("Misiones", "Puerto Iguazú",     "3370", "Av. Victoria Aguirre 300", -25.5972, -54.5788, "Patricia",  "Rojas",    "3757551304"),
+            new("Misiones", "Apóstoles",         "3316", "San Martín 500",           -27.9148, -55.7622, "Esteban",   "Miño",     "3758551305"),
+            new("Misiones", "Jardín América",    "3328", "Av. Independencia 800",    -27.0433, -55.2271, "Natalia",   "Acuña",    "3751551306"),
+            new("Misiones", "Leandro N. Alem",   "3315", "Belgrano 700",             -27.5971, -55.3283, "Hugo",      "Pucheta",  "3754551307"),
+
+            // ── Corrientes ───────────────────────────────────────────────────
+            new("Corrientes", "Corrientes Capital","3400", "Junín 1000",              -27.4696, -58.8341, "Adriana",   "Vallejos", "3794551400"),
+            new("Corrientes", "Corrientes Capital","3400", "Carlos Pellegrini 600",   -27.4723, -58.8310, "Gustavo",   "Leiva",    "3794551401"),
+            new("Corrientes", "Goya",             "3450", "25 de Mayo 800",           -29.1427, -59.2637, "Miriam",    "Portillo", "3777551402"),
+            new("Corrientes", "Paso de los Libres","3230", "Av. Lavalle 1400",        -29.7118, -57.0794, "Fernando",  "Aquino",   "3772551403"),
+            new("Corrientes", "Curuzú Cuatiá",    "3460", "Av. San Martín 500",      -29.7919, -58.0541, "Rosa",      "Sandoval", "3774551404"),
+            new("Corrientes", "Mercedes",         "3470", "Belgrano 900",             -29.1862, -58.0783, "Daniel",    "Vera",     "3773551405"),
+
+            // ── Chaco ────────────────────────────────────────────────────────
+            new("Chaco", "Resistencia",           "3500", "Av. 9 de Julio 1100",      -27.4514, -58.9862, "Oscar",     "Benítez",  "3624551500"),
+            new("Chaco", "Resistencia",           "3500", "San Martín 700",           -27.4539, -58.9831, "Hilda",     "Chamorro", "3624551501"),
+            new("Chaco", "Presidencia R. S. Peña","3700", "Av. Belgrano 900",         -26.7924, -60.4424, "Reinaldo",  "Cáceres",  "3732551502"),
+            new("Chaco", "Villa Ángela",          "3540", "Salta 600",                -27.5694, -60.7180, "Claudia",   "Encina",   "3735551503"),
+            new("Chaco", "Charata",               "3730", "Av. Rivadavia 800",        -27.2154, -61.1882, "Abelardo",  "Godoy",    "3731551504"),
+
+            // ── Jujuy ────────────────────────────────────────────────────────
+            new("Jujuy", "San Salvador de Jujuy", "4600", "Belgrano 1200",            -24.1858, -65.2995, "Alicia",    "Mamani",   "3884551600"),
+            new("Jujuy", "San Salvador de Jujuy", "4600", "Gorriti 800",              -24.1871, -65.3012, "Ernesto",   "Condori",  "3884551601"),
+            new("Jujuy", "San Pedro de Jujuy",    "4630", "Av. Libertad 500",         -24.2264, -64.8685, "Yolanda",   "Flores",   "3886551602"),
+            new("Jujuy", "Palpalá",               "4612", "San Martín 900",           -24.2535, -65.2173, "Domingo",   "Quispe",   "3884551603"),
+            new("Jujuy", "La Quiaca",             "4650", "Belgrano 300",             -22.1029, -65.5967, "Juana",     "Llanos",   "3887551604"),
+
+            // ── Santiago del Estero ──────────────────────────────────────────
+            new("Santiago del Estero", "Santiago del Estero Capital", "4200", "Av. Belgrano 500", -27.7951, -64.2615, "Mario",    "Juárez",   "3854551700"),
+            new("Santiago del Estero", "Santiago del Estero Capital", "4200", "Independencia 900",-27.7978, -64.2647, "Beatriz",  "Nassif",   "3854551701"),
+            new("Santiago del Estero", "La Banda",  "4300", "Av. 9 de Julio 700",     -27.7353, -64.2477, "Ramón",     "Soria",    "3854551702"),
+            new("Santiago del Estero", "Termas de Río Hondo","4220","Alberdi 400",     -27.4941, -64.8590, "Carmen",    "Taboada",  "3858551703"),
+            new("Santiago del Estero", "Frías",     "4230", "Buenos Aires 600",       -28.6497, -65.1495, "Adolfo",    "Figueroa", "3843551704"),
+
+            // ── La Rioja ─────────────────────────────────────────────────────
+            new("La Rioja", "La Rioja Capital",   "5300", "Av. Ortiz de Ocampo 1200", -29.4133, -66.8563, "Sandra",    "Araoz",    "3822551800"),
+            new("La Rioja", "La Rioja Capital",   "5300", "San Nicolás de Bari 600",  -29.4158, -66.8590, "Leandro",   "Barraza",  "3822551801"),
+            new("La Rioja", "Chilecito",          "5360", "Libertad 800",             -29.1618, -67.4955, "Estela",    "Perez",    "3825551802"),
+            new("La Rioja", "Aimogasta",          "5330", "San Martín 400",           -28.5604, -66.8125, "Roberto",   "Ontiveros","3827551803"),
+
+            // ── San Juan ─────────────────────────────────────────────────────
+            new("San Juan", "San Juan Capital",   "5400", "Av. Ignacio de la Roza 800",  -31.5375, -68.5364, "Adrián",  "Lucero",   "2644551900"),
+            new("San Juan", "San Juan Capital",   "5400", "Rivadavia 1200",           -31.5392, -68.5399, "Celeste",   "Maldonado","2644551901"),
+            new("San Juan", "Rawson",             "5409", "Sarmiento 600",            -31.5773, -68.5358, "Horacio",   "Sánchez",  "2644551902"),
+            new("San Juan", "Caucete",            "5440", "25 de Mayo 400",           -31.6517, -68.2802, "Liliana",   "Rojas",    "2646551903"),
+
+            // ── San Luis ─────────────────────────────────────────────────────
+            new("San Luis", "San Luis Capital",   "5700", "Colón 1100",               -33.2950, -66.3356, "Nicolás",   "Agüero",   "2664552000"),
+            new("San Luis", "San Luis Capital",   "5700", "Av. Illía 800",            -33.2967, -66.3374, "Virginia",  "Castro",   "2664552001"),
+            new("San Luis", "Villa Mercedes",     "5730", "Av. del Trabajador 600",   -33.6742, -65.4595, "Jorge",     "Morán",    "2657552002"),
+            new("San Luis", "Merlo",              "5881", "Av. del Sol 400",          -32.3497, -65.0133, "Susana",    "Quiroga",  "2656552003"),
+
+            // ── La Pampa ─────────────────────────────────────────────────────
+            new("La Pampa", "Santa Rosa",         "6300", "Av. San Martín 1100",      -36.6209, -64.2908, "Jorge",     "Tello",    "2954552100"),
+            new("La Pampa", "Santa Rosa",         "6300", "Pellegrini 700",           -36.6223, -64.2927, "Ana",       "Bianchi",  "2954552101"),
+            new("La Pampa", "General Pico",       "6360", "Av. San Martín 800",       -35.6565, -63.7582, "Marcelo",   "Rivarola", "2302552102"),
+            new("La Pampa", "Toay",               "6303", "Buenos Aires 400",         -36.6726, -64.3816, "Graciela",  "Velarde",  "2954552103"),
+
+            // ── Río Negro ────────────────────────────────────────────────────
+            new("Río Negro", "Viedma",            "8500", "Av. Rivadavia 800",        -40.8135, -62.9967, "Gustavo",   "Pereyra",  "2920552200"),
+            new("Río Negro", "Viedma",            "8500", "Buenos Aires 1200",        -40.8152, -62.9985, "Silvia",    "Martínez", "2920552201"),
+            new("Río Negro", "Bariloche",         "8400", "Av. San Martín 1500",      -41.1335, -71.3103, "Alejandro", "Hoffmann", "2944552202"),
+            new("Río Negro", "General Roca",      "8332", "Av. Roca 1400",            -39.0229, -67.5731, "Mónica",    "Oyarzo",   "2984552203"),
+            new("Río Negro", "Cipolletti",        "8324", "Liniers 600",              -38.9408, -67.9926, "Fabián",    "González", "2994552204"),
+
+            // ── Chubut ───────────────────────────────────────────────────────
+            new("Chubut", "Rawson",               "9103", "Belgrano 500",             -43.3003, -65.1023, "Néstor",    "Albornoz", "2965552300"),
+            new("Chubut", "Trelew",               "9100", "25 de Mayo 900",           -43.2489, -65.3027, "Liliana",   "Cano",     "2965552301"),
+            new("Chubut", "Puerto Madryn",        "9120", "Av. Roca 1200",            -42.7682, -65.0368, "Ramiro",    "Flores",   "2965552302"),
+            new("Chubut", "Comodoro Rivadavia",   "9000", "Av. Hipólito Yrigoyen 1100",-45.8651,-67.4978,"Valeria",    "Torres",   "297 5552303"),
+            new("Chubut", "Esquel",               "9200", "Av. Fontana 600",          -42.9079, -71.3138, "Osvaldo",   "Pichun",   "2945552304"),
+
+            // ── Formosa ──────────────────────────────────────────────────────
+            new("Formosa", "Formosa Capital",     "3600", "Av. 25 de Mayo 800",       -26.1786, -58.1754, "Elsa",      "Ramírez",  "3717552400"),
+            new("Formosa", "Formosa Capital",     "3600", "Belgrano 500",             -26.1803, -58.1771, "Silvio",    "Insfrán",  "3717552401"),
+            new("Formosa", "Clorinda",            "3612", "San Martín 700",           -25.2855, -57.7233, "Teresa",    "González", "3718552402"),
+            new("Formosa", "Pirané",              "3636", "Urquiza 400",              -25.7294, -59.1078, "Bernardo",  "Paez",     "3716552403"),
+
+            // ── Santa Cruz ───────────────────────────────────────────────────
+            new("Santa Cruz", "Río Gallegos",     "9400", "Av. Roca 1100",            -51.6352, -69.2172, "Patricia",  "Mercado",  "2966552500"),
+            new("Santa Cruz", "Río Gallegos",     "9400", "San Martín 700",           -51.6369, -69.2190, "Claudio",   "Cárdenas", "2966552501"),
+            new("Santa Cruz", "Caleta Olivia",    "9011", "Av. Hipólito Yrigoyen 800",-46.4384,-67.5249, "Andrea",    "Mansilla", "297 5552502"),
+            new("Santa Cruz", "Puerto Deseado",   "9050", "Colón 500",                -47.7535, -65.9034, "Rubén",     "Funes",    "2974552503"),
+
+            // ── Tierra del Fuego ─────────────────────────────────────────────
+            new("Tierra del Fuego", "Ushuaia",    "9410", "Av. Maipú 1200",           -54.8019, -68.3029, "Alejandra", "Lagos",    "2901552600"),
+            new("Tierra del Fuego", "Ushuaia",    "9410", "San Martín 800",           -54.8036, -68.3051, "Mateo",     "Montes",   "2901552601"),
+            new("Tierra del Fuego", "Río Grande", "9420", "Av. Belgrano 1100",        -53.7878, -67.7072, "Graciela",  "Mansilla", "2964552602"),
+            new("Tierra del Fuego", "Tolhuin",    "9432", "El Yagán 300",             -54.5045, -67.1995, "Diego",     "Zurita",   "2901552603"),
+
+            // ── Ciudad Autónoma de Buenos Aires (CABA) ───────────────────────
+            new("Ciudad Autónoma de Buenos Aires", "CABA - Palermo",     "1414", "Thames 2200",       -34.5880, -58.4258, "Sofía",    "Ríos",     "1145512100"),
+            new("Ciudad Autónoma de Buenos Aires", "CABA - San Telmo",   "1070", "Defensa 800",       -34.6199, -58.3733, "Matías",   "Conte",    "1145512101"),
+            new("Ciudad Autónoma de Buenos Aires", "CABA - Belgrano",    "1428", "Av. Cabildo 2200",  -34.5606, -58.4512, "Laura",    "Visconti", "1145512102"),
+            new("Ciudad Autónoma de Buenos Aires", "CABA - Caballito",   "1406", "Av. Rivadavia 5800",-34.6188, -58.4406, "Rodrigo",  "Ponti",    "1145512103"),
+            new("Ciudad Autónoma de Buenos Aires", "CABA - Villa Urquiza","1431","Av. Triunvirato 4500",-34.5773,-58.4889,"Fernanda","Greco",     "1145512104"),
+            new("Ciudad Autónoma de Buenos Aires", "CABA - Almagro",     "1196", "Av. Corrientes 3800",-34.6054,-58.4237,"Gabriel",  "Suárez",   "1145512105"),
         };
 
         private sealed record DemoAddress(

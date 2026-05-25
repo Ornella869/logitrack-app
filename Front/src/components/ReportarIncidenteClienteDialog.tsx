@@ -20,6 +20,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined'
 import { incidenciaService, type TipoIncidencia } from '../services/incidenciaService'
+import { notificationService } from '../services/notificationService'
 import type { Shipment } from '../types'
 
 const MOTIVOS: { value: TipoIncidencia; label: string }[] = [
@@ -83,6 +84,14 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
       })
       setIncidenciaId(nueva.id)
       setSubmitted(true)
+      // Notificar al supervisor de la sucursal correspondiente
+      notificationService.add({
+        type: 'incidencia',
+        title: 'Incidencia reportada por cliente',
+        message: `${motivoLabel} en envío ${shipment.trackingId}. ID: ${nueva.id.slice(-8)}`,
+        recipientId: 'supervisor',
+        navigateTo: '/incidencias',
+      })
     } catch (err: any) {
       setError(err.response?.data ?? 'No se pudo registrar la incidencia.')
     } finally {

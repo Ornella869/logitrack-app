@@ -67,6 +67,12 @@ const KEYWORDS: { pattern: RegExp; tipoId: string }[] = [
   { pattern: /entregar|entrega|destinatario|ausente|direcci[oó]n|nadie/i, tipoId: 'delivery' },
 ]
 
+// Respuestas afirmativas: "si", "sí", "dale", "ok", "claro", "avisá", etc.
+const AFFIRMATIVE = /^(s[ií]|dale|ok|claro|sí por favor|si por favor|avisá?|notificá?|avisa|notifica|por favor|anda|va|bueno)\.?$/i
+
+// Respuestas negativas: "no", "no gracias", "estoy bien"
+const NEGATIVE = /^(no|no gracias|estoy bien|gracias|tranquilo|tranquila|no te preocupes)\.?$/i
+
 function detectKeyword(text: string): string | null {
   for (const { pattern, tipoId } of KEYWORDS) {
     if (pattern.test(text)) return tipoId
@@ -249,8 +255,11 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
     setTyping(true)
     setTimeout(() => {
       setTyping(false)
-      const isGeneric = !templateId
-      addTrackyMessage(templateId ? (TRACKY_RESPONSES[templateId] ?? GENERIC_RESPONSE) : GENERIC_RESPONSE, isGeneric)
+      // Siempre mostramos follow-up para que el usuario tenga opciones claras
+      addTrackyMessage(
+        templateId ? (TRACKY_RESPONSES[templateId] ?? GENERIC_RESPONSE) : GENERIC_RESPONSE,
+        true,
+      )
     }, 900)
   }
 
@@ -259,6 +268,21 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
     if (!text) return
     addUserMessage(text)
     setInput('')
+
+    // Si hay contexto de incidente y el usuario responde afirmativamente → notificar supervisor
+    if (lastTemplateId && !supervisorNotificado && AFFIRMATIVE.test(text)) {
+      setTyping(true)
+      setTimeout(() => { setTyping(false); handleNotificarSupervisor() }, 700)
+      return
+    }
+
+    // Si el usuario responde negativamente → cierre amigable
+    if (lastTemplateId && NEGATIVE.test(text)) {
+      setTyping(true)
+      setTimeout(() => { setTyping(false); addTrackyMessage(WELLBEING_RESPONSE, false) }, 700)
+      return
+    }
+
     const detectedType = detectKeyword(text)
     if (detectedType) {
       setLastTemplateId(detectedType)
