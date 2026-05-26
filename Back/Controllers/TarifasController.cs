@@ -46,7 +46,7 @@ namespace Back.Controllers
             {
                 var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
                 var config = await _service.ActualizarConfiguracionAsync(
-                    provincia, request.PrecioPorKg, request.PrecioPorKm, request.PorcentajeRecargoZonaPeligrosa);
+                    provincia, request.PrecioPorKg!.Value, request.PrecioPorKm!.Value, request.PorcentajeRecargoZonaPeligrosa!.Value);
                 await _auditoria.RegistrarAsync(
                     TipoAccion.Otro,
                     $"Actualizó la configuración de tarifas (provincia {provincia})",
@@ -133,9 +133,9 @@ namespace Back.Controllers
 
     public class ConfiguracionTarifaRequest
     {
-        [Required] public double PrecioPorKg { get; set; }
-        [Required] public double PrecioPorKm { get; set; }
-        [Required] public double PorcentajeRecargoZonaPeligrosa { get; set; }
+        [Required] public double? PrecioPorKg { get; set; }
+        [Required] public double? PrecioPorKm { get; set; }
+        [Required] public double? PorcentajeRecargoZonaPeligrosa { get; set; }
     }
 
     public class ZonaPeligrosaRequest

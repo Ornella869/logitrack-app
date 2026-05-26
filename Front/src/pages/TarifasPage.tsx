@@ -57,6 +57,7 @@ export default function TarifasPage() {
   // Centro inicial del mapa: sucursal de origen si tiene coords; si no, centro de Argentina.
   const [mapCenter, setMapCenter] = useState<[number, number]>([-34.6, -58.45])
   const [mapZoom, setMapZoom] = useState(11)
+  const hasMaxTwoDecimals = (value: string) => /^\d+([.,]\d{1,2})?$/.test(value.trim())
 
   useEffect(() => {
     void (async () => {
@@ -81,6 +82,14 @@ export default function TarifasPage() {
   }, [])
 
   const handleSaveConfig = async () => {
+    if (!kg.trim() || !km.trim() || !recargo.trim()) {
+      setConfigMsg({ sev: 'error', text: 'Completá todos los valores de tarifas.' })
+      return
+    }
+    if (![kg, km, recargo].every(hasMaxTwoDecimals)) {
+      setConfigMsg({ sev: 'error', text: 'Los valores aceptan como máximo 2 decimales.' })
+      return
+    }
     const nKg = Number(kg), nKm = Number(km), nRec = Number(recargo)
     if ([nKg, nKm, nRec].some((v) => isNaN(v) || v < 0)) {
       setConfigMsg({ sev: 'error', text: 'Los valores deben ser números no negativos.' })
@@ -156,22 +165,29 @@ export default function TarifasPage() {
             <CardContent>
               <Typography variant="h6" gutterBottom>Valores base</Typography>
               <Stack spacing={2} sx={{ mt: 1 }}>
-                <TextField
+                <TextField required
                   label="Precio por kilogramo ($/kg)" type="number" size="small" fullWidth
                   value={kg} onChange={(e) => setKg(e.target.value)} inputProps={{ min: 0, step: 0.01 }}
+                  error={!kg.trim() || (kg.trim() !== '' && !hasMaxTwoDecimals(kg))}
+                  helperText={!kg.trim() ? 'Obligatorio' : (!hasMaxTwoDecimals(kg) ? 'Máximo 2 decimales' : ' ')}
                 />
-                <TextField
+                <TextField required
                   label="Precio por kilómetro ($/km)" type="number" size="small" fullWidth
                   value={km} onChange={(e) => setKm(e.target.value)} inputProps={{ min: 0, step: 0.01 }}
+                  error={!km.trim() || (km.trim() !== '' && !hasMaxTwoDecimals(km))}
+                  helperText={!km.trim() ? 'Obligatorio' : (!hasMaxTwoDecimals(km) ? 'Máximo 2 decimales' : ' ')}
                 />
-                <TextField
+                <TextField required
                   label="Recargo por zona peligrosa (%)" type="number" size="small" fullWidth
                   value={recargo} onChange={(e) => setRecargo(e.target.value)} inputProps={{ min: 0, step: 0.01 }}
+                  error={!recargo.trim() || (recargo.trim() !== '' && !hasMaxTwoDecimals(recargo))}
+                  helperText={!recargo.trim() ? 'Obligatorio' : (!hasMaxTwoDecimals(recargo) ? 'Máximo 2 decimales' : ' ')}
                 />
                 {configMsg && <Alert severity={configMsg.sev} sx={{ py: 0 }}>{configMsg.text}</Alert>}
                 <Button
                   variant="contained" startIcon={savingConfig ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
-                  onClick={handleSaveConfig} disabled={savingConfig}
+                  onClick={handleSaveConfig}
+                  disabled={savingConfig || !kg.trim() || !km.trim() || !recargo.trim() || ![kg, km, recargo].every(hasMaxTwoDecimals)}
                 >
                   Guardar tarifas
                 </Button>

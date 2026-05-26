@@ -1,0 +1,121 @@
+[
+  { "provincia": "Buenos Aires", "localidad": "La Plata", "cp": "1900", "direccion": "Calle 12 800", "latitud": -34.9214, "longitud": -57.9544, "nombre": "Camila", "apellido": "Torres", "telefono": "2214551200" },
+  { "provincia": "Buenos Aires", "localidad": "Mar del Plata", "cp": "7600", "direccion": "Av. Luro 3050", "latitud": -38.0023, "longitud": -57.5575, "nombre": "Lucia", "apellido": "Mendez", "telefono": "2234551202" },
+  { "provincia": "Buenos Aires", "localidad": "Bahia Blanca", "cp": "8000", "direccion": "Alsina 65", "latitud": -38.7196, "longitud": -62.2724, "nombre": "Mateo", "apellido": "Rossi", "telefono": "2914551203" },
+  { "provincia": "Buenos Aires", "localidad": "Tandil", "cp": "7000", "direccion": "San Martin 650", "latitud": -37.3287, "longitud": -59.1361, "nombre": "Paula", "apellido": "Luna", "telefono": "2494551204" },
+
+  { "provincia": "Ciudad Autónoma de Buenos Aires", "localidad": "CABA - Palermo", "cp": "1414", "direccion": "Thames 2200", "latitud": -34.5880, "longitud": -58.4258, "nombre": "Sofia", "apellido": "Rios", "telefono": "1145512100" },
+  { "provincia": "Ciudad Autónoma de Buenos Aires", "localidad": "CABA - San Telmo", "cp": "1070", "direccion": "Defensa 800", "latitud": -34.6199, "longitud": -58.3733, "nombre": "Matias", "apellido": "Conte", "telefono": "1145512101" },
+  { "provincia": "Ciudad Autónoma de Buenos Aires", "localidad": "CABA - Belgrano", "cp": "1428", "direccion": "Av. Cabildo 2200", "latitud": -34.5606, "longitud": -58.4512, "nombre": "Laura", "apellido": "Visconti", "telefono": "1145512102" },
+  { "provincia": "Ciudad Autónoma de Buenos Aires", "localidad": "CABA - Caballito", "cp": "1406", "direccion": "Av. Rivadavia 5800", "latitud": -34.6188, "longitud": -58.4406, "nombre": "Rodrigo", "apellido": "Ponti", "telefono": "1145512103" },
+
+  { "provincia": "Catamarca", "localidad": "San Fernando del Valle de Catamarca", "cp": "4700", "direccion": "Av. Güemes 650", "latitud": -28.4696, "longitud": -65.7795, "nombre": "Sofia", "apellido": "Herrera", "telefono": "3834551203" },
+  { "provincia": "Catamarca", "localidad": "Valle Viejo", "cp": "4707", "direccion": "Av. Presidente Castillo 1200", "latitud": -28.4691, "longitud": -65.7206, "nombre": "Diego", "apellido": "Nunez", "telefono": "3834551204" },
+  { "provincia": "Catamarca", "localidad": "Recreo", "cp": "4650", "direccion": "Av. del Bicentenario 200", "latitud": -29.2807, "longitud": -65.0618, "nombre": "Ezequiel", "apellido": "Valdez", "telefono": "3837551207" },
+  { "provincia": "Catamarca", "localidad": "Tinogasta", "cp": "5340", "direccion": "Av. San Martin 600", "latitud": -28.0644, "longitud": -67.5699, "nombre": "Micaela", "apellido": "Gimenez", "telefono": "3835551208" },
+
+  { "provincia": "Córdoba", "localidad": "Córdoba Capital", "cp": "5000", "direccion": "Av. Colon 500", "latitud": -31.4135, "longitud": -64.1888, "nombre": "Julian", "apellido": "Acosta", "telefono": "3514551205" },
+  { "provincia": "Córdoba", "localidad": "Rio Cuarto", "cp": "5800", "direccion": "Av. Hipolito Yrigoyen 900", "latitud": -33.1234, "longitud": -64.3493, "nombre": "Ariel", "apellido": "Dominguez", "telefono": "3584551207" },
+  { "provincia": "Córdoba", "localidad": "Villa Maria", "cp": "5900", "direccion": "Av. Sabattini 450", "latitud": -32.4075, "longitud": -63.2435, "nombre": "Daniela", "apellido": "Ruiz", "telefono": "3534551208" },
+  { "provincia": "Córdoba", "localidad": "Alta Gracia", "cp": "5186", "direccion": "Urquiza 300", "latitud": -31.6557, "longitud": -64.4299, "nombre": "Florencia", "apellido": "Vega", "telefono": "3547551210" },
+
+  { "provincia": "Santa Fe", "localidad": "Rosario", "cp": "2000", "direccion": "Bv. Oroño 1100", "latitud": -32.9442, "longitud": -60.6505, "nombre": "Valentina", "apellido": "Molina", "telefono": "3414551206" },
+  { "provincia": "Santa Fe", "localidad": "Santa Fe Capital", "cp": "3000", "direccion": "Bv. Pellegrini 2500", "latitud": -31.6333, "longitud": -60.7000, "nombre": "Carolina", "apellido": "Vega", "telefono": "3424551208" },
+  { "provincia": "Santa Fe", "localidad": "Rafaela", "cp": "2300", "direccion": "Bv. Santa Fe 800", "latitud": -31.2519, "longitud": -61.4874, "nombre": "Luciana", "apellido": "Gimenez", "telefono": "3492551210" },
+  { "provincia": "Santa Fe", "localidad": "Venado Tuerto", "cp": "2600", "direccion": "Av. Presidente Peron 600", "latitud": -33.7463, "longitud": -61.9653, "nombre": "Ezequiel", "apellido": "Herrera", "telefono": "3462551211" },
+
+  { "provincia": "Mendoza", "localidad": "Mendoza Capital", "cp": "5500", "direccion": "San Martin 1200", "latitud": -32.8895, "longitud": -68.8458, "nombre": "Pablo", "apellido": "Sosa", "telefono": "2614551207" },
+  { "provincia": "Mendoza", "localidad": "Godoy Cruz", "cp": "5501", "direccion": "Av. San Martin 3800", "latitud": -32.9272, "longitud": -68.8448, "nombre": "Lorena", "apellido": "Quiroga", "telefono": "2614551209" },
+  { "provincia": "Mendoza", "localidad": "San Rafael", "cp": "5600", "direccion": "Av. Hipolito Yrigoyen 350", "latitud": -34.6178, "longitud": -68.3298, "nombre": "Emiliano", "apellido": "Aranda", "telefono": "2604551210" },
+  { "provincia": "Mendoza", "localidad": "Lujan de Cuyo", "cp": "5507", "direccion": "Av. San Martin 1100", "latitud": -33.0566, "longitud": -68.8784, "nombre": "Mariela", "apellido": "Blanco", "telefono": "2614551211" },
+
+  { "provincia": "Tucumán", "localidad": "San Miguel de Tucumán", "cp": "4000", "direccion": "24 de Septiembre 600", "latitud": -26.8241, "longitud": -65.2226, "nombre": "Natalia", "apellido": "Paz", "telefono": "3814551208" },
+  { "provincia": "Tucumán", "localidad": "Yerba Buena", "cp": "4107", "direccion": "Av. Aconquija 3500", "latitud": -26.8162, "longitud": -65.2751, "nombre": "Mariana", "apellido": "Acosta", "telefono": "3814551210" },
+  { "provincia": "Tucumán", "localidad": "Tafi Viejo", "cp": "4103", "direccion": "Alem 800", "latitud": -26.7277, "longitud": -65.2582, "nombre": "Facundo", "apellido": "Rivero", "telefono": "3814551211" },
+  { "provincia": "Tucumán", "localidad": "Concepcion", "cp": "4100", "direccion": "Av. Belgrano 600", "latitud": -27.3355, "longitud": -65.5940, "nombre": "Yanina", "apellido": "Campos", "telefono": "3865551212" },
+
+  { "provincia": "Salta", "localidad": "Salta Capital", "cp": "4400", "direccion": "Caseros 900", "latitud": -24.7897, "longitud": -65.4105, "nombre": "Bruno", "apellido": "Vega", "telefono": "3874551209" },
+  { "provincia": "Salta", "localidad": "Tartagal", "cp": "4560", "direccion": "Av. 9 de Julio 1200", "latitud": -22.5233, "longitud": -63.8000, "nombre": "Walter", "apellido": "Morales", "telefono": "3876551212" },
+  { "provincia": "Salta", "localidad": "General Güemes", "cp": "4450", "direccion": "Belgrano 400", "latitud": -24.6707, "longitud": -65.0509, "nombre": "Silvina", "apellido": "Castillo", "telefono": "3876551213" },
+  { "provincia": "Salta", "localidad": "Metan", "cp": "4530", "direccion": "9 de Julio 600", "latitud": -25.4931, "longitud": -64.9722, "nombre": "Ignacio", "apellido": "Torino", "telefono": "3876551216" },
+
+  { "provincia": "Neuquén", "localidad": "Neuquen Capital", "cp": "8300", "direccion": "Av. Argentina 400", "latitud": -38.9516, "longitud": -68.0591, "nombre": "Rocio", "apellido": "Luna", "telefono": "2994551210" },
+  { "provincia": "Neuquén", "localidad": "Cipolletti", "cp": "8324", "direccion": "Av. Roca 600", "latitud": -38.9370, "longitud": -67.9910, "nombre": "Mariana", "apellido": "Diaz", "telefono": "2994551212" },
+  { "provincia": "Neuquén", "localidad": "Centenario", "cp": "8309", "direccion": "San Martin 450", "latitud": -38.8292, "longitud": -68.1310, "nombre": "Javier", "apellido": "Gomez", "telefono": "2994551213" },
+  { "provincia": "Neuquén", "localidad": "San Martin de los Andes", "cp": "8370", "direccion": "Av. San Martin 850", "latitud": -40.1579, "longitud": -71.3534, "nombre": "Carla", "apellido": "Pereyra", "telefono": "2972551214" },
+
+  { "provincia": "Entre Ríos", "localidad": "Parana", "cp": "3100", "direccion": "Urquiza 950", "latitud": -31.7413, "longitud": -60.5115, "nombre": "Emilia", "apellido": "Castro", "telefono": "3434551211" },
+  { "provincia": "Entre Ríos", "localidad": "Concordia", "cp": "3200", "direccion": "Av. Urquiza 1800", "latitud": -31.3932, "longitud": -58.0223, "nombre": "Lucia", "apellido": "Fernandez", "telefono": "3454551213" },
+  { "provincia": "Entre Ríos", "localidad": "Gualeguaychu", "cp": "2820", "direccion": "Andrade 600", "latitud": -33.0052, "longitud": -58.5153, "nombre": "Pablo", "apellido": "Mendez", "telefono": "3446551214" },
+  { "provincia": "Entre Ríos", "localidad": "Concepcion del Uruguay", "cp": "3260", "direccion": "9 de Julio 950", "latitud": -32.4846, "longitud": -58.2322, "nombre": "Noelia", "apellido": "Bustos", "telefono": "3442551215" },
+
+  { "provincia": "Misiones", "localidad": "Posadas", "cp": "3300", "direccion": "Av. Roque Perez 1200", "latitud": -27.3671, "longitud": -55.8962, "nombre": "Veronica", "apellido": "Alderete", "telefono": "3764551300" },
+  { "provincia": "Misiones", "localidad": "Obera", "cp": "3360", "direccion": "Av. Libertad 600", "latitud": -27.4869, "longitud": -55.1196, "nombre": "Liliana", "apellido": "Gimenez", "telefono": "3755551302" },
+  { "provincia": "Misiones", "localidad": "Eldorado", "cp": "3380", "direccion": "Av. San Martin 1100", "latitud": -26.4044, "longitud": -54.6269, "nombre": "Marcos", "apellido": "Rueda", "telefono": "3751551303" },
+  { "provincia": "Misiones", "localidad": "Puerto Iguazu", "cp": "3370", "direccion": "Av. Victoria Aguirre 300", "latitud": -25.5972, "longitud": -54.5788, "nombre": "Patricia", "apellido": "Rojas", "telefono": "3757551304" },
+
+  { "provincia": "Corrientes", "localidad": "Corrientes Capital", "cp": "3400", "direccion": "Junin 1000", "latitud": -27.4696, "longitud": -58.8341, "nombre": "Adriana", "apellido": "Vallejos", "telefono": "3794551400" },
+  { "provincia": "Corrientes", "localidad": "Goya", "cp": "3450", "direccion": "25 de Mayo 800", "latitud": -29.1427, "longitud": -59.2637, "nombre": "Miriam", "apellido": "Portillo", "telefono": "3777551402" },
+  { "provincia": "Corrientes", "localidad": "Paso de los Libres", "cp": "3230", "direccion": "Av. Lavalle 1400", "latitud": -29.7118, "longitud": -57.0794, "nombre": "Fernando", "apellido": "Aquino", "telefono": "3772551403" },
+  { "provincia": "Corrientes", "localidad": "Mercedes", "cp": "3470", "direccion": "Belgrano 900", "latitud": -29.1862, "longitud": -58.0783, "nombre": "Daniel", "apellido": "Vera", "telefono": "3773551405" },
+
+  { "provincia": "Chaco", "localidad": "Resistencia", "cp": "3500", "direccion": "Av. 9 de Julio 1100", "latitud": -27.4514, "longitud": -58.9862, "nombre": "Oscar", "apellido": "Benitez", "telefono": "3624551500" },
+  { "provincia": "Chaco", "localidad": "Presidencia Roque Saenz Peña", "cp": "3700", "direccion": "Av. Belgrano 900", "latitud": -26.7924, "longitud": -60.4424, "nombre": "Reinaldo", "apellido": "Caceres", "telefono": "3732551502" },
+  { "provincia": "Chaco", "localidad": "Villa Angela", "cp": "3540", "direccion": "Salta 600", "latitud": -27.5694, "longitud": -60.7180, "nombre": "Claudia", "apellido": "Encina", "telefono": "3735551503" },
+  { "provincia": "Chaco", "localidad": "Charata", "cp": "3730", "direccion": "Av. Rivadavia 800", "latitud": -27.2154, "longitud": -61.1882, "nombre": "Abelardo", "apellido": "Godoy", "telefono": "3731551504" },
+
+  { "provincia": "Jujuy", "localidad": "San Salvador de Jujuy", "cp": "4600", "direccion": "Belgrano 1200", "latitud": -24.1858, "longitud": -65.2995, "nombre": "Alicia", "apellido": "Mamani", "telefono": "3884551600" },
+  { "provincia": "Jujuy", "localidad": "San Pedro de Jujuy", "cp": "4630", "direccion": "Av. Libertad 500", "latitud": -24.2264, "longitud": -64.8685, "nombre": "Yolanda", "apellido": "Flores", "telefono": "3886551602" },
+  { "provincia": "Jujuy", "localidad": "Palpala", "cp": "4612", "direccion": "San Martin 900", "latitud": -24.2535, "longitud": -65.2173, "nombre": "Domingo", "apellido": "Quispe", "telefono": "3884551603" },
+  { "provincia": "Jujuy", "localidad": "La Quiaca", "cp": "4650", "direccion": "Belgrano 300", "latitud": -22.1029, "longitud": -65.5967, "nombre": "Juana", "apellido": "Llanos", "telefono": "3887551604" },
+
+  { "provincia": "Santiago del Estero", "localidad": "Santiago del Estero Capital", "cp": "4200", "direccion": "Av. Belgrano 500", "latitud": -27.7951, "longitud": -64.2615, "nombre": "Mario", "apellido": "Juarez", "telefono": "3854551700" },
+  { "provincia": "Santiago del Estero", "localidad": "La Banda", "cp": "4300", "direccion": "Av. 9 de Julio 700", "latitud": -27.7353, "longitud": -64.2477, "nombre": "Ramon", "apellido": "Soria", "telefono": "3854551702" },
+  { "provincia": "Santiago del Estero", "localidad": "Termas de Rio Hondo", "cp": "4220", "direccion": "Alberdi 400", "latitud": -27.4941, "longitud": -64.8590, "nombre": "Carmen", "apellido": "Taboada", "telefono": "3858551703" },
+  { "provincia": "Santiago del Estero", "localidad": "Frias", "cp": "4230", "direccion": "Buenos Aires 600", "latitud": -28.6497, "longitud": -65.1495, "nombre": "Adolfo", "apellido": "Figueroa", "telefono": "3843551704" },
+
+  { "provincia": "La Rioja", "localidad": "La Rioja Capital", "cp": "5300", "direccion": "Av. Ortiz de Ocampo 1200", "latitud": -29.4133, "longitud": -66.8563, "nombre": "Sandra", "apellido": "Araoz", "telefono": "3822551800" },
+  { "provincia": "La Rioja", "localidad": "Chilecito", "cp": "5360", "direccion": "Libertad 800", "latitud": -29.1618, "longitud": -67.4955, "nombre": "Estela", "apellido": "Perez", "telefono": "3825551802" },
+  { "provincia": "La Rioja", "localidad": "Aimogasta", "cp": "5330", "direccion": "San Martin 400", "latitud": -28.5604, "longitud": -66.8125, "nombre": "Roberto", "apellido": "Ontiveros", "telefono": "3827551803" },
+  { "provincia": "La Rioja", "localidad": "Chamical", "cp": "5380", "direccion": "Rivadavia 500", "latitud": -30.3600, "longitud": -66.3130, "nombre": "Florencia", "apellido": "Paz", "telefono": "3826551804" },
+
+  { "provincia": "San Juan", "localidad": "San Juan Capital", "cp": "5400", "direccion": "Av. Ignacio de la Roza 800", "latitud": -31.5375, "longitud": -68.5364, "nombre": "Adrian", "apellido": "Lucero", "telefono": "2644551900" },
+  { "provincia": "San Juan", "localidad": "Rawson", "cp": "5409", "direccion": "Sarmiento 600", "latitud": -31.5773, "longitud": -68.5358, "nombre": "Horacio", "apellido": "Sanchez", "telefono": "2644551902" },
+  { "provincia": "San Juan", "localidad": "Caucete", "cp": "5440", "direccion": "25 de Mayo 400", "latitud": -31.6517, "longitud": -68.2802, "nombre": "Liliana", "apellido": "Rojas", "telefono": "2646551903" },
+  { "provincia": "San Juan", "localidad": "Chimbas", "cp": "5413", "direccion": "Mendoza 1000", "latitud": -31.4833, "longitud": -68.5333, "nombre": "Martin", "apellido": "Alvarez", "telefono": "2645551904" },
+
+  { "provincia": "San Luis", "localidad": "San Luis Capital", "cp": "5700", "direccion": "Colon 1100", "latitud": -33.2950, "longitud": -66.3356, "nombre": "Nicolas", "apellido": "Agüero", "telefono": "2664552000" },
+  { "provincia": "San Luis", "localidad": "Villa Mercedes", "cp": "5730", "direccion": "Av. del Trabajador 600", "latitud": -33.6742, "longitud": -65.4595, "nombre": "Jorge", "apellido": "Moran", "telefono": "2657552002" },
+  { "provincia": "San Luis", "localidad": "Merlo", "cp": "5881", "direccion": "Av. del Sol 400", "latitud": -32.3497, "longitud": -65.0133, "nombre": "Susana", "apellido": "Quiroga", "telefono": "2656552003" },
+  { "provincia": "San Luis", "localidad": "La Punta", "cp": "5710", "direccion": "Bv. Tobar Garcia 700", "latitud": -33.1833, "longitud": -66.3120, "nombre": "Belen", "apellido": "Miranda", "telefono": "2665552004" },
+
+  { "provincia": "La Pampa", "localidad": "Santa Rosa", "cp": "6300", "direccion": "Av. San Martin 1100", "latitud": -36.6209, "longitud": -64.2908, "nombre": "Jorge", "apellido": "Tello", "telefono": "2954552100" },
+  { "provincia": "La Pampa", "localidad": "General Pico", "cp": "6360", "direccion": "Av. San Martin 800", "latitud": -35.6565, "longitud": -63.7582, "nombre": "Marcelo", "apellido": "Rivarola", "telefono": "2302552102" },
+  { "provincia": "La Pampa", "localidad": "Toay", "cp": "6303", "direccion": "Buenos Aires 400", "latitud": -36.6726, "longitud": -64.3816, "nombre": "Graciela", "apellido": "Velarde", "telefono": "2954552103" },
+  { "provincia": "La Pampa", "localidad": "Realico", "cp": "6200", "direccion": "2 de Marzo 950", "latitud": -35.0360, "longitud": -64.2440, "nombre": "Cecilia", "apellido": "Vega", "telefono": "2302552104" },
+
+  { "provincia": "Río Negro", "localidad": "Viedma", "cp": "8500", "direccion": "Av. Rivadavia 800", "latitud": -40.8135, "longitud": -62.9967, "nombre": "Gustavo", "apellido": "Pereyra", "telefono": "2920552200" },
+  { "provincia": "Río Negro", "localidad": "Bariloche", "cp": "8400", "direccion": "Av. San Martin 1500", "latitud": -41.1335, "longitud": -71.3103, "nombre": "Alejandro", "apellido": "Hoffmann", "telefono": "2944552202" },
+  { "provincia": "Río Negro", "localidad": "General Roca", "cp": "8332", "direccion": "Av. Roca 1400", "latitud": -39.0229, "longitud": -67.5731, "nombre": "Monica", "apellido": "Oyarzo", "telefono": "2984552203" },
+  { "provincia": "Río Negro", "localidad": "Cipolletti", "cp": "8324", "direccion": "Liniers 600", "latitud": -38.9408, "longitud": -67.9926, "nombre": "Fabian", "apellido": "Gonzalez", "telefono": "2994552204" },
+
+  { "provincia": "Chubut", "localidad": "Rawson", "cp": "9103", "direccion": "Belgrano 500", "latitud": -43.3003, "longitud": -65.1023, "nombre": "Nestor", "apellido": "Albornoz", "telefono": "2965552300" },
+  { "provincia": "Chubut", "localidad": "Trelew", "cp": "9100", "direccion": "25 de Mayo 900", "latitud": -43.2489, "longitud": -65.3027, "nombre": "Liliana", "apellido": "Cano", "telefono": "2965552301" },
+  { "provincia": "Chubut", "localidad": "Puerto Madryn", "cp": "9120", "direccion": "Av. Roca 1200", "latitud": -42.7682, "longitud": -65.0368, "nombre": "Ramiro", "apellido": "Flores", "telefono": "2965552302" },
+  { "provincia": "Chubut", "localidad": "Comodoro Rivadavia", "cp": "9000", "direccion": "Av. Hipolito Yrigoyen 1100", "latitud": -45.8651, "longitud": -67.4978, "nombre": "Valeria", "apellido": "Torres", "telefono": "2975552303" },
+
+  { "provincia": "Formosa", "localidad": "Formosa Capital", "cp": "3600", "direccion": "Av. 25 de Mayo 800", "latitud": -26.1786, "longitud": -58.1754, "nombre": "Elsa", "apellido": "Ramirez", "telefono": "3717552400" },
+  { "provincia": "Formosa", "localidad": "Clorinda", "cp": "3612", "direccion": "San Martin 700", "latitud": -25.2855, "longitud": -57.7233, "nombre": "Teresa", "apellido": "Gonzalez", "telefono": "3718552402" },
+  { "provincia": "Formosa", "localidad": "Pirane", "cp": "3636", "direccion": "Urquiza 400", "latitud": -25.7294, "longitud": -59.1078, "nombre": "Bernardo", "apellido": "Paez", "telefono": "3716552403" },
+  { "provincia": "Formosa", "localidad": "Las Lomitas", "cp": "3630", "direccion": "Av. San Martin 550", "latitud": -24.7100, "longitud": -60.5940, "nombre": "Rosa", "apellido": "Diaz", "telefono": "3716552404" },
+
+  { "provincia": "Santa Cruz", "localidad": "Rio Gallegos", "cp": "9400", "direccion": "Av. Roca 1100", "latitud": -51.6352, "longitud": -69.2172, "nombre": "Patricia", "apellido": "Mercado", "telefono": "2966552500" },
+  { "provincia": "Santa Cruz", "localidad": "Caleta Olivia", "cp": "9011", "direccion": "Av. Hipolito Yrigoyen 800", "latitud": -46.4384, "longitud": -67.5249, "nombre": "Andrea", "apellido": "Mansilla", "telefono": "2975552502" },
+  { "provincia": "Santa Cruz", "localidad": "Puerto Deseado", "cp": "9050", "direccion": "Colon 500", "latitud": -47.7535, "longitud": -65.9034, "nombre": "Ruben", "apellido": "Funes", "telefono": "2974552503" },
+  { "provincia": "Santa Cruz", "localidad": "El Calafate", "cp": "9405", "direccion": "Av. Libertador 900", "latitud": -50.3378, "longitud": -72.2648, "nombre": "Carolina", "apellido": "Molina", "telefono": "2902552504" },
+
+  { "provincia": "Tierra del Fuego", "localidad": "Ushuaia", "cp": "9410", "direccion": "Av. Maipu 1200", "latitud": -54.8019, "longitud": -68.3029, "nombre": "Alejandra", "apellido": "Lagos", "telefono": "2901552600" },
+  { "provincia": "Tierra del Fuego", "localidad": "Rio Grande", "cp": "9420", "direccion": "Av. Belgrano 1100", "latitud": -53.7878, "longitud": -67.7072, "nombre": "Graciela", "apellido": "Mansilla", "telefono": "2964552602" },
+  { "provincia": "Tierra del Fuego", "localidad": "Tolhuin", "cp": "9432", "direccion": "El Yagan 300", "latitud": -54.5045, "longitud": -67.1995, "nombre": "Diego", "apellido": "Zurita", "telefono": "2901552603" },
+  { "provincia": "Tierra del Fuego", "localidad": "Ushuaia", "cp": "9410", "direccion": "San Martin 800", "latitud": -54.8036, "longitud": -68.3051, "nombre": "Mateo", "apellido": "Montes", "telefono": "2901552601" }
+]

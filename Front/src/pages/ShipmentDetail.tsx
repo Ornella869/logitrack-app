@@ -270,7 +270,7 @@ function ShipmentDetail() {
         title: 'Entrega completada',
         message: `Envío ${shipment.trackingId} entregado a ${shipment.receiver.name}`,
         recipientId: 'supervisor',
-        sucursalId: user.sucursalId ?? undefined,
+        sucursalId: updated?.sucursalId ?? shipment.sucursalId ?? user.sucursalId ?? undefined,
         navigateTo: `/shipment/${id}`,
       })
       // Fase C: notificación al propio repartidor por cada parada entregada.

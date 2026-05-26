@@ -111,6 +111,7 @@ export interface Shipment {
   receiverUbicacion?: { latitud: number; longitud: number } | null
   status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado'
   fechaCalendarizada?: string | null
+  sucursalId?: string | null
   ubicacionActual?: { latitud: number; longitud: number } | null
   tipoEnvio?: TipoEnvio
   tipoPaquete?: TipoPaquete

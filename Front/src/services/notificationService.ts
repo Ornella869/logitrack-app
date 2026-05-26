@@ -48,6 +48,10 @@ function dispatch(): void {
   window.dispatchEvent(new Event('logitrack:notification'))
 }
 
+function sameId(a?: string | null, b?: string | null): boolean {
+  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+}
+
 export const notificationService = {
   /** Devuelve todas las notificaciones del sistema (para auditoría) */
   getAllForAudit(): AppNotification[] {
@@ -59,11 +63,11 @@ export const notificationService = {
   getForUser(userId: string, role: UserRole, sucursalId?: string): AppNotification[] {
     return loadAll()
       .filter((n) => {
-        if (n.recipientId === userId) return true
-        if (n.recipientId === role) {
+        if (sameId(n.recipientId, userId)) return true
+        if (n.recipientId.toLowerCase() === role.toLowerCase()) {
           // Sin sucursalId en la notificación → broadcast global (compatible con datos viejos)
           if (!n.sucursalId) return true
-          return n.sucursalId === sucursalId
+          return sameId(n.sucursalId, sucursalId)
         }
         return false
       })

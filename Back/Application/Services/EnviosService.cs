@@ -1,4 +1,7 @@
 using System.Text.RegularExpressions;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using Back.Application.Abstractions;
 using Back.Application.Common;
 using Back.Application.Util;
@@ -50,6 +53,9 @@ namespace Back.Application.Services
         private readonly AuditoriaService _auditoria;
         private readonly GeocodingService _geocoding;
         private readonly TarifaService _tarifas;
+        private const int DemoAddressesPerProvince = 1200;
+        private static readonly Lazy<List<DemoAddress>> DemoAddressesCache = new(() =>
+            ExpandirDireccionesDemo(CargarDireccionesDemoBase()));
 
         public EnviosService(
             IEnviosRepository enviosRepository,
@@ -706,6 +712,14 @@ namespace Back.Application.Services
         private async Task<List<DemoAddress>> ObtenerDireccionesDemoHabilitadasAsync(Guid? usuarioId)
         {
             var disponibles = DireccionesDemo();
+            var sucursalUsuario = await ObtenerSucursalUsuarioAsync(usuarioId);
+            if (sucursalUsuario is not null)
+            {
+                return disponibles
+                    .Where(d => CubreAcentoInsensible(sucursalUsuario, d.Provincia))
+                    .ToList();
+            }
+
             var sucursales = (await _enviosRepository.GetSucursales())
                 .Where(s => s.Estado == SucursalStatus.Activa)
                 .ToList();
@@ -756,7 +770,113 @@ namespace Back.Application.Services
         // Direcciones demo por provincia — cubre todas las sucursales seeded.
         // El generador masivo cicla con i % Count, así que con 8+ por provincia
         // los 1000 envíos tienen buena variedad de destinos.
-        private static List<DemoAddress> DireccionesDemo() => new()
+        private static List<DemoAddress> DireccionesDemo() => DemoAddressesCache.Value.ToList();
+
+        private static List<DemoAddress> CargarDireccionesDemoBase()
+        {
+            var paths = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "Infrastructure", "Data", "demo-addresses.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Infrastructure", "Data", "demo-addresses.json"),
+            };
+
+            foreach (var path in paths.Distinct())
+            {
+                if (!File.Exists(path)) continue;
+
+                try
+                {
+                    var json = File.ReadAllText(path);
+                    var items = JsonSerializer.Deserialize<List<DemoAddressDto>>(json, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                    }) ?? new List<DemoAddressDto>();
+
+                    var mapped = items
+                        .Where(i => !string.IsNullOrWhiteSpace(i.Provincia)
+                            && !string.IsNullOrWhiteSpace(i.Localidad)
+                            && !string.IsNullOrWhiteSpace(i.CP)
+                            && !string.IsNullOrWhiteSpace(i.Direccion))
+                        .Select(i => new DemoAddress(
+                            i.Provincia!.Trim(),
+                            i.Localidad!.Trim(),
+                            i.CP!.Trim(),
+                            i.Direccion!.Trim(),
+                            i.Latitud,
+                            i.Longitud,
+                            string.IsNullOrWhiteSpace(i.Nombre) ? "Cliente" : i.Nombre!.Trim(),
+                            string.IsNullOrWhiteSpace(i.Apellido) ? "Demo" : i.Apellido!.Trim(),
+                            string.IsNullOrWhiteSpace(i.Telefono) ? "1100000000" : i.Telefono!.Trim()))
+                        .ToList();
+
+                    if (mapped.Count > 0) return mapped;
+                }
+                catch
+                {
+                    // Si el archivo externo falla, queda el fallback compilado.
+                }
+            }
+
+            return DireccionesDemoFallback();
+        }
+
+        private static List<DemoAddress> ExpandirDireccionesDemo(List<DemoAddress> bases)
+        {
+            var nombres = new[] { "Sofia", "Diego", "Martina", "Lucas", "Valentina", "Tomas", "Camila", "Mateo", "Lucia", "Joaquin", "Paula", "Nicolas" };
+            var apellidos = new[] { "Gomez", "Rios", "Herrera", "Sosa", "Torres", "Vega", "Molina", "Castro", "Romero", "Silva", "Acosta", "Medina" };
+            var result = new List<DemoAddress>();
+
+            foreach (var grupo in bases.GroupBy(x => NormalizarProvincia(x.Provincia)))
+            {
+                var baseProvincia = grupo.ToList();
+                var variantsPerBase = Math.Max(1, (int)Math.Ceiling(DemoAddressesPerProvince / (double)baseProvincia.Count));
+                var creadasProvincia = 0;
+
+                for (var baseIndex = 0; baseIndex < baseProvincia.Count && creadasProvincia < DemoAddressesPerProvince; baseIndex++)
+                {
+                    var seed = baseProvincia[baseIndex];
+                    for (var variant = 0; variant < variantsPerBase && creadasProvincia < DemoAddressesPerProvince; variant++)
+                    {
+                        var offset = ((variant * 17) + (baseIndex * 31)) % 1800;
+                        result.Add(new DemoAddress(
+                            seed.Provincia,
+                            seed.Localidad,
+                            seed.CP,
+                            VariarDireccion(seed.Direccion, offset),
+                            seed.Latitud + (((variant % 9) - 4) * 0.00035),
+                            seed.Longitud + ((((variant / 9) % 9) - 4) * 0.00035),
+                            nombres[(baseIndex + variant) % nombres.Length],
+                            apellidos[(baseIndex * 3 + variant) % apellidos.Length],
+                            VariarTelefono(seed.Telefono, baseIndex, variant)));
+                        creadasProvincia++;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private static string VariarDireccion(string direccion, int offset)
+        {
+            if (offset == 0) return direccion;
+            var regex = new Regex(@"\d+");
+            return regex.Replace(direccion, m =>
+            {
+                return int.TryParse(m.Value, out var numero)
+                    ? (numero + offset).ToString(CultureInfo.InvariantCulture)
+                    : m.Value;
+            }, 1);
+        }
+
+        private static string VariarTelefono(string telefono, int baseIndex, int variant)
+        {
+            var digits = Regex.Replace(telefono, @"\D", string.Empty);
+            if (digits.Length < 6) digits = "1100000000";
+            var suffix = ((baseIndex * 1000 + variant) % 10000).ToString("0000", CultureInfo.InvariantCulture);
+            return digits.Length > 4 ? digits[..^4] + suffix : digits + suffix;
+        }
+
+        private static List<DemoAddress> DireccionesDemoFallback() => new()
         {
             // ── Buenos Aires ─────────────────────────────────────────────────
             new("Buenos Aires", "La Plata",            "1900", "Calle 12 800",           -34.9214, -57.9544, "Camila",    "Torres",   "2214551200"),
@@ -958,6 +1078,19 @@ namespace Back.Application.Services
             string Nombre,
             string Apellido,
             string Telefono);
+
+        private sealed class DemoAddressDto
+        {
+            public string? Provincia { get; set; }
+            public string? Localidad { get; set; }
+            public string? CP { get; set; }
+            public string? Direccion { get; set; }
+            public double Latitud { get; set; }
+            public double Longitud { get; set; }
+            public string? Nombre { get; set; }
+            public string? Apellido { get; set; }
+            public string? Telefono { get; set; }
+        }
 
         private static string MensajeBloqueoEdicion(PaqueteStatus status) => status switch
         {

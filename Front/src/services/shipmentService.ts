@@ -106,6 +106,7 @@ const mapToShipment = (paquete: any): Shipment => ({
   costoRecargoSeguridad: paquete.costoRecargoSeguridad ?? undefined,
   esZonaPeligrosa: paquete.esZonaPeligrosa ?? undefined,
   fechaCalendarizada: paquete.fechaCalendarizada ?? null,
+  sucursalId: paquete.sucursalId ?? paquete.SucursalId ?? null,
   ubicacionActual: paquete.ubicacionActual
     ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
     : null,

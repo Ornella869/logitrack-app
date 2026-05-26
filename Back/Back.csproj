@@ -35,5 +35,8 @@
   <None Update="ML\Models\prioridad_model.zip">
     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
   </None>
+  <Content Update="Infrastructure\Data\demo-addresses.json">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </Content>
 </ItemGroup>
 </Project>
