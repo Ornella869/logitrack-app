@@ -292,7 +292,7 @@ export default function LandingPage() {
   const [leadSent, setLeadSent] = useState(false)
   const [leadError, setLeadError] = useState('')
   const [leadForm, setLeadForm] = useState(initialLeadForm)
-  const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
+  const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone', string>>>({})
   const [plans, setPlans] = useState<LandingPlan[]>(fallbackPlans)
   const [facturacion, setFacturacion] = useState<'mensual' | 'anual'>('mensual')
   const selectedCountry = COUNTRIES[0]
@@ -447,7 +447,7 @@ export default function LandingPage() {
   }
 
   const validateLeadForm = () => {
-    const errors: Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>> = {}
+    const errors: Partial<Record<'companyName' | 'contactName' | 'email' | 'phone', string>> = {}
 
     if (!leadForm.companyName.trim()) {
       errors.companyName = 'Completá el nombre de la empresa.'
@@ -472,10 +472,6 @@ export default function LandingPage() {
       errors.phone = `Ingresá ${selectedCountry.digits} dígitos (${selectedCountry.name}).`
     } else if (selectedCountry.code === 'AR' && (digits.startsWith('0') || digits.startsWith('15'))) {
       errors.phone = 'Para Argentina, el número no debe comenzar con 0 ni con 15.'
-    }
-
-    if (!leadForm.plan) {
-      errors.plan = 'Seleccioná un plan de interés.'
     }
 
     setLeadFormErrors(errors)
@@ -1461,17 +1457,12 @@ export default function LandingPage() {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                select
                 label="Plan de interés"
                 fullWidth
-                value={leadForm.plan}
-                onChange={(event) => handleLeadChange('plan', event.target.value)}
-                error={Boolean(leadFormErrors.plan)}
-                helperText={leadFormErrors.plan}
-              >
-                <MenuItem value="Basico">Básico</MenuItem>
-                <MenuItem value="Premium">Premium</MenuItem>
-              </TextField>
+                value={leadForm.plan === 'Premium' ? 'Premium' : 'Básico'}
+                InputProps={{ readOnly: true }}
+                sx={{ '& .MuiInputBase-input': { cursor: 'default' } }}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField
