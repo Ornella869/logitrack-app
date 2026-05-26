@@ -90,6 +90,7 @@ export default function ReportarIncidenteClienteDialog({ open, onClose, shipment
         title: 'Incidencia reportada por cliente',
         message: `${motivoLabel} en envío ${shipment.trackingId}. ID: ${nueva.id.slice(-8)}`,
         recipientId: 'supervisor',
+        sucursalId: nueva.sucursalId ?? shipment.sucursalId ?? undefined,
         navigateTo: '/incidencias',
       })
     } catch (err: any) {

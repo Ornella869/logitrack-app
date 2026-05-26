@@ -207,10 +207,22 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
       const cpResult = await postalCodeService.validate(formData.postalCode)
       if (!cpResult.valid) {
         newErrors.postalCode = cpResult.error ?? 'CP inválido'
-      } else if (lockedProvince && cpResult.province) {
-        const normalizedCpProvince = normalizeProvincia(cpResult.province)
-        if (normalizedCpProvince && normalizedCpProvince.toLowerCase() !== lockedProvince.toLowerCase()) {
-          newErrors.postalCode = `Este CP pertenece a ${normalizedCpProvince}, no a ${lockedProvince}`
+      } else {
+        if (lockedProvince && cpResult.province) {
+          const normalizedCpProvince = normalizeProvincia(cpResult.province)
+          if (normalizedCpProvince && normalizedCpProvince.toLowerCase() !== lockedProvince.toLowerCase()) {
+            newErrors.postalCode = `Este CP pertenece a ${normalizedCpProvince}, no a ${lockedProvince}`
+          }
+        }
+        // Validar que la calle exista para el CP dado.
+        if (!newErrors.address) {
+          const addrResult = await postalCodeService.validateStreetAddress(
+            formData.address.trim(),
+            formData.postalCode.trim(),
+          )
+          if (!addrResult.valid) {
+            newErrors.address = addrResult.error ?? 'No se pudo verificar la dirección'
+          }
         }
       }
     }

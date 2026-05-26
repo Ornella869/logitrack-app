@@ -35,6 +35,7 @@ export interface Incidencia {
   codigoSeguimiento?: string
   emailContacto?: string
   chatFinalizado?: boolean
+  sucursalId?: string
 }
 
 const normalizeEstado = (estado: string): EstadoIncidencia =>
@@ -61,6 +62,7 @@ const mapIncidencia = (raw: any): Incidencia => ({
   codigoSeguimiento: raw.codigoSeguimiento,
   emailContacto: raw.emailContacto,
   chatFinalizado: raw.chatFinalizado,
+  sucursalId: raw.sucursalId ?? undefined,
 })
 
 function dispatch(): void {

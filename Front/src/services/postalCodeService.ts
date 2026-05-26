@@ -122,9 +122,34 @@ async function validateWithGeoref(
   }
 }
 
+export interface AddressValidation {
+  valid: boolean
+  /** true cuando Nominatim no estaba disponible y no se pudo verificar */
+  fallback?: boolean
+  error?: string
+}
+
 export const postalCodeService = {
   isValidFormat(cp: string): boolean {
     return AR_POSTAL_FORMAT.test(cp.trim())
+  },
+
+  async validateStreetAddress(street: string, cp: string): Promise<AddressValidation> {
+    const url = `https://nominatim.openstreetmap.org/search?street=${encodeURIComponent(street)}&postalcode=${encodeURIComponent(cp)}&country=Argentina&format=json&limit=1`
+    try {
+      const res = await fetchWithTimeout(url, { headers: { 'Accept-Language': 'es' } })
+      if (!res.ok) return { valid: true, fallback: true }
+      const data = (await res.json()) as NominatimResult[]
+      if (!data?.length) {
+        return {
+          valid: false,
+          error: 'No se encontró esta dirección. Verificá la calle y el código postal.',
+        }
+      }
+      return { valid: true }
+    } catch {
+      return { valid: true, fallback: true }
+    }
   },
 
   async validate(cp: string): Promise<PostalCodeValidation> {

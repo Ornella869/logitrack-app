@@ -1,5 +1,6 @@
 
 
+using System.Text.RegularExpressions;
 using Back.Application.Services;
 
 namespace Back.Domain.Models
@@ -146,10 +147,12 @@ namespace Back.Domain.Models
 
         public void ActualizarLicencia(string licencia)
         {
-            if (string.IsNullOrWhiteSpace(licencia))
+            var trimmed = licencia?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmed))
                 throw new InvalidOperationException("La licencia es obligatoria.");
-
-            Licencia = licencia.Trim();
+            if (!Regex.IsMatch(trimmed, @"^[A-Za-z0-9\- ]{6,15}$"))
+                throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
+            Licencia = trimmed;
         }
 
         public void CambiarEstado(EstadoRepartidor estado)

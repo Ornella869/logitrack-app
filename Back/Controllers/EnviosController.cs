@@ -167,6 +167,7 @@ namespace Back.Controllers
             return Ok(new SeguimientoPublicoResponse
             {
                 Id = paquete.Id,
+                SucursalId = paquete.SucursalId,
                 CodigoSeguimiento = paquete.CodigoSeguimiento,
                 Status = paquete.Status,
                 TipoEnvio = paquete.TipoEnvio,
@@ -259,8 +260,8 @@ namespace Back.Controllers
             return Ok(new { fecha = DateTime.SpecifyKind(hoy, DateTimeKind.Utc), paradas = await OrdenarParadasDesdeSucursalAsync(paquetes, geocoding) });
         }
 
-        /// <summary>G1L-42: Repartidor asignado al paquete (vista Supervisor).</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        /// <summary>G1L-42: Repartidor asignado al paquete (Supervisor / Operador / Admin).</summary>
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador + "," + Roles.Operador)]
         [HttpGet("paquete/{paqueteId:guid}/repartidor-asignado")]
         public async Task<ActionResult<object>> GetRepartidorAsignado(
             Guid paqueteId,
@@ -908,6 +909,7 @@ namespace Back.Controllers
     public class SeguimientoPublicoResponse
     {
         public Guid Id { get; set; }
+        public Guid? SucursalId { get; set; }
         public string CodigoSeguimiento { get; set; } = string.Empty;
         public PaqueteStatus Status { get; set; }
         public TipoEnvio TipoEnvio { get; set; }

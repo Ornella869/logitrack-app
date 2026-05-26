@@ -502,9 +502,15 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         setFormError('La sucursal es obligatoria para supervisores, operadores y repartidores.')
         return false
       }
-      if (formData.role === 'repartidor' && !formData.licencia.trim()) {
-        setFormError('La licencia es obligatoria para repartidores.')
-        return false
+      if (formData.role === 'repartidor') {
+        if (!formData.licencia.trim()) {
+          setFormError('La licencia es obligatoria para repartidores.')
+          return false
+        }
+        if (!/^[A-Za-z0-9\- ]{6,15}$/.test(formData.licencia.trim())) {
+          setFormError('La licencia debe tener entre 6 y 15 caracteres alfanuméricos.')
+          return false
+        }
       }
     }
     setFormError('')
@@ -1037,8 +1043,11 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               <TextField
                 label="Licencia *"
                 value={formData.licencia}
-                onChange={(e) => setFormData((p) => ({ ...p, licencia: e.target.value }))}
+                onChange={(e) => setFormData((p) => ({ ...p, licencia: e.target.value.replace(/[^A-Za-z0-9\- ]/g, '') }))}
                 fullWidth
+                placeholder="Ej: 12345678"
+                helperText="Número de licencia de conducir (6–15 caracteres alfanuméricos)"
+                inputProps={{ maxLength: 15 }}
               />
             )}
             <TextField

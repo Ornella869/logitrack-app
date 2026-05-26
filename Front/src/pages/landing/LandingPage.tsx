@@ -23,6 +23,8 @@ import {
   Snackbar,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material'
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
@@ -209,6 +211,7 @@ type LandingPlan = {
   planValue: PlanInteres
   accountLimit: string
   price: string
+  priceAnual: string
   features: string[]
 }
 
@@ -217,7 +220,8 @@ const fallbackPlans: LandingPlan[] = [
     name: 'Básico',
     planValue: 'Basico',
     accountLimit: 'Hasta 50 cuentas',
-    price: '$50.000 / mes',
+    price: '$49.900 / mes',
+    priceAnual: '$479.000 / año',
     features: [
       'Registro y seguimiento de envios',
       'Estados de entrega y trazabilidad',
@@ -229,7 +233,8 @@ const fallbackPlans: LandingPlan[] = [
     name: 'Premium',
     planValue: 'Premium',
     accountLimit: 'Hasta 100 cuentas',
-    price: '$180.000 / mes',
+    price: '$189.900 / mes',
+    priceAnual: '$1.819.000 / año',
     features: [
       'Todo lo incluido en Basico',
       'Planificacion de rutas avanzada',
@@ -289,6 +294,7 @@ export default function LandingPage() {
   const [leadForm, setLeadForm] = useState(initialLeadForm)
   const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone' | 'plan', string>>>({})
   const [plans, setPlans] = useState<LandingPlan[]>(fallbackPlans)
+  const [facturacion, setFacturacion] = useState<'mensual' | 'anual'>('mensual')
   const selectedCountry = COUNTRIES[0]
 
   const closeReviewToast = () => {
@@ -341,6 +347,7 @@ export default function LandingPage() {
               planValue,
               accountLimit: `Hasta ${plan.limiteCuentas} cuentas`,
               price: plan.precioMock,
+              priceAnual: plan.precioMockAnual,
               features: landingFeaturesByPlan[planValue],
             }
           })
@@ -521,6 +528,38 @@ export default function LandingPage() {
           <Typography sx={{ color: 'rgba(255,255,255,0.75)', maxWidth: 780, lineHeight: 1.75 }}>
             Compará funcionalidades y capacidad por plan. Si ya sos cliente, podés ingresar directo al sistema desde el botón de acceso.
           </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ pt: 1 }}>
+            <ToggleButtonGroup
+              value={facturacion}
+              exclusive
+              onChange={(_e, v) => { if (v) setFacturacion(v) }}
+              size="small"
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.08)',
+                borderRadius: '10px',
+                '& .MuiToggleButton-root': {
+                  color: 'rgba(255,255,255,0.6)',
+                  border: 'none',
+                  borderRadius: '10px !important',
+                  px: 2.5, py: 0.6,
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  textTransform: 'none',
+                  '&.Mui-selected': { bgcolor: '#0288D1', color: '#fff' },
+                },
+              }}
+            >
+              <ToggleButton value="mensual">Mensual</ToggleButton>
+              <ToggleButton value="anual">Anual</ToggleButton>
+            </ToggleButtonGroup>
+            {facturacion === 'anual' && (
+              <Chip
+                label="2 meses gratis"
+                size="small"
+                sx={{ bgcolor: '#2e7d32', color: '#fff', fontWeight: 700, fontSize: '0.72rem' }}
+              />
+            )}
+          </Stack>
         </Stack>
 
         <Grid container spacing={3}>
@@ -528,6 +567,11 @@ export default function LandingPage() {
             const isPremium = plan.planValue === 'Premium'
             const accentMain = isPremium ? '#26A69A' : '#0288D1'
             const accentSoft = isPremium ? '#4DB6AC' : '#26C6DA'
+
+            const precioDisplay = facturacion === 'anual' ? plan.priceAnual : plan.price
+            const equivMensual = facturacion === 'anual'
+              ? (plan.planValue === 'Basico' ? 'equiv. $39.917/mes' : 'equiv. $151.583/mes')
+              : null
 
             return (
             <Grid item xs={12} md={6} key={plan.planValue}>
@@ -592,9 +636,23 @@ export default function LandingPage() {
                   {plan.name}
                 </Typography>
 
-                <Typography sx={{ mt: 1.5, color: accentMain, fontWeight: 900, fontSize: '1.5rem' }}>
-                  {plan.price}
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
+                  <Typography sx={{ color: accentMain, fontWeight: 900, fontSize: '1.5rem' }}>
+                    {precioDisplay}
+                  </Typography>
+                  {facturacion === 'anual' && (
+                    <Chip
+                      label="20% OFF"
+                      size="small"
+                      sx={{ bgcolor: '#2e7d32', color: '#fff', fontWeight: 800, fontSize: '0.68rem' }}
+                    />
+                  )}
+                </Stack>
+                {equivMensual && (
+                  <Typography variant="caption" sx={{ color: '#557', fontWeight: 600 }}>
+                    {equivMensual}
+                  </Typography>
+                )}
 
                 <Stack spacing={1.15} sx={{ mt: 2.5 }}>
                   {plan.features.map((feature) => (

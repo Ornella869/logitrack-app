@@ -121,6 +121,8 @@ namespace Back.Application.Services
 
             if (string.IsNullOrWhiteSpace(request.Licencia))
                 throw new InvalidOperationException("La licencia es obligatoria.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(request.Licencia.Trim(), @"^[A-Za-z0-9\- ]{6,15}$"))
+                throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
 
             var existingByDni = await _userRepository.GetUsuarioByDni(request.DNI.Trim());
             if (existingByDni is not null)
@@ -196,13 +198,7 @@ namespace Back.Application.Services
                 Roles.Gerente => new Gerente(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), request.Provincia?.Trim() ?? string.Empty),
                 Roles.Supervisor => new Supervisor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
                 Roles.Operador => new Operador(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
-                Roles.Repartidor => new Repartidor(
-                    request.Nombre.Trim(),
-                    request.Apellido.Trim(),
-                    request.Email.Trim(),
-                    hash,
-                    request.DNI.Trim(),
-                    string.IsNullOrWhiteSpace(request.Licencia) ? "No informada" : request.Licencia.Trim()),
+                Roles.Repartidor => CrearRepartidorValidado(request, hash),
                 _ => throw new InvalidOperationException("Rol no válido."),
             };
 
@@ -263,6 +259,16 @@ namespace Back.Application.Services
         private static string GenerateTemporaryPassword()
         {
             return $"Tmp{Guid.NewGuid().ToString("N")[..8]}";
+        }
+
+        private static Repartidor CrearRepartidorValidado(CrearUsuarioRequest request, string hash)
+        {
+            var licencia = request.Licencia?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(licencia))
+                throw new InvalidOperationException("La licencia es obligatoria para repartidores.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(licencia, @"^[A-Za-z0-9\- ]{6,15}$"))
+                throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
+            return new Repartidor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), licencia);
         }
 
         public async Task<Repartidor> ActualizarLicenciaRepartidor(Guid repartidorId, string licencia)

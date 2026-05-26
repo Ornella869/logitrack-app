@@ -330,7 +330,8 @@ namespace Back.Controllers
             i.PaqueteId?.ToString(),
             i.CodigoSeguimiento,
             i.EmailContacto,
-            i.ChatFinalizado);
+            i.ChatFinalizado,
+            i.SucursalId?.ToString());
     }
 
     public record CrearIncidenciaPublicaRequest(string TrackingId, string Tipo, string? TipoLabel, string Descripcion, string? EmailContacto);
@@ -366,5 +367,6 @@ namespace Back.Controllers
         string? EnvioId,
         string? CodigoSeguimiento,
         string? EmailContacto,
-        bool ChatFinalizado);
+        bool ChatFinalizado,
+        string? SucursalId);
 }

@@ -177,8 +177,8 @@ function ShipmentDetail() {
       const data = await shipmentService.getShipmentTracking(id)
       if (data) {
         setShipment(data)
-        // G1L-42: cargar repartidor asignado para Supervisor / Admin
-        if ((isSupervisor || isAdmin) && data.id) {
+        // G1L-42: cargar repartidor asignado para Supervisor / Admin / Operador
+        if ((isSupervisor || isAdmin || isOperador) && data.id) {
           const rep = await shipmentService.getRepartidorDePaquete(data.id)
           setRepartidorAsignado(rep)
         }
@@ -785,8 +785,8 @@ function ShipmentDetail() {
           </Grid>
         )}
 
-        {/* G1L-42: Repartidor asignado (Supervisor / Admin, solo lectura) */}
-        {(isSupervisor || isAdmin) && repartidorAsignado && (
+        {/* G1L-42: Repartidor asignado (Supervisor / Admin / Operador, solo lectura) */}
+        {(isSupervisor || isAdmin || isOperador) && repartidorAsignado && (
           <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 1 : undefined }}>
             <Card>
               <CardContent>
@@ -799,27 +799,35 @@ function ShipmentDetail() {
                     {(repartidorAsignado.nombre[0] ?? '').toUpperCase()}{(repartidorAsignado.apellido[0] ?? '').toUpperCase()}
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Typography
-                      variant="body1"
-                      fontWeight={600}
-                      sx={{ color: '#1976d2', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                      onClick={() => navigate(`/repartidor/${repartidorAsignado.id}/rendimiento`)}
-                    >
-                      {repartidorAsignado.nombre} {repartidorAsignado.apellido}
-                    </Typography>
+                    {(isSupervisor || isAdmin) ? (
+                      <Typography
+                        variant="body1"
+                        fontWeight={600}
+                        sx={{ color: '#1976d2', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                        onClick={() => navigate(`/repartidor/${repartidorAsignado.id}/rendimiento`)}
+                      >
+                        {repartidorAsignado.nombre} {repartidorAsignado.apellido}
+                      </Typography>
+                    ) : (
+                      <Typography variant="body1" fontWeight={600}>
+                        {repartidorAsignado.nombre} {repartidorAsignado.apellido}
+                      </Typography>
+                    )}
                     <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                       {repartidorAsignado.email}
                     </Typography>
                   </Box>
                   <Chip size="small" label={repartidorAsignado.estado} color={repartidorAsignado.estado === 'Activo' ? 'success' : 'warning'} />
                 </Stack>
-                <Button
-                  size="small"
-                  sx={{ mt: 2 }}
-                  onClick={() => navigate(`/repartidor/${repartidorAsignado.id}/rendimiento`)}
-                >
-                  Ver perfil de rendimiento
-                </Button>
+                {(isSupervisor || isAdmin) && (
+                  <Button
+                    size="small"
+                    sx={{ mt: 2 }}
+                    onClick={() => navigate(`/repartidor/${repartidorAsignado.id}/rendimiento`)}
+                  >
+                    Ver perfil de rendimiento
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </Grid>

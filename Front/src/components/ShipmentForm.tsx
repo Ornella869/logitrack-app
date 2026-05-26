@@ -258,10 +258,20 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       const cpResult = await postalCodeService.validate(formData.receiverPostal)
       if (!cpResult.valid) {
         newErrors.receiverPostal = cpResult.error ?? 'CP inválido'
-      } else if (cpResult.province && !formData.receiverProvince) {
-        // Si valida pero por algún motivo nunca se hizo el blur, igual capturamos
-        // la provincia para enviarla al backend.
-        setFormData((prev) => ({ ...prev, receiverProvince: cpResult.province as string }))
+      } else {
+        if (cpResult.province && !formData.receiverProvince) {
+          setFormData((prev) => ({ ...prev, receiverProvince: cpResult.province as string }))
+        }
+        // Validar que la calle exista en Nominatim para el CP dado.
+        if (!newErrors.receiverAddress) {
+          const addrResult = await postalCodeService.validateStreetAddress(
+            formData.receiverAddress.trim(),
+            formData.receiverPostal.trim(),
+          )
+          if (!addrResult.valid) {
+            newErrors.receiverAddress = addrResult.error ?? 'No se pudo verificar la dirección'
+          }
+        }
       }
     }
 
