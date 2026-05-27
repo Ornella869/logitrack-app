@@ -152,6 +152,47 @@ export const postalCodeService = {
     }
   },
 
+  async geocodeAddress(
+    street: string,
+    city: string,
+    postalCode?: string,
+  ): Promise<{ lat: number; lng: number } | null> {
+    const tryQuery = async (params: Record<string, string>): Promise<{ lat: number; lng: number } | null> => {
+      try {
+        const qs = new URLSearchParams({ ...params, countrycodes: 'ar', format: 'json', limit: '1' }).toString()
+        const res = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?${qs}`, {
+          headers: { 'Accept-Language': 'es' },
+        })
+        if (!res.ok) return null
+        const data = (await res.json()) as Array<{ lat: string; lon: string }>
+        const first = data[0]
+        if (!first) return null
+        const lat = parseFloat(first.lat)
+        const lng = parseFloat(first.lon)
+        return Number.isNaN(lat) || Number.isNaN(lng) ? null : { lat, lng }
+      } catch {
+        return null
+      }
+    }
+    if (postalCode) {
+      const r = await tryQuery({ street, city, postalcode: postalCode })
+      if (r) return r
+    }
+    return tryQuery({ street, city })
+  },
+
+  async reverseGeocode(lat: number, lng: number): Promise<string | null> {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+      const res = await fetchWithTimeout(url, { headers: { 'Accept-Language': 'es' } })
+      if (!res.ok) return null
+      const data = (await res.json()) as { address?: { state?: string } }
+      return data.address?.state?.trim() ?? null
+    } catch {
+      return null
+    }
+  },
+
   async validate(cp: string): Promise<PostalCodeValidation> {
     const trimmed = cp.trim()
 

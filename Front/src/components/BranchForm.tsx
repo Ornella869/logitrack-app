@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import 'leaflet/dist/leaflet.css'
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
+import { branchMarkerIcon } from '../utils/mapIcons'
 import axios from 'axios'
 
 function extractApiError(error: unknown, fallback: string): string {
@@ -32,7 +35,9 @@ import {
   Select,
   MenuItem,
   FormHelperText,
+  Typography,
 } from '@mui/material'
+import LocationOnIcon from '@mui/icons-material/LocationOn'
 import type { Branch, BranchStatus } from '../types'
 import { branchService } from '../services/branchService'
 import { postalCodeService } from '../services/postalCodeService'
@@ -46,6 +51,15 @@ interface BranchFormProps {
   initialData?: Branch
   // Épica D: si se provee, el Gerente solo puede crear sucursales en su provincia.
   lockedProvince?: string
+}
+
+// Mueve el centro del mapa cuando cambian las coordenadas de preview.
+function MapAutoCenter({ coords }: { coords: [number, number] | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (coords) map.setView(coords, 6, { animate: false })
+  }, [coords, map])
+  return null
 }
 
 const nameRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.-]{1,}$/
@@ -70,9 +84,14 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [postalChecking, setPostalChecking] = useState(false)
+  const [previewCoords, setPreviewCoords] = useState<[number, number] | null>(null)
+  const [geocodingPreview, setGeocodingPreview] = useState(false)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setPreviewCoords(null)
+      return
+    }
     setErrors({})
     if (isEdit && initialData) {
       setFormData({
@@ -122,6 +141,14 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
     }
   }
 
+  const geocodePreview = async (address: string, city: string, postalCode: string) => {
+    if (!address.trim() || !city.trim()) return
+    setGeocodingPreview(true)
+    const coords = await postalCodeService.geocodeAddress(address.trim(), city.trim(), postalCode.trim() || undefined)
+    setGeocodingPreview(false)
+    setPreviewCoords(coords ? [coords.lat, coords.lng] : null)
+  }
+
   const checkPostal = async () => {
     const cp = formData.postalCode.trim()
     if (!cp) return
@@ -149,6 +176,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
       })
       // Pre-rellena provincia solo si está vacía. Si el operador la eligió
       // manualmente (CPs ambiguos como 9420), respetamos su elección.
+      const resolvedCity = result.city ?? formData.city
       setFormData((prev) => ({
         ...prev,
         city: result.city ?? prev.city,
@@ -161,6 +189,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
           return next
         })
       }
+      void geocodePreview(formData.address, resolvedCity, cp)
     } finally {
       setPostalChecking(false)
     }
@@ -310,6 +339,11 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
             name="address"
             value={formData.address}
             onChange={handleChange}
+            onBlur={() => {
+              if (formData.address.trim() && formData.city.trim()) {
+                void geocodePreview(formData.address, formData.city, formData.postalCode)
+              }
+            }}
             error={!!errors.address}
             helperText={errors.address ?? 'Formato: "Calle Altura" (ej. Av. Corrientes 1000)'}
             required
@@ -418,6 +452,48 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
             disabled={loading}
             inputProps={{ maxLength: 15 }}
           />
+
+          {/* Vista previa de ubicación */}
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75 }}>
+              <LocationOnIcon fontSize="small" color="primary" />
+              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                Ubicación en el mapa
+              </Typography>
+              {geocodingPreview && <CircularProgress size={12} />}
+            </Stack>
+            <Box
+              sx={{
+                height: 200,
+                borderRadius: 1,
+                overflow: 'hidden',
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <MapContainer
+                center={[-38, -65]}
+                zoom={4}
+                style={{ height: '100%', width: '100%' }}
+                zoomControl={false}
+                attributionControl={false}
+                dragging={false}
+                scrollWheelZoom={false}
+                doubleClickZoom={false}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <MapAutoCenter coords={previewCoords} />
+                {previewCoords && (
+                  <Marker position={previewCoords} icon={branchMarkerIcon} />
+                )}
+              </MapContainer>
+            </Box>
+            {!previewCoords && !geocodingPreview && (
+              <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
+                Completá la dirección y el código postal para ver la ubicación.
+              </Typography>
+            )}
+          </Box>
         </Stack>
       </DialogContent>
       <DialogActions>

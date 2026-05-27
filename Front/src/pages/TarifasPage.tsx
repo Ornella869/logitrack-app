@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { MapContainer, TileLayer, Rectangle, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Rectangle, Marker, Tooltip, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   Alert,
@@ -22,6 +22,8 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt'
 import { tarifaService, type ConfiguracionTarifa, type ZonaPeligrosa } from '../services/tarifaService'
 import { branchService } from '../services/branchService'
+import { postalCodeService } from '../services/postalCodeService'
+import { branchMarkerIcon } from '../utils/mapIcons'
 import type { User } from '../types'
 import { formatInstantArgentina } from '../utils/argentinaDate'
 
@@ -54,10 +56,34 @@ export default function TarifasPage() {
   const [zonaNombre, setZonaNombre] = useState('')
   const [savingZona, setSavingZona] = useState(false)
   const [zonaMsg, setZonaMsg] = useState<{ sev: 'success' | 'error'; text: string } | null>(null)
+  const [provinceWarning, setProvinceWarning] = useState('')
   // Centro inicial del mapa: sucursal de origen si tiene coords; si no, centro de Argentina.
   const [mapCenter, setMapCenter] = useState<[number, number]>([-34.6, -58.45])
   const [mapZoom, setMapZoom] = useState(11)
+  const [branchCoords, setBranchCoords] = useState<[number, number] | null>(null)
   const hasMaxTwoDecimals = (value: string) => /^\d+([.,]\d{1,2})?$/.test(value.trim())
+
+  useEffect(() => {
+    if (corners.length !== 2 || !user.provincia) {
+      setProvinceWarning('')
+      return
+    }
+    void (async () => {
+      const [prov1, prov2] = await Promise.all([
+        postalCodeService.reverseGeocode(corners[0].lat, corners[0].lng),
+        postalCodeService.reverseGeocode(corners[1].lat, corners[1].lng),
+      ])
+      const myProv = user.provincia!.trim().toLowerCase()
+      const outside = ([prov1, prov2] as (string | null)[])
+        .filter(Boolean)
+        .filter((p) => p!.trim().toLowerCase() !== myProv)
+      setProvinceWarning(
+        outside.length > 0
+          ? `Una o más esquinas están fuera de ${user.provincia}. Limitá bien la zona peligrosa, estás tomando territorio de otra provincia.`
+          : '',
+      )
+    })()
+  }, [corners, user.provincia])
 
   useEffect(() => {
     void (async () => {
@@ -76,6 +102,7 @@ export default function TarifasPage() {
       if (origen?.latitud != null && origen?.longitud != null) {
         setMapCenter([origen.latitud, origen.longitud])
         setMapZoom(12)
+        setBranchCoords([origen.latitud, origen.longitud])
       }
       setLoading(false)
     })()
@@ -105,6 +132,7 @@ export default function TarifasPage() {
 
   const handleMapClick = (p: LatLng) => {
     if (!isAdmin) return
+    setProvinceWarning('')
     setCorners((prev) => (prev.length >= 2 ? [p] : [...prev, p]))
   }
 
@@ -115,6 +143,10 @@ export default function TarifasPage() {
   const handleSaveZona = async () => {
     if (corners.length !== 2) {
       setZonaMsg({ sev: 'error', text: 'Marcá dos esquinas en el mapa para delimitar la zona.' })
+      return
+    }
+    if (provinceWarning) {
+      setZonaMsg({ sev: 'error', text: 'Corregí los límites de la zona antes de guardar: la zona cruza territorio de otra provincia.' })
       return
     }
     if (!zonaNombre.trim()) {
@@ -223,15 +255,28 @@ export default function TarifasPage() {
                   ))}
                   {/* Rectángulo en construcción */}
                   {rectBounds && <Rectangle bounds={rectBounds} pathOptions={{ color: '#1976d2', dashArray: '6', weight: 2, fillOpacity: 0.15 }} />}
+                  {/* Marcador de la sucursal origen */}
+                  {branchCoords && (
+                    <Marker position={branchCoords} icon={branchMarkerIcon}>
+                      <Tooltip permanent direction="top" offset={[0, -52]}>
+                        Tu sucursal
+                      </Tooltip>
+                    </Marker>
+                  )}
                 </MapContainer>
               </Box>
 
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                 <Chip size="small" label={`Esquinas marcadas: ${corners.length}/2`} color={corners.length === 2 ? 'primary' : 'default'} />
                 {corners.length > 0 && (
-                  <Button size="small" onClick={() => setCorners([])}>Reiniciar</Button>
+                  <Button size="small" onClick={() => { setCorners([]); setProvinceWarning('') }}>Reiniciar</Button>
                 )}
               </Stack>
+              {provinceWarning && (
+                <Alert severity="warning" sx={{ py: 0.5, mb: 1 }}>
+                  {provinceWarning}
+                </Alert>
+              )}
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1 }}>
                 <TextField
@@ -241,7 +286,7 @@ export default function TarifasPage() {
                 />
                 <Button
                   variant="contained" startIcon={<AddLocationAltIcon />}
-                  onClick={handleSaveZona} disabled={savingZona || corners.length !== 2}
+                  onClick={handleSaveZona} disabled={savingZona || corners.length !== 2 || !!provinceWarning}
                 >
                   Crear zona
                 </Button>
