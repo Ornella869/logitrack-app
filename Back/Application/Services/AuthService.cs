@@ -174,8 +174,19 @@ namespace Back.Application.Services
             if (string.IsNullOrWhiteSpace(request.PasswordTemporal) || request.PasswordTemporal.Length < 8)
                 throw new InvalidOperationException("La contraseña temporal debe tener al menos 8 caracteres.");
 
-            if (request.Role == Roles.Gerente && string.IsNullOrWhiteSpace(request.Provincia))
-                throw new InvalidOperationException("La provincia es obligatoria para gerentes.");
+            if (request.Role == Roles.Gerente)
+            {
+                if (string.IsNullOrWhiteSpace(request.Provincia))
+                    throw new InvalidOperationException("La provincia es obligatoria para gerentes.");
+
+                var provincia = request.Provincia.Trim();
+                var todos = await _userRepository.GetAll();
+                var gerenteExistente = todos.OfType<Gerente>()
+                    .FirstOrDefault(g => string.Equals(g.Provincia, provincia, StringComparison.OrdinalIgnoreCase) && g.Activo);
+                if (gerenteExistente is not null)
+                    throw new InvalidOperationException(
+                        $"Ya existe un gerente activo para la provincia de {provincia}. Cada provincia solo puede tener un gerente.");
+            }
 
             if ((request.Role == Roles.Supervisor || request.Role == Roles.Operador || request.Role == Roles.Repartidor)
                 && !request.SucursalId.HasValue)

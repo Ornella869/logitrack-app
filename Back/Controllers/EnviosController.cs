@@ -736,6 +736,21 @@ namespace Back.Controllers
                 sucursal.DefinirCobertura(request.ProvinciasCubiertas);
             await _enviosRepository.Add(sucursal);
             await _context.SaveChangesAsync();
+
+            // Si se abre una sucursal en una provincia, las demás sucursales ya no deben cubrirla.
+            if (!string.IsNullOrWhiteSpace(request.Provincia))
+            {
+                var provinciaNew = request.Provincia.Trim();
+                var otras = (await _context.Sucursales.ToListAsync())
+                    .Where(s => s.Id != sucursal.Id &&
+                                s.ProvinciasCubiertas.Any(p => string.Equals(p, provinciaNew, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+                foreach (var s in otras)
+                    s.DefinirCobertura(s.ProvinciasCubiertas.Where(p => !string.Equals(p, provinciaNew, StringComparison.OrdinalIgnoreCase)));
+                if (otras.Count > 0)
+                    await _context.SaveChangesAsync();
+            }
+
             return Ok();
         }
 

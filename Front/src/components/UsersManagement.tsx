@@ -272,6 +272,20 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
 
   const handleCreate = async () => {
     if (!validateForm(true)) return
+
+    if (formData.role === 'gerente' && formData.provincia) {
+      const existente = users.find(
+        (u) =>
+          u.role === 'gerente' &&
+          u.provincia?.trim().toLowerCase() === formData.provincia.trim().toLowerCase() &&
+          u.activo !== false,
+      )
+      if (existente) {
+        setFormError(`Ya existe un gerente activo para ${formData.provincia}. Cada provincia solo puede tener un gerente.`)
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
       const result = await authService.createUsuario({

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { MapContainer, TileLayer, Rectangle, Marker, Tooltip, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -60,7 +60,7 @@ export default function TarifasPage() {
   // Centro inicial del mapa: sucursal de origen si tiene coords; si no, centro de Argentina.
   const [mapCenter, setMapCenter] = useState<[number, number]>([-34.6, -58.45])
   const [mapZoom, setMapZoom] = useState(11)
-  const [branchCoords, setBranchCoords] = useState<[number, number] | null>(null)
+  const [branchMarkers, setBranchMarkers] = useState<Map<string, { name: string; coords: [number, number] }>>(new Map())
   const hasMaxTwoDecimals = (value: string) => /^\d+([.,]\d{1,2})?$/.test(value.trim())
 
   useEffect(() => {
@@ -85,12 +85,34 @@ export default function TarifasPage() {
     })()
   }, [corners, user.provincia])
 
+  const geocodificarSucursales = useCallback(async () => {
+    const [origen, todas] = await Promise.all([
+      branchService.getSucursalOrigen().catch(() => null),
+      branchService.getAllBranches().catch(() => [] as import('../types').Branch[]),
+    ])
+    if (origen?.latitud != null && origen?.longitud != null) {
+      setMapCenter([origen.latitud, origen.longitud])
+      setMapZoom(12)
+    }
+    setBranchMarkers(new Map())
+    for (const b of todas) {
+      const coords = await postalCodeService.geocodeAddress(b.address, b.city, b.postalCode || undefined)
+      if (coords) {
+        setBranchMarkers((prev) => new Map(prev).set(b.id, { name: b.name, coords: [coords.lat, coords.lng] }))
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('logitrack:sucursales', geocodificarSucursales)
+    return () => window.removeEventListener('logitrack:sucursales', geocodificarSucursales)
+  }, [geocodificarSucursales])
+
   useEffect(() => {
     void (async () => {
-      const [c, z, origen] = await Promise.all([
+      const [c, z] = await Promise.all([
         tarifaService.getConfiguracion(),
         tarifaService.getZonas(),
-        branchService.getSucursalOrigen().catch(() => null),
       ])
       if (c) {
         setConfig(c)
@@ -99,14 +121,10 @@ export default function TarifasPage() {
         setRecargo(String(c.porcentajeRecargoZonaPeligrosa))
       }
       setZonas(z)
-      if (origen?.latitud != null && origen?.longitud != null) {
-        setMapCenter([origen.latitud, origen.longitud])
-        setMapZoom(12)
-        setBranchCoords([origen.latitud, origen.longitud])
-      }
       setLoading(false)
+      void geocodificarSucursales()
     })()
-  }, [])
+  }, [geocodificarSucursales])
 
   const handleSaveConfig = async () => {
     if (!kg.trim() || !km.trim() || !recargo.trim()) {
@@ -173,6 +191,7 @@ export default function TarifasPage() {
   const handleDeleteZona = async (id: string) => {
     await tarifaService.eliminarZona(id)
     setZonas(await tarifaService.getZonas())
+    setZonaMsg({ sev: 'success', text: 'Zona peligrosa eliminada.' })
   }
 
   if (!isAdmin) {
@@ -255,14 +274,14 @@ export default function TarifasPage() {
                   ))}
                   {/* Rectángulo en construcción */}
                   {rectBounds && <Rectangle bounds={rectBounds} pathOptions={{ color: '#1976d2', dashArray: '6', weight: 2, fillOpacity: 0.15 }} />}
-                  {/* Marcador de la sucursal origen */}
-                  {branchCoords && (
-                    <Marker position={branchCoords} icon={branchMarkerIcon}>
-                      <Tooltip permanent direction="top" offset={[0, -52]}>
-                        Tu sucursal
+                  {/* Marcadores de todas las sucursales */}
+                  {Array.from(branchMarkers.values()).map(({ name, coords }) => (
+                    <Marker key={name} position={coords} icon={branchMarkerIcon}>
+                      <Tooltip direction="top" offset={[0, -52]}>
+                        <strong>{name}</strong>
                       </Tooltip>
                     </Marker>
-                  )}
+                  ))}
                 </MapContainer>
               </Box>
 

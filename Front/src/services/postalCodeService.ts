@@ -6,6 +6,37 @@
 
 const AR_POSTAL_FORMAT = /^\d{4}$/
 
+// Cache persistente de geocodificación de direcciones (sobrevive recargas de página).
+const GEO_ADDR_CACHE_KEY = 'logitrack_geo_addr_v1'
+
+function buildGeoKey(street: string, city: string, postalCode?: string): string {
+  return `${street.trim().toLowerCase()}|${city.trim().toLowerCase()}|${(postalCode ?? '').trim()}`
+}
+
+function readGeoCache(): Record<string, { lat: number; lng: number } | null> {
+  try {
+    const raw = localStorage.getItem(GEO_ADDR_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, { lat: number; lng: number } | null>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeGeoCache(key: string, value: { lat: number; lng: number } | null): void {
+  try {
+    const cache = readGeoCache()
+    cache[key] = value
+    // Limitar a 200 entradas para no saturar localStorage.
+    const entries = Object.entries(cache)
+    const trimmed = entries.length > 200
+      ? Object.fromEntries(entries.slice(entries.length - 200))
+      : cache
+    localStorage.setItem(GEO_ADDR_CACHE_KEY, JSON.stringify(trimmed))
+  } catch {
+    // localStorage no disponible (modo incógnito, cuota llena, etc.)
+  }
+}
+
 export interface PostalCodeValidation {
   valid: boolean
   city?: string
@@ -157,6 +188,10 @@ export const postalCodeService = {
     city: string,
     postalCode?: string,
   ): Promise<{ lat: number; lng: number } | null> {
+    const cacheKey = buildGeoKey(street, city, postalCode)
+    const cached = readGeoCache()
+    if (Object.prototype.hasOwnProperty.call(cached, cacheKey)) return cached[cacheKey]
+
     const tryQuery = async (params: Record<string, string>): Promise<{ lat: number; lng: number } | null> => {
       try {
         const qs = new URLSearchParams({ ...params, countrycodes: 'ar', format: 'json', limit: '1' }).toString()
@@ -174,11 +209,15 @@ export const postalCodeService = {
         return null
       }
     }
+    let result: { lat: number; lng: number } | null = null
     if (postalCode) {
-      const r = await tryQuery({ street, city, postalcode: postalCode })
-      if (r) return r
+      result = await tryQuery({ street, city, postalcode: postalCode })
     }
-    return tryQuery({ street, city })
+    if (!result) result = await tryQuery({ street, city })
+
+    // Solo cachear resultados positivos; los null pueden ser fallas transitorias de red.
+    if (result) writeGeoCache(cacheKey, result)
+    return result
   },
 
   async reverseGeocode(lat: number, lng: number): Promise<string | null> {
