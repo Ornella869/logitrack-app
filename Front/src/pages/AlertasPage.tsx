@@ -85,7 +85,7 @@ export default function AlertasPage() {
             Alertas de envíos
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Paquetes En Tránsito o Demorados cuya fecha de entrega prevista ya venció.
+            Paquetes En Tránsito o Demorados con fecha de entrega vencida, o que llevan más de 24 h en tránsito.
           </Typography>
         </Box>
         <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualizar</Button>
@@ -102,8 +102,9 @@ export default function AlertasPage() {
               <TableRow>
                 <TableCell>Tracking ID</TableCell>
                 <TableCell>Repartidor</TableCell>
-                <TableCell>Fecha prevista</TableCell>
-                <TableCell align="center">Días de demora</TableCell>
+                <TableCell>Motivo</TableCell>
+                <TableCell>Referencia</TableCell>
+                <TableCell align="center">Días</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell align="right">Acción</TableCell>
               </TableRow>
@@ -113,7 +114,18 @@ export default function AlertasPage() {
                 <TableRow key={a.paqueteId} hover>
                   <TableCell sx={{ fontFamily: 'monospace' }}>{a.trackingId}</TableCell>
                   <TableCell>{a.repartidorNombre}</TableCell>
-                  <TableCell>{formatDateOnlyEs(a.fechaPrevista)}</TableCell>
+                  <TableCell>
+                    {a.motivoAlerta === 'MasDe24hEnTransito' ? (
+                      <Chip size="small" label="⏱ Más de 24 h en tránsito" sx={{ bgcolor: '#f3e5f5', color: '#6a1b9a', fontWeight: 600 }} />
+                    ) : (
+                      <Chip size="small" label="⚠️ Fecha vencida" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 600 }} />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {a.motivoAlerta === 'MasDe24hEnTransito'
+                      ? `En tránsito desde ${formatDateOnlyEs(a.fechaPrevista)}`
+                      : formatDateOnlyEs(a.fechaPrevista)}
+                  </TableCell>
                   <TableCell align="center">
                     <Chip
                       size="small"

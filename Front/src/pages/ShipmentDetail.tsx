@@ -62,7 +62,6 @@ const CANCEL_REASONS = [
 
 // G1L-82: motivos predefinidos para marcar un envío como Demorado.
 const DEMORA_REASONS = [
-  'Problema mecánico',
   'Corte de ruta',
   'Condiciones climáticas',
   'Otro',

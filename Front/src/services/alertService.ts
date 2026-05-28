@@ -9,6 +9,7 @@ export interface AlertaPaqueteSinEstadoFinal {
   fechaPrevista: string
   diasDemora: number
   estadoActual: string
+  motivoAlerta?: string // "FechaVencida" | "MasDe24hEnTransito"
 }
 
 export const alertService = {

@@ -75,6 +75,7 @@ interface RouteMapProps {
   origen?: Origen | null
   height?: number | string
   showReturnRoute?: boolean
+  animateReturnRoute?: boolean
 }
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -142,10 +143,8 @@ function haversineMeters(a: [number, number], b: [number, number]): number {
   return 2 * R * Math.asin(Math.sqrt(x))
 }
 
-// Camina la geometría OSRM hasta el punto a la mitad de la distancia recorrida.
-// Devuelve coords interpoladas para que el camión caiga EXACTAMENTE sobre la calle.
-function midpointAlongRoute(geo: [number, number][]): [number, number] | null {
-  if (!geo || geo.length === 0) return null
+// Devuelve el punto exacto sobre la geometría OSRM al progreso t (0=inicio, 1=fin).
+function positionAlongRoute(geo: [number, number][], t: number): [number, number] {
   if (geo.length === 1) return geo[0]
   let total = 0
   const cum: number[] = [0]
@@ -154,43 +153,60 @@ function midpointAlongRoute(geo: [number, number][]): [number, number] | null {
     cum.push(total)
   }
   if (total === 0) return geo[0]
-  const half = total / 2
+  const target = Math.min(t, 1) * total
   for (let i = 1; i < cum.length; i++) {
-    if (cum[i] >= half) {
-      const a = geo[i - 1]
-      const b = geo[i]
+    if (cum[i] >= target) {
+      const a = geo[i - 1], b = geo[i]
       const segLen = cum[i] - cum[i - 1]
-      const ratio = segLen === 0 ? 0 : (half - cum[i - 1]) / segLen
+      const ratio = segLen === 0 ? 0 : (target - cum[i - 1]) / segLen
       return [a[0] + ratio * (b[0] - a[0]), a[1] + ratio * (b[1] - a[1])]
     }
   }
   return geo[geo.length - 1]
 }
 
-// Dado "desde" y "hasta", pide a OSRM la ruta real y devuelve el punto a la mitad
-// de la distancia. Si OSRM falla, fallback al midpoint geométrico.
-function useTruckOnRoute(
+// Anima el camión a lo largo del segmento desde→hasta usando la geometría real de OSRM.
+// Dura TRUCK_ANIM_DURATION_MS ms y se detiene al llegar (no hace loop).
+export const TRUCK_ANIM_DURATION_MS = 40000
+
+function useAnimatedTruck(
   desde: [number, number] | null,
   hasta: [number, number] | null,
 ): [number, number] | null {
-  const [pos, setPos] = useState<[number, number] | null>(null)
+  const [geo, setGeo] = useState<[number, number][] | null>(null)
+  const [progress, setProgress] = useState(0)
+
+  // Obtener la geometría real del segmento actual.
   useEffect(() => {
-    if (!desde || !hasta) {
-      setPos(null)
-      return
-    }
-    // Fallback inmediato (geométrico) para que algo se vea mientras OSRM responde.
-    setPos([(desde[0] + hasta[0]) / 2, (desde[1] + hasta[1]) / 2])
+    if (!desde || !hasta) { setGeo(null); setProgress(0); return }
+    setGeo([desde, hasta]) // fallback inmediato
     const ctrl = new AbortController()
-    fetchOsrmRoute([desde, hasta], ctrl.signal).then((geo) => {
-      if (!geo) return
-      const mid = midpointAlongRoute(geo)
-      if (mid) setPos(mid)
-    })
+    fetchOsrmRoute([desde, hasta], ctrl.signal).then((r) => { if (r) setGeo(r) })
     return () => ctrl.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desde?.[0], desde?.[1], hasta?.[0], hasta?.[1]])
-  return pos
+
+  // Animar el progreso 0→1 en TRUCK_ANIM_DURATION_MS ms; se detiene al llegar.
+  // Cuando desde/hasta cambian (nueva parada), el efecto se limpia y reinicia desde 0.
+  useEffect(() => {
+    if (!desde || !hasta) { setProgress(0); return }
+    setProgress(0)
+    const startTime = Date.now()
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      if (elapsed >= TRUCK_ANIM_DURATION_MS) {
+        setProgress(1)
+        clearInterval(timer)
+      } else {
+        setProgress(elapsed / TRUCK_ANIM_DURATION_MS)
+      }
+    }, 150)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desde?.[0], desde?.[1], hasta?.[0], hasta?.[1]])
+
+  if (!geo || !desde || !hasta) return null
+  return positionAlongRoute(geo, progress)
 }
 
 // Si dos o más paradas tienen coordenadas casi idénticas (mismo edificio o calle),
@@ -224,7 +240,7 @@ function spreadOverlappingMarkers<T extends { latitud: number; longitud: number 
   return out
 }
 
-export default function RouteMap({ paradas, proximaIdx, origen, height = 340, showReturnRoute = false }: RouteMapProps) {
+export default function RouteMap({ paradas, proximaIdx, origen, height = 340, showReturnRoute = false, animateReturnRoute = false }: RouteMapProps) {
   const paradasConCoords = paradas.filter(
     (p): p is Parada & { latitud: number; longitud: number } =>
       p.latitud != null && p.longitud != null,
@@ -292,7 +308,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
   const hasta: [number, number] | null = enTransito
     ? [enTransito.latitud, enTransito.longitud]
     : null
-  const truckPosOnRoute = useTruckOnRoute(desde, hasta)
+  const truckPosOnRoute = useAnimatedTruck(desde, hasta)
 
   let truckPos: [number, number] | null = null
   let truckLabel = ''
@@ -323,15 +339,22 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
       : []
   const returnRouteGeo = useOsrmRoute(returnPositions)
   const returnTrazo = returnRouteGeo ?? returnPositions
-  const returnTruckPos = useTruckOnRoute(
-    returnPositions.length === 2 ? returnPositions[0] : null,
-    returnPositions.length === 2 ? returnPositions[1] : null,
+  // Animar el retorno solo cuando el repartidor hizo click en "Retorno a Sucursal".
+  const returnTruckPos = useAnimatedTruck(
+    animateReturnRoute && returnPositions.length === 2 ? returnPositions[0] : null,
+    animateReturnRoute && returnPositions.length === 2 ? returnPositions[1] : null,
   )
 
-  // When returning to branch, override truck position to the return route midpoint.
-  if (showReturnRoute && (returnTruckPos || ultimaEntregadaParaRetorno)) {
-    truckPos = returnTruckPos ?? (ultimaEntregadaParaRetorno ? [ultimaEntregadaParaRetorno.latitud, ultimaEntregadaParaRetorno.longitud] : truckPos)
-    truckLabel = 'Regresando a la sucursal'
+  // Cuando está en retorno: si ya se clickeó el botón, el camión se mueve hacia la sucursal;
+  // si aún no, se queda quieto en la última parada entregada.
+  if (showReturnRoute) {
+    if (animateReturnRoute && (returnTruckPos || ultimaEntregadaParaRetorno)) {
+      truckPos = returnTruckPos ?? (ultimaEntregadaParaRetorno ? [ultimaEntregadaParaRetorno.latitud, ultimaEntregadaParaRetorno.longitud] : truckPos)
+      truckLabel = 'Regresando a la sucursal'
+    } else if (!animateReturnRoute && ultimaEntregadaParaRetorno) {
+      truckPos = [ultimaEntregadaParaRetorno.latitud, ultimaEntregadaParaRetorno.longitud]
+      truckLabel = 'Todas las entregas completadas'
+    }
   }
 
   // FitBounds debe usar los puntos de paradas + origen.

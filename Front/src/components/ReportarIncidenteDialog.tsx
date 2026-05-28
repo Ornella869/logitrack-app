@@ -47,6 +47,7 @@ const TEMPLATES = [
   { id: 'danger' as TipoIncidencia, emoji: '⚠️', label: 'Zona de riesgo', text: 'Estoy en una zona de riesgo y me siento inseguro/a.' },
   { id: 'health' as TipoIncidencia, emoji: '😷', label: 'Problema de salud', text: 'No me siento bien y necesito asistencia médica urgente.' },
   { id: 'delivery' as TipoIncidencia, emoji: '📦', label: 'No puedo entregar', text: 'No puedo completar una entrega y necesito orientación del supervisor.' },
+  { id: 'demorado' as TipoIncidencia, emoji: '⏰', label: 'Envío demorado', text: 'Un envío de mi ruta se está demorando y no voy a poder entregarlo en el horario previsto.' },
 ]
 
 const TRACKY_RESPONSES: Record<string, string> = {
@@ -55,6 +56,7 @@ const TRACKY_RESPONSES: Record<string, string> = {
   danger: '¡Tu seguridad es lo primero! ⚠️\n\nSi estás en peligro inmediato:\n• Llamá al 911 ahora\n• Alejate del área si podés hacerlo con seguridad\n• Quedate en un lugar iluminado y concurrido\n\n¿Alertamos a tu supervisor de inmediato?',
   health: '¡Eso es serio, hay que atenderlo enseguida! 😟\n\nPor favor:\n• Si es urgente, llamá al 107 (SAME) o 911\n• Pará el vehículo en un lugar seguro\n• No sigas conduciendo si no te sentís bien\n\n¿Notifico al supervisor para que te envíen asistencia?',
   delivery: 'Entendido, vemos qué podemos hacer. 📦\n\nAlgunas opciones según la situación:\n• Destinatario ausente → intentá en horario alternativo\n• Dirección incorrecta → el supervisor puede verificar los datos\n\n¿Notifico al supervisor ahora?',
+  demorado: 'Entendido, los retrasos pueden pasar. ⏰\n\nAlgunos pasos a seguir:\n• Avisale al destinatario que llegás más tarde si podés\n• Anotá la causa del retraso (tráfico, desvío, etc.)\n• El supervisor puede reorganizar las entregas restantes\n\n¿Notifico al supervisor para que tome nota del retraso?',
 }
 
 const GENERIC_RESPONSE = 'Recibí tu mensaje. 📝\n\nEstoy aquí para ayudarte con cualquier situación durante tu ruta. ¿Qué querés hacer ahora?'
@@ -65,6 +67,7 @@ const KEYWORDS: { pattern: RegExp; tipoId: string }[] = [
   { pattern: /zona|riesgo|peligro|insegur|robo|asalt/i, tipoId: 'danger' },
   { pattern: /salud|m[eé]dico|medico|enferm|mareo|dolor|herido|lastim/i, tipoId: 'health' },
   { pattern: /entregar|entrega|destinatario|ausente|direcci[oó]n|nadie/i, tipoId: 'delivery' },
+  { pattern: /demor|retraso|tarde|no llego a tiempo|no llegar[eé]/i, tipoId: 'demorado' },
 ]
 
 // Respuestas afirmativas: "si", "sí", "dale", "ok", "claro", "avisá", etc.
@@ -286,7 +289,15 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
     const detectedType = detectKeyword(text)
     if (detectedType) {
       setLastTemplateId(detectedType)
-      simulateReply(detectedType)
+      if (detectedType === 'demorado') {
+        setTyping(true)
+        setTimeout(() => {
+          setTyping(false)
+          handleNotificarSupervisor('demorado')
+        }, 900)
+      } else {
+        simulateReply(detectedType)
+      }
     } else {
       simulateReply()
     }
@@ -295,7 +306,16 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
   const handleTemplate = (t: typeof TEMPLATES[0]) => {
     addUserMessage(t.text)
     setLastTemplateId(t.id)
-    simulateReply(t.id)
+    if (t.id === 'demorado') {
+      // Notifica al supervisor automáticamente sin mostrar consejos.
+      setTyping(true)
+      setTimeout(() => {
+        setTyping(false)
+        handleNotificarSupervisor('demorado')
+      }, 900)
+    } else {
+      simulateReply(t.id)
+    }
   }
 
   const handleFollowUp = (optId: string) => {
@@ -313,8 +333,8 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
     }
   }
 
-  const handleNotificarSupervisor = () => {
-    const tipoTemplate = lastTemplateId ?? 'otro'
+  const handleNotificarSupervisor = (tipoId?: string) => {
+    const tipoTemplate = tipoId ?? lastTemplateId ?? 'otro'
     const tipoLabel = TEMPLATES.find((t) => t.id === tipoTemplate)?.label ?? 'Incidente'
 
     if (incidenciaService.checkDuplicateRepartidor(user.id, tipoTemplate)) {
@@ -525,7 +545,7 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
               <Button
                 fullWidth variant="contained"
                 startIcon={<NotificationsActiveIcon />}
-                onClick={handleNotificarSupervisor}
+                onClick={() => handleNotificarSupervisor()}
                 sx={{
                   bgcolor: '#c62828', '&:hover': { bgcolor: '#b71c1c' },
                   borderRadius: 2, fontWeight: 600,

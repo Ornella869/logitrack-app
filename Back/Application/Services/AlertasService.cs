@@ -17,6 +17,9 @@ namespace Back.Application.Services
         public required DateTime FechaPrevista { get; init; }
         public required int DiasDemora { get; init; }
         public required string EstadoActual { get; init; }
+        // "FechaVencida" = fecha de entrega prevista ya pasó
+        // "MasDe24hEnTransito" = lleva más de 24 h en tránsito sin resolverse
+        public required string MotivoAlerta { get; init; }
     }
 
     public class AlertasService
@@ -31,17 +34,24 @@ namespace Back.Application.Services
         public async Task<List<AlertaPaqueteSinEstadoFinal>> GetPaquetesSinEstadoFinalAsync(Guid? sucursalId = null)
         {
             var hoy = OperationalClock.TodayUtcDate;
+            var hace24h = DateTime.UtcNow.AddHours(-24);
 
-            // Activos no terminales con fecha prevista vencida. Incluye Demorado:
-            // no es estado final, así que igual debe alertar (G1L-84 sin falsos negativos).
+            // Todos los paquetes activos no terminales del ámbito de la sucursal.
             var paquetes = await _context.Paquetes
                 .Where(p => (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado)
-                            && p.FechaCalendarizada != null
-                            && p.FechaCalendarizada < hoy
                             && (sucursalId == null || p.SucursalId == sucursalId))
                 .ToListAsync();
 
             if (paquetes.Count == 0) return new List<AlertaPaqueteSinEstadoFinal>();
+
+            var ids = paquetes.Select(p => p.Id).ToList();
+
+            // Última vez que cada paquete entró a EnTransito (para detectar > 24 h).
+            var ultimaEntradaTransito = await _context.HistorialEstadosEnvio
+                .Where(h => ids.Contains(h.PaqueteId) && h.EstadoNuevo == PaqueteStatus.EnTransito)
+                .GroupBy(h => h.PaqueteId)
+                .Select(g => new { PaqueteId = g.Key, Desde = g.Max(h => h.FechaHora) })
+                .ToDictionaryAsync(x => x.PaqueteId, x => x.Desde);
 
             // Nombres de los repartidores asignados (una sola consulta).
             var repIds = paquetes.Where(p => p.RepartidorAsignadoId.HasValue)
@@ -50,26 +60,49 @@ namespace Back.Application.Services
                 .Where(u => repIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => u.Nombre + " " + u.Apellido);
 
-            return paquetes
-                .Select(p =>
+            var alertas = new List<AlertaPaqueteSinEstadoFinal>();
+            foreach (var p in paquetes)
+            {
+                bool fechaVencida = p.FechaCalendarizada != null && p.FechaCalendarizada.Value.Date < hoy;
+                bool masDe24h = ultimaEntradaTransito.TryGetValue(p.Id, out var desdeTransito)
+                                && desdeTransito < hace24h;
+
+                if (!fechaVencida && !masDe24h) continue;
+
+                var nombre = p.RepartidorAsignadoId.HasValue && repsNombre.TryGetValue(p.RepartidorAsignadoId.Value, out var n)
+                    ? n : "(sin repartidor)";
+
+                DateTime fechaRef;
+                int dias;
+                string motivo;
+
+                if (fechaVencida)
                 {
-                    var fechaPrevista = p.FechaCalendarizada!.Value;
-                    var dias = (hoy - fechaPrevista.Date).Days;
-                    var nombre = p.RepartidorAsignadoId.HasValue && repsNombre.TryGetValue(p.RepartidorAsignadoId.Value, out var n)
-                        ? n : "(sin repartidor)";
-                    return new AlertaPaqueteSinEstadoFinal
-                    {
-                        PaqueteId = p.Id,
-                        TrackingId = p.CodigoSeguimiento,
-                        RepartidorId = p.RepartidorAsignadoId,
-                        RepartidorNombre = nombre,
-                        FechaPrevista = fechaPrevista,
-                        DiasDemora = dias,
-                        EstadoActual = p.Status == PaqueteStatus.Demorado ? "Demorado" : "En Tránsito",
-                    };
-                })
-                .OrderByDescending(a => a.DiasDemora)
-                .ToList();
+                    fechaRef = p.FechaCalendarizada!.Value;
+                    dias = (hoy - fechaRef.Date).Days;
+                    motivo = "FechaVencida";
+                }
+                else
+                {
+                    fechaRef = desdeTransito;
+                    dias = Math.Max(1, (int)(DateTime.UtcNow - desdeTransito).TotalDays);
+                    motivo = "MasDe24hEnTransito";
+                }
+
+                alertas.Add(new AlertaPaqueteSinEstadoFinal
+                {
+                    PaqueteId = p.Id,
+                    TrackingId = p.CodigoSeguimiento,
+                    RepartidorId = p.RepartidorAsignadoId,
+                    RepartidorNombre = nombre,
+                    FechaPrevista = fechaRef,
+                    DiasDemora = dias,
+                    EstadoActual = p.Status == PaqueteStatus.Demorado ? "Demorado" : "En Tránsito",
+                    MotivoAlerta = motivo,
+                });
+            }
+
+            return alertas.OrderByDescending(a => a.DiasDemora).ToList();
         }
 
         public async Task<int> ContarAsync(Guid? sucursalId = null)

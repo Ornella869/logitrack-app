@@ -1,7 +1,7 @@
 import api from './api'
 
 export type EstadoIncidencia = 'Abierta' | 'En Revisión' | 'Resuelta'
-export type TipoIncidencia = 'accident' | 'mechanical' | 'danger' | 'health' | 'delivery' | 'otro' | 'no_llego' | 'llego_danado' | 'llego_tarde'
+export type TipoIncidencia = 'accident' | 'mechanical' | 'danger' | 'health' | 'delivery' | 'demorado' | 'otro' | 'no_llego' | 'llego_danado' | 'llego_tarde'
 
 export interface ObservacionIncidencia {
   texto: string

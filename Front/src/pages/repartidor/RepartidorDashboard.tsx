@@ -166,6 +166,9 @@ export default function RepartidorDashboard() {
   // Reportar incidente — chatbot Tracky
   const [incidenteOpen, setIncidenteOpen] = useState(false)
 
+  // Controla si el camión ya empezó a animarse hacia la sucursal (se activa al clickear "Retorno a Sucursal").
+  const [retornoAnimando, setRetornoAnimando] = useState(false)
+
   // Parada acción dialog (QR + demora rápida para próxima parada)
   const [paradaAccionOpen, setParadaAccionOpen] = useState(false)
 
@@ -317,12 +320,18 @@ export default function RepartidorDashboard() {
   // (Antes arrastraba un flag global que lo dejaba visible al cambiar a otro día con pendientes.)
   const showRetorno = todasEntregadas
 
+  // Resetear animación de retorno si se recarga la ruta y ya no está en retorno.
+  useEffect(() => {
+    if (!showRetorno) setRetornoAnimando(false)
+  }, [showRetorno])
+
   // Fase A: el repartidor confirma que volvió a la sucursal → vuelve a estar disponible.
   const handleCerrarJornada = async () => {
     setCerrandoJornada(true)
     const res = await shipmentService.cerrarJornada()
     setCerrandoJornada(false)
     if (res.success) {
+      setRetornoAnimando(false)
       setEstadoJornada('Disponible')
       void load(fechaRuta ?? undefined)
     }
@@ -439,19 +448,6 @@ export default function RepartidorDashboard() {
           >
             Escanear QR
           </Button>
-          {showRetorno && (
-            <Button
-              variant="contained"
-              startIcon={<DirectionsIcon />}
-              onClick={() => {
-                const url = buildReturnUrl()
-                if (url) window.open(url, '_blank', 'noopener,noreferrer')
-              }}
-              sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
-            >
-              Retorno a Sucursal
-            </Button>
-          )}
           {/* Fase A: cerrar jornada al volver. Solo mientras está "Retornando". */}
           {showRetorno && estadoJornada === 'Retornando' && (
             <Button
@@ -653,10 +649,8 @@ export default function RepartidorDashboard() {
                       size="small"
                       variant="contained"
                       startIcon={<DirectionsIcon />}
-                      onClick={() => {
-                        const url = buildReturnUrl()
-                        if (url) window.open(url, '_blank', 'noopener,noreferrer')
-                      }}
+                      onClick={() => setRetornoAnimando(true)}
+                      disabled={retornoAnimando}
                       sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
                     >
                       Retorno a Sucursal
@@ -689,6 +683,7 @@ export default function RepartidorDashboard() {
                     : null
                 }
                 showReturnRoute={showRetorno}
+                animateReturnRoute={retornoAnimando}
                 height={380}
               />
               {proxima && (
