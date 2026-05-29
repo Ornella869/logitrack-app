@@ -85,6 +85,11 @@ const theme = createTheme({
         root: {
           borderRadius: 12,
           boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+          '&:hover': {
+            transform: 'translateY(-3px)',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+          },
         },
       },
     },
@@ -143,6 +148,16 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 10,
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          transition: 'transform 0.15s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+          },
         },
       },
     },

@@ -28,6 +28,7 @@ import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import ClienteDashboard from './pages/ClienteDashboard'
 import LandingPage from './pages/landing/LandingPage'
 import AccessDenied from './pages/AccessDenied'
+import ProfilePage from './pages/ProfilePage'
 import type { User } from './types'
 import { isRepartidorRole, normalizeUserRole } from './utils/roleUtils'
 
@@ -105,6 +106,17 @@ function App() {
   }
 
   useEffect(() => {
+    const handler = () => {
+      try {
+        const stored = localStorage.getItem('user')
+        if (stored) setUser(JSON.parse(stored) as User)
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('logitrack:userUpdate', handler)
+    return () => window.removeEventListener('logitrack:userUpdate', handler)
+  }, [])
+
+  useEffect(() => {
     if (!user) {
       return
     }
@@ -178,6 +190,7 @@ function App() {
           <Route path="/access-denied" element={<AccessDenied user={user as User} />} />
 
           {/* Rutas comunes — el componente decide qué hacer según rol */}
+          <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/shipment/:id" element={<ShipmentDetail />} />
           <Route path="/shipment/:id/etiqueta" element={<ShipmentLabel />} />
 

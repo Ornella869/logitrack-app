@@ -26,6 +26,7 @@ interface ScanResult {
   prevStatus: string
   message: string
   severity: 'success' | 'info'
+  navigateTo?: string
 }
 
 interface ParadaAccionDialogProps {
@@ -68,6 +69,11 @@ export default function ParadaAccionDialog({
   }, [qrTab, parada?.trackingId])
 
   const handleClose = () => {
+    if (scanResult?.navigateTo) {
+      onClose()
+      navigate(scanResult.navigateTo)
+      return
+    }
     if (scanResult) {
       onScanSuccess({ severity: scanResult.severity, message: scanResult.message })
     }
@@ -86,8 +92,12 @@ export default function ParadaAccionDialog({
     }
     const accion = result.data?.accion
     if (accion === 'AbrirFichaEntrega' && result.data?.paqueteId) {
-      onClose()
-      navigate(`/shipment/${result.data.paqueteId}`)
+      setScanResult({
+        prevStatus: parada?.status ?? '',
+        message: 'Abrí la ficha para confirmar la entrega.',
+        severity: 'success',
+        navigateTo: `/shipment/${result.data.paqueteId}`,
+      })
       return
     }
     const message = result.data?.mensaje
@@ -160,37 +170,25 @@ export default function ParadaAccionDialog({
         {/* ── Resultado del escaneo ── */}
         {scanResult ? (
           <Stack spacing={2} alignItems="center" sx={{ py: 2, textAlign: 'center' }}>
-            <CheckCircleIcon sx={{ fontSize: 60, color: scanResult.severity === 'success' ? '#2e7d32' : '#1565C0' }} />
-            <Typography variant="h6" fontWeight={700} color={scanResult.severity === 'success' ? 'success.main' : 'primary.main'}>
-              {scanResult.severity === 'success' ? '¡Estado actualizado!' : '¡Registrado!'}
+            <CheckCircleIcon sx={{ fontSize: 60, color: '#2e7d32' }} />
+            <Typography variant="h6" fontWeight={700} color="success.main">
+              QR escaneado con éxito
             </Typography>
 
-            {/* Estado anterior → nuevo */}
-            <Box
-              sx={{
-                width: '100%',
-                bgcolor: 'action.hover',
-                borderRadius: 2,
-                px: 2,
-                py: 1.5,
-              }}
-            >
+            {/* Estado anterior → qué pasó */}
+            <Box sx={{ width: '100%', bgcolor: 'action.hover', borderRadius: 2, px: 2, py: 1.5 }}>
               <Stack spacing={0.8}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="caption" color="text.secondary" fontWeight={600}>
                     Estado anterior
                   </Typography>
-                  <Chip
-                    label={scanResult.prevStatus}
-                    size="small"
-                    sx={{ fontSize: 11, fontWeight: 600 }}
-                  />
+                  <Chip label={scanResult.prevStatus} size="small" sx={{ fontSize: 11, fontWeight: 600 }} />
                 </Stack>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="caption" color="text.secondary" fontWeight={600}>
                     Resultado
                   </Typography>
-                  <Typography variant="caption" fontWeight={600} color={scanResult.severity === 'success' ? 'success.main' : 'primary.main'}>
+                  <Typography variant="caption" fontWeight={600} color="success.main">
                     {scanResult.message}
                   </Typography>
                 </Stack>

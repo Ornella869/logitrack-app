@@ -356,7 +356,7 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>Actualizar datos de usuario (nombre, apellido, email, DNI).</summary>
+        /// <summary>Actualizar datos de usuario (nombre, apellido, email, DNI y, opcionalmente, provincia para Gerentes).</summary>
         [Authorize(Roles = Roles.Administrador)]
         [HttpPut("usuarios/{userId:guid}")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarUsuario(Guid userId, [FromBody] ActualizarUsuarioRequest request)
@@ -364,8 +364,35 @@ namespace Back.Controllers
             try
             {
                 var updated = await _authService.ActualizarUsuario(userId, request.Nombre, request.Apellido, request.Email, request.DNI);
+
+                // Si se envió Provincia y el usuario es Gerente, actualizar provincias.
+                if (!string.IsNullOrWhiteSpace(request.Provincia) && updated is Gerente gerente)
+                {
+                    var provincias = request.Provincia
+                        .Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries)
+                        .ToList();
+                    gerente.AsignarProvincias(provincias);
+                }
+
                 await _context.SaveChangesAsync();
                 return Ok(MapUsuario(updated));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>Asignar una o más provincias a un Gerente (solo Administrador).</summary>
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpPut("usuarios/{userId:guid}/provincias")]
+        public async Task<ActionResult<UserInfoResponse>> AsignarProvincias(Guid userId, [FromBody] AsignarProvinciasRequest request)
+        {
+            try
+            {
+                var gerente = await _authService.AsignarProvinciasGerente(userId, request.Provincias);
+                await _context.SaveChangesAsync();
+                return Ok(MapUsuario(gerente));
             }
             catch (InvalidOperationException ex)
             {
@@ -561,6 +588,13 @@ namespace Back.Controllers
         [Required]
         [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
+        /// <summary>Para Gerentes: una o más provincias separadas por comas.</summary>
+        public string? Provincia { get; set; }
+    }
+
+    public class AsignarProvinciasRequest
+    {
+        [Required] public List<string> Provincias { get; set; } = new();
     }
 
     public class ResetPasswordRequest

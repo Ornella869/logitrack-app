@@ -696,6 +696,51 @@ export default function RepartidorDashboard() {
                   </Typography>
                 </Box>
               )}
+              {/* Mini lista de todas las paradas */}
+              <Box sx={{ borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #eee' }}>
+                <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" fontWeight={700} color="text.secondary">
+                    TODAS LAS PARADAS ({paradas.length})
+                  </Typography>
+                </Box>
+                <Box sx={{ maxHeight: 180, overflowY: 'auto', px: 1, pb: 1 }}>
+                  {paradas.map((p, idx) => {
+                    const isProxima = idx === metrics.proximaIdx
+                    const statusColor = p.status === 'Entregado' ? '#2e7d32' : p.status === 'En tránsito' ? '#ed6c02' : p.status === 'Cancelado' ? '#c62828' : '#546e7a'
+                    const hasCoordsP = p.receiverUbicacion?.latitud != null
+                    return (
+                      <Box key={p.id} sx={{
+                        display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.5, borderRadius: 1,
+                        bgcolor: isProxima ? (isDark ? 'rgba(25,118,210,0.18)' : '#e3f2fd') : 'transparent',
+                        mb: 0.3,
+                      }}>
+                        <Box sx={{
+                          minWidth: 24, height: 24, borderRadius: '50%',
+                          bgcolor: statusColor, color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        }}>
+                          {idx + 1}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography noWrap variant="caption" fontWeight={isProxima ? 700 : 400} sx={{ display: 'block', color: isProxima ? 'primary.main' : 'text.primary' }}>
+                            {p.receiver.address}, {p.receiver.city}
+                          </Typography>
+                          <Typography noWrap variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                            {p.receiver.name}
+                          </Typography>
+                        </Box>
+                        {!hasCoordsP && (
+                          <Typography variant="caption" sx={{ fontSize: 10, color: '#90a4ae', flexShrink: 0 }}>sin GPS</Typography>
+                        )}
+                        <Typography variant="caption" sx={{ fontSize: 10, color: statusColor, fontWeight: 600, flexShrink: 0 }}>
+                          {p.status}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </Box>
             </Card>
           )}
 

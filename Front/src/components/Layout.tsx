@@ -39,6 +39,7 @@ import StoreIcon from '@mui/icons-material/Store'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
+import AccountCircleIcon from '@mui/icons-material/AccountCircle'
 import WbSunnyIcon from '@mui/icons-material/WbSunny'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import NotificationsIcon from '@mui/icons-material/Notifications'
@@ -65,6 +66,9 @@ function Layout({ user, onLogout }: LayoutProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [openChangePassword, setOpenChangePassword] = useState(false)
+  const [avatarSrc, setAvatarSrc] = useState<string | null>(
+    () => localStorage.getItem(`logitrack_avatar_${user.id}`)
+  )
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [isDarkPremium, setIsDarkPremium] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => localStorage.getItem('miPlanTipo') === 'Premium')
@@ -138,11 +142,12 @@ function Layout({ user, onLogout }: LayoutProps) {
     },
     shape: { borderRadius: 10 },
     components: {
-      MuiCard: { styleOverrides: { root: { borderRadius: 12, transition: 'background-color 0.4s ease, box-shadow 0.3s ease', '&:hover': { boxShadow: '0 4px 20px rgba(66,165,245,0.18)' } } } },
+      MuiCard: { styleOverrides: { root: { borderRadius: 12, transition: 'background-color 0.4s ease, box-shadow 0.3s ease, transform 0.2s ease', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 6px 24px rgba(66,165,245,0.25)' } } } },
       MuiPaper: { styleOverrides: { root: { transition: 'background-color 0.4s ease' } } },
       MuiButton: { styleOverrides: { root: { borderRadius: 8 } } },
       MuiChip: { styleOverrides: { root: { borderRadius: 6 } } },
       MuiDialog: { styleOverrides: { paper: { borderRadius: 14 } } },
+      MuiTab: { styleOverrides: { root: { transition: 'transform 0.15s ease', '&:hover': { transform: 'translateY(-2px)' } } } },
       MuiTableCell: {
         styleOverrides: {
           head: {
@@ -185,6 +190,12 @@ function Layout({ user, onLogout }: LayoutProps) {
     window.addEventListener('miPlanDarkModeChange', onDarkChange)
     return () => window.removeEventListener('miPlanDarkModeChange', onDarkChange)
   }, [])
+
+  useEffect(() => {
+    const handler = () => setAvatarSrc(localStorage.getItem(`logitrack_avatar_${user.id}`))
+    window.addEventListener('logitrack:avatarChange', handler)
+    return () => window.removeEventListener('logitrack:avatarChange', handler)
+  }, [user.id])
 
   const toggleDarkPremium = () => {
     const next = !isDarkPremium
@@ -302,6 +313,14 @@ function Layout({ user, onLogout }: LayoutProps) {
           [data-dark] .MuiTableCell-root { border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.87) !important; }
           [data-dark] .MuiTableBody-root .MuiTableRow-root:hover { background-color: rgba(255,255,255,0.06) !important; }
           [data-dark] .MuiTableBody-root .MuiTableRow-root { background-color: #162032; }
+          [data-dark] input:-webkit-autofill,
+          [data-dark] input:-webkit-autofill:hover,
+          [data-dark] input:-webkit-autofill:focus,
+          [data-dark] input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px #1a2d42 inset !important;
+            -webkit-text-fill-color: rgba(255,255,255,0.87) !important;
+            caret-color: rgba(255,255,255,0.87) !important;
+          }
         `}</style>
       )}
       <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.15)', ...(isDarkPremium && { background: 'linear-gradient(135deg, #0A1628 0%, #1B2D42 100%)' }) }}>
@@ -380,6 +399,7 @@ function Layout({ user, onLogout }: LayoutProps) {
 
             {/* Avatar with dropdown */}
             <Avatar
+              src={avatarSrc ?? undefined}
               onClick={handleMenuOpen}
               sx={{
                 cursor: 'pointer',
@@ -392,7 +412,7 @@ function Layout({ user, onLogout }: LayoutProps) {
                 '&:hover': { opacity: 0.85 },
               }}
             >
-              {initials}
+              {!avatarSrc && initials}
             </Avatar>
 
             <Menu
@@ -414,6 +434,10 @@ function Layout({ user, onLogout }: LayoutProps) {
                 </Box>
               </MenuItem>
               <Divider />
+              <MenuItem onClick={() => { handleMenuClose(); navigate('/perfil') }} sx={{ gap: 1 }}>
+                <AccountCircleIcon fontSize="small" />
+                Mi Perfil
+              </MenuItem>
               <MenuItem onClick={handleOpenChangePassword} sx={{ gap: 1 }}>
                 <LockIcon fontSize="small" />
                 Cambiar contraseña
@@ -523,7 +547,7 @@ function Layout({ user, onLogout }: LayoutProps) {
             value={selectedTab}
             onChange={(_, v) => navigate(v)}
             variant="scrollable"
-            scrollButtons="auto"
+            scrollButtons={false}
             sx={isDarkPremium ? {
               '& .MuiTab-root': { color: 'rgba(255,255,255,0.85)' },
               '& .Mui-selected': { color: '#42A5F5' },

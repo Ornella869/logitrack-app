@@ -86,10 +86,16 @@ namespace Back.Domain.Models
         }
     }
 
-    // Épica D: gerente a cargo de todas las sucursales de UNA provincia.
+    // Épica D: gerente a cargo de todas las sucursales de una o más provincias.
     public class Gerente : Usuario
     {
         public string Provincia { get; private set; } = string.Empty;
+
+        /// <summary>Lista de provincias asignadas, parseada desde el campo Provincia (separado por comas).</summary>
+        public IReadOnlyList<string> ProvinciasAsignadas =>
+            string.IsNullOrWhiteSpace(Provincia)
+                ? Array.Empty<string>()
+                : Provincia.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         public Gerente() { }
 
@@ -99,6 +105,19 @@ namespace Back.Domain.Models
             Provincia = provincia;
         }
 
+        /// <summary>Asigna múltiples provincias, guardadas como string separado por comas.</summary>
+        public void AsignarProvincias(IEnumerable<string> provincias)
+        {
+            var lista = provincias
+                .Select(p => p.Trim())
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToList();
+            if (lista.Count == 0)
+                throw new InvalidOperationException("Debe asignarse al menos una provincia.");
+            Provincia = string.Join(",", lista);
+        }
+
+        /// <summary>Compatibilidad con asignación de una sola provincia.</summary>
         public void AsignarProvincia(string provincia) => Provincia = provincia;
     }
 

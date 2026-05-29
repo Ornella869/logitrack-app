@@ -301,12 +301,12 @@ function ComparisonBar({
       <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', height: BAR_MAX_H }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
           <Typography variant="caption" fontWeight={700} sx={{ color, fontSize: '0.65rem' }}>{fmt(current)}</Typography>
-          <Box sx={{ width: 26, height: `${currentH}px`, bgcolor: color, borderRadius: '4px 4px 0 0' }} />
+          <Box sx={{ width: 26, height: `${currentH}px`, bgcolor: color, borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Actual</Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>{fmt(prev)}</Typography>
-          <Box sx={{ width: 26, height: `${prevH}px`, bgcolor: isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd', borderRadius: '4px 4px 0 0' }} />
+          <Box sx={{ width: 26, height: `${prevH}px`, bgcolor: isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd', borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease 0.1s both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Anterior</Typography>
         </Box>
       </Box>

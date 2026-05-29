@@ -109,8 +109,8 @@ export default function ReviewsSection({ reviewsRef }: ReviewsSectionProps) {
                     <Box key={star} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography sx={{ fontSize: '0.75rem', color: '#546E7A', width: 12, textAlign: 'right' }}>{star}</Typography>
                       <Box component="span" sx={{ color: '#FFB300', fontSize: '0.75rem' }}>★</Box>
-                      <Box sx={{ width: { xs: 80, sm: 120 }, height: 6, bgcolor: '#E0E7EF', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: '#FFB300', borderRadius: '3px', transition: 'width 1s ease' }} />
+                      <Box sx={{ width: { xs: 80, sm: 120 }, height: 6, bgcolor: '#E0E7EF', borderRadius: '3px', overflow: 'hidden', cursor: 'default', '&:hover .bar-fill': { filter: 'brightness(1.2)', transform: 'scaleX(1.03)', transformOrigin: 'left' } }}>
+                        <Box className="bar-fill" sx={{ width: `${pct}%`, height: '100%', bgcolor: '#FFB300', borderRadius: '3px', transition: 'width 1s ease, filter 0.2s ease, transform 0.2s ease' }} />
                       </Box>
                       <Typography sx={{ fontSize: '0.72rem', color: '#90A4AE', width: 18 }}>{count}</Typography>
                     </Box>
@@ -122,10 +122,10 @@ export default function ReviewsSection({ reviewsRef }: ReviewsSectionProps) {
         </RevealBox>
 
         {/* Carousel */}
-        <Grid container spacing={3} sx={{ mb: 2 }}>
+        <Grid container spacing={3} sx={{ mb: 2 }} key={page}>
           {visible.map((review, i) => (
             <Grid item xs={12} sm={6} md={4} key={review.id}>
-              <RevealBox delay={i * 100}>
+              <RevealBox delay={i * 120}>
                 <Card sx={{
                   p: 3, height: '100%', borderRadius: '18px',
                   border: '1px solid #E8F4FD',

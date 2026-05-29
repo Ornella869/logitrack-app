@@ -26,6 +26,7 @@ import { postalCodeService } from '../services/postalCodeService'
 import { branchMarkerIcon } from '../utils/mapIcons'
 import type { User } from '../types'
 import { formatInstantArgentina } from '../utils/argentinaDate'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 type LatLng = { lat: number; lng: number }
 
@@ -57,6 +58,7 @@ export default function TarifasPage() {
   const [savingZona, setSavingZona] = useState(false)
   const [zonaMsg, setZonaMsg] = useState<{ sev: 'success' | 'error'; text: string } | null>(null)
   const [provinceWarning, setProvinceWarning] = useState('')
+  const [deleteZonaId, setDeleteZonaId] = useState<string | null>(null)
   // Centro inicial del mapa: sucursal de origen si tiene coords; si no, centro de Argentina.
   const [mapCenter, setMapCenter] = useState<[number, number]>([-34.6, -58.45])
   const [mapZoom, setMapZoom] = useState(11)
@@ -326,7 +328,7 @@ export default function TarifasPage() {
                           [{z.latMin.toFixed(4)}, {z.lngMin.toFixed(4)}] → [{z.latMax.toFixed(4)}, {z.lngMax.toFixed(4)}]
                         </Typography>
                       </Box>
-                      <IconButton size="small" color="error" onClick={() => handleDeleteZona(z.id)}>
+                      <IconButton size="small" color="error" onClick={() => setDeleteZonaId(z.id)}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Stack>
@@ -337,6 +339,22 @@ export default function TarifasPage() {
           </Card>
         </Grid>
       </Grid>
+
+      <ConfirmDialog
+        open={!!deleteZonaId}
+        title="¿Eliminar zona peligrosa?"
+        message="¿Estás seguro que querés eliminar esta zona? Esta acción no se puede deshacer."
+        confirmLabel="Sí, eliminar"
+        cancelLabel="Cancelar"
+        confirmColor="error"
+        onConfirm={async () => {
+          if (!deleteZonaId) return
+          const id = deleteZonaId
+          setDeleteZonaId(null)
+          await handleDeleteZona(id)
+        }}
+        onCancel={() => setDeleteZonaId(null)}
+      />
     </Box>
   )
 }

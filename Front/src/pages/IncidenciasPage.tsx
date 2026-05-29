@@ -48,6 +48,7 @@ import {
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../services/mensajeIncidenciaService'
 import { shipmentService } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { formatInstantArgentina, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 const TIPO_INFO: Record<string, { label: string; emoji: string; color: string }> = {
@@ -111,6 +112,8 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   const [paradasAccion, setParadasAccion] = useState<Record<string, 'loading' | 'done' | 'error' | string>>({})
   const [cancelarDialogId, setCancelarDialogId] = useState<string | null>(null)
   const [cancelarMotivo, setCancelarMotivo] = useState('')
+  const [cancelarFinalConfirm, setCancelarFinalConfirm] = useState(false)
+  const [finalizarChatConfirm, setFinalizarChatConfirm] = useState(false)
 
   const tipoInfo = TIPO_INFO[inc.tipo] ?? TIPO_INFO.otro!
 
@@ -589,10 +592,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                   color="error"
                   size="small"
                   fullWidth
-                  onClick={async () => {
-                    const updated = await incidenciaService.finalizarChat(inc.id)
-                    if (updated) onUpdated(updated)
-                  }}
+                  onClick={() => setFinalizarChatConfirm(true)}
                   sx={{ fontWeight: 600, borderStyle: 'dashed' }}
                 >
                   Finalizar chat con {inc.repartidorNombre.split(' ')[0]}
@@ -610,7 +610,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
     </Dialog>
 
     {/* Dialogo de motivo para cancelar envío */}
-    <Dialog open={!!cancelarDialogId} onClose={() => setCancelarDialogId(null)} maxWidth="xs" fullWidth>
+    <Dialog open={!!cancelarDialogId && !cancelarFinalConfirm} onClose={() => setCancelarDialogId(null)} maxWidth="xs" fullWidth>
       <DialogTitle>Motivo de cancelación</DialogTitle>
       <DialogContent>
         <TextField
@@ -630,12 +630,38 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
           variant="contained"
           color="error"
           disabled={!cancelarMotivo.trim()}
-          onClick={() => void handleConfirmarCancelar()}
+          onClick={() => setCancelarFinalConfirm(true)}
         >
           Confirmar cancelación
         </Button>
       </DialogActions>
     </Dialog>
+
+    <ConfirmDialog
+      open={cancelarFinalConfirm}
+      title="¿Estás seguro?"
+      message={`Esta acción cancelará el envío de forma definitiva. Motivo: "${cancelarMotivo}". No se puede deshacer.`}
+      confirmLabel="Sí, cancelar envío"
+      cancelLabel="Volver"
+      confirmColor="error"
+      onConfirm={() => { setCancelarFinalConfirm(false); void handleConfirmarCancelar() }}
+      onCancel={() => setCancelarFinalConfirm(false)}
+    />
+
+    <ConfirmDialog
+      open={finalizarChatConfirm}
+      title="¿Finalizar chat?"
+      message={`¿Estás seguro que querés finalizar el chat con ${inc.repartidorNombre.split(' ')[0]}? El historial se conservará pero no se podrán enviar nuevos mensajes.`}
+      confirmLabel="Sí, finalizar chat"
+      cancelLabel="Volver"
+      confirmColor="error"
+      onConfirm={async () => {
+        setFinalizarChatConfirm(false)
+        const updated = await incidenciaService.finalizarChat(inc.id)
+        if (updated) onUpdated(updated)
+      }}
+      onCancel={() => setFinalizarChatConfirm(false)}
+    />
     </>
   )
 }
@@ -1019,10 +1045,23 @@ export default function IncidenciasPage() {
                   alignItems: 'center',
                   gap: 1,
                 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: unread > 0 ? '#c62828' : '#4caf50', flexShrink: 0 }} />
-                  <Typography noWrap sx={{ fontSize: 12, color: 'text.secondary', flex: 1 }}>
-                    {unread > 0 ? `${unread} mensaje${unread > 1 ? 's' : ''} sin leer` : 'Clic para abrir chat'}
-                  </Typography>
+                  {unread > 0 ? (
+                    <>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#c62828', flexShrink: 0 }} />
+                      <Typography noWrap sx={{ fontSize: 12, color: 'text.secondary', flex: 1 }}>
+                        {`${unread} mensaje${unread > 1 ? 's' : ''} sin leer`}
+                      </Typography>
+                    </>
+                  ) : (
+                    <Typography noWrap sx={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: isDark ? '#4caf50' : '#1565C0',
+                      flex: 1,
+                    }}>
+                      💬 Iniciar chat con repartidor
+                    </Typography>
+                  )}
                 </Box>
               </Box>
             )

@@ -273,18 +273,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const handleCreate = async () => {
     if (!validateForm(true)) return
 
-    if (formData.role === 'gerente' && formData.provincia) {
-      const existente = users.find(
-        (u) =>
-          u.role === 'gerente' &&
-          u.provincia?.trim().toLowerCase() === formData.provincia.trim().toLowerCase() &&
-          u.activo !== false,
-      )
-      if (existente) {
-        setFormError(`Ya existe un gerente activo para ${formData.provincia}. Cada provincia solo puede tener un gerente.`)
-        return
-      }
-    }
+    // Multiple provinces allowed — no single-province uniqueness check
 
     setSubmitting(true)
     try {
@@ -346,6 +335,10 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         email: formData.email.trim(),
         dni: formData.dni.trim(),
       })
+      if (selectedUser.role === 'gerente' && formData.provincia) {
+        const provincias = formData.provincia.split(',').map((s) => s.trim()).filter(Boolean)
+        if (provincias.length > 0) await authService.assignProvincias(selectedUser.id, provincias)
+      }
       if (updated) {
         await loadUsers()
       }
@@ -893,7 +886,11 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                     <TableCell><RoleChip role={user.role} /></TableCell>
                     <TableCell>
                       {user.role === 'gerente' && user.provincia ? (
-                        <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{user.provincia}</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                          {user.provincia.split(',').map((p) => p.trim()).filter(Boolean).map((prov) => (
+                            <Chip key={prov} label={prov} size="small" sx={{ fontSize: '0.7rem', height: 20 }} />
+                          ))}
+                        </Box>
                       ) : user.sucursalId ? (
                         <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
                           {branches.find((b) => b.id === user.sucursalId)?.name ?? '—'}
@@ -1024,18 +1021,29 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 <MenuItem value="repartidor">Repartidor</MenuItem>
               </Select>
             </FormControl>
-            {/* Épica D: el Gerente lleva provincia; los roles operativos, sucursal. */}
+            {/* Épica D: el Gerente lleva provincias (múltiple); los roles operativos, sucursal. */}
             {formData.role === 'gerente' && (
               <FormControl fullWidth>
-                <InputLabel>Provincia *</InputLabel>
+                <InputLabel>Provincias a cargo *</InputLabel>
                 <Select
-                  label="Provincia *"
-                  value={formData.provincia}
-                  onChange={(e) => setFormData((p) => ({ ...p, provincia: e.target.value }))}
+                  label="Provincias a cargo *"
+                  multiple
+                  value={formData.provincia ? formData.provincia.split(',').map((s) => s.trim()).filter(Boolean) : []}
+                  onChange={(e) => {
+                    const val = e.target.value as string[]
+                    setFormData((p) => ({ ...p, provincia: val.join(',') }))
+                  }}
+                  renderValue={(selected) => (selected as string[]).join(', ')}
                 >
-                  {AR_PROVINCIAS.map((prov) => (
-                    <MenuItem key={prov} value={prov}>{prov}</MenuItem>
-                  ))}
+                  {AR_PROVINCIAS.map((prov) => {
+                    const selected = formData.provincia.split(',').map((s) => s.trim()).includes(prov)
+                    return (
+                      <MenuItem key={prov} value={prov}>
+                        <Checkbox checked={selected} size="small" />
+                        {prov}
+                      </MenuItem>
+                    )
+                  })}
                 </Select>
               </FormControl>
             )}
@@ -1151,6 +1159,48 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 Rol actual: <strong>{ROLE_LABELS[selectedUser?.role ?? 'operador']}</strong> — el rol no se puede modificar desde este panel.
               </Typography>
             </Box>
+
+            {/* Provincias a cargo (solo para Gerente) */}
+            {selectedUser?.role === 'gerente' && (
+              <FormControl fullWidth>
+                <InputLabel>Provincias a cargo</InputLabel>
+                <Select
+                  label="Provincias a cargo"
+                  multiple
+                  value={formData.provincia ? formData.provincia.split(',').map((s) => s.trim()).filter(Boolean) : []}
+                  onChange={(e) => {
+                    const val = e.target.value as string[]
+                    const current = formData.provincia.split(',').map((s) => s.trim()).filter(Boolean)
+                    // Warn about provinces being removed (orphan check)
+                    const removed = current.filter((p) => !val.includes(p))
+                    if (removed.length > 0) {
+                      const orphans = removed.filter((prov) =>
+                        !users.some((u) => u.id !== selectedUser?.id && u.role === 'gerente' && u.activo !== false && u.provincia?.split(',').map((s) => s.trim()).includes(prov)),
+                      )
+                      if (orphans.length > 0) {
+                        setFormError(`Atención: ${orphans.join(', ')} quedarán sin supervisión gerencial. Podés continuar igual.`)
+                      } else {
+                        setFormError('')
+                      }
+                    } else {
+                      setFormError('')
+                    }
+                    setFormData((p) => ({ ...p, provincia: val.join(',') }))
+                  }}
+                  renderValue={(selected) => (selected as string[]).join(', ') || '— Sin provincias —'}
+                >
+                  {AR_PROVINCIAS.map((prov) => {
+                    const selected = formData.provincia.split(',').map((s) => s.trim()).includes(prov)
+                    return (
+                      <MenuItem key={prov} value={prov}>
+                        <Checkbox checked={selected} size="small" />
+                        {prov}
+                      </MenuItem>
+                    )
+                  })}
+                </Select>
+              </FormControl>
+            )}
 
             {/* Sección: Reseteo de contraseña de emergencia */}
             <Box>

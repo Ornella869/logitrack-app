@@ -450,6 +450,10 @@ export const authService = {
     }
   },
 
+  assignProvincias: async (userId: string, provincias: string[]): Promise<void> => {
+    await api.put(`/auth/usuarios/${userId}/provincias`, { Provincias: provincias })
+  },
+
   cambiarPassword: async (
     passwordActual: string,
     passwordNueva: string,

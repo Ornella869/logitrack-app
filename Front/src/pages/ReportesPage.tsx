@@ -167,7 +167,7 @@ function VolumeChart({ data }: { data: ReporteVolumen }) {
           Sobre un total de {data.totalEnvios} envíos en el período.
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 220, gap: 2 }}>
-          {bars.map((b) => {
+          {bars.map((b, i) => {
             const pct = data.totalEnvios > 0 ? Math.round((b.value / data.totalEnvios) * 100) : 0
             return (
               <Box key={b.label} sx={{ flex: 1, maxWidth: 140, textAlign: 'center' }}>
@@ -177,8 +177,13 @@ function VolumeChart({ data }: { data: ReporteVolumen }) {
                     height: `${Math.max(6, (b.value / max) * 160)}px`,
                     bgcolor: b.color,
                     borderRadius: '6px 6px 0 0',
-                    transition: 'height .3s',
-                    // Sin esto, al imprimir/PDF el navegador omite el color de fondo de las barras.
+                    transformOrigin: 'bottom center',
+                    animation: 'barRise 0.7s ease both',
+                    animationDelay: `${i * 0.15}s`,
+                    '@keyframes barRise': {
+                      from: { transform: 'scaleY(0)', opacity: 0 },
+                      to: { transform: 'scaleY(1)', opacity: 1 },
+                    },
                     WebkitPrintColorAdjust: 'exact',
                     printColorAdjust: 'exact',
                   }}
