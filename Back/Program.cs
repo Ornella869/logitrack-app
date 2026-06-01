@@ -85,6 +85,7 @@ builder.Services.AddScoped<IUserRepository, UsuariosRepository>();
 builder.Services.AddScoped<IEnviosRepository, EnviosRepository>();
 builder.Services.AddScoped<IVehiculoRepository, VehiculosRepository>();
 builder.Services.AddScoped<IRutasRepository, RutasRepository>();
+builder.Services.AddScoped<Back.Domain.Repositories.IGerenteProvinciaRepository, Back.Infrastructure.Database.Repositories.GerenteProvinciaRepository>();
 
 // Configuración de Autenticación JWT
 var jwtSecretKey = "Grupo8SuperSecretKeyWithAtLeast32Characters";

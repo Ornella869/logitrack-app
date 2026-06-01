@@ -30,6 +30,7 @@ namespace Back.Application.Services
     {
         private readonly LogiTrackDbContext _context;
         private readonly GeocodingService _geocoding;
+        private readonly Back.Domain.Repositories.IGerenteProvinciaRepository _gerenteProvinciaRepo;
 
         private sealed record ProvinciaBounds(double LatMin, double LatMax, double LngMin, double LngMax);
 
@@ -61,17 +62,22 @@ namespace Back.Application.Services
             ["tucuman"] = new(-28.1, -26.0, -66.3, -64.4),
         };
 
-        public TarifaService(LogiTrackDbContext context, GeocodingService geocoding)
+        public TarifaService(LogiTrackDbContext context, GeocodingService geocoding, Back.Domain.Repositories.IGerenteProvinciaRepository gerenteProvinciaRepo)
         {
             _context = context;
             _geocoding = geocoding;
+            _gerenteProvinciaRepo = gerenteProvinciaRepo;
         }
 
         // Épica D: provincia del usuario (Gerente → su provincia; otros → la de su sucursal).
         public async Task<string> ResolverProvinciaUsuarioAsync(Guid usuarioId)
         {
             var usuario = await _context.Usuarios.FindAsync(usuarioId);
-            if (usuario is Gerente g) return g.Provincia ?? string.Empty;
+            if (usuario is Gerente g)
+            {
+                var provincias = await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id);
+                return provincias.FirstOrDefault() ?? string.Empty;
+            }
             if (usuario?.SucursalId is Guid sucId)
             {
                 var suc = await _context.Sucursales.FindAsync(sucId);
@@ -90,7 +96,10 @@ namespace Back.Application.Services
                     .Distinct()
                     .ToListAsync();
             if (usuario is Gerente g)
-                return string.IsNullOrWhiteSpace(g.Provincia) ? new List<string>() : new List<string> { g.Provincia };
+            {
+                var provincias = await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id);
+                return provincias ?? new List<string>();
+            }
             if (usuario?.SucursalId is Guid sucId)
             {
                 var suc = await _context.Sucursales.FindAsync(sucId);

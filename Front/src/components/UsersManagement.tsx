@@ -91,6 +91,12 @@ interface PendingReset {
   status: 'pending'
 }
 
+function splitProvinces(value?: string | null): string[] {
+  return value
+    ? value.split(',').map((part) => part.trim()).filter(Boolean)
+    : []
+}
+
 // Prioriza `activo` (soft-delete flag del back). Si no viene, usa `estado` como fallback.
 function isActive(user?: { activo?: boolean; estado?: string }): boolean {
   if (!user) return false
@@ -167,6 +173,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [users, setUsers] = useState<User[]>([])
+  const [provinceOwners, setProvinceOwners] = useState<User[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -174,6 +181,12 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
 
   useEffect(() => {
     void branchService.getAllBranches().then(setBranches).catch(() => setBranches([]))
+  }, [])
+
+  useEffect(() => {
+    void authService.getUsuarios()
+      .then((result) => setProvinceOwners(result.filter((user) => user.role === 'gerente' && user.activo !== false)))
+      .catch(() => setProvinceOwners([]))
   }, [])
 
   const [search, setSearch] = useState('')
@@ -192,6 +205,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const [formData, setFormData] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [createProvinceOpen, setCreateProvinceOpen] = useState(false)
 
   // Reset password desde el diálogo de edición
   const [showResetSection, setShowResetSection] = useState(false)
@@ -261,6 +275,15 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
     }
   }
 
+  const findProvinceOwner = (province: string, excludedUserId?: string) => {
+    const normalizedProvince = province.trim().toLowerCase()
+    return provinceOwners.find((user) => {
+      if (excludedUserId && user.id === excludedUserId) return false
+      const assigned = splitProvinces(user.provincias?.join(', ') ?? user.provincia)
+      return assigned.some((assignedProvince) => assignedProvince.toLowerCase() === normalizedProvince)
+    })
+  }
+
   // ── Create ──────────────────────────────────────────────────────────────────
 
   const handleOpenCreate = () => {
@@ -315,7 +338,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       licencia: user.licencia ?? '',
       passwordTemporal: '',
       sucursalId: user.sucursalId ?? '',
-      provincia: user.provincia ?? '',
+      provincia: user.provincias && user.provincias.length > 0 ? user.provincias.join(', ') : (user.provincia ?? ''),
     })
     setFormError('')
     setShowResetSection(false)
@@ -501,6 +524,23 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       if (formData.role === 'gerente' && !formData.provincia) {
         setFormError('La provincia es obligatoria para gerentes.')
         return false
+      }
+      if (formData.role === 'gerente' && formData.provincia) {
+        const selectedProvincias = formData.provincia.split(',').map((s) => s.trim()).filter(Boolean)
+        const conflicts = selectedProvincias.flatMap((prov) => {
+          const owner = users.find((u) => {
+            if (u.role !== 'gerente' || u.activo === false) return false
+            const assigned = (u.provincias && u.provincias.length > 0)
+              ? u.provincias
+              : (u.provincia ? u.provincia.split(',').map((s) => s.trim()) : [])
+            return assigned.includes(prov)
+          })
+          return owner ? [`${prov} (ya cubierta por ${owner.name} ${owner.lastname})`] : []
+        })
+        if (conflicts.length > 0) {
+          setFormError(`No podés asignar: ${conflicts.join(', ')}. Cada provincia solo puede tener un gerente activo.`)
+          return false
+        }
       }
       if (
         (formData.role === 'supervisor' || formData.role === 'operador' || formData.role === 'repartidor')
@@ -1023,29 +1063,64 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             </FormControl>
             {/* Épica D: el Gerente lleva provincias (múltiple); los roles operativos, sucursal. */}
             {formData.role === 'gerente' && (
-              <FormControl fullWidth>
-                <InputLabel>Provincias a cargo *</InputLabel>
-                <Select
-                  label="Provincias a cargo *"
-                  multiple
-                  value={formData.provincia ? formData.provincia.split(',').map((s) => s.trim()).filter(Boolean) : []}
-                  onChange={(e) => {
-                    const val = e.target.value as string[]
-                    setFormData((p) => ({ ...p, provincia: val.join(',') }))
-                  }}
-                  renderValue={(selected) => (selected as string[]).join(', ')}
-                >
-                  {AR_PROVINCIAS.map((prov) => {
-                    const selected = formData.provincia.split(',').map((s) => s.trim()).includes(prov)
-                    return (
-                      <MenuItem key={prov} value={prov}>
-                        <Checkbox checked={selected} size="small" />
-                        {prov}
-                      </MenuItem>
-                    )
-                  })}
-                </Select>
-              </FormControl>
+              <>
+                <FormControl fullWidth>
+                  <InputLabel>Provincias a cargo *</InputLabel>
+                    <Select
+                      label="Provincias a cargo *"
+                      multiple
+                      open={createProvinceOpen}
+                      onOpen={() => setCreateProvinceOpen(true)}
+                      onClose={() => setCreateProvinceOpen(false)}
+                      value={splitProvinces(formData.provincia)}
+                      onChange={(e) => {
+                        const val = e.target.value as string[]
+                        setFormData((p) => ({ ...p, provincia: val.join(',') }))
+                        // Al crear un gerente desde el administrador, tras elegir una provincia
+                        // cerramos el selector para evitar que el admin seleccione varias a la vez.
+                        if ((val?.length ?? 0) >= 1) setCreateProvinceOpen(false)
+                      }}
+                      renderValue={(selected) => (selected as string[]).join(', ')}
+                    >
+                    {AR_PROVINCIAS.map((prov) => {
+                      const isSelected = splitProvinces(formData.provincia).some((selected) => selected.toLowerCase() === prov.toLowerCase())
+                      const ownerGerente = findProvinceOwner(prov)
+                      const isBlocked = !!ownerGerente && !isSelected
+                      return (
+                        <MenuItem
+                          key={prov}
+                          value={prov}
+                          disabled={isBlocked}
+                          sx={{
+                            opacity: isBlocked ? 0.55 : 1,
+                            '&.Mui-disabled': { opacity: 0.55 },
+                          }}
+                        >
+                          <Checkbox checked={isSelected} size="small" disabled={isBlocked} />
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
+                            <span>{prov}</span>
+                            {ownerGerente && (
+                              <Typography
+                                variant="caption"
+                                color={isBlocked ? 'text.disabled' : 'warning.main'}
+                                sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}
+                              >
+                                Asignada a {ownerGerente.name} {ownerGerente.lastname}
+                              </Typography>
+                            )}
+                          </Box>
+                        </MenuItem>
+                      )
+                    })}
+                  </Select>
+                </FormControl>
+                {/* Provincias bloqueadas: aviso informativo */}
+                {provinceOwners.length > 0 && (
+                  <Alert severity="info" sx={{ mt: -1, fontSize: '0.8rem' }}>
+                    Las provincias marcadas con nombre ya tienen un gerente activo asignado y no están disponibles.
+                  </Alert>
+                )}
+              </>
             )}
             {(formData.role === 'supervisor' || formData.role === 'operador' || formData.role === 'repartidor') && (
               <FormControl fullWidth>
@@ -1167,15 +1242,29 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 <Select
                   label="Provincias a cargo"
                   multiple
-                  value={formData.provincia ? formData.provincia.split(',').map((s) => s.trim()).filter(Boolean) : []}
+                  value={splitProvinces(formData.provincia)}
                   onChange={(e) => {
                     const val = e.target.value as string[]
-                    const current = formData.provincia.split(',').map((s) => s.trim()).filter(Boolean)
-                    // Warn about provinces being removed (orphan check)
+                    const current = splitProvinces(formData.provincia)
+
+                    // BLOQUEO: no permitir agregar provincia ya cubierta por otro gerente activo
+                    const added = val.filter((p) => !current.includes(p))
+                    if (added.length > 0) {
+                      const conflicts = added.flatMap((prov) => {
+                        const owner = findProvinceOwner(prov, selectedUser?.id)
+                        return owner ? [`${prov} (ya cubierta por ${owner.name} ${owner.lastname})`] : []
+                      })
+                      if (conflicts.length > 0) {
+                        setFormError(`No podés asignar: ${conflicts.join(', ')}. Cada provincia solo puede tener un gerente.`)
+                        return // No aplica el cambio
+                      }
+                    }
+
+                    // ADVERTENCIA: provincias removidas que quedan sin gerente (orphan check)
                     const removed = current.filter((p) => !val.includes(p))
                     if (removed.length > 0) {
                       const orphans = removed.filter((prov) =>
-                        !users.some((u) => u.id !== selectedUser?.id && u.role === 'gerente' && u.activo !== false && u.provincia?.split(',').map((s) => s.trim()).includes(prov)),
+                        !provinceOwners.some((u) => u.id !== selectedUser?.id && splitProvinces(u.provincias?.join(', ') ?? u.provincia).some((assigned) => assigned.toLowerCase() === prov.toLowerCase())),
                       )
                       if (orphans.length > 0) {
                         setFormError(`Atención: ${orphans.join(', ')} quedarán sin supervisión gerencial. Podés continuar igual.`)
@@ -1190,11 +1279,28 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                   renderValue={(selected) => (selected as string[]).join(', ') || '— Sin provincias —'}
                 >
                   {AR_PROVINCIAS.map((prov) => {
-                    const selected = formData.provincia.split(',').map((s) => s.trim()).includes(prov)
+                    const selected = splitProvinces(formData.provincia).some((value) => value.toLowerCase() === prov.toLowerCase())
+                    const ownerGerente = findProvinceOwner(prov, selectedUser?.id)
+                    const isBlocked = !!ownerGerente && !selected
                     return (
-                      <MenuItem key={prov} value={prov}>
-                        <Checkbox checked={selected} size="small" />
-                        {prov}
+                      <MenuItem
+                        key={prov}
+                        value={prov}
+                        disabled={isBlocked}
+                        sx={{
+                          opacity: isBlocked ? 0.55 : 1,
+                          '&.Mui-disabled': { opacity: 0.55 },
+                        }}
+                      >
+                        <Checkbox checked={selected} size="small" disabled={isBlocked} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
+                          <span>{prov}</span>
+                          {ownerGerente && (
+                            <Typography variant="caption" color={isBlocked ? 'text.disabled' : 'warning.main'} sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                              Asignada a {ownerGerente.name} {ownerGerente.lastname}
+                            </Typography>
+                          )}
+                        </Box>
                       </MenuItem>
                     )
                   })}

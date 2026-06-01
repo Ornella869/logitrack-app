@@ -14,6 +14,8 @@ namespace Back.Domain.Models
         public string Password { get; private set; }
         public string DNI { get; private set; }
         public bool Activo { get; private set; } = true;
+        public int FailedLoginAttempts { get; private set; }
+        public DateTime? LockoutUntilUtc { get; private set; }
         // Épica D: sucursal a la que pertenece el usuario (Supervisor/Operador/Repartidor).
         // El Gerente no usa SucursalId (su ámbito es la provincia); el Administrador es global.
         public Guid? SucursalId { get; private set; }
@@ -35,6 +37,26 @@ namespace Back.Domain.Models
 
         public void Activar() => Activo = true;
         public void Desactivar() => Activo = false;
+
+        public bool EstaBloqueado(DateTime utcNow)
+        {
+            return LockoutUntilUtc.HasValue && LockoutUntilUtc.Value > utcNow;
+        }
+
+        public void RegistrarLoginFallido(int maxAttempts, TimeSpan lockoutDuration, DateTime utcNow)
+        {
+            FailedLoginAttempts++;
+            if (FailedLoginAttempts >= maxAttempts)
+            {
+                LockoutUntilUtc = utcNow.Add(lockoutDuration);
+            }
+        }
+
+        public void ResetearIntentosLogin()
+        {
+            FailedLoginAttempts = 0;
+            LockoutUntilUtc = null;
+        }
 
         public void CambiarPassword(string nuevoPasswordHash)
         {

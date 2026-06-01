@@ -4,6 +4,7 @@ using Back.Application.Abstractions;
 using Back.Application.Common;
 using Back.Application.Services;
 using Back.Domain.Models;
+using Microsoft.EntityFrameworkCore;
 using Back.Domain.Repositories;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
@@ -85,17 +86,37 @@ namespace Back.Controllers
             try
             {
                 var result = await _authService.Login(request);
+                await _context.SaveChangesAsync();
                 return Ok(result);
+            }
+            catch (LoginLockoutException ex)
+            {
+                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+                if (ex.JustLocked)
+                {
+                    await _auditoria.RegistrarAsync(
+                        null,
+                        request.Email,
+                        "Anónimo",
+                        TipoAccion.BloqueoLogin,
+                        "Cuenta bloqueada por intentos fallidos",
+                        request.Email,
+                        $"IP origen: {ip ?? "desconocida"}; Bloqueo hasta: {ex.LockoutUntilUtc:O}");
+                }
+                await _context.SaveChangesAsync();
+                return Unauthorized(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
+                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
                 await _auditoria.RegistrarAsync(
                     null,
                     request.Email,
                     "Anónimo",
                     TipoAccion.LoginFallido,
                     "Intento de inicio de sesión fallido",
-                    request.Email);
+                    request.Email,
+                    $"IP origen: {ip ?? "desconocida"}");
                 await _context.SaveChangesAsync();
                 return Unauthorized(ex.Message);
             }
@@ -344,8 +365,18 @@ namespace Back.Controllers
         {
             try
             {
+                await using var tx = await _context.Database.BeginTransactionAsync();
                 var result = await _authService.CrearUsuario(request);
                 await _context.SaveChangesAsync();
+
+                // Si es Gerente, asignar provincias luego de persistir el usuario
+                if (result.Usuario is Gerente && !string.IsNullOrWhiteSpace(request.Provincia))
+                {
+                    await _authService.AsignarProvinciasGerente(result.Usuario.Id, new[] { request.Provincia.Trim() });
+                    await _context.SaveChangesAsync();
+                }
+
+                await tx.CommitAsync();
                 var resp = MapUsuario(result.Usuario);
                 resp.TemporaryPassword = result.TemporaryPassword;
                 return Ok(resp);
@@ -398,6 +429,19 @@ namespace Back.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        /// <summary>Listado de provincias que ya tienen gerente asignado (Gerente/Admin).</summary>
+        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [HttpGet("gerentes/provincias-ocupadas")]
+        public async Task<ActionResult<List<string>>> GetProvinciasOcupadasGerentes()
+        {
+            var provincias = await _context.GerentesProvincias
+                .Select(gp => gp.Provincia)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToListAsync();
+            return Ok(provincias);
         }
 
         /// <summary>Soft-delete: desactivar usuario sin perder historial.</summary>
@@ -473,6 +517,7 @@ namespace Back.Controllers
             // Épica D: ámbito del usuario para que el front gatee por sucursal/provincia.
             SucursalId = u.SucursalId?.ToString(),
             Provincia = u is Gerente ger ? ger.Provincia : null,
+            Provincias = u is Gerente ger2 ? ger2.ProvinciasAsignadas.ToList() : null,
             Role = u switch
             {
                 Administrador => Roles.Administrador,
@@ -515,6 +560,7 @@ namespace Back.Controllers
         // Épica D: ámbito del usuario.
         public string? SucursalId { get; set; }
         public string? Provincia { get; set; }
+        public List<string>? Provincias { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse

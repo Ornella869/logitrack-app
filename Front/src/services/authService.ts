@@ -74,6 +74,7 @@ const mapUsuario = (usuario: any): User => ({
   estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
   sucursalId: usuario.sucursalId ?? usuario.SucursalId ?? null,
   provincia: usuario.provincia ?? usuario.Provincia ?? null,
+  provincias: usuario.provincias ?? usuario.Provincias ?? null,
 })
 
 const mapPagedUsuarios = (data: any): PagedResult<User> => ({
@@ -113,6 +114,7 @@ export const authService = {
         activo: userInfo?.activo ?? true,
         sucursalId: userInfo?.sucursalId ?? userInfo?.SucursalId ?? null,
         provincia: userInfo?.provincia ?? userInfo?.Provincia ?? null,
+        provincias: userInfo?.provincias ?? userInfo?.Provincias ?? null,
       }
 
       console.log('✓ Login exitoso:', user)
@@ -127,9 +129,9 @@ export const authService = {
         responseData?.message ||
         ''
 
-      // 401 puede ser credencial inválida o usuario inactivo. Diferenciar:
+      // 401 puede ser credencial inválida, usuario inactivo o cuenta bloqueada.
       if (status === 401) {
-        if (/inactivo/i.test(responseMsg)) {
+        if (/inactivo|bloqueada|bloqueado/i.test(responseMsg)) {
           throw new Error(responseMsg)
         }
         return null
@@ -346,6 +348,16 @@ export const authService = {
     } catch (error) {
       console.error('Get usuarios page error:', error)
       return { items: [], page, pageSize, totalItems: 0, totalPages: 1 }
+    }
+  },
+
+  getGerenteProvinciasOcupadas: async (): Promise<string[]> => {
+    try {
+      const response = await api.get('/auth/gerentes/provincias-ocupadas')
+      return Array.isArray(response.data) ? response.data : []
+    } catch (error) {
+      console.error('Get gerente provincias ocupadas error:', error)
+      return []
     }
   },
 

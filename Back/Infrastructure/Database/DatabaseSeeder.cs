@@ -324,6 +324,17 @@ namespace Back.Infrastructure.Database
                 }
 
                 await _context.SaveChangesAsync();
+                // Asegurar mapping gerente -> provincia en la nueva tabla
+                var gerenteUsuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Email == p.gerenteEmail) as Gerente;
+                if (gerenteUsuario is not null)
+                {
+                    var exists = await _context.GerentesProvincias.AnyAsync(gp => gp.GerenteId == gerenteUsuario.Id && gp.Provincia == p.provincia);
+                    if (!exists)
+                    {
+                        _context.GerentesProvincias.Add(new Back.Domain.Models.GerenteProvincia(gerenteUsuario.Id, p.provincia));
+                        await _context.SaveChangesAsync();
+                    }
+                }
             }
         }
 
@@ -349,6 +360,13 @@ namespace Back.Infrastructure.Database
                 "30111222", "Buenos Aires");
             _context.Usuarios.Add(gerente);
             await _context.SaveChangesAsync();
+            // Asegurar mapping en GerentesProvincias
+            var exists = await _context.GerentesProvincias.AnyAsync(gp => gp.GerenteId == gerente.Id && gp.Provincia == "Buenos Aires");
+            if (!exists)
+            {
+                _context.GerentesProvincias.Add(new Back.Domain.Models.GerenteProvincia(gerente.Id, "Buenos Aires"));
+                await _context.SaveChangesAsync();
+            }
         }
     }
 

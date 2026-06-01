@@ -23,6 +23,7 @@ export interface User {
   // Épica D: ámbito del usuario.
   sucursalId?: string | null
   provincia?: string | null
+  provincias?: string[] | null
 }
 
 export interface CreateRepartidorData {

@@ -34,18 +34,22 @@ namespace Back.Application.Services
             _context = context;
         }
 
-        public async Task<ReporteVolumen> GetReporteVolumenAsync(DateTime? from, DateTime? to, Guid? sucursalId = null, string? provinciaGerente = null)
+        public async Task<ReporteVolumen> GetReporteVolumenAsync(DateTime? from, DateTime? to, Guid? sucursalId = null, List<string>? provinciasGerente = null)
         {
             var now = OperationalClock.Now;
             var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
             var toUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
 
-            var sucursalesProvincia = string.IsNullOrWhiteSpace(provinciaGerente)
-                ? null
-                : await _context.Sucursales
-                    .Where(s => s.Provincia == provinciaGerente)
+            List<Guid>? sucursalesProvincia = null;
+            if (provinciasGerente != null && provinciasGerente.Any())
+            {
+                var normalized = provinciasGerente.Select(p => p.Trim()).ToList();
+                sucursalesProvincia = await _context.Sucursales
+                    .Where(s => normalized.Any(n => string.Equals(n, s.Provincia, StringComparison.OrdinalIgnoreCase))
+                                || s.ProvinciasCubiertas.Any(pc => normalized.Any(n => string.Equals(n, pc, StringComparison.OrdinalIgnoreCase))))
                     .Select(s => s.Id)
                     .ToListAsync();
+            }
 
             // CA: se filtran todos los paquetes cuya fecha de creación cae en el rango.
             var paquetes = await _context.Paquetes
