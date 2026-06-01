@@ -791,10 +791,18 @@ namespace Back.Controllers
         public async Task<ActionResult<List<Sucursal>>> GetSucursales()
         {
             var user = await CurrentUserAsync();
-            var sucursales = await _enviosRepository.GetSucursales(
-                provincia: user is Gerente gerente ? gerente.Provincia : null,
-                sucursalId: user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null);
-            return Ok(sucursales);
+            // Obtener sucursales y, si es Gerente, filtrar por sus provincias asignadas
+            var sucursalIdFilter = user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null;
+            var all = await _enviosRepository.GetSucursales(null, sucursalIdFilter);
+            if (user is Gerente gerente)
+            {
+                var provincias = await _context.GerentesProvincias.Where(gp => gp.GerenteId == gerente.Id).Select(gp => gp.Provincia).ToListAsync();
+                var filtered = all.Where(s => provincias.Any(p => string.Equals(p, s.Provincia, StringComparison.OrdinalIgnoreCase))
+                    || s.ProvinciasCubiertas.Any(pc => provincias.Any(p => string.Equals(p, pc, StringComparison.OrdinalIgnoreCase))))
+                    .ToList();
+                return Ok(filtered);
+            }
+            return Ok(all);
         }
 
         // Sucursal de origen con coordenadas (geocodificadas on-the-fly).
@@ -804,9 +812,14 @@ namespace Back.Controllers
         public async Task<ActionResult<object>> GetSucursalOrigen([FromServices] GeocodingService geocoding)
         {
             var user = await CurrentUserAsync();
-            var sucursales = await _enviosRepository.GetSucursales(
-                provincia: user is Gerente gerente ? gerente.Provincia : null,
-                sucursalId: user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null);
+            var sucursalIdFilter = user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null;
+            var sucursales = await _enviosRepository.GetSucursales(null, sucursalIdFilter);
+            if (user is Gerente g)
+            {
+                var provincias = await _context.GerentesProvincias.Where(gp => gp.GerenteId == g.Id).Select(gp => gp.Provincia).ToListAsync();
+                sucursales = sucursales.Where(s => provincias.Any(p => string.Equals(p, s.Provincia, StringComparison.OrdinalIgnoreCase))
+                    || s.ProvinciasCubiertas.Any(pc => provincias.Any(p => string.Equals(p, pc, StringComparison.OrdinalIgnoreCase)))).ToList();
+            }
             var sucursal = sucursales.FirstOrDefault(s => s.Estado == SucursalStatus.Activa)
                 ?? sucursales.FirstOrDefault();
             if (sucursal is null) return NoContent();
@@ -839,14 +852,20 @@ namespace Back.Controllers
         // Épica D: multi-sucursal. El Gerente crea sucursales (idealmente de su provincia).
         [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpPost("sucursales/registrar-sucursal")]
-        public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request, [FromServices] IUserRepository userRepo)
+        public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
         {
-            var error = await ValidarProvinciaGerente(request.Provincia, userRepo);
+            var error = await ValidarProvinciaGerente(request.Provincia);
             if (error is not null) return BadRequest(new { error });
 
             var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
             if (request.ProvinciasCubiertas is not null)
                 sucursal.DefinirCobertura(request.ProvinciasCubiertas);
+            // Validar que, si el usuario es Gerente, las provincias cubiertas estén dentro de sus provincias asignadas
+            if (request.ProvinciasCubiertas is not null && request.ProvinciasCubiertas.Count > 0)
+            {
+                var coveredError = await ValidarProvinciasCubiertas(request.ProvinciasCubiertas);
+                if (coveredError is not null) return BadRequest(new { error = coveredError });
+            }
             await _enviosRepository.Add(sucursal);
             await _context.SaveChangesAsync();
 
@@ -869,42 +888,74 @@ namespace Back.Controllers
 
         // Épica D: un Gerente solo puede crear/editar sucursales de su propia provincia.
         // Devuelve un mensaje de error si la provincia no coincide; null si es válido (o Admin).
-        private async Task<string?> ValidarProvinciaGerente(string? provinciaSucursal, IUserRepository userRepo)
+        private async Task<string?> ValidarProvinciaGerente(string? provinciaSucursal)
         {
             if (!User.IsInRole(Roles.Gerente)) return null; // Admin sin restricción
             var userId = CurrentUserId();
             if (userId is null) return "No se pudo identificar al usuario.";
-            var gerente = await userRepo.GetUsuarioById(userId.Value) as Gerente;
+            var gerente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value) as Gerente;
             if (gerente is null) return "Usuario no es Gerente.";
-            if (!string.Equals(gerente.Provincia?.Trim(), provinciaSucursal?.Trim(), StringComparison.OrdinalIgnoreCase))
-                return $"Solo podés gestionar sucursales de tu provincia ({gerente.Provincia}).";
+            // Obtener provincias asignadas al gerente
+            var provincias = await _context.GerentesProvincias
+                .Where(gp => gp.GerenteId == gerente.Id)
+                .Select(gp => gp.Provincia)
+                .ToListAsync();
+            if (!provincias.Any()) return "El gerente no tiene provincias asignadas.";
+            var provNorm = provinciaSucursal?.Trim() ?? string.Empty;
+            if (!provincias.Any(p => string.Equals(p.Trim(), provNorm, StringComparison.OrdinalIgnoreCase)))
+                return $"Solo podés gestionar sucursales de tus provincias asignadas ({string.Join(", ", provincias)}).";
+            return null;
+        }
+
+        // Valida que las provincias cubiertas no tengan gerente asignado (si el usuario es gerente).
+        private async Task<string?> ValidarProvinciasCubiertas(List<string>? provinciasCubiertas)
+        {
+            if (!User.IsInRole(Roles.Gerente)) return null; // Admin sin restricción
+            var userId = CurrentUserId();
+            if (userId is null) return "No se pudo identificar al usuario.";
+            var gerente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value) as Gerente;
+            if (gerente is null) return "Usuario no es Gerente.";
+            var provinciasOcupadas = await _context.GerentesProvincias
+                .Select(gp => gp.Provincia)
+                .ToListAsync();
+            foreach (var prov in provinciasCubiertas ?? new List<string>())
+            {
+                var pNorm = prov?.Trim() ?? string.Empty;
+                if (provinciasOcupadas.Any(p => string.Equals(p.Trim(), pNorm, StringComparison.OrdinalIgnoreCase)))
+                    return "Solo podés asignar cobertura de provincias que no tengan gerente asignado.";
+            }
             return null;
         }
 
         [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpPut("sucursales/{id:guid}")]
-        public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request, [FromServices] IUserRepository userRepo)
+        public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request)
         {
             var sucursal = await _enviosRepository.GetSucursalById(id);
             if (sucursal == null) return NotFound();
             // Bloqueamos tanto la provincia destino como la actual (no permitir mover fuera del ámbito).
-            var error = await ValidarProvinciaGerente(request.Provincia, userRepo)
-                        ?? await ValidarProvinciaGerente(sucursal.Provincia, userRepo);
+            var error = await ValidarProvinciaGerente(request.Provincia)
+                        ?? await ValidarProvinciaGerente(sucursal.Provincia);
             if (error is not null) return BadRequest(new { error });
             sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
             if (request.ProvinciasCubiertas is not null)
                 sucursal.DefinirCobertura(request.ProvinciasCubiertas);
+            if (request.ProvinciasCubiertas is not null && request.ProvinciasCubiertas.Count > 0)
+            {
+                var coveredError = await ValidarProvinciasCubiertas(request.ProvinciasCubiertas);
+                if (coveredError is not null) return BadRequest(new { error = coveredError });
+            }
             await _context.SaveChangesAsync();
             return Ok();
         }
 
         [Authorize(Roles = Roles.GerenteOAdministrador)]
         [HttpDelete("sucursales/{id:guid}")]
-        public async Task<ActionResult> EliminarSucursal(Guid id, [FromServices] IUserRepository userRepo)
+        public async Task<ActionResult> EliminarSucursal(Guid id)
         {
             var sucursal = await _enviosRepository.GetSucursalById(id);
             if (sucursal == null) return NotFound();
-            var error = await ValidarProvinciaGerente(sucursal.Provincia, userRepo);
+            var error = await ValidarProvinciaGerente(sucursal.Provincia);
             if (error is not null) return BadRequest(new { error });
             _enviosRepository.DeleteSucursal(sucursal);
             await _context.SaveChangesAsync();

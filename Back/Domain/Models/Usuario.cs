@@ -16,6 +16,8 @@ namespace Back.Domain.Models
         public bool Activo { get; private set; } = true;
         public int AccessFailedCount { get; private set; }
         public DateTime? BloqueadoHasta { get; private set; }
+        public int FailedLoginAttempts { get; private set; }
+        public DateTime? LockoutUntilUtc { get; private set; }
         // Épica D: sucursal a la que pertenece el usuario (Supervisor/Operador/Repartidor).
         // El Gerente no usa SucursalId (su ámbito es la provincia); el Administrador es global.
         public Guid? SucursalId { get; private set; }
@@ -37,8 +39,6 @@ namespace Back.Domain.Models
 
         public void Activar() => Activo = true;
         public void Desactivar() => Activo = false;
-        public bool EstaBloqueado => BloqueadoHasta.HasValue && BloqueadoHasta.Value > DateTime.UtcNow;
-
         public void RegistrarLoginFallido(int maxIntentos, TimeSpan duracionBloqueo)
         {
             AccessFailedCount++;
@@ -52,11 +52,37 @@ namespace Back.Domain.Models
             BloqueadoHasta = null;
         }
 
+        public bool EstaBloqueado(DateTime utcNow)
+        {
+            return LockoutUntilUtc.HasValue && LockoutUntilUtc.Value > utcNow;
+        }
+
+        public void RegistrarLoginFallido(int maxAttempts, TimeSpan lockoutDuration, DateTime utcNow)
+        {
+            FailedLoginAttempts++;
+            if (FailedLoginAttempts >= maxAttempts)
+            {
+                LockoutUntilUtc = utcNow.Add(lockoutDuration);
+            }
+        }
+
+        public void ResetearIntentosLogin()
+        {
+            FailedLoginAttempts = 0;
+            LockoutUntilUtc = null;
+        }
+
         public void CambiarPassword(string nuevoPasswordHash)
         {
             if (string.IsNullOrWhiteSpace(nuevoPasswordHash))
                 throw new InvalidOperationException("La contraseña no puede estar vacía.");
             Password = nuevoPasswordHash;
+        }
+
+        public void ActualizarNombreApellido(string nombre, string apellido)
+        {
+            Nombre = nombre;
+            Apellido = apellido;
         }
 
         public void ActualizarDatos(string nombre, string apellido, string email, string dni)

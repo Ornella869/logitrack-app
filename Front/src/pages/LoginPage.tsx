@@ -181,51 +181,6 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
           }} />
         ))}
 
-        {/* Camión decorativo flat — rebota suavemente simulando ruta */}
-        <Box sx={{
-          position: 'absolute',
-          bottom: '-18px',
-          left: '-24px',
-          width: { xs: '90vw', sm: '62vw', md: '52vw' },
-          opacity: 0.12,
-          animation: 'truckRide 2.8s ease-in-out infinite',
-          '@keyframes truckRide': {
-            '0%,100%': { transform: 'translateY(0px)' },
-            '50%':     { transform: 'translateY(-5px)' },
-          },
-        }}>
-          <svg viewBox="0 0 480 195" xmlns="http://www.w3.org/2000/svg" width="100%">
-            <circle cx="82"  cy="162" r="27" fill="rgba(255,255,255,0.22)"/>
-            <circle cx="82"  cy="162" r="18" fill="rgba(255,255,255,0.45)"/>
-            <circle cx="82"  cy="162" r="7"  fill="rgba(255,255,255,0.7)"/>
-            <circle cx="192" cy="162" r="27" fill="rgba(255,255,255,0.22)"/>
-            <circle cx="192" cy="162" r="18" fill="rgba(255,255,255,0.45)"/>
-            <circle cx="192" cy="162" r="7"  fill="rgba(255,255,255,0.7)"/>
-            <circle cx="378" cy="162" r="27" fill="rgba(255,255,255,0.22)"/>
-            <circle cx="378" cy="162" r="18" fill="rgba(255,255,255,0.45)"/>
-            <circle cx="378" cy="162" r="7"  fill="rgba(255,255,255,0.7)"/>
-            <circle cx="444" cy="162" r="27" fill="rgba(255,255,255,0.22)"/>
-            <circle cx="444" cy="162" r="18" fill="rgba(255,255,255,0.45)"/>
-            <circle cx="444" cy="162" r="7"  fill="rgba(255,255,255,0.7)"/>
-            <rect x="6" y="136" width="456" height="9" rx="3" fill="white"/>
-            <rect x="8" y="20" width="298" height="118" rx="5" fill="white"/>
-            <rect x="8" y="20" width="298" height="17" rx="5" fill="rgba(0,0,50,0.13)"/>
-            <rect x="8" y="20" width="5" height="118" rx="2" fill="rgba(0,0,50,0.18)"/>
-            <text x="158" y="96" textAnchor="middle"
-              fontFamily="'Arial Black','Arial',sans-serif"
-              fontWeight="900" fontSize="27" letterSpacing="2"
-              fill="rgba(0,20,80,0.38)">LogiTrack</text>
-            <rect x="303" y="122" width="12" height="12" rx="2" fill="rgba(255,255,255,0.6)"/>
-            <path d="M 316 42 L 368 16 L 452 16 L 452 42 Z" fill="white"/>
-            <path d="M 323 41 L 366 18 L 449 18 L 449 41 Z" fill="rgba(180,230,255,0.5)"/>
-            <rect x="316" y="42" width="136" height="96" rx="5" fill="white"/>
-            <rect x="340" y="50" width="60" height="54" rx="4" fill="rgba(180,230,255,0.5)"/>
-            <line x1="400" y1="46" x2="400" y2="136" stroke="rgba(0,0,80,0.1)" strokeWidth="2"/>
-            <rect x="448" y="88" width="16" height="46" rx="3" fill="rgba(255,255,255,0.55)"/>
-            <rect x="449" y="62" width="10" height="18" rx="3" fill="rgba(255,255,220,0.9)"/>
-            <rect x="376" y="-2" width="10" height="20" rx="4" fill="rgba(255,255,255,0.65)"/>
-          </svg>
-        </Box>
 
       </Box>
 

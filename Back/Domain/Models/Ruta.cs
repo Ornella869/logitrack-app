@@ -18,6 +18,9 @@ namespace Back.Domain.Models
         public Repartidor Repartidor { get; private set; }
         public Vehiculo Vehiculo { get; private set; }
         public ICollection<Paquete> Paquetes { get; } = [];
+        public double? UbicacionActualLat { get; private set; }
+        public double? UbicacionActualLng { get; private set; }
+        public DateTime? UbicacionActualizadaEn { get; private set; }
 
         private Ruta()
         {
@@ -104,6 +107,15 @@ namespace Back.Domain.Models
             FinalizadoEn = DateTimeOffset.UtcNow;
 
             Vehiculo.MarcarDisponible();
+        }
+
+        public void ActualizarUbicacion(double lat, double lng)
+        {
+            if (Estado != RutaStatus.EnCurso)
+                throw new InvalidOperationException("Solo se puede actualizar la ubicación de una ruta en curso.");
+            UbicacionActualLat = lat;
+            UbicacionActualLng = lng;
+            UbicacionActualizadaEn = DateTime.UtcNow;
         }
 
         public void ReasignarRepartidor(Repartidor nuevoRepartidor)

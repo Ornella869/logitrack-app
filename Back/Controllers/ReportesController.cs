@@ -13,24 +13,27 @@ namespace Back.Controllers
     {
         private readonly ReportesService _service;
         private readonly IUserRepository _userRepository;
+        private readonly Back.Domain.Repositories.IGerenteProvinciaRepository _gerenteProvinciaRepo;
 
-        public ReportesController(ReportesService service, IUserRepository userRepository)
+        public ReportesController(ReportesService service, IUserRepository userRepository, Back.Domain.Repositories.IGerenteProvinciaRepository gerenteProvinciaRepo)
         {
             _service = service;
             _userRepository = userRepository;
+            _gerenteProvinciaRepo = gerenteProvinciaRepo;
         }
 
-        private async Task<(Guid? SucursalId, string? Provincia)> CurrentScopeAsync()
+        private async Task<(Guid? SucursalId, List<string>? Provincias)> CurrentScopeAsync()
         {
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdStr, out var userId)) return (null, null);
             var usuario = await _userRepository.GetUsuarioById(userId);
-            return usuario switch
+            if (usuario is Administrador) return (null, null);
+            if (usuario is Gerente g)
             {
-                Gerente gerente => (null, gerente.Provincia),
-                Administrador => (null, null),
-                _ => (usuario?.SucursalId, null),
-            };
+                var provincias = await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id);
+                return (null, provincias);
+            }
+            return (usuario?.SucursalId, null);
         }
 
         /// <summary>G1L-26: Reporte de volumen por período (Supervisor).</summary>
@@ -40,7 +43,8 @@ namespace Back.Controllers
             [FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {
             var scope = await CurrentScopeAsync();
-            var reporte = await _service.GetReporteVolumenAsync(desde, hasta, scope.SucursalId, scope.Provincia);
+            // Obtener provincias visibles del usuario (el servicio puede resolverlas si es necesario)
+            var reporte = await _service.GetReporteVolumenAsync(desde, hasta, scope.SucursalId, scope.Provincias);
             return Ok(reporte);
         }
     }

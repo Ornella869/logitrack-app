@@ -7,6 +7,19 @@ using static Back.Domain.Models.Repartidor;
 
 namespace Back.Application.Services
 {
+    public class LoginLockoutException : InvalidOperationException
+    {
+        public DateTime LockoutUntilUtc { get; }
+        public bool JustLocked { get; }
+
+        public LoginLockoutException(DateTime lockoutUntilUtc, bool justLocked, string message)
+            : base(message)
+        {
+            LockoutUntilUtc = lockoutUntilUtc;
+            JustLocked = justLocked;
+        }
+    }
+
     public class RegistrarRepartidorResult
     {
         public required Repartidor Repartidor { get; init; }
@@ -22,31 +35,59 @@ namespace Back.Application.Services
     public class AuthService
     {
 
+        private const int MaxFailedLoginAttempts = 5;
+        private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+
         private readonly IUserRepository _userRepository;
         private readonly EmpresaService _empresaService;
-        private static readonly TimeSpan DuracionBloqueoLogin = TimeSpan.FromMinutes(15);
-        private const int MaxIntentosFallidos = 5;
+        private readonly Back.Domain.Repositories.IGerenteProvinciaRepository _gerenteProvinciaRepo;
 
-        public AuthService(IUserRepository userRepository, EmpresaService empresaService)
+        public AuthService(IUserRepository userRepository, EmpresaService empresaService, Back.Domain.Repositories.IGerenteProvinciaRepository gerenteProvinciaRepo)
         {
             _userRepository = userRepository;
             _empresaService = empresaService;
+            _gerenteProvinciaRepo = gerenteProvinciaRepo;
         }
 
         public async Task<dynamic> Login(LoginRequest request)
         {
             var user = await _userRepository.GetUsuarioByEmail(request.Email);
+            var now = DateTime.UtcNow;
 
             // G1L-31 (Seguridad en Fallos): mismo mensaje sin importar cuál de los dos campos falló.
-            if (user is not null && user.EstaBloqueado)
+            if (user is not null && user.EstaBloqueado(now))
             {
                 throw new InvalidOperationException("Cuenta bloqueada temporalmente por multiples intentos fallidos. Reintenta mas tarde o contacta a un administrador.");
             }
 
             if (user == null || !PasswordHasher.VerifyPassword(request.Password, user.Password))
             {
-                user?.RegistrarLoginFallido(MaxIntentosFallidos, DuracionBloqueoLogin);
+                if (user != null)
+                {
+                    if (user.LockoutUntilUtc.HasValue && user.LockoutUntilUtc.Value <= now)
+                        user.ResetearIntentosLogin();
+
+                    user.RegistrarLoginFallido(MaxFailedLoginAttempts, LockoutDuration, now);
+                    if (user.LockoutUntilUtc.HasValue && user.LockoutUntilUtc.Value > now)
+                    {
+                        var remaining = user.LockoutUntilUtc.Value - now;
+                        var message = $"Cuenta bloqueada temporalmente. Esperá {Math.Ceiling(remaining.TotalMinutes)} min o contactá a un responsable para desbloqueo.";
+                        throw new LoginLockoutException(user.LockoutUntilUtc.Value, true, message);
+                    }
+                }
                 throw new InvalidOperationException("Usuario o contraseña incorrectos");
+            }
+
+            if (user.LockoutUntilUtc.HasValue && user.LockoutUntilUtc.Value > now)
+            {
+                var remaining = user.LockoutUntilUtc.Value - now;
+                var message = $"Cuenta bloqueada temporalmente. Esperá {Math.Ceiling(remaining.TotalMinutes)} min o contactá a un responsable para desbloqueo.";
+                throw new LoginLockoutException(user.LockoutUntilUtc.Value, false, message);
+            }
+
+            if (user.LockoutUntilUtc.HasValue && user.LockoutUntilUtc.Value <= now)
+            {
+                user.ResetearIntentosLogin();
             }
 
             if (!user.Activo)
@@ -55,6 +96,7 @@ namespace Back.Application.Services
             }
 
             user.ResetearLoginFallido();
+            user.ResetearIntentosLogin();
 
             // G1L-64: Si la empresa está suspendida, sólo el Administrador puede ingresar (para reactivar).
             var empresa = await _empresaService.GetOrCreateSingletonAsync();
@@ -62,6 +104,9 @@ namespace Back.Application.Services
             {
                 throw new InvalidOperationException("Servicio suspendido. Contactá al equipo de LogiTrack para regularizar el pago.");
             }
+
+            // Login exitoso: reinicia contador de fallos.
+            user.ResetearIntentosLogin();
 
             var token = JWTservice.GenerateToken(user);
 
@@ -76,7 +121,7 @@ namespace Back.Application.Services
                     email = user.Email,
                     role = user.GetType().Name,
                     sucursalId = user.SucursalId?.ToString(),
-                    provincia = user is Gerente gerente ? gerente.Provincia : null
+                    provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null
                 }
             };
         }
@@ -236,6 +281,7 @@ namespace Back.Application.Services
                 ?? throw new InvalidOperationException("Usuario no encontrado.");
             user.Activar();
             user.ResetearLoginFallido();
+            user.ResetearIntentosLogin();
         }
 
         // G1L-47: usuario cambia su propia clave.
@@ -294,7 +340,22 @@ namespace Back.Application.Services
             if (user is not Gerente gerente)
                 throw new InvalidOperationException("El usuario no es un gerente.");
 
-            gerente.AsignarProvincias(provincias);
+            var lista = provincias?.Select(p => p?.Trim()).Where(p => !string.IsNullOrEmpty(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                ?? new List<string>();
+
+            // Validar que ninguna provincia esté asignada a otro gerente
+            foreach (var p in lista)
+            {
+                var existing = await _gerenteProvinciaRepo.GetGerenteIdByProvincia(p);
+                if (existing.HasValue && existing.Value != gerente.Id)
+                    throw new InvalidOperationException($"La provincia '{p}' ya está asignada a otro gerente.");
+            }
+
+            // Persistir asignaciones
+            await _gerenteProvinciaRepo.AssignProvincias(gerente.Id, lista);
+
+            // Mantener compatibilidad en la entidad Gerente (campo serializado)
+            gerente.AsignarProvincias(lista);
             return gerente;
         }
 

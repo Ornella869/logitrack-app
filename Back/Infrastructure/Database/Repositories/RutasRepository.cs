@@ -68,5 +68,15 @@ namespace Back.Infrastructure.Database.Repositories
                 .Where(r => r.Estado == RutaStatus.Pendiente && r.Paquetes.Any(p => p.Id == paqueteId))
                 .ToListAsync();
         }
+
+        public async Task<Ruta?> GetRutaActivaByRepartidorId(Guid repartidorId)
+        {
+            return await _context.Rutas
+                .Include(r => r.Paquetes)
+                .Include(r => r.Repartidor)
+                .Include(r => r.Vehiculo)
+                .Where(r => r.Repartidor.Id == repartidorId && r.Estado == RutaStatus.EnCurso)
+                .FirstOrDefaultAsync();
+        }
     }
 }

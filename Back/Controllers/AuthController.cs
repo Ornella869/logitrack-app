@@ -4,6 +4,7 @@ using Back.Application.Abstractions;
 using Back.Application.Common;
 using Back.Application.Services;
 using Back.Domain.Models;
+using Microsoft.EntityFrameworkCore;
 using Back.Domain.Repositories;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
@@ -88,15 +89,34 @@ namespace Back.Controllers
                 await _context.SaveChangesAsync();
                 return Ok(result);
             }
+            catch (LoginLockoutException ex)
+            {
+                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+                if (ex.JustLocked)
+                {
+                    await _auditoria.RegistrarAsync(
+                        null,
+                        request.Email,
+                        "Anónimo",
+                        TipoAccion.BloqueoLogin,
+                        "Cuenta bloqueada por intentos fallidos",
+                        request.Email,
+                        $"IP origen: {ip ?? "desconocida"}; Bloqueo hasta: {ex.LockoutUntilUtc:O}");
+                }
+                await _context.SaveChangesAsync();
+                return Unauthorized(ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
+                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
                 await _auditoria.RegistrarAsync(
                     null,
                     request.Email,
                     "Anónimo",
                     TipoAccion.LoginFallido,
                     "Intento de inicio de sesión fallido",
-                    request.Email);
+                    request.Email,
+                    $"IP origen: {ip ?? "desconocida"}");
                 await _context.SaveChangesAsync();
                 return Unauthorized(ex.Message);
             }
@@ -345,8 +365,18 @@ namespace Back.Controllers
         {
             try
             {
+                await using var tx = await _context.Database.BeginTransactionAsync();
                 var result = await _authService.CrearUsuario(request);
                 await _context.SaveChangesAsync();
+
+                // Si es Gerente, asignar provincias luego de persistir el usuario
+                if (result.Usuario is Gerente && !string.IsNullOrWhiteSpace(request.Provincia))
+                {
+                    await _authService.AsignarProvinciasGerente(result.Usuario.Id, new[] { request.Provincia.Trim() });
+                    await _context.SaveChangesAsync();
+                }
+
+                await tx.CommitAsync();
                 var resp = MapUsuario(result.Usuario);
                 resp.TemporaryPassword = result.TemporaryPassword;
                 return Ok(resp);
@@ -355,6 +385,25 @@ namespace Back.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        /// <summary>Actualiza el nombre y apellido del usuario autenticado.</summary>
+        [Authorize]
+        [HttpPut("mi-perfil")]
+        public async Task<ActionResult<UserInfoResponse>> ActualizarMiPerfil([FromBody] ActualizarMiPerfilRequest request)
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(request.Nombre) || string.IsNullOrWhiteSpace(request.Apellido))
+                return BadRequest("Nombre y apellido son obligatorios.");
+
+            var user = await _userRepository.GetUsuarioById(Guid.Parse(userId));
+            if (user == null) return NotFound();
+
+            user.ActualizarNombreApellido(request.Nombre.Trim(), request.Apellido.Trim());
+            await _context.SaveChangesAsync();
+            return Ok(MapUsuario(user));
         }
 
         /// <summary>Actualizar datos de usuario (nombre, apellido, email, DNI y, opcionalmente, provincia para Gerentes).</summary>
@@ -399,6 +448,19 @@ namespace Back.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        /// <summary>Listado de provincias que ya tienen gerente asignado (Gerente/Admin).</summary>
+        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [HttpGet("gerentes/provincias-ocupadas")]
+        public async Task<ActionResult<List<string>>> GetProvinciasOcupadasGerentes()
+        {
+            var provincias = await _context.GerentesProvincias
+                .Select(gp => gp.Provincia)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToListAsync();
+            return Ok(provincias);
         }
 
         /// <summary>Soft-delete: desactivar usuario sin perder historial.</summary>
@@ -474,6 +536,7 @@ namespace Back.Controllers
             // Épica D: ámbito del usuario para que el front gatee por sucursal/provincia.
             SucursalId = u.SucursalId?.ToString(),
             Provincia = u is Gerente ger ? ger.Provincia : null,
+            Provincias = u is Gerente ger2 ? ger2.ProvinciasAsignadas.ToList() : null,
             Role = u switch
             {
                 Administrador => Roles.Administrador,
@@ -516,6 +579,7 @@ namespace Back.Controllers
         // Épica D: ámbito del usuario.
         public string? SucursalId { get; set; }
         public string? Provincia { get; set; }
+        public List<string>? Provincias { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse
@@ -591,6 +655,12 @@ namespace Back.Controllers
         public string DNI { get; set; } = string.Empty;
         /// <summary>Para Gerentes: una o más provincias separadas por comas.</summary>
         public string? Provincia { get; set; }
+    }
+
+    public class ActualizarMiPerfilRequest
+    {
+        [Required] public string Nombre { get; set; } = string.Empty;
+        [Required] public string Apellido { get; set; } = string.Empty;
     }
 
     public class AsignarProvinciasRequest

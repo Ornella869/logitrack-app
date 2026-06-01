@@ -25,12 +25,16 @@ import { postalCodeService } from '../services/postalCodeService'
 import { branchMarkerIcon } from '../utils/mapIcons'
 import BranchForm from './BranchForm'
 import ConfirmDialog from './ConfirmDialog'
+import { authService } from '../services/authService'
+import { notificationService } from '../services/notificationService'
 
 interface BranchManagementProps {
   gerenteProvincia?: string
+  gerenteId?: string
+  gerenteName?: string
 }
 
-function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
+function BranchManagement({ gerenteProvincia, gerenteId, gerenteName }: BranchManagementProps) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -88,8 +92,30 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
     setFormOpen(true)
   }
 
-  const handleSaved = () => {
+  const handleSaved = async (savedBranch: Branch) => {
     setToast({ open: true, msg: editing ? 'Sucursal actualizada' : 'Sucursal creada', severity: 'success' })
+
+    // Al crear una sucursal, notificar a otros gerentes que también cubrían esa provincia
+    if (!editing && savedBranch.province && gerenteId) {
+      try {
+        const result = await authService.getUsuariosPage({ page: 1, pageSize: 100, role: 'gerente' })
+        result.items
+          .filter((g) => g.id !== gerenteId && g.activo)
+          .filter((g) => {
+            const provincias = g.provincia?.split(',').map((p) => p.trim()).filter(Boolean) ?? []
+            return provincias.some((p) => p.toLowerCase() === savedBranch.province!.toLowerCase())
+          })
+          .forEach((g) => {
+            notificationService.add({
+              type: 'otro',
+              title: 'Cambio en tu cobertura provincial',
+              message: `${gerenteName ?? 'Otro gerente'} ha creado una sucursal en ${savedBranch.province}. Ya no tenés cobertura sobre esa provincia.`,
+              recipientId: g.id,
+            })
+          })
+      } catch { /* silent — no bloquea el flujo */ }
+    }
+
     load()
     window.dispatchEvent(new Event('logitrack:sucursales'))
   }
@@ -107,8 +133,14 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
     }
   }
 
-  const visibleBranches = gerenteProvincia
-    ? branches.filter((b) => b.province === gerenteProvincia)
+  const gerenteProvincias = gerenteProvincia
+    ? gerenteProvincia.split(',').map((p) => p.trim()).filter(Boolean)
+    : []
+
+  const visibleBranches = gerenteProvincias.length > 0
+    ? branches.filter((b) => b.province && gerenteProvincias.some(
+        (p) => p.toLowerCase() === b.province!.toLowerCase()
+      ))
     : branches
 
   return (
@@ -243,6 +275,7 @@ function BranchManagement({ gerenteProvincia }: BranchManagementProps) {
         mode={editing ? 'edit' : 'create'}
         initialData={editing ?? undefined}
         lockedProvince={gerenteProvincia}
+        existingBranches={branches}
       />
 
       <ConfirmDialog

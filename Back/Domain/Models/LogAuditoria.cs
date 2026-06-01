@@ -12,6 +12,7 @@ namespace Back.Domain.Models
         DesactivacionUsuario,
         CambioRol,
         LoginFallido,
+        BloqueoLogin,
         Otro,
         ActivacionUsuario,
         // G1L-59 / G1L-61: seguridad del repartidor (Ojo del Patrón).

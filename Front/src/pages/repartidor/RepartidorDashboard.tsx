@@ -44,6 +44,7 @@ import SendIcon from '@mui/icons-material/Send'
 import MyLocationIcon from '@mui/icons-material/MyLocation'
 import LocationDisabledIcon from '@mui/icons-material/LocationDisabled'
 import GpsFixedIcon from '@mui/icons-material/GpsFixed'
+import { useGpsTracking } from '../../hooks/useGpsTracking'
 import { shipmentService } from '../../services/shipmentService'
 import { notificationService } from '../../services/notificationService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
@@ -105,6 +106,7 @@ export default function RepartidorDashboard() {
 
   // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
   const [estadoJornada, setEstadoJornada] = useState('Disponible')
+  useGpsTracking(estadoJornada === 'EnRuta')
   const [cerrandoJornada, setCerrandoJornada] = useState(false)
 
   // QR scanner (cámara + entrada manual del código).

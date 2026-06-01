@@ -40,6 +40,7 @@ import {
 import LocationOnIcon from '@mui/icons-material/LocationOn'
 import type { Branch, BranchStatus } from '../types'
 import { branchService } from '../services/branchService'
+import { authService } from '../services/authService'
 import { postalCodeService } from '../services/postalCodeService'
 import { AR_PROVINCIAS, normalizeProvincia } from '../utils/provincias'
 
@@ -51,6 +52,8 @@ interface BranchFormProps {
   initialData?: Branch
   // Épica D: si se provee, el Gerente solo puede crear sucursales en su provincia.
   lockedProvince?: string
+  // Sucursales existentes para detectar conflicto de provincia.
+  existingBranches?: Branch[]
 }
 
 // Mueve el centro del mapa cuando cambian las coordenadas de preview.
@@ -78,7 +81,7 @@ const EMPTY_FORM = {
   coveredProvinces: [] as string[],
 }
 
-function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lockedProvince }: BranchFormProps) {
+function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lockedProvince, existingBranches }: BranchFormProps) {
   const isEdit = mode === 'edit'
   const [formData, setFormData] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -86,6 +89,13 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
   const [postalChecking, setPostalChecking] = useState(false)
   const [previewCoords, setPreviewCoords] = useState<[number, number] | null>(null)
   const [geocodingPreview, setGeocodingPreview] = useState(false)
+  const [provinceConflictWarning, setProvinceConflictWarning] = useState('')
+  const [provinciasConGerente, setProvinciasConGerente] = useState<string[]>([])
+
+  // Provincias que ya tienen su propia sucursal registrada (excluye la sucursal actual si se está editando)
+  const coveredBlockedProvinces = (existingBranches ?? [])
+    .filter((b) => !isEdit || b.id !== initialData?.id)
+    .flatMap((b) => (b.province ? [b.province.toLowerCase()] : []))
 
   useEffect(() => {
     if (!open) {
@@ -105,9 +115,25 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
         coveredProvinces: initialData.coveredProvinces ?? [],
       })
     } else {
-      setFormData({ ...EMPTY_FORM, province: lockedProvince ?? '' })
+      // lockedProvince puede ser una lista CSV de provincias asignadas al gerente.
+      // Por compatibilidad, si viene, no forzamos a una sola provincia: dejamos vacía
+      // para que el gerente elija cuál de sus provincias crear.
+      setFormData({ ...EMPTY_FORM, province: '' })
     }
+    // Cargar provincias ya asignadas a gerentes activos
+    void (async () => {
+      try {
+        const provincias = await authService.getGerenteProvinciasOcupadas()
+        setProvinciasConGerente(provincias.map((p) => p.toLowerCase()))
+      } catch {
+        setProvinciasConGerente([])
+      }
+    })()
   }, [open, isEdit, initialData, lockedProvince])
+
+  const gerenteProvincias = lockedProvince
+    ? (lockedProvince as string).split(',').map((p) => p.trim()).filter(Boolean)
+    : []
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name } = e.target
@@ -305,6 +331,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
     if (loading) return
     setFormData(EMPTY_FORM)
     setErrors({})
+    setProvinceConflictWarning('')
     onClose()
   }
 
@@ -385,59 +412,104 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
             disabled={loading}
           />
 
-          <FormControl fullWidth required error={!!errors.province} disabled={loading || !!lockedProvince}>
+          <FormControl fullWidth required error={!!errors.province} disabled={loading}>
             <InputLabel>Provincia</InputLabel>
             <Select
               value={formData.province}
               label="Provincia"
               onChange={(e) => {
+                const selected = e.target.value
                 setFormData((prev) => ({
                   ...prev,
-                  province: e.target.value,
-                  coveredProvinces: prev.coveredProvinces.filter((p) => p !== e.target.value),
+                  province: selected,
+                  coveredProvinces: prev.coveredProvinces.filter((p) => p !== selected),
                 }))
                 if (errors.province) setErrors((prev) => ({ ...prev, province: '' }))
+                // Advertencia si ya existe una sucursal en esa provincia
+                if (existingBranches && selected && !isEdit) {
+                  const conflict = existingBranches.some(
+                    (b) => b.province?.toLowerCase() === selected.toLowerCase()
+                  )
+                  setProvinceConflictWarning(
+                    conflict
+                      ? `Ya existe una sucursal en ${selected}. Registrar otra podría superponerse con la gestión de otro gerente.`
+                      : ''
+                  )
+                }
               }}
             >
-              {AR_PROVINCIAS.map((p) => (
+              {(gerenteProvincias.length > 0 ? gerenteProvincias : AR_PROVINCIAS).map((p) => (
                 <MenuItem key={p} value={p}>{p}</MenuItem>
               ))}
             </Select>
             <FormHelperText>
-              {errors.province ?? (lockedProvince
-                ? `Como Gerente solo podés crear sucursales en tu provincia (${lockedProvince}).`
+              {errors.province ?? (gerenteProvincias.length > 0
+                ? `Como Gerente solo podés crear sucursales en tus provincias asignadas (${gerenteProvincias.join(', ')}).`
                 : 'Se pre-selecciona al validar el CP — verificá que sea correcta para CPs ambiguos.')}
             </FormHelperText>
           </FormControl>
+          {provinceConflictWarning && (
+            <Alert severity="warning" sx={{ mt: -1 }}>
+              {provinceConflictWarning}
+            </Alert>
+          )}
 
-          <FormControl fullWidth disabled={loading}>
-            <InputLabel>Cobertura adicional</InputLabel>
-            <Select
-              multiple
-              value={formData.coveredProvinces}
-              label="Cobertura adicional"
-              onChange={(e) => {
-                const value = e.target.value
-                setFormData((prev) => ({
-                  ...prev,
-                  coveredProvinces: (typeof value === 'string' ? value.split(',') : value)
-                    .filter((p) => p !== prev.province),
-                }))
-              }}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {selected.map((value) => (
-                    <Chip key={value} label={value} size="small" />
-                  ))}
-                </Box>
-              )}
-            >
-              {AR_PROVINCIAS.filter((p) => p !== formData.province).map((p) => (
-                <MenuItem key={p} value={p}>{p}</MenuItem>
-              ))}
-            </Select>
-            <FormHelperText>La provincia propia siempre queda cubierta.</FormHelperText>
-          </FormControl>
+            <FormControl fullWidth disabled={loading}>
+              <FormHelperText sx={{ mb: 1 }}>
+                <strong>Nota:</strong> Solo podés asignar cobertura de provincias que no tengan gerente activo asignado ni sucursal propia.
+              </FormHelperText>
+              <InputLabel>Cobertura adicional</InputLabel>
+              <Select
+                multiple
+                value={formData.coveredProvinces}
+                label="Cobertura adicional"
+                onChange={(e) => {
+                  const value = e.target.value
+                  setFormData((prev) => ({
+                    ...prev,
+                    coveredProvinces: (typeof value === 'string' ? value.split(',') : value)
+                      .filter((p) => p !== prev.province),
+                  }))
+                }}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip key={value} label={value} size="small" />
+                    ))}
+                  </Box>
+                )}
+              >
+                {AR_PROVINCIAS.filter((p) => p !== formData.province).map((p) => {
+                  const lower = p.toLowerCase()
+                  const isBlockedByBranch = coveredBlockedProvinces.includes(lower)
+                  const isBlockedByGerente = provinciasConGerente.includes(lower)
+                  const isAlreadySelected = formData.coveredProvinces.map((s) => s.toLowerCase()).includes(lower)
+                  const disabled = (isBlockedByBranch || isBlockedByGerente) && !isAlreadySelected
+                  return (
+                    <MenuItem key={p} value={p} disabled={disabled}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
+                        <span>{p}</span>
+                        {isBlockedByGerente && !isAlreadySelected && (
+                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                            ya tiene gerente
+                          </Typography>
+                        )}
+                        {isBlockedByBranch && !isAlreadySelected && !isBlockedByGerente && (
+                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                            ya tiene sucursal
+                          </Typography>
+                        )}
+                      </Box>
+                    </MenuItem>
+                  )
+                })}
+              </Select>
+              <FormHelperText>
+                {formData.coveredProvinces.length > 0
+                  ? 'Estas coberturas se guardan solo si la provincia no tiene gerente asignado.'
+                  : 'La provincia propia siempre queda cubierta.'}
+              </FormHelperText>
+            </FormControl>
 
           <TextField
             label="Teléfono"

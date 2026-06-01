@@ -21,6 +21,7 @@ namespace Back.Infrastructure.Database
         public DbSet<ConfiguracionTarifa> ConfiguracionesTarifa { get; set; }
         public DbSet<ZonaPeligrosa> ZonasPeligrosas { get; set; }
         public DbSet<ConsentimientoOjoPatron> ConsentimientosOjoPatron { get; set; }
+        public DbSet<Back.Domain.Models.GerenteProvincia> GerentesProvincias { get; set; }
         public DbSet<PruebaOjoPatron> PruebasOjoPatron { get; set; }
         public DbSet<ConfiguracionOjoPatron> ConfiguracionesOjoPatron { get; set; }
         public DbSet<Incidencia> Incidencias { get; set; }

@@ -11,5 +11,6 @@ namespace Back.Domain.Repositories
         Task<List<Ruta>> GetRutas();
         Task<bool> IsVehiculoEnRuta(Guid vehiculoId);
         Task<List<Ruta>> GetRutasPendientesConPaquete(Guid paqueteId);
+        Task<Ruta?> GetRutaActivaByRepartidorId(Guid repartidorId);
     }
 }

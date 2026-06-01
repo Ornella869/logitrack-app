@@ -70,7 +70,7 @@ namespace Back.Infrastructure.Database.Repositories
                     if (!string.IsNullOrWhiteSpace(sucursal?.Provincia))
                     {
                         var prov = sucursal.Provincia;
-                        query = query.OfType<Gerente>().Where(g => g.Provincia == prov);
+                        query = query.OfType<Gerente>().Where(g => _context.GerentesProvincias.Any(gp => gp.Provincia == prov && gp.GerenteId == g.Id));
                     }
                     else
                     {
@@ -126,6 +126,10 @@ namespace Back.Infrastructure.Database.Repositories
 
         public Task<Usuario?> GetUsuarioById(Guid id)
         {
+            var tracked = _context.Usuarios.Local.FirstOrDefault(u => u.Id == id);
+            if (tracked is not null)
+                return Task.FromResult<Usuario?>(tracked);
+
             return _context.Usuarios.FirstOrDefaultAsync(u => u.Id == id);
         }
     }
