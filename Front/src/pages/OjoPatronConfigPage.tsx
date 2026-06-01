@@ -15,11 +15,12 @@ import SaveIcon from '@mui/icons-material/Save'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import { ojoPatronService } from '../services/ojoPatronService'
 import type { User } from '../types'
+import OjoPatronSupervisorPanel from './OjoPatronSupervisorPanel'
 
 // G1L-61: configuración del umbral del Ojo del Patrón (Administrador).
 export default function OjoPatronConfigPage() {
   const user = useOutletContext<User>()
-  const isAdmin = user.role === 'gerente'
+  const isGerente = user.role === 'gerente'
 
   const [umbral, setUmbral] = useState(0.4)
   const [loading, setLoading] = useState(true)
@@ -27,12 +28,16 @@ export default function OjoPatronConfigPage() {
   const [msg, setMsg] = useState<{ sev: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
+    if (!isGerente) {
+      setLoading(false)
+      return
+    }
     void (async () => {
       const c = await ojoPatronService.getConfiguracion()
       if (c) setUmbral(c.umbralAlertness)
       setLoading(false)
     })()
-  }, [])
+  }, [isGerente])
 
   const handleSave = async () => {
     setSaving(true)
@@ -43,7 +48,8 @@ export default function OjoPatronConfigPage() {
       : { sev: 'error', text: res.error ?? 'Error al guardar' })
   }
 
-  if (!isAdmin) return <Alert severity="warning">Solo el Gerente.</Alert>
+  if (user.role === 'supervisor') return <OjoPatronSupervisorPanel />
+  if (!isGerente) return <Alert severity="warning">Solo el Gerente.</Alert>
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
 
   return (

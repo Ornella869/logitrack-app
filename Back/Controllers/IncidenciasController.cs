@@ -52,7 +52,8 @@ namespace Back.Controllers
                 string.IsNullOrWhiteSpace(request.TipoLabel) ? request.Tipo.Trim() : request.TipoLabel.Trim(),
                 request.Descripcion.Trim(),
                 string.IsNullOrWhiteSpace(request.EmailContacto) ? null : request.EmailContacto.Trim(),
-                new[] { paquete.Id });
+                new[] { paquete.Id },
+                request.Severidad);
 
             await _context.Incidencias.AddAsync(incidencia);
             await _context.SaveChangesAsync();
@@ -91,7 +92,8 @@ namespace Back.Controllers
                 string.IsNullOrWhiteSpace(request.TipoLabel) ? request.Tipo.Trim() : request.TipoLabel.Trim(),
                 request.Descripcion.Trim(),
                 null,
-                paradas.Select(p => p.Id));
+                paradas.Select(p => p.Id),
+                request.Severidad);
 
             await _context.Incidencias.AddAsync(incidencia);
             await _auditoria.RegistrarAsync(
@@ -112,7 +114,11 @@ namespace Back.Controllers
 
             var incidencias = await _context.Incidencias
                 .Where(i => i.SucursalId == user.SucursalId)
-                .OrderByDescending(i => i.FechaReporte)
+                .OrderBy(i => i.Estado == "Resuelta")
+                .ThenByDescending(i => i.Severidad == "Alta")
+                .ThenByDescending(i => i.Severidad == "Media")
+                .ThenBy(i => i.SlaVenceEn)
+                .ThenByDescending(i => i.FechaReporte)
                 .ToListAsync();
 
             return Ok(incidencias.Select(ToDto).ToList());
@@ -238,6 +244,41 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor)]
+        [HttpGet("ranking-zonas")]
+        public async Task<ActionResult<List<RankingZonaIncidenciaDto>>> RankingZonas()
+        {
+            var user = await CurrentUserAsync();
+            if (user?.SucursalId is null) return Ok(new List<RankingZonaIncidenciaDto>());
+
+            var data = await _context.Incidencias
+                .Where(i => i.SucursalId == user.SucursalId)
+                .GroupJoin(_context.Paquetes,
+                    i => i.PaqueteId,
+                    p => p.Id,
+                    (i, ps) => new { Incidencia = i, Paquete = ps.FirstOrDefault() })
+                .ToListAsync();
+
+            var ranking = data
+                .GroupBy(x => new
+                {
+                    Provincia = x.Paquete?.ProvinciaDestino ?? "Sin provincia",
+                    Localidad = x.Paquete?.Destinatario.Direccion.Ciudad ?? "Sin localidad",
+                })
+                .Select(g => new RankingZonaIncidenciaDto(
+                    g.Key.Provincia,
+                    g.Key.Localidad,
+                    g.Count(),
+                    g.Count(x => x.Incidencia.Severidad == "Alta"),
+                    g.Count(x => x.Incidencia.Estado != "Resuelta" && x.Incidencia.SlaVenceEn < DateTime.UtcNow)))
+                .OrderByDescending(x => x.Total)
+                .ThenByDescending(x => x.Altas)
+                .Take(10)
+                .ToList();
+
+            return Ok(ranking);
+        }
+
+        [Authorize(Roles = Roles.Supervisor)]
         [HttpPost("{id:guid}/observaciones")]
         public async Task<ActionResult<IncidenciaDto>> AgregarObservacion(Guid id, [FromBody] AgregarObservacionIncidenciaRequest request)
         {
@@ -331,11 +372,14 @@ namespace Back.Controllers
             i.CodigoSeguimiento,
             i.EmailContacto,
             i.ChatFinalizado,
-            i.SucursalId?.ToString());
+            i.SucursalId?.ToString(),
+            i.Severidad,
+            i.SlaVenceEn,
+            i.Estado != "Resuelta" && i.SlaVenceEn.HasValue && i.SlaVenceEn.Value < DateTime.UtcNow);
     }
 
-    public record CrearIncidenciaPublicaRequest(string TrackingId, string Tipo, string? TipoLabel, string Descripcion, string? EmailContacto);
-    public record CrearIncidenciaRepartidorRequest(string Tipo, string? TipoLabel, string Descripcion, List<Guid>? ParadasAfectadas);
+    public record CrearIncidenciaPublicaRequest(string TrackingId, string Tipo, string? TipoLabel, string Descripcion, string? EmailContacto, string? Severidad);
+    public record CrearIncidenciaRepartidorRequest(string Tipo, string? TipoLabel, string Descripcion, List<Guid>? ParadasAfectadas, string? Severidad);
     public record CambiarEstadoIncidenciaRequest(string Estado);
     public record AgregarObservacionIncidenciaRequest(string Texto);
     public record SendMensajeRequest(string Texto);
@@ -368,5 +412,10 @@ namespace Back.Controllers
         string? CodigoSeguimiento,
         string? EmailContacto,
         bool ChatFinalizado,
-        string? SucursalId);
+        string? SucursalId,
+        string Severidad,
+        DateTime? SlaVenceEn,
+        bool SlaVencido);
+
+    public record RankingZonaIncidenciaDto(string Provincia, string Localidad, int Total, int Altas, int Vencidas);
 }

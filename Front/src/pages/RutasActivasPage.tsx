@@ -9,6 +9,9 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Grid,
   InputAdornment,
   LinearProgress,
@@ -29,7 +32,11 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import GpsFixedIcon from '@mui/icons-material/GpsFixed'
+import PlaceIcon from '@mui/icons-material/Place'
 import api from '../services/api'
+import { shipmentService } from '../services/shipmentService'
+import { pickupService, type PuntoPickUp } from '../services/pickupService'
 import type { PagedResult, User } from '../types'
 import { dateOnly, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
@@ -47,6 +54,9 @@ type RutaActiva = {
   pesoTotal: number
   estado: string
   esDemorada: boolean
+  paqueteIdParaSimulacion?: string | null
+  latitudSimulacion?: number | null
+  longitudSimulacion?: number | null
 }
 
 type RutasActivasKpis = {
@@ -84,23 +94,39 @@ export default function RutasActivasPage() {
     avancePct: 0,
     totalRutas: 0,
   })
+  const [ubicaciones, setUbicaciones] = useState<Array<{ repartidorId: string; repartidorNombre: string; codigoSeguimiento: string; latitud: number; longitud: number; actualizadaEn?: string }>>([])
+  const [simulandoId, setSimulandoId] = useState<string | null>(null)
+  const [pickupsOpen, setPickupsOpen] = useState(false)
+  const [pickups, setPickups] = useState<PuntoPickUp[]>([])
+  const [pickupsLoading, setPickupsLoading] = useState(false)
 
   useEffect(() => {
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
   }, [user.role, page, rowsPerPage, search])
 
+  useEffect(() => {
+    if (user.role !== 'supervisor' && user.role !== 'administrador') return
+    const timer = window.setInterval(() => {
+      void shipmentService.getRepartidoresUbicacion().then(setUbicaciones).catch(() => undefined)
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [user.role])
+
   const load = async () => {
     setLoading(true)
     setError('')
     try {
-      const response = await api.get<RutasActivasResponse>('/rutas-activas', {
-        params: {
-          page: page + 1,
-          pageSize: rowsPerPage,
-          search: search.trim() || undefined,
-        },
-      })
+      const [response, ubicacionesActivas] = await Promise.all([
+        api.get<RutasActivasResponse>('/rutas-activas', {
+          params: {
+            page: page + 1,
+            pageSize: rowsPerPage,
+            search: search.trim() || undefined,
+          },
+        }),
+        shipmentService.getRepartidoresUbicacion().catch(() => []),
+      ])
       setRutas(response.data?.items ?? [])
       setTotalItems(response.data?.totalItems ?? 0)
       setKpis(response.data?.kpis ?? {
@@ -112,10 +138,37 @@ export default function RutasActivasPage() {
         avancePct: 0,
         totalRutas: 0,
       })
+      setUbicaciones(ubicacionesActivas)
     } catch {
       setError('No se pudieron cargar las rutas activas')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const simularUbicacion = async (ruta: RutaActiva) => {
+    if (!ruta.paqueteIdParaSimulacion || ruta.latitudSimulacion == null || ruta.longitudSimulacion == null) return
+    setSimulandoId(ruta.paqueteIdParaSimulacion)
+    try {
+      const offset = (Math.random() - 0.5) * 0.018
+      await shipmentService.actualizarUbicacion(
+        ruta.paqueteIdParaSimulacion,
+        ruta.latitudSimulacion + offset,
+        ruta.longitudSimulacion + offset,
+      )
+      await load()
+    } finally {
+      setSimulandoId(null)
+    }
+  }
+
+  const abrirPickUps = async () => {
+    setPickupsOpen(true)
+    setPickupsLoading(true)
+    try {
+      setPickups(await pickupService.getAll())
+    } finally {
+      setPickupsLoading(false)
     }
   }
 
@@ -136,6 +189,11 @@ export default function RutasActivasPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
+          {user.role === 'supervisor' && (
+            <Button startIcon={<PlaceIcon />} onClick={() => void abrirPickUps()} disabled={pickupsLoading}>
+              PickUps cobertura
+            </Button>
+          )}
           <TextField
             size="small"
             placeholder="Buscar repartidor o CP..."
@@ -163,6 +221,12 @@ export default function RutasActivasPage() {
         <Kpi label="Avance global" value={`${kpis.avancePct}%`} sub={`${kpis.totalEntregadas}/${kpis.totalParadas} paradas`} color="#5e35b1" icon={<CheckCircleIcon />} />
       </Grid>
 
+      {ubicaciones.length > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Ubicacion en vivo: {ubicaciones.map((u) => `${u.repartidorNombre} (${u.codigoSeguimiento})`).join(' · ')}
+        </Alert>
+      )}
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
       ) : totalItems === 0 ? (
@@ -188,6 +252,7 @@ export default function RutasActivasPage() {
             </TableHead>
             <TableBody>
               {rutas.map((r, idx) => {
+                const ubicacionRuta = ubicaciones.find((u) => u.repartidorId === r.repartidorId)
                 const initials = r.repartidorNombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
                 const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                 const completas = r.entregadas + r.canceladas
@@ -248,15 +313,30 @@ export default function RutasActivasPage() {
                       ) : (
                         <Chip size="small" label="Listo para Salir" sx={{ bgcolor: isDark ? 'rgba(2,136,209,0.2)' : '#e1f5fe', color: isDark ? '#81d4fa' : '#0288d1' }} />
                       )}
+                      {ubicacionRuta && (
+                        <Chip size="small" label="GPS activo" color="success" variant="outlined" sx={{ ml: 1 }} />
+                      )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => navigate(`/rutas-activas/${r.repartidorId}?fecha=${fechaIso}`)}
-                      >
-                        Ver detalle
-                      </Button>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => navigate(`/rutas-activas/${r.repartidorId}?fecha=${fechaIso}`)}
+                        >
+                          Ver detalle
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="secondary"
+                          startIcon={simulandoId === r.paqueteIdParaSimulacion ? <CircularProgress size={12} /> : <GpsFixedIcon />}
+                          disabled={r.estado !== 'EnTransito' || !r.paqueteIdParaSimulacion || simulandoId === r.paqueteIdParaSimulacion}
+                          onClick={() => void simularUbicacion(r)}
+                        >
+                          Simular ubicacion
+                        </Button>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 )
@@ -285,6 +365,33 @@ export default function RutasActivasPage() {
           Hay {kpis.demoradas} ruta{kpis.demoradas > 1 ? 's' : ''} marcada{kpis.demoradas > 1 ? 's' : ''} como demorada{kpis.demoradas > 1 ? 's' : ''} (menos del 50% completado pasado el mediodía).
         </Alert>
       )}
+      <Dialog open={pickupsOpen} onClose={() => setPickupsOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>PickUps dentro de tu cobertura</DialogTitle>
+        <DialogContent>
+          {pickupsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress /></Box>
+          ) : pickups.length === 0 ? (
+            <Alert severity="info">No hay PickUps activos para tu cobertura.</Alert>
+          ) : (
+            <Stack spacing={1.2} sx={{ pt: 1 }}>
+              {pickups.map((p) => (
+                <Card key={p.id} variant="outlined">
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                      <Box>
+                        <Typography variant="body2" fontWeight={700}>{p.nombre}</Typography>
+                        <Typography variant="caption" color="text.secondary">{p.direccion}, {p.localidad}</Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">CP {p.codigoPostal} - {p.provincia}</Typography>
+                      </Box>
+                      <Chip size="small" label={p.horarios} />
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }

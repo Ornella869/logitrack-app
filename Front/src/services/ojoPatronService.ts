@@ -30,6 +30,28 @@ export type ResultadoPrueba = 0 | 2
 // 0 = Inicio de ruta, 1 = Mitad de recorrido
 export type MomentoPrueba = 0 | 1
 
+export interface OverrideOjoPatron {
+  id: string
+  repartidorId: string
+  supervisorId?: string | null
+  momento: string
+  motivo: string
+  estado: 'Pendiente' | 'Aprobado' | 'Rechazado'
+  solicitadoEn: string
+  resueltoEn?: string | null
+  comentarioSupervisor?: string | null
+}
+
+export interface MetricaOjoPatron {
+  repartidorId: string
+  repartidorNombre: string
+  aprobadas: number
+  fallidas: number
+  overridesAprobados: number
+  promedioAlertness: number
+  ultimaPrueba?: string | null
+}
+
 export interface RegistrarPruebaPayload {
   scoreNeu: number
   scoreHap: number
@@ -139,5 +161,29 @@ export const ojoPatronService = {
     } catch (e: any) {
       return { success: false, error: e.response?.data ?? 'No se pudo actualizar' }
     }
+  },
+
+  solicitarOverride: async (momento: MomentoPrueba, motivo: string): Promise<{ success: boolean; data?: OverrideOjoPatron; error?: string }> => {
+    try {
+      const r = await api.post('/ojo-patron/override/solicitar', { Momento: momento, Motivo: motivo })
+      return { success: true, data: r.data }
+    } catch (e: any) {
+      return { success: false, error: e.response?.data ?? 'No se pudo solicitar el override' }
+    }
+  },
+
+  getOverrides: async (): Promise<OverrideOjoPatron[]> => {
+    const r = await api.get('/ojo-patron/override/solicitudes')
+    return r.data ?? []
+  },
+
+  resolverOverride: async (overrideId: string, aprobado: boolean, comentario?: string): Promise<OverrideOjoPatron> => {
+    const r = await api.post(`/ojo-patron/override/${overrideId}/resolver`, { Aprobado: aprobado, Comentario: comentario })
+    return r.data
+  },
+
+  getMetricasHistoricas: async (): Promise<MetricaOjoPatron[]> => {
+    const r = await api.get('/ojo-patron/metricas-historicas')
+    return r.data ?? []
   },
 }

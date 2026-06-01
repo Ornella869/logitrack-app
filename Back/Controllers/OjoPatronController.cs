@@ -107,6 +107,59 @@ namespace Back.Controllers
         public async Task<ActionResult<object>> PruebaMitadRequerida(Guid paqueteId)
             => Ok(new { requerida = await _service.RequierePruebaMitadAsync(paqueteId) });
 
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("override/solicitar")]
+        public async Task<ActionResult<OverrideOjoPatronDto>> SolicitarOverride([FromBody] SolicitarOverrideOjoPatronRequest request)
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            try
+            {
+                var solicitud = await _service.SolicitarOverrideAsync(userId.Value, request.Momento, request.Motivo);
+                return Ok(ToOverrideDto(solicitud));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = Roles.Supervisor)]
+        [HttpGet("override/solicitudes")]
+        public async Task<ActionResult<List<OverrideOjoPatronDto>>> ListarOverrides()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            var solicitudes = await _service.ListarOverridesSupervisorAsync(userId.Value);
+            return Ok(solicitudes.Select(ToOverrideDto).ToList());
+        }
+
+        [Authorize(Roles = Roles.Supervisor)]
+        [HttpPost("override/{overrideId:guid}/resolver")]
+        public async Task<ActionResult<OverrideOjoPatronDto>> ResolverOverride(Guid overrideId, [FromBody] ResolverOverrideOjoPatronRequest request)
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            try
+            {
+                var solicitud = await _service.ResolverOverrideAsync(userId.Value, overrideId, request.Aprobado, request.Comentario);
+                return Ok(ToOverrideDto(solicitud));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = Roles.Supervisor)]
+        [HttpGet("metricas-historicas")]
+        public async Task<ActionResult<List<object>>> MetricasHistoricas()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            return Ok(await _service.GetMetricasHistoricasAsync(userId.Value));
+        }
+
         /// <summary>Configuración del umbral de la provincia del usuario logueado.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
         [HttpGet("configuracion")]
@@ -131,6 +184,17 @@ namespace Back.Controllers
                 return BadRequest(ex.Message);
             }
         }
+
+        private static OverrideOjoPatronDto ToOverrideDto(OverrideOjoPatron o) => new(
+            o.Id,
+            o.RepartidorId,
+            o.SupervisorId,
+            o.Momento.ToString(),
+            o.Motivo,
+            o.Estado.ToString(),
+            o.SolicitadoEn,
+            o.ResueltoEn,
+            o.ComentarioSupervisor);
     }
 
     public class RegistrarPruebaRequest
@@ -149,4 +213,28 @@ namespace Back.Controllers
     {
         public double UmbralAlertness { get; set; }
     }
+
+    public class SolicitarOverrideOjoPatronRequest
+    {
+        public Domain.Models.MomentoPruebaOjoPatron Momento { get; set; } = Domain.Models.MomentoPruebaOjoPatron.Inicio;
+        public string Motivo { get; set; } = string.Empty;
+    }
+
+    public class ResolverOverrideOjoPatronRequest
+    {
+        public bool Aprobado { get; set; }
+        public string? Comentario { get; set; }
+    }
+
+    public record OverrideOjoPatronDto(
+        Guid Id,
+        Guid RepartidorId,
+        Guid? SupervisorId,
+        string Momento,
+        string Motivo,
+        string Estado,
+        DateTime SolicitadoEn,
+        DateTime? ResueltoEn,
+        string? ComentarioSupervisor);
+
 }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -89,6 +90,65 @@ namespace Back.Application.Services
             return null;
         }
 
+        public async Task<ValidacionDireccionResult> ValidarDireccionExactaAsync(
+            string direccion,
+            string localidad,
+            string codigoPostal,
+            string provincia)
+        {
+            var direccionTrim = (direccion ?? string.Empty).Trim();
+            var localidadTrim = (localidad ?? string.Empty).Trim();
+            var cpTrim = (codigoPostal ?? string.Empty).Trim();
+            var provinciaTrim = (provincia ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(direccionTrim) ||
+                string.IsNullOrWhiteSpace(localidadTrim) ||
+                string.IsNullOrWhiteSpace(cpTrim) ||
+                string.IsNullOrWhiteSpace(provinciaTrim))
+                return ValidacionDireccionResult.Invalida("Direccion, localidad, codigo postal y provincia son obligatorios.");
+
+            var alturaPedida = ExtraerAltura(direccionTrim);
+            if (!alturaPedida.HasValue)
+                return ValidacionDireccionResult.Invalida("La direccion debe incluir altura.");
+
+            if (!Regex.IsMatch(cpTrim, @"^\d{4}$"))
+                return ValidacionDireccionResult.Invalida("El codigo postal debe tener 4 digitos.");
+
+            var cpValido = await ValidarCodigoPostalAsync(cpTrim, localidadTrim, provinciaTrim);
+            if (!cpValido.Valido)
+                return ValidacionDireccionResult.Invalida(cpValido.Error ?? "El codigo postal no coincide con la localidad/provincia.");
+
+            var ubicGeoref = await TryGeoref(direccionTrim, localidadTrim, provinciaTrim);
+            if (ubicGeoref is not null) return ValidacionDireccionResult.Valida();
+
+            var ubicNominatim = await SearchNominatimStrict(
+                BuildStructured(direccionTrim, localidadTrim, cpTrim, provinciaTrim),
+                alturaPedida.Value,
+                cpTrim,
+                localidadTrim,
+                provinciaTrim);
+
+            if (ubicNominatim is not null) return ValidacionDireccionResult.Valida();
+
+            var calleEnProvincia = await SearchNominatimStreetLevel(
+                direccionTrim,
+                localidadTrim,
+                cpTrim,
+                provinciaTrim,
+                alturaPedida.Value);
+
+            if (calleEnProvincia) return ValidacionDireccionResult.Valida();
+
+            var provinciaDetectada = await DetectarProvinciaDireccionAsync(direccionTrim, alturaPedida.Value);
+            if (!string.IsNullOrWhiteSpace(provinciaDetectada) &&
+                NormalizeProvince(provinciaDetectada) != NormalizeProvince(provinciaTrim))
+            {
+                return ValidacionDireccionResult.Invalida($"La direccion parece pertenecer a {provinciaDetectada}, no a {provinciaTrim}.");
+            }
+
+            return ValidacionDireccionResult.Invalida("No se pudo verificar que la calle exista dentro de la localidad y provincia indicadas.");
+        }
+
         private static int? ExtraerAltura(string direccion)
         {
             // "Av. Corrientes 1234" → 1234. Tolera "1234A".
@@ -125,6 +185,73 @@ namespace Back.Application.Services
                 ["addressdetails"] = "1",
                 ["accept-language"] = "es",
             };
+
+        private async Task<ValidacionPostalResult> ValidarCodigoPostalAsync(string codigoPostal, string localidad, string provincia)
+        {
+            var parameters = new Dictionary<string, string?>
+            {
+                ["postalcode"] = codigoPostal,
+                ["country"] = "Argentina",
+                ["countrycodes"] = CountryCode,
+                ["format"] = "json",
+                ["limit"] = CandidateLimit.ToString(),
+                ["addressdetails"] = "1",
+                ["accept-language"] = "es",
+            };
+
+            var results = await FetchNominatim(parameters);
+            if (results is null || results.Length == 0)
+                return ValidacionPostalResult.Invalido("No se pudo verificar el codigo postal.");
+
+            var candidatos = results
+                .Where(r => string.Equals(r.Address?.CountryCode, CountryCode, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (candidatos.Count == 0)
+                return ValidacionPostalResult.Invalido("El codigo postal no pertenece a Argentina.");
+
+            var provinciaEsperada = NormalizeProvince(provincia);
+            var mismaProvincia = candidatos.Where(r => NormalizeProvince(r.Address?.State ?? r.Address?.Province) == provinciaEsperada).ToList();
+            if (mismaProvincia.Count == 0)
+            {
+                var provinciaEncontrada = candidatos
+                    .Select(r => r.Address?.State ?? r.Address?.Province)
+                    .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+                return ValidacionPostalResult.Invalido(string.IsNullOrWhiteSpace(provinciaEncontrada)
+                    ? "No se pudo confirmar la provincia del codigo postal."
+                    : $"El codigo postal pertenece a {provinciaEncontrada}, no a {provincia}.");
+            }
+
+            var conLocalidad = mismaProvincia
+                .Select(r => GetLocalidad(r.Address))
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .ToList();
+            if (conLocalidad.Count > 0 && !conLocalidad.Any(l => TextMatches(l, localidad)))
+            {
+                return ValidacionPostalResult.Invalido($"El codigo postal no coincide con la localidad {localidad}.");
+            }
+
+            return ValidacionPostalResult.Ok();
+        }
+
+        private async Task<NominatimResult[]?> FetchNominatim(Dictionary<string, string?> parameters)
+        {
+            var qs = string.Join("&", parameters
+                .Where(kv => !string.IsNullOrEmpty(kv.Value))
+                .Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value!)}"));
+            var url = $"{NominatimBaseUrl}?{qs}";
+
+            try
+            {
+                using var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return null;
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<NominatimResult[]>(json);
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         // ── Georef ──────────────────────────────────────────────────────────────
         // API: https://apis.datos.gob.ar/georef/api/direcciones
@@ -185,6 +312,91 @@ namespace Back.Application.Services
         }
 
         // ── Nominatim ───────────────────────────────────────────────────────────
+        private async Task<Ubicacion?> SearchNominatimStrict(
+            Dictionary<string, string?> parameters,
+            int alturaPedida,
+            string expectedPostalCode,
+            string expectedLocalidad,
+            string expectedProvincia)
+        {
+            var results = await FetchNominatim(parameters);
+            if (results is null || results.Length == 0) return null;
+
+            var provinciaEsperada = NormalizeProvince(expectedProvincia);
+            var cpEsperado = expectedPostalCode.Trim();
+
+            var elegido = results
+                .Where(r => string.Equals(r.Address?.CountryCode, CountryCode, StringComparison.OrdinalIgnoreCase))
+                .Where(r => int.TryParse(r.Address?.HouseNumber, out var hn) && hn == alturaPedida)
+                .Where(r => string.IsNullOrWhiteSpace(r.Address?.Postcode) || string.Equals(r.Address.Postcode.Trim(), cpEsperado, StringComparison.OrdinalIgnoreCase))
+                .Where(r => NormalizeProvince(r.Address?.State ?? r.Address?.Province) == provinciaEsperada)
+                .Where(r =>
+                {
+                    var localidad = GetLocalidad(r.Address);
+                    return string.IsNullOrWhiteSpace(localidad) || TextMatches(localidad, expectedLocalidad);
+                })
+                .OrderByDescending(r => r.Importance ?? 0)
+                .FirstOrDefault();
+
+            if (elegido is null) return null;
+            if (!double.TryParse(elegido.Lat, NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) ||
+                !double.TryParse(elegido.Lon, NumberStyles.Float, CultureInfo.InvariantCulture, out var lon))
+                return null;
+
+            return new Ubicacion(lat, lon);
+        }
+
+        private async Task<string?> DetectarProvinciaDireccionAsync(string direccion, int alturaPedida)
+        {
+            var results = await FetchNominatim(BuildStructured(direccion, city: string.Empty, postalcode: null, state: null));
+            if (results is null || results.Length == 0) return null;
+
+            var exactos = results
+                .Where(r => string.Equals(r.Address?.CountryCode, CountryCode, StringComparison.OrdinalIgnoreCase))
+                .Where(r => int.TryParse(r.Address?.HouseNumber, out var hn) && hn == alturaPedida)
+                .Select(r => r.Address?.State ?? r.Address?.Province)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return exactos.Count == 1 ? exactos[0] : null;
+        }
+
+        private async Task<bool> SearchNominatimStreetLevel(
+            string direccion,
+            string localidad,
+            string codigoPostal,
+            string provincia,
+            int alturaPedida)
+        {
+            var expectedStreet = ExtractStreetName(direccion);
+            var queries = new[]
+            {
+                BuildStructured(direccion, localidad, codigoPostal, provincia),
+                BuildStructured(expectedStreet, localidad, codigoPostal, provincia),
+                BuildFreeText($"{direccion}, {localidad}, {provincia}, Argentina"),
+                BuildFreeText($"{expectedStreet}, {localidad}, {provincia}, Argentina"),
+            };
+
+            foreach (var query in queries)
+            {
+                var results = await FetchNominatim(query);
+                if (results is null || results.Length == 0) continue;
+
+                var match = results.Any(r =>
+                    string.Equals(r.Address?.CountryCode, CountryCode, StringComparison.OrdinalIgnoreCase) &&
+                    NormalizeProvince(r.Address?.State ?? r.Address?.Province) == NormalizeProvince(provincia) &&
+                    StreetMatches(r, expectedStreet) &&
+                    PostalCodeCompatible(r.Address?.Postcode, codigoPostal) &&
+                    HouseNumberCompatible(r.Address?.HouseNumber, alturaPedida) &&
+                    LocalidadCompatible(GetLocalidad(r.Address), localidad));
+
+                if (match) return true;
+            }
+
+            return false;
+        }
+
         private async Task<Ubicacion?> SearchNominatim(Dictionary<string, string?> parameters, int? alturaPedida, string? expectedPostalCode)
         {
             var qs = string.Join("&", parameters
@@ -275,6 +487,80 @@ namespace Back.Application.Services
         }
 
         // ── DTOs Georef ─────────────────────────────────────────────────────────
+        private static string? GetLocalidad(NominatimAddress? address)
+            => address?.City
+               ?? address?.Town
+               ?? address?.Village
+               ?? address?.Locality
+               ?? address?.Municipality
+               ?? address?.StateDistrict
+               ?? address?.County;
+
+        private static bool TextMatches(string? actual, string expected)
+        {
+            var a = NormalizeText(actual);
+            var e = NormalizeText(expected);
+            return !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(e) && (a == e || a.Contains(e) || e.Contains(a));
+        }
+
+        private static string ExtractStreetName(string direccion)
+            => HouseNumberRx.Replace(direccion, string.Empty).Trim();
+
+        private static bool StreetMatches(NominatimResult result, string expectedStreet)
+        {
+            var expected = NormalizeStreet(expectedStreet);
+            var road = NormalizeStreet(result.Address?.Road);
+            var display = NormalizeStreet(result.DisplayName);
+            return !string.IsNullOrEmpty(expected) &&
+                   ((!string.IsNullOrEmpty(road) && (road.Contains(expected) || expected.Contains(road))) ||
+                    (!string.IsNullOrEmpty(display) && display.Contains(expected)));
+        }
+
+        private static bool PostalCodeCompatible(string? actual, string expected)
+            => string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(expected) ||
+               string.Equals(actual.Trim(), expected.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private static bool HouseNumberCompatible(string? actual, int expected)
+            => string.IsNullOrWhiteSpace(actual) ||
+               (int.TryParse(actual, out var n) && n == expected);
+
+        private static bool LocalidadCompatible(string? actual, string expected)
+            => string.IsNullOrWhiteSpace(actual) || TextMatches(actual, expected);
+
+        private static string NormalizeStreet(string? value)
+        {
+            var normalized = NormalizeText(value);
+            if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
+            var parts = normalized
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(p => p is not ("av" or "avenida" or "calle" or "gral" or "general" or "dr" or "doctor" or "pte" or "presidente"))
+                .ToArray();
+            return string.Join(' ', parts);
+        }
+
+        private static string NormalizeProvince(string? value)
+        {
+            var normalized = NormalizeText(value);
+            if (normalized is "caba" or "capital federal" || normalized.Contains("ciudad autonoma de buenos aires"))
+                return "ciudad autonoma de buenos aires";
+            if (normalized == "provincia de buenos aires")
+                return "buenos aires";
+            return normalized;
+        }
+
+        private static string NormalizeText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var formD = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(formD.Length);
+            foreach (var c in formD)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    sb.Append(c);
+            }
+            return Regex.Replace(sb.ToString().Normalize(NormalizationForm.FormC), @"[^a-z0-9]+", " ").Trim();
+        }
+
         private sealed class GeorefDireccionesResponse
         {
             [JsonPropertyName("direcciones")] public List<GeorefDireccion>? Direcciones { get; set; }
@@ -303,6 +589,7 @@ namespace Back.Application.Services
         {
             [JsonPropertyName("lat")] public string Lat { get; set; } = string.Empty;
             [JsonPropertyName("lon")] public string Lon { get; set; } = string.Empty;
+            [JsonPropertyName("display_name")] public string? DisplayName { get; set; }
             [JsonPropertyName("importance")] public double? Importance { get; set; }
             [JsonPropertyName("address")] public NominatimAddress? Address { get; set; }
         }
@@ -313,7 +600,27 @@ namespace Back.Application.Services
             [JsonPropertyName("house_number")] public string? HouseNumber { get; set; }
             [JsonPropertyName("road")] public string? Road { get; set; }
             [JsonPropertyName("state")] public string? State { get; set; }
+            [JsonPropertyName("province")] public string? Province { get; set; }
             [JsonPropertyName("postcode")] public string? Postcode { get; set; }
+            [JsonPropertyName("city")] public string? City { get; set; }
+            [JsonPropertyName("town")] public string? Town { get; set; }
+            [JsonPropertyName("village")] public string? Village { get; set; }
+            [JsonPropertyName("locality")] public string? Locality { get; set; }
+            [JsonPropertyName("municipality")] public string? Municipality { get; set; }
+            [JsonPropertyName("state_district")] public string? StateDistrict { get; set; }
+            [JsonPropertyName("county")] public string? County { get; set; }
         }
+
+        private sealed record ValidacionPostalResult(bool Valido, string? Error)
+        {
+            public static ValidacionPostalResult Ok() => new(true, null);
+            public static ValidacionPostalResult Invalido(string error) => new(false, error);
+        }
+    }
+
+    public sealed record ValidacionDireccionResult(bool EsValida, string? Error)
+    {
+        public static ValidacionDireccionResult Valida() => new(true, null);
+        public static ValidacionDireccionResult Invalida(string error) => new(false, error);
     }
 }

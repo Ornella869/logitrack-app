@@ -17,6 +17,9 @@ namespace Back.Application.Services
         public required double PesoTotal { get; init; }
         public required string Estado { get; init; } // EnTransito | ListoParaSalir | Completada | Demorada
         public required bool EsDemorada { get; init; }
+        public Guid? PaqueteIdParaSimulacion { get; init; }
+        public double? LatitudSimulacion { get; init; }
+        public double? LongitudSimulacion { get; init; }
     }
 
     public class DetalleRutaResponse
@@ -103,6 +106,8 @@ namespace Back.Application.Services
                     // pasado el mediodía con < 50% completado.
                     var demorada = esHoy && pasoMediodia && enTransito && avancePct < 50;
                     var completada = totalParadas > 0 && (entregadas + canceladas) == totalParadas;
+                    var paqueteSimulable = g.FirstOrDefault(p => p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado)
+                        ?? g.FirstOrDefault();
                     var estado = completada
                         ? "Completada"
                         : demorada
@@ -126,6 +131,9 @@ namespace Back.Application.Services
                         PesoTotal = pesoTotal,
                         Estado = estado,
                         EsDemorada = demorada,
+                        PaqueteIdParaSimulacion = paqueteSimulable?.Id,
+                        LatitudSimulacion = paqueteSimulable?.Destinatario.Direccion.Ubicacion?.Latitud,
+                        LongitudSimulacion = paqueteSimulable?.Destinatario.Direccion.Ubicacion?.Longitud,
                     };
                 })
                 .OrderBy(r => r.Fecha)

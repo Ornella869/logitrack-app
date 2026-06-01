@@ -33,6 +33,8 @@ namespace Back.Domain.Models
         public string Descripcion { get; private set; } = string.Empty;
         public string Estado { get; private set; } = "Abierta";
         public DateTime FechaReporte { get; private set; } = DateTime.UtcNow;
+        public string Severidad { get; private set; } = "Media";
+        public DateTime? SlaVenceEn { get; private set; }
         public string? EmailContacto { get; private set; }
         public bool ChatFinalizado { get; private set; }
         public string ParadasAfectadasJson { get; private set; } = "[]";
@@ -52,7 +54,8 @@ namespace Back.Domain.Models
             string tipoLabel,
             string descripcion,
             string? emailContacto,
-            IEnumerable<Guid>? paradasAfectadas)
+            IEnumerable<Guid>? paradasAfectadas,
+            string? severidad = null)
         {
             PaqueteId = paqueteId;
             CodigoSeguimiento = codigoSeguimiento;
@@ -63,6 +66,8 @@ namespace Back.Domain.Models
             Tipo = tipo;
             TipoLabel = tipoLabel;
             Descripcion = descripcion;
+            Severidad = NormalizarSeveridad(severidad);
+            SlaVenceEn = FechaReporte.Add(ResolverSla(Severidad));
             EmailContacto = emailContacto;
             ParadasAfectadasJson = JsonSerializer.Serialize(paradasAfectadas ?? Enumerable.Empty<Guid>());
             SetHistorial(new[]
@@ -92,6 +97,8 @@ namespace Back.Domain.Models
             if (string.IsNullOrWhiteSpace(nuevoEstado)) throw new InvalidOperationException("El estado es obligatorio.");
             var anterior = Estado;
             Estado = nuevoEstado.Trim();
+            if (string.Equals(Estado, "Resuelta", StringComparison.OrdinalIgnoreCase))
+                ChatFinalizado = true;
             var historial = GetHistorial();
             historial.Add(new HistorialEstadoIncidencia
             {
@@ -120,9 +127,33 @@ namespace Back.Domain.Models
 
         public void FinalizarChat() => ChatFinalizado = true;
 
+        public void CambiarSeveridad(string severidad)
+        {
+            Severidad = NormalizarSeveridad(severidad);
+            SlaVenceEn = FechaReporte.Add(ResolverSla(Severidad));
+        }
+
         private void SetHistorial(IEnumerable<HistorialEstadoIncidencia> historial)
         {
             HistorialEstadosJson = JsonSerializer.Serialize(historial);
         }
+
+        private static string NormalizarSeveridad(string? severidad)
+        {
+            var value = (severidad ?? "Media").Trim();
+            return value.ToLowerInvariant() switch
+            {
+                "alta" => "Alta",
+                "baja" => "Baja",
+                _ => "Media",
+            };
+        }
+
+        private static TimeSpan ResolverSla(string severidad) => severidad switch
+        {
+            "Alta" => TimeSpan.FromHours(4),
+            "Baja" => TimeSpan.FromHours(24),
+            _ => TimeSpan.FromHours(12),
+        };
     }
 }

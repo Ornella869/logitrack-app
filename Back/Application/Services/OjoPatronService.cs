@@ -133,10 +133,17 @@ namespace Back.Application.Services
         {
             var hoy = OperationalClock.TodayStartUtc;
             var manana = OperationalClock.TomorrowStartUtc;
-            return await _context.PruebasOjoPatron.AnyAsync(p =>
+            var pruebaAprobada = await _context.PruebasOjoPatron.AnyAsync(p =>
                 p.UsuarioId == usuarioId && p.FechaHora >= hoy && p.FechaHora < manana
                 && p.Resultado == ResultadoPruebaOjoPatron.Aprobada
                 && p.Momento == momento);
+            if (pruebaAprobada) return true;
+
+            return await _context.OverridesOjoPatron.AnyAsync(o =>
+                o.RepartidorId == usuarioId
+                && o.SolicitadoEn >= hoy && o.SolicitadoEn < manana
+                && o.Estado == EstadoOverrideOjoPatron.Aprobado
+                && o.Momento == momento);
         }
 
         // Fase B: ¿para entregar este paquete se requiere la prueba de mitad de recorrido?
@@ -225,6 +232,94 @@ namespace Back.Application.Services
                 recursoId: usuarioId.ToString(),
                 contexto: contextoJson);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<OverrideOjoPatron> SolicitarOverrideAsync(Guid repartidorId, MomentoPruebaOjoPatron momento, string motivo)
+        {
+            if (string.IsNullOrWhiteSpace(motivo))
+                throw new InvalidOperationException("El motivo es obligatorio.");
+
+            var hoy = OperationalClock.TodayStartUtc;
+            var manana = OperationalClock.TomorrowStartUtc;
+            var existente = await _context.OverridesOjoPatron.FirstOrDefaultAsync(o =>
+                o.RepartidorId == repartidorId
+                && o.SolicitadoEn >= hoy && o.SolicitadoEn < manana
+                && o.Momento == momento
+                && o.Estado == EstadoOverrideOjoPatron.Pendiente);
+            if (existente is not null) return existente;
+
+            var solicitud = new OverrideOjoPatron(repartidorId, momento, motivo);
+            _context.OverridesOjoPatron.Add(solicitud);
+            await _auditoria.RegistrarAsync(
+                TipoAccion.PruebaOjoDelPatron,
+                "Solicitud de override del Ojo del Patron",
+                recursoId: repartidorId.ToString(),
+                contexto: $"Momento: {momento} | Motivo: {motivo}");
+            await _context.SaveChangesAsync();
+            return solicitud;
+        }
+
+        public async Task<List<OverrideOjoPatron>> ListarOverridesSupervisorAsync(Guid supervisorId)
+        {
+            var supervisor = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == supervisorId);
+            if (supervisor?.SucursalId is null) return new List<OverrideOjoPatron>();
+            var repartidoresSucursal = await _context.Usuarios
+                .Where(u => u.SucursalId == supervisor.SucursalId && u is Repartidor)
+                .Select(u => u.Id)
+                .ToListAsync();
+            return await _context.OverridesOjoPatron
+                .Where(o => repartidoresSucursal.Contains(o.RepartidorId))
+                .OrderByDescending(o => o.SolicitadoEn)
+                .ToListAsync();
+        }
+
+        public async Task<OverrideOjoPatron> ResolverOverrideAsync(Guid supervisorId, Guid overrideId, bool aprobado, string? comentario)
+        {
+            var supervisor = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == supervisorId);
+            if (supervisor?.SucursalId is null) throw new InvalidOperationException("El supervisor no tiene sucursal asignada.");
+
+            var solicitud = await _context.OverridesOjoPatron.FirstOrDefaultAsync(o => o.Id == overrideId)
+                ?? throw new InvalidOperationException("Solicitud no encontrada.");
+            var repartidor = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == solicitud.RepartidorId);
+            if (repartidor?.SucursalId != supervisor.SucursalId)
+                throw new InvalidOperationException("No podes resolver solicitudes de otra sucursal.");
+
+            solicitud.Resolver(supervisorId, aprobado, comentario);
+            await _auditoria.RegistrarAsync(
+                TipoAccion.PruebaOjoDelPatron,
+                aprobado ? "Override del Ojo del Patron aprobado" : "Override del Ojo del Patron rechazado",
+                recursoId: solicitud.RepartidorId.ToString(),
+                contexto: comentario);
+            await _context.SaveChangesAsync();
+            return solicitud;
+        }
+
+        public async Task<List<object>> GetMetricasHistoricasAsync(Guid supervisorId)
+        {
+            var supervisor = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == supervisorId);
+            if (supervisor?.SucursalId is null) return new List<object>();
+            var repartidores = await _context.Usuarios
+                .Where(u => u.SucursalId == supervisor.SucursalId && u is Repartidor)
+                .ToListAsync();
+            var ids = repartidores.Select(r => r.Id).ToList();
+            var pruebas = await _context.PruebasOjoPatron.Where(p => ids.Contains(p.UsuarioId)).ToListAsync();
+            var overrides = await _context.OverridesOjoPatron.Where(o => ids.Contains(o.RepartidorId)).ToListAsync();
+
+            return repartidores.Select(r =>
+            {
+                var ps = pruebas.Where(p => p.UsuarioId == r.Id).ToList();
+                var os = overrides.Where(o => o.RepartidorId == r.Id).ToList();
+                return (object)new
+                {
+                    repartidorId = r.Id,
+                    repartidorNombre = $"{r.Nombre} {r.Apellido}",
+                    aprobadas = ps.Count(p => p.Resultado == ResultadoPruebaOjoPatron.Aprobada),
+                    fallidas = ps.Count(p => p.Resultado != ResultadoPruebaOjoPatron.Aprobada),
+                    overridesAprobados = os.Count(o => o.Estado == EstadoOverrideOjoPatron.Aprobado),
+                    promedioAlertness = ps.Count == 0 ? 0 : Math.Round(ps.Average(p => p.AlertnessScore), 3),
+                    ultimaPrueba = ps.OrderByDescending(p => p.FechaHora).FirstOrDefault()?.FechaHora,
+                };
+            }).ToList();
         }
     }
 }

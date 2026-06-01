@@ -13,6 +13,7 @@ using System.Text;
 using Microsoft.Extensions.ML;
 using Back.Ml.Service;
 using Back.Background;
+using Back.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -79,12 +80,15 @@ builder.Services.AddHttpClient<GeocodingService>(c =>
 // Registrar el HttpClient
 builder.Services.AddHttpClient();
 builder.Services.AddHealthChecks();
+builder.Services.AddSignalR();
 // Registrar el servicio de fondo
 builder.Services.AddHostedService<UptimerService>();
 builder.Services.AddScoped<IUserRepository, UsuariosRepository>();
 builder.Services.AddScoped<IEnviosRepository, EnviosRepository>();
 builder.Services.AddScoped<IVehiculoRepository, VehiculosRepository>();
 builder.Services.AddScoped<IRutasRepository, RutasRepository>();
+builder.Services.AddScoped<EmailNotificacionService>();
+builder.Services.AddScoped<EnviosExcelImportService>();
 
 // Configuración de Autenticación JWT
 var jwtSecretKey = "Grupo8SuperSecretKeyWithAtLeast32Characters";
@@ -141,6 +145,7 @@ app.UseAuthorization();
 
 // 5. Mapeo de Controladores
 app.MapControllers();
+app.MapHub<UbicacionHub>("/hubs/ubicacion");
 app.MapHealthChecks("api/health");
 
 // --- TAREAS DE INICIO (Migraciones y Seed) ---

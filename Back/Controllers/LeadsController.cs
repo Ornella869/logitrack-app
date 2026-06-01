@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,12 @@ namespace Back.Controllers
         };
 
         private readonly LogiTrackDbContext _context;
+        private readonly EmailNotificacionService _emails;
 
-        public LeadsController(LogiTrackDbContext context)
+        public LeadsController(LogiTrackDbContext context, EmailNotificacionService emails)
         {
             _context = context;
+            _emails = emails;
         }
 
         [HttpPost]
@@ -43,6 +46,7 @@ namespace Back.Controllers
                 request.Comentarios);
 
             _context.SolicitudesComerciales.Add(lead);
+            await _emails.CrearEmailLeadAsync(lead);
             await _context.SaveChangesAsync();
 
             return Ok(new

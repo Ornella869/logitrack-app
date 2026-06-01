@@ -17,10 +17,8 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
-import MapIcon from '@mui/icons-material/Map'
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined'
 import { shipmentService } from '../services/shipmentService'
-import ShipmentMap from '../components/ShipmentMap'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment } from '../types'
 import { formatInstantArgentinaDate } from '../utils/argentinaDate'
@@ -394,19 +392,6 @@ export default function TrackingPublicPage() {
                   </Stack>
                 </CardContent>
               </Card>
-
-              {/* G1L-17 GPS: mapa cuando el envío está en tránsito y tiene ubicación */}
-              {shipment.status === 'En tránsito' && shipment.ubicacionActual && (
-                <Card sx={{ borderRadius: 4, boxShadow: '0 20px 45px rgba(15, 23, 42, 0.06)' }}>
-                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                      <MapIcon color="primary" />
-                      <Typography variant="h6" fontWeight={700}>Tu paquete está acá</Typography>
-                    </Stack>
-                    <ShipmentMap position={shipment.ubicacionActual} height={320} />
-                  </CardContent>
-                </Card>
-              )}
 
               <ReportarIncidenteClienteDialog
                 open={reportDialogOpen}

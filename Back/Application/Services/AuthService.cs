@@ -24,6 +24,8 @@ namespace Back.Application.Services
 
         private readonly IUserRepository _userRepository;
         private readonly EmpresaService _empresaService;
+        private static readonly TimeSpan DuracionBloqueoLogin = TimeSpan.FromMinutes(15);
+        private const int MaxIntentosFallidos = 5;
 
         public AuthService(IUserRepository userRepository, EmpresaService empresaService)
         {
@@ -36,8 +38,14 @@ namespace Back.Application.Services
             var user = await _userRepository.GetUsuarioByEmail(request.Email);
 
             // G1L-31 (Seguridad en Fallos): mismo mensaje sin importar cuál de los dos campos falló.
+            if (user is not null && user.EstaBloqueado)
+            {
+                throw new InvalidOperationException("Cuenta bloqueada temporalmente por multiples intentos fallidos. Reintenta mas tarde o contacta a un administrador.");
+            }
+
             if (user == null || !PasswordHasher.VerifyPassword(request.Password, user.Password))
             {
+                user?.RegistrarLoginFallido(MaxIntentosFallidos, DuracionBloqueoLogin);
                 throw new InvalidOperationException("Usuario o contraseña incorrectos");
             }
 
@@ -45,6 +53,8 @@ namespace Back.Application.Services
             {
                 throw new InvalidOperationException("Usuario inactivo. Contactá a un administrador.");
             }
+
+            user.ResetearLoginFallido();
 
             // G1L-64: Si la empresa está suspendida, sólo el Administrador puede ingresar (para reactivar).
             var empresa = await _empresaService.GetOrCreateSingletonAsync();
@@ -225,6 +235,7 @@ namespace Back.Application.Services
             var user = await _userRepository.GetUsuarioById(userId)
                 ?? throw new InvalidOperationException("Usuario no encontrado.");
             user.Activar();
+            user.ResetearLoginFallido();
         }
 
         // G1L-47: usuario cambia su propia clave.

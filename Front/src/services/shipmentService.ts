@@ -8,6 +8,7 @@ interface RegistrarPaqueteRequest {
   TipoEnvio: TipoEnvio
   TipoPaquete: TipoPaquete
   Comentarios?: string
+  PuntoPickUpId?: string | null
   Remitente: {
     Nombre: string
     Apellido: string
@@ -16,6 +17,7 @@ interface RegistrarPaqueteRequest {
     CP: string
     Provincia?: string
     Telefono?: string
+    Email?: string
   }
   Destinatario: {
     Nombre: string
@@ -25,6 +27,7 @@ interface RegistrarPaqueteRequest {
     CP: string
     Provincia?: string
     Telefono?: string
+    Email?: string
   }
 }
 
@@ -70,6 +73,13 @@ export interface GenerarLoteDemoResultado {
   errores: string[]
 }
 
+export interface ImportarEnviosResultado {
+  procesados: number
+  creados: number
+  fallidos: number
+  detalles: Array<{ fila: number; creado: boolean; codigoSeguimiento?: string | null; error?: string | null }>
+}
+
 // Convertir respuesta del backend a tipo Shipment
 const mapToShipment = (paquete: any): Shipment => ({
   id: paquete.id,
@@ -80,6 +90,7 @@ const mapToShipment = (paquete: any): Shipment => ({
     city: paquete.remitente?.direccion?.ciudad ?? paquete.remitente?.ciudad ?? 'No disponible',
     postalCode: paquete.remitente?.direccion?.cp ?? paquete.remitente?.cp ?? 'No disponible',
     phone: paquete.remitente.telefono,
+    email: paquete.remitente.email ?? undefined,
   },
   receiver: {
     name: [paquete.destinatario?.nombre, paquete.destinatario?.apellido].filter(Boolean).join(' ') || 'No disponible',
@@ -87,6 +98,7 @@ const mapToShipment = (paquete: any): Shipment => ({
     city: paquete.destinatario?.direccion?.ciudad ?? paquete.destinatario?.ciudad ?? 'No disponible',
     postalCode: paquete.destinatario?.direccion?.cp ?? paquete.destinatario?.cp ?? 'No disponible',
     phone: paquete.destinatario.telefono,
+    email: paquete.destinatario.email ?? undefined,
   },
   status: mapStatus(paquete.status),
   tipoEnvio: paquete.tipoEnvio as TipoEnvio | undefined,
@@ -105,7 +117,9 @@ const mapToShipment = (paquete: any): Shipment => ({
   costoEnvio: paquete.costoEnvio ?? undefined,
   costoRecargoSeguridad: paquete.costoRecargoSeguridad ?? undefined,
   esZonaPeligrosa: paquete.esZonaPeligrosa ?? undefined,
+  puntoPickUpId: paquete.puntoPickUpId ?? null,
   fechaCalendarizada: paquete.fechaCalendarizada ?? null,
+  fechaEstimadaEntrega: paquete.fechaEstimadaEntrega ?? null,
   sucursalId: paquete.sucursalId ?? paquete.SucursalId ?? null,
   ubicacionActual: paquete.ubicacionActual
     ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
@@ -155,6 +169,7 @@ export const shipmentService = {
         TipoEnvio: shipment.tipoEnvio ?? 'Comun',
         TipoPaquete: shipment.tipoPaquete ?? 'Comun',
         Comentarios: shipment.description,
+        PuntoPickUpId: shipment.puntoPickUpId ?? null,
         Remitente: {
           Nombre: remitente.nombre,
           Apellido: remitente.apellido,
@@ -163,6 +178,7 @@ export const shipmentService = {
           CP: shipment.sender.postalCode,
           Provincia: shipment.sender.province,
           Telefono: shipment.sender.phone,
+          Email: shipment.sender.email,
         },
         Destinatario: {
           Nombre: destinatario.nombre,
@@ -172,6 +188,7 @@ export const shipmentService = {
           CP: shipment.receiver.postalCode,
           Provincia: shipment.receiver.province,
           Telefono: shipment.receiver.phone,
+          Email: shipment.receiver.email,
         }
       }
 
@@ -206,6 +223,27 @@ export const shipmentService = {
         : 'No se pudo generar la carga masiva'
       throw new Error(message)
     }
+  },
+
+  descargarTemplateImportacion: async (): Promise<void> => {
+    const response = await api.get('/envios/importacion/template', { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'template_envios_logitrack.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
+
+  importarExcel: async (file: File): Promise<ImportarEnviosResultado> => {
+    const form = new FormData()
+    form.append('File', file)
+    const response = await api.post('/envios/importacion/excel', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
   },
 
   // Obtener seguimiento de un paquete por ID (GUID)
@@ -426,6 +464,7 @@ export const shipmentService = {
           CP: data.sender.postalCode,
           Provincia: data.sender.province,
           Telefono: data.sender.phone,
+          Email: data.sender.email,
         },
         Destinatario: {
           Nombre: destinatario.nombre,
@@ -435,6 +474,7 @@ export const shipmentService = {
           CP: data.receiver.postalCode,
           Provincia: data.receiver.province,
           Telefono: data.receiver.phone,
+          Email: data.receiver.email,
         },
       })
       return { success: true }
@@ -515,6 +555,20 @@ export const shipmentService = {
     } catch (e: any) {
       return { success: false, error: e.response?.data ?? 'No se pudo actualizar la ubicación' }
     }
+  },
+
+  actualizarMiUbicacion: async (lat: number, lng: number): Promise<{ success: boolean; actualizados?: number; error?: string }> => {
+    try {
+      const response = await api.post('/envios/mi-ubicacion', { latitud: lat, longitud: lng })
+      return { success: true, actualizados: response.data?.actualizados ?? 0 }
+    } catch (e: any) {
+      return { success: false, error: e.response?.data ?? 'No se pudo enviar la ubicacion' }
+    }
+  },
+
+  getRepartidoresUbicacion: async (): Promise<Array<{ repartidorId: string; repartidorNombre: string; paqueteId: string; codigoSeguimiento: string; latitud: number; longitud: number; actualizadaEn?: string }>> => {
+    const response = await api.get('/envios/repartidores-ubicacion')
+    return response.data ?? []
   },
 
   // G1L-42: Repartidor asignado a un paquete (Supervisor / Admin)

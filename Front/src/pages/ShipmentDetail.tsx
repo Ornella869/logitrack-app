@@ -40,8 +40,11 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
+import EmailIcon from '@mui/icons-material/Email'
+import ReplayIcon from '@mui/icons-material/Replay'
 import { Tab, Tabs } from '@mui/material'
 import { shipmentService, type HistorialEstadoEnvio } from '../services/shipmentService'
+import { emailNotificacionService, type EmailNotificacion } from '../services/emailNotificacionService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
 import ShipmentForm from '../components/ShipmentForm'
@@ -121,6 +124,9 @@ function ShipmentDetail() {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const isRepartidor = user?.role === 'repartidor'
+  const [emails, setEmails] = useState<EmailNotificacion[]>([])
+  const [loadingEmails, setLoadingEmails] = useState(false)
+  const [retryingEmailId, setRetryingEmailId] = useState<string | null>(null)
 
   // G1L-42: repartidor asignado al envío (Supervisor / Admin)
   const [repartidorAsignado, setRepartidorAsignado] = useState<{
@@ -168,6 +174,21 @@ function ShipmentDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  const loadEmails = async (paqueteId: string) => {
+    if (!isSupervisor && !isAdmin) {
+      setEmails([])
+      return
+    }
+    setLoadingEmails(true)
+    try {
+      setEmails(await emailNotificacionService.getPorPaquete(paqueteId))
+    } catch {
+      setEmails([])
+    } finally {
+      setLoadingEmails(false)
+    }
+  }
+
   const loadShipment = async () => {
     if (!id) return
     setLoading(true)
@@ -197,6 +218,7 @@ function ShipmentDetail() {
         } else {
           setUltimoEscaneoCarga(null)
         }
+        await loadEmails(data.id)
       } else {
         setError('Envío no encontrado')
       }
@@ -312,6 +334,20 @@ function ShipmentDetail() {
       showActionToast(result.error || 'Error al cancelar el envío', 'error')
     }
     setUpdatingStatus(false)
+  }
+
+  const handleRetryEmail = async (emailId: string) => {
+    if (!shipment) return
+    setRetryingEmailId(emailId)
+    try {
+      await emailNotificacionService.reintentar(emailId)
+      await loadEmails(shipment.id)
+      showActionToast('Email reenviado correctamente', 'success')
+    } catch {
+      showActionToast('No se pudo reenviar el email', 'error')
+    } finally {
+      setRetryingEmailId(null)
+    }
   }
 
   // G1L-82: el repartidor o supervisor marca el envío como Demorado con motivo obligatorio.
@@ -764,6 +800,7 @@ function ShipmentDetail() {
                 <TextField label="Ciudad" value={shipment.receiver.city} fullWidth disabled size="small" />
                 <TextField label="Código Postal" value={shipment.receiver.postalCode} fullWidth disabled size="small" />
                 <TextField label="Teléfono" value={shipment.receiver.phone ?? ''} fullWidth disabled size="small" />
+                <TextField label="Email" value={shipment.receiver.email ?? 'No tiene asociado ningún mail'} fullWidth disabled size="small" />
               </Stack>
             </CardContent>
           </Card>
@@ -779,6 +816,58 @@ function ShipmentDetail() {
                   <Typography variant="h6">Historial de estados</Typography>
                 </Stack>
                 <ShipmentTimeline paqueteId={shipment.id} />
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {(isSupervisor || isAdmin) && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <EmailIcon color="primary" />
+                  <Typography variant="h6">Emails del envío</Typography>
+                </Stack>
+                {loadingEmails ? (
+                  <CircularProgress size={22} />
+                ) : emails.length === 0 ? (
+                  <Alert severity="info">No hay emails registrados para este envío.</Alert>
+                ) : (
+                  <Stack spacing={1.2}>
+                    {emails.map((email) => (
+                      <Box key={email.id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.2 }}>
+                        <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
+                          <Typography variant="body2" fontWeight={600}>{email.evento}</Typography>
+                          <Chip
+                            size="small"
+                            label={email.estado}
+                            color={email.estado === 'Enviado' ? 'success' : email.estado === 'Fallido' ? 'error' : 'warning'}
+                          />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {email.destinatarioEmail} · {formatInstantArgentina(email.creadoEn)}
+                        </Typography>
+                        {email.error && (
+                          <Typography variant="caption" color="error" display="block">
+                            {email.error}
+                          </Typography>
+                        )}
+                        {email.estado === 'Fallido' && (
+                          <Button
+                            size="small"
+                            startIcon={<ReplayIcon />}
+                            onClick={() => handleRetryEmail(email.id)}
+                            disabled={retryingEmailId === email.id}
+                            sx={{ mt: 0.5 }}
+                          >
+                            Reintentar
+                          </Button>
+                        )}
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
               </CardContent>
             </Card>
           </Grid>

@@ -85,6 +85,7 @@ namespace Back.Controllers
             try
             {
                 var result = await _authService.Login(request);
+                await _context.SaveChangesAsync();
                 return Ok(result);
             }
             catch (InvalidOperationException ex)

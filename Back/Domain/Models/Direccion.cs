@@ -48,6 +48,7 @@ namespace Back.Domain.Models
         public string Nombre { get; private set; }
         public string Apellido { get; private set; }
         public string? Telefono { get; private set; }
+        public string? Email { get; private set; }
         public Direccion Direccion { get; private set; }
 
 
@@ -55,12 +56,13 @@ namespace Back.Domain.Models
         {
         }
 
-        public Cliente(string nombre, string apellido, Direccion direccion, string? telefono = null)
+        public Cliente(string nombre, string apellido, Direccion direccion, string? telefono = null, string? email = null)
         {
             Nombre = nombre;
             Apellido = apellido;
             Direccion = direccion;
             Telefono = telefono;
+            Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         }
 
 

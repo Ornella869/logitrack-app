@@ -19,9 +19,10 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd'
-import { shipmentService, type GenerarLoteDemoResultado } from '../services/shipmentService'
+import { shipmentService, type GenerarLoteDemoResultado, type ImportarEnviosResultado } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
 import ShipmentForm from '../components/ShipmentForm'
@@ -58,6 +59,8 @@ export default function EnviosPage() {
   const [bulkCantidad, setBulkCantidad] = useState(100)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResult, setBulkResult] = useState<GenerarLoteDemoResultado | null>(null)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState<ImportarEnviosResultado | null>(null)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<ShipmentFiltersValue>(EMPTY_FILTERS)
   const [hasQuery, setHasQuery] = useState(false)
@@ -152,6 +155,25 @@ export default function EnviosPage() {
     }
   }
 
+  const handleImportExcel = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setImportLoading(true)
+    setImportResult(null)
+    try {
+      const result = await shipmentService.importarExcel(file)
+      setImportResult(result)
+      setPage(1)
+      void loadShipments(search, filters, 1, pageSize)
+      showActionToast(`Importacion lista: ${result.creados} envios creados`, result.fallidos ? 'warning' : 'success')
+    } catch (error: any) {
+      showActionToast(error?.response?.data || error?.message || 'Error al importar el archivo', 'error')
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
   const handleDownloadShipments = async () => {
     const exportShipments = await shipmentService.getAllShipments(
       search || undefined,
@@ -230,7 +252,7 @@ export default function EnviosPage() {
 
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
           {showCreateButton && (
-            <Button variant="outlined" startIcon={<PlaylistAddIcon />} onClick={() => { setBulkResult(null); setBulkOpen(true) }}>
+            <Button variant="outlined" startIcon={<PlaylistAddIcon />} onClick={() => { setBulkResult(null); setImportResult(null); setBulkOpen(true) }}>
               Carga masiva
             </Button>
           )}
@@ -311,14 +333,44 @@ export default function EnviosPage() {
               ))}
             </TextField>
             <Alert severity="info">
-              Se generan envios pendientes con direcciones reales dentro de la cobertura de tu sucursal.
+              Se generan envios pendientes con direcciones reales dentro de la cobertura de tu sucursal. El Excel toma la sucursal origen desde tu usuario y permite modalidad Domicilio o PickUp.
             </Alert>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                onClick={() => void shipmentService.descargarTemplateImportacion()}
+                disabled={bulkLoading || importLoading}
+              >
+                Descargar template Excel
+              </Button>
+              <Button
+                component="label"
+                variant="outlined"
+                startIcon={importLoading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                disabled={bulkLoading || importLoading}
+              >
+                Importar Excel
+                <input hidden type="file" accept=".xlsx,.csv" onChange={handleImportExcel} />
+              </Button>
+            </Stack>
             {bulkResult && (
               <Alert severity={bulkResult.fallidos ? 'warning' : 'success'}>
                 Creados: {bulkResult.creados} / {bulkResult.solicitados}
                 {bulkResult.fallidos ? ` - Fallidos: ${bulkResult.fallidos}` : ''}
               </Alert>
             )}
+            {importResult && (
+              <Alert severity={importResult.fallidos ? 'warning' : 'success'}>
+                Importados: {importResult.creados} / {importResult.procesados}
+                {importResult.fallidos ? ` - Fallidos: ${importResult.fallidos}` : ''}
+              </Alert>
+            )}
+            {importResult?.detalles?.some((d) => !d.creado) ? (
+              <Alert severity="warning">
+                {importResult.detalles.filter((d) => !d.creado).slice(0, 3).map((d) => `Fila ${d.fila}: ${d.error}`).join(' | ')}
+              </Alert>
+            ) : null}
             {bulkResult?.errores?.length ? (
               <Alert severity="warning">
                 {bulkResult.errores.slice(0, 3).join(' | ')}

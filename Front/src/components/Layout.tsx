@@ -36,6 +36,7 @@ import PriceChangeIcon from '@mui/icons-material/PriceChange'
 import GraphicEqIcon from '@mui/icons-material/GraphicEq'
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import StoreIcon from '@mui/icons-material/Store'
+import PlaceIcon from '@mui/icons-material/Place'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
@@ -297,6 +298,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
+    if (pathname.startsWith('/pickups')) return '/pickups'
     if (pathname.startsWith('/tarifas')) return '/tarifas'
     if (pathname.startsWith('/ojo-patron')) return '/ojo-patron'
     return false
@@ -609,9 +611,12 @@ function Layout({ user, onLogout }: LayoutProps) {
               <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Sucursales" value="/sucursales" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'gerente' && (
-              <Tab icon={<PriceChangeIcon fontSize="small" />} iconPosition="start" label="Tarifas" value="/tarifas" sx={{ minHeight: 48, textTransform: 'none' }} />
+              <Tab icon={<PlaceIcon fontSize="small" />} iconPosition="start" label="PickUps" value="/pickups" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'gerente' && (
+              <Tab icon={<PriceChangeIcon fontSize="small" />} iconPosition="start" label="Tarifas" value="/tarifas" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {(user.role === 'gerente' || user.role === 'supervisor') && (
               <Tab icon={<GraphicEqIcon fontSize="small" />} iconPosition="start" label="Ojo del Patrón" value="/ojo-patron" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'administrador' && (

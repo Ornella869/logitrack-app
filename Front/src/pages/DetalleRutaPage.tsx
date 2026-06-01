@@ -23,6 +23,7 @@ import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import RouteMap from '../components/RouteMap'
 import { branchService, type BranchOrigin } from '../services/branchService'
+import { shipmentService } from '../services/shipmentService'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 import { buildMapsUrl } from '../utils/mapsUrl'
 import type { User } from '../types'
@@ -76,13 +77,31 @@ export default function DetalleRutaPage() {
   const fecha = searchParams.get('fecha') ?? undefined
   const [detalle, setDetalle] = useState<DetalleRuta | null>(null)
   const [origen, setOrigen] = useState<BranchOrigin | null>(null)
+  const [ubicacionActual, setUbicacionActual] = useState<{ latitud: number; longitud: number; actualizadaEn?: string; codigoSeguimiento?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const loadUbicacion = async () => {
+    if (!repartidorId) return
+    const ubicaciones = await shipmentService.getRepartidoresUbicacion().catch(() => [])
+    const actual = ubicaciones.find((u) => u.repartidorId === repartidorId)
+    setUbicacionActual(actual
+      ? {
+          latitud: actual.latitud,
+          longitud: actual.longitud,
+          actualizadaEn: actual.actualizadaEn,
+          codigoSeguimiento: actual.codigoSeguimiento,
+        }
+      : null)
+  }
 
   useEffect(() => {
     if (!repartidorId) return
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
+    void loadUbicacion()
+    const timer = window.setInterval(() => void loadUbicacion(), 5000)
+    return () => window.clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repartidorId, user.role, fecha])
 
@@ -182,6 +201,11 @@ export default function DetalleRutaPage() {
                     : `Orden automático por código postal y FIFO · ${detalle.paradas.length} paradas`}
                 </Typography>
               </Box>
+              {ubicacionActual && (
+                <Typography variant="caption" color="success.main">
+                  Ubicacion actual recibida para {ubicacionActual.codigoSeguimiento}
+                </Typography>
+              )}
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 <Button
                   size="small"
@@ -220,6 +244,7 @@ export default function DetalleRutaPage() {
                     }
                   : null
               }
+              ubicacionActual={ubicacionActual}
               height={380}
             />
             {proxima && (

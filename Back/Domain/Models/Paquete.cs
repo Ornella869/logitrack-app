@@ -56,12 +56,16 @@ namespace Back.Domain.Models
         public double CostoRecargoSeguridad { get; private set; }
         public bool EsZonaPeligrosa { get; private set; }
         public DateTime? FechaCalendarizada { get; private set; }
+        public DateTime? FechaEstimadaEntrega { get; private set; }
+        public int DiasEstimadosEntrega { get; private set; } = 1;
         public Guid? RepartidorAsignadoId { get; private set; }
         public Ubicacion? UbicacionActual { get; set; }
+        public DateTime? UbicacionActualActualizadaEn { get; set; }
         // Épica D: sucursal responsable del envío (la que cubre la provincia de destino).
         public Guid? SucursalId { get; set; }
         public string? ProvinciaDestino { get; set; }
         public bool EsEnvioADomicilio { get; set; }
+        public Guid? PuntoPickUpId { get; private set; }
 
 
         [JsonPropertyName("prioridad")]
@@ -198,6 +202,7 @@ namespace Back.Domain.Models
 
             RepartidorAsignadoId = repartidorId;
             FechaCalendarizada = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
+            FechaEstimadaEntrega = DateTime.SpecifyKind(fecha.Date.AddDays(Math.Max(1, DiasEstimadosEntrega) - 1), DateTimeKind.Utc);
             Status = PaqueteStatus.AsignadoAVehiculo;
         }
 
@@ -205,6 +210,7 @@ namespace Back.Domain.Models
         {
             RepartidorAsignadoId = null;
             FechaCalendarizada = null;
+            FechaEstimadaEntrega = null;
             // G1L-68: al "volver a calendarizar" también caemos desde ListoParaSalir,
             // no solo desde Asignado/Cargado. Si no incluimos ese estado, el paquete
             // queda con repartidor/fecha en null pero el Status sigue mostrándose
@@ -239,6 +245,30 @@ namespace Back.Domain.Models
             Descripcion = descripcion;
             Distancia = distancia;
             Prioridad = prioridad;
+        }
+
+        public void ActualizarEstimacionEntrega(float distanciaKm)
+        {
+            const double kmPorJornada = 560;
+            DiasEstimadosEntrega = Math.Max(1, (int)Math.Ceiling(distanciaKm / kmPorJornada));
+            if (FechaCalendarizada.HasValue)
+                FechaEstimadaEntrega = DateTime.SpecifyKind(FechaCalendarizada.Value.Date.AddDays(DiasEstimadosEntrega - 1), DateTimeKind.Utc);
+        }
+
+        public void AsignarPuntoPickUp(Guid puntoPickUpId)
+        {
+            var yaTeniaPickUp = PuntoPickUpId.HasValue;
+            PuntoPickUpId = puntoPickUpId;
+            EsEnvioADomicilio = false;
+
+            if (!yaTeniaPickUp && CostoEnvio > 0)
+                AplicarDescuentoPickUp();
+        }
+
+        public void AplicarDescuentoPickUp()
+        {
+            if (CostoEnvio > 0)
+                CostoEnvio = Math.Round(CostoEnvio * 0.75, 2);
         }
 
         public override string ToString()

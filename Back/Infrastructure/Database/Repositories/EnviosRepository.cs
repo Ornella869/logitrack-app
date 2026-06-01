@@ -205,6 +205,11 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Sucursales.FindAsync(id);
         }
 
+        public async Task<PuntoPickUp?> GetPuntoPickUpById(Guid id)
+        {
+            return await _context.PuntosPickUp.FindAsync(id);
+        }
+
         public void DeleteSucursal(Sucursal sucursal)
         {
             _context.Sucursales.Remove(sucursal);

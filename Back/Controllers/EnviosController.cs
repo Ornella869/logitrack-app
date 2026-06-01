@@ -3,10 +3,12 @@ using Back.Application.Common;
 using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
+using Back.Hubs;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Back.Controllers
 {
@@ -155,6 +157,34 @@ namespace Back.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.Operador)]
+        [HttpGet("importacion/template")]
+        public ActionResult DescargarTemplateImportacion([FromServices] EnviosExcelImportService excel)
+        {
+            return File(
+                excel.GenerarTemplate(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "template_envios_logitrack.xlsx");
+        }
+
+        [Authorize(Roles = Roles.Operador)]
+        [HttpPost("importacion/excel")]
+        public async Task<ActionResult<ImportarEnviosResult>> ImportarExcel([FromForm] ImportarEnviosExcelRequest request, [FromServices] EnviosExcelImportService excel)
+        {
+            if (request.File is null || request.File.Length == 0) return BadRequest("El archivo es obligatorio.");
+            try
+            {
+                var rows = await excel.ParseAsync(request.File);
+                var result = await _enviosService.ImportarDesdeExcelAsync(rows, CurrentUserId());
+                await _context.SaveChangesAsync();
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         // ============== Vista pública (no requiere auth) ==============
 
         /// <summary>Vista pública de seguimiento por código.</summary>
@@ -174,9 +204,12 @@ namespace Back.Controllers
                 TipoPaquete = paquete.TipoPaquete,
                 CreadoEn = paquete.CreadoEn,
                 FechaCalendarizada = paquete.FechaCalendarizada,
+                FechaEstimadaEntrega = paquete.FechaEstimadaEntrega,
                 Peso = paquete.Peso,
                 Descripcion = paquete.Descripcion,
                 RazonCancelacion = paquete.RazonCancelacion,
+                UbicacionActual = paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado ? paquete.UbicacionActual : null,
+                UbicacionActualActualizadaEn = paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado ? paquete.UbicacionActualActualizadaEn : null,
                 Remitente = new SeguimientoPublicoCliente
                 {
                     Ciudad = paquete.Remitente.Direccion.Ciudad,
@@ -273,18 +306,98 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-18: Actualizar ubicación GPS de un envío en tránsito (Admin).</summary>
-        [Authorize(Roles = Roles.Administrador)]
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
         [HttpPost("paquete/{paqueteId:guid}/ubicacion")]
-        public async Task<ActionResult> ActualizarUbicacion(Guid paqueteId, [FromBody] ActualizarUbicacionRequest request)
+        public async Task<ActionResult> ActualizarUbicacion(Guid paqueteId, [FromBody] ActualizarUbicacionRequest request, [FromServices] IHubContext<UbicacionHub> hub)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId);
             if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             if (paquete.Status != PaqueteStatus.EnTransito)
                 return BadRequest("La simulación de movimiento solo está disponible para envíos en tránsito.");
 
             paquete.UbicacionActual = new Ubicacion(request.Latitud, request.Longitud);
+            paquete.UbicacionActualActualizadaEn = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+            await hub.Clients.All.SendAsync("ubicacionActualizada", new
+            {
+                paqueteId = paquete.Id,
+                codigoSeguimiento = paquete.CodigoSeguimiento,
+                latitud = request.Latitud,
+                longitud = request.Longitud,
+                actualizadaEn = paquete.UbicacionActualActualizadaEn,
+            });
             return Ok();
+        }
+
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("mi-ubicacion")]
+        public async Task<ActionResult<object>> ActualizarMiUbicacion([FromBody] ActualizarUbicacionRequest request, [FromServices] IHubContext<UbicacionHub> hub)
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            var hoy = OperationalClock.TodayUtcDate;
+            var manana = hoy.AddDays(1);
+            var paquetes = await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == userId
+                            && p.FechaCalendarizada >= hoy
+                            && p.FechaCalendarizada < manana
+                            && (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado))
+                .ToListAsync();
+
+            foreach (var paqueteActual in paquetes)
+            {
+                paqueteActual.UbicacionActual = new Ubicacion(request.Latitud, request.Longitud);
+                paqueteActual.UbicacionActualActualizadaEn = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            foreach (var paqueteActual in paquetes)
+            {
+                await hub.Clients.All.SendAsync("ubicacionActualizada", new
+                {
+                    repartidorId = userId,
+                    paqueteId = paqueteActual.Id,
+                    codigoSeguimiento = paqueteActual.CodigoSeguimiento,
+                    latitud = request.Latitud,
+                    longitud = request.Longitud,
+                    actualizadaEn = paqueteActual.UbicacionActualActualizadaEn,
+                });
+            }
+            return Ok(new { actualizados = paquetes.Count });
+        }
+
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [HttpGet("repartidores-ubicacion")]
+        public async Task<ActionResult<List<RepartidorUbicacionDto>>> GetRepartidoresUbicacion()
+        {
+            var scope = await CurrentSucursalScopeAsync();
+            var query = _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId.HasValue
+                            && p.UbicacionActual != null
+                            && (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado));
+            if (scope.HasValue) query = query.Where(p => p.SucursalId == scope);
+
+            var paquetes = await query.ToListAsync();
+            var repartidorIds = paquetes.Select(p => p.RepartidorAsignadoId!.Value).Distinct().ToList();
+            var repartidores = await _context.Usuarios
+                .Where(u => repartidorIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => $"{u.Nombre} {u.Apellido}");
+
+            var result = paquetes
+                .GroupBy(p => p.RepartidorAsignadoId!.Value)
+                .Select(g => g.OrderByDescending(p => p.UbicacionActualActualizadaEn).First())
+                .Select(p => new RepartidorUbicacionDto(
+                    p.RepartidorAsignadoId!.Value,
+                    repartidores.TryGetValue(p.RepartidorAsignadoId!.Value, out var nombre) ? nombre : "Repartidor",
+                    p.Id,
+                    p.CodigoSeguimiento,
+                    p.UbicacionActual!.Latitud,
+                    p.UbicacionActual.Longitud,
+                    p.UbicacionActualActualizadaEn))
+                .ToList();
+
+            return Ok(result);
         }
 
         /// <summary>Todas las fechas con asignaciones del repartidor logueado (para selector de día).</summary>
@@ -850,6 +963,15 @@ namespace Back.Controllers
         [Required] public double Longitud { get; set; }
     }
 
+    public record RepartidorUbicacionDto(
+        Guid RepartidorId,
+        string RepartidorNombre,
+        Guid PaqueteId,
+        string CodigoSeguimiento,
+        double Latitud,
+        double Longitud,
+        DateTime? ActualizadaEn);
+
     public class RegistrarPaqueteRequest
     {
         [Required] public double Peso { get; set; }
@@ -858,11 +980,17 @@ namespace Back.Controllers
         public TipoPaquete TipoPaquete { get; set; } = TipoPaquete.Comun;
         [Required] public RegistrarClienteRequest Remitente { get; set; }
         [Required] public RegistrarClienteRequest Destinatario { get; set; }
+        public Guid? PuntoPickUpId { get; set; }
     }
 
     public class GenerarLoteDemoRequest
     {
         [Required] public int Cantidad { get; set; }
+    }
+
+    public class ImportarEnviosExcelRequest
+    {
+        [Required] public IFormFile File { get; set; } = default!;
     }
 
     public class RegistrarClienteRequest
@@ -877,6 +1005,7 @@ namespace Back.Controllers
         // correcta cuando el nombre de calle es ambiguo entre provincias.
         public string? Provincia { get; set; }
         public string? Telefono { get; set; }
+        public string? Email { get; set; }
     }
 
     public class RegistrarVehiculoRequest
@@ -933,9 +1062,12 @@ namespace Back.Controllers
         // G1L-17: fecha estimada de entrega (asignada por la calendarización).
         // Si está definida, el front la muestra como hito en la línea de tiempo.
         public DateTime? FechaCalendarizada { get; set; }
+        public DateTime? FechaEstimadaEntrega { get; set; }
         public double Peso { get; set; }
         public string? Descripcion { get; set; }
         public string? RazonCancelacion { get; set; }
+        public Ubicacion? UbicacionActual { get; set; }
+        public DateTime? UbicacionActualActualizadaEn { get; set; }
         public SeguimientoPublicoCliente Remitente { get; set; } = new();
         public SeguimientoPublicoCliente Destinatario { get; set; } = new();
     }

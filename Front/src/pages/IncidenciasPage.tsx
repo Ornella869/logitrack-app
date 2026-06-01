@@ -86,6 +86,19 @@ function EstadoChip({ estado }: { estado: EstadoIncidencia }) {
   )
 }
 
+function SeveridadChip({ severidad, vencido }: { severidad?: string; vencido?: boolean }) {
+  const value = severidad ?? 'Media'
+  const color = vencido ? '#b71c1c' : value === 'Alta' ? '#c62828' : value === 'Media' ? '#e65100' : '#2e7d32'
+  const bg = vencido ? '#ffebee' : value === 'Alta' ? '#fdecea' : value === 'Media' ? '#fff3e0' : '#e8f5e9'
+  return (
+    <Chip
+      label={vencido ? `SLA vencido · ${value}` : value}
+      size="small"
+      sx={{ bgcolor: bg, color, fontWeight: 700, border: `1px solid ${color}`, fontSize: 11 }}
+    />
+  )
+}
+
 function formatFecha(iso: string): string {
   return formatInstantArgentina(iso, {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -213,7 +226,8 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
               {formatFecha(inc.fechaReporte)} · ID: {inc.id.slice(-8)}
             </Typography>
           </Box>
-          <Box sx={{ ml: 'auto' }}>
+          <Box sx={{ ml: 'auto', display: 'flex', gap: 0.8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <SeveridadChip severidad={inc.severidad} vencido={inc.slaVencido} />
             <EstadoChip estado={inc.estado} />
           </Box>
         </Stack>
@@ -239,6 +253,12 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
               </>
             )}
           </Box>
+
+          {inc.slaVenceEn && (
+            <Alert severity={inc.slaVencido ? 'error' : 'info'} sx={{ py: 0.5 }}>
+              SLA: vence {formatFecha(inc.slaVenceEn)}
+            </Alert>
+          )}
 
           {/* Descripción */}
           <Box>
@@ -347,6 +367,8 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                     const accion = paradasAccion[p.id]
                     const isDone = accion === 'done'
                     const isLoading = accion === 'loading'
+                    const esEntregado = p.status === 'Entregado'
+                    const esCancelado = p.status === 'Cancelado'
                     return (
                       <Box
                         key={p.id}
@@ -364,7 +386,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                             <Typography variant="caption" color="text.secondary">{p.receiver.address}, {p.receiver.city}</Typography>
                             <Typography variant="caption" color="text.secondary" display="block">Estado: {p.status}</Typography>
                           </Box>
-                          {!isDone && (
+                          {!isDone && !esEntregado && !esCancelado && (
                             <Stack direction="row" spacing={0.7} flexWrap="wrap" useFlexGap>
                               <Button
                                 size="small"
@@ -389,6 +411,12 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                                 Cancelar
                               </Button>
                             </Stack>
+                          )}
+                          {esEntregado && (
+                            <Chip label="Reclamo post-entrega" size="small" color="info" />
+                          )}
+                          {esCancelado && (
+                            <Chip label="Envio cancelado" size="small" color="default" />
                           )}
                           {isDone && (
                             <Chip label="Acción aplicada" size="small" color="success" />
@@ -677,8 +705,16 @@ export default function IncidenciasPage() {
   const [busqueda, setBusqueda] = useState('')
   const [detalle, setDetalle] = useState<Incidencia | null>(null)
   const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
+  const [rankingZonas, setRankingZonas] = useState<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number }>>([])
 
-  const cargar = async () => setIncidencias(await incidenciaService.getAll())
+  const cargar = async () => {
+    setIncidencias(await incidenciaService.getAll())
+    try {
+      setRankingZonas(await incidenciaService.rankingZonas())
+    } catch {
+      setRankingZonas([])
+    }
+  }
 
   const refreshChats = async () => {
     const all = (await incidenciaService.getAll()).filter(
@@ -831,6 +867,35 @@ export default function IncidenciasPage() {
         </Grid>
       </Grid>
 
+      {rankingZonas.length > 0 && (
+        <Card variant="outlined" sx={{ mb: 2.5 }}>
+          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              Ranking de zonas con más incidencias
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Agrupado por provincia y localidad del envio asociado. La severidad sale del reporte y el SLA vencido de incidencias abiertas fuera de plazo.
+            </Typography>
+            <Grid container spacing={1}>
+              {rankingZonas.slice(0, 5).map((zona) => (
+                <Grid item xs={12} md={6} lg={4} key={`${zona.provincia}-${zona.localidad}`}>
+                  <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" fontWeight={700}>{zona.localidad || 'Sin localidad'}</Typography>
+                      <Chip size="small" color="error" label={zona.total} />
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">{zona.provincia}</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Altas: {zona.altas} · SLA vencido: {zona.vencidas}
+                    </Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filtros */}
       <Card variant="outlined" sx={{ mb: 2.5 }}>
         <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -899,6 +964,7 @@ export default function IncidenciasPage() {
                           {esCliente && (
                             <Chip label="Cliente" size="small" sx={{ height: 18, fontSize: 10, fontWeight: 600, bgcolor: '#E0F7FA', color: '#006064', border: '1px solid #80DEEA', '& .MuiChip-label': { px: 0.8 } }} />
                           )}
+                          <SeveridadChip severidad={inc.severidad} vencido={inc.slaVencido} />
                           <EstadoChip estado={inc.estado} />
                         </Stack>
                       </Stack>

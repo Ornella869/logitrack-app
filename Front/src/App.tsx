@@ -17,6 +17,7 @@ import OjoPatronConfigPage from './pages/OjoPatronConfigPage'
 import AlertasPage from './pages/AlertasPage'
 import IncidenciasPage from './pages/IncidenciasPage'
 import SucursalesPage from './pages/SucursalesPage'
+import PuntosPickUpPage from './pages/PuntosPickUpPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
@@ -341,6 +342,16 @@ function App() {
           />
           {/* G1L-86/87/88 + Épica D: tarifas y zonas peligrosas las gestiona el Gerente */}
           <Route
+            path="/pickups"
+            element={
+              user && (user.role === 'gerente' || user.role === 'supervisor' || user.role === 'administrador') ? (
+                <PuntosPickUpPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
             path="/tarifas"
             element={
               user && user.role === 'gerente' ? (
@@ -354,7 +365,7 @@ function App() {
           <Route
             path="/ojo-patron"
             element={
-              user && user.role === 'gerente' ? (
+              user && (user.role === 'gerente' || user.role === 'supervisor') ? (
                 <OjoPatronConfigPage />
               ) : (
                 <Navigate to="/access-denied" replace />

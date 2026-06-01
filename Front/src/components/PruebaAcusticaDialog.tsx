@@ -10,6 +10,7 @@ import {
   DialogTitle,
   LinearProgress,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material'
 import MicIcon from '@mui/icons-material/Mic'
@@ -61,6 +62,9 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
   const [error, setError] = useState('')
   const [registrando, setRegistrando] = useState(false)
   const [modeloOk, setModeloOk] = useState(true)
+  const [overrideMotivo, setOverrideMotivo] = useState('')
+  const [overrideLoading, setOverrideLoading] = useState(false)
+  const [overrideMsg, setOverrideMsg] = useState<{ sev: 'success' | 'error'; text: string } | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -110,7 +114,7 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
 
   useEffect(() => {
     if (!open) { stopWaveAnimation(); return }
-    setIntentos(0); setUltimo(null); setAprobada(false); setError(''); setModeloOk(true); setRegistroError(false)
+    setIntentos(0); setUltimo(null); setAprobada(false); setError(''); setModeloOk(true); setRegistroError(false); setOverrideMotivo(''); setOverrideMsg(null)
     setFase('cargando-modelo'); setProgresoModelo(0)
     // El gate es por energía de voz (RMS), así que aunque el modelo de emoción
     // no cargue, igual se puede hacer la prueba. La emoción es complementaria.
@@ -190,6 +194,21 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
     setRegistrando(false)
   }
 
+  const solicitarOverride = async () => {
+    const motivo = overrideMotivo.trim()
+    if (!motivo) {
+      setOverrideMsg({ sev: 'error', text: 'Ingresá el motivo para pedir autorización.' })
+      return
+    }
+    setOverrideLoading(true)
+    setOverrideMsg(null)
+    const res = await ojoPatronService.solicitarOverride(momento, motivo)
+    setOverrideLoading(false)
+    setOverrideMsg(res.success
+      ? { sev: 'success', text: 'Solicitud enviada al supervisor. Cuando la apruebe, intentá iniciar o continuar la ruta nuevamente.' }
+      : { sev: 'error', text: res.error ?? 'No se pudo enviar la solicitud.' })
+  }
+
   return (
     <Dialog open={open} onClose={() => fase === 'resultado' && onClose()} fullWidth maxWidth="xs">
       <DialogTitle>
@@ -236,6 +255,22 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
                 <Alert severity="warning" sx={{ py: 0.5, fontSize: 12 }}>
                   El resultado no pudo guardarse en el servidor. Si el problema persiste, contactá al administrador.
                 </Alert>
+              )}
+              {((intentos > 0 && !aprobada) || error) && fase === 'listo' && (
+                <Stack spacing={1}>
+                  <TextField
+                    size="small"
+                    label="Motivo para autorización manual"
+                    value={overrideMotivo}
+                    onChange={(e) => setOverrideMotivo(e.target.value)}
+                    placeholder="Ej: el micrófono del celular no funciona"
+                    fullWidth
+                  />
+                  <Button variant="outlined" onClick={solicitarOverride} disabled={overrideLoading}>
+                    {overrideLoading ? 'Enviando...' : 'Solicitar autorización del supervisor'}
+                  </Button>
+                  {overrideMsg && <Alert severity={overrideMsg.sev}>{overrideMsg.text}</Alert>}
+                </Stack>
               )}
               {ultimo && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>

@@ -38,6 +38,7 @@ import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import { postalCodeService } from '../services/postalCodeService'
 import { branchService } from '../services/branchService'
 import { tarifaService, type Cotizacion } from '../services/tarifaService'
+import { pickupService, type PuntoPickUp } from '../services/pickupService'
 import { AR_PROVINCIAS, normalizeProvincia } from '../utils/provincias'
 
 interface ShipmentFormProps {
@@ -59,6 +60,7 @@ const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
 // Inválidos: "2487 Rosa Castillo", "1234", "asdfgh".
 const addressRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s.,'-]*\s\d+[A-Za-z]?$/
 const phoneRegex = /^[+\d][\d\s-]{6,19}$/
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }: ShipmentFormProps) {
   const isEdit = mode === 'edit'
@@ -69,6 +71,9 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState<string>('')
   const [loadingBranches, setLoadingBranches] = useState(false)
+  const [pickups, setPickups] = useState<PuntoPickUp[]>([])
+  const [selectedPickUpId, setSelectedPickUpId] = useState('')
+  const [deliveryMode, setDeliveryMode] = useState<'domicilio' | 'pickup'>('domicilio')
   // G1L-88: cotización detallada (preview antes de confirmar).
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null)
   const [cotizando, setCotizando] = useState(false)
@@ -79,6 +84,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     receiverPostal: '',
     receiverProvince: '', // se autocompleta cuando el CP valida (no editable por UI)
     receiverPhone: '',
+    receiverEmail: '',
     weight: '',
     description: '',
     tipoEnvio: 'Comun' as TipoEnvio,
@@ -90,7 +96,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     setErrors({})
     setCotizacion(null)
     loadBranches()
+    loadPickUps()
     if (isEdit && initialData) {
+      setDeliveryMode(initialData.puntoPickUpId ? 'pickup' : 'domicilio')
+      setSelectedPickUpId(initialData.puntoPickUpId ?? '')
       setFormData({
         receiverName: initialData.receiver.name,
         receiverAddress: initialData.receiver.address,
@@ -98,6 +107,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         receiverPostal: initialData.receiver.postalCode,
         receiverProvince: initialData.receiver.province ?? '',
         receiverPhone: initialData.receiver.phone ?? '',
+        receiverEmail: initialData.receiver.email ?? '',
         weight: String(initialData.weight),
         description: initialData.description,
         tipoEnvio: initialData.tipoEnvio ?? 'Comun',
@@ -105,6 +115,8 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       })
     } else {
       // Alta nueva: limpiamos los campos para no arrastrar datos de un intento previo.
+      setDeliveryMode('domicilio')
+      setSelectedPickUpId('')
       setFormData({
         receiverName: '',
         receiverAddress: '',
@@ -112,6 +124,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         receiverPostal: '',
         receiverProvince: '',
         receiverPhone: '',
+        receiverEmail: '',
         weight: '',
         description: '',
         tipoEnvio: 'Comun',
@@ -133,6 +146,15 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       setBranches([])
     } finally {
       setLoadingBranches(false)
+    }
+  }
+
+  const loadPickUps = async () => {
+    try {
+      setPickups(await pickupService.getAll())
+    } catch (error) {
+      console.error('Error cargando puntos PickUp:', error)
+      setPickups([])
     }
   }
 
@@ -212,12 +234,35 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
 
   const validateForm = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {}
+    const isPickUp = deliveryMode === 'pickup'
+    const selectedPickUp = pickups.find((p) => p.id === selectedPickUpId)
 
     // Destinatario — G1L-10
     if (!formData.receiverName.trim()) {
       newErrors.receiverName = 'Requerido'
     } else if (!nameRegex.test(formData.receiverName.trim())) {
       newErrors.receiverName = 'Solo letras (mín. 2 caracteres)'
+    }
+
+    if (isPickUp) {
+      if (!selectedPickUp) {
+        newErrors.pickup = 'Elegí un punto PickUp'
+      }
+      if (formData.receiverPhone.trim() && !phoneRegex.test(formData.receiverPhone.trim())) {
+        newErrors.receiverPhone = 'Teléfono inválido'
+      }
+      if (formData.receiverEmail.trim() && !emailRegex.test(formData.receiverEmail.trim())) {
+        newErrors.receiverEmail = 'Email invalido'
+      }
+      const weightNum = Number(formData.weight)
+      if (!formData.weight || isNaN(weightNum) || weightNum <= 0) {
+        newErrors.weight = 'El peso debe ser mayor a 0'
+      } else if (weightNum > MAX_WEIGHT_KG) {
+        newErrors.weight = `El peso no puede superar ${MAX_WEIGHT_KG} kg`
+      }
+
+      setErrors(newErrors)
+      return Object.keys(newErrors).length === 0
     }
 
     if (!formData.receiverAddress.trim()) {
@@ -246,6 +291,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       newErrors.receiverPhone = 'Teléfono inválido'
     }
 
+    if (formData.receiverEmail.trim() && !emailRegex.test(formData.receiverEmail.trim())) {
+      newErrors.receiverEmail = 'Email invalido'
+    }
+
     // Peso — G1L-10 (>0) + G1L-54 (capacidad máxima por repartidor)
     const weightNum = Number(formData.weight)
     if (!formData.weight || isNaN(weightNum) || weightNum <= 0) {
@@ -259,14 +308,17 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       if (!cpResult.valid) {
         newErrors.receiverPostal = cpResult.error ?? 'CP inválido'
       } else {
-        if (cpResult.province && !formData.receiverProvince) {
-          setFormData((prev) => ({ ...prev, receiverProvince: cpResult.province as string }))
+        let provinceToUse = formData.receiverProvince.trim()
+        if (cpResult.province && !provinceToUse) {
+          provinceToUse = cpResult.province as string
+          setFormData((prev) => ({ ...prev, receiverProvince: provinceToUse }))
         }
-        // Validar que la calle exista en Nominatim para el CP dado.
+        // Validar que la calle exista en Nominatim para el CP dado y la Provincia elegida.
         if (!newErrors.receiverAddress) {
           const addrResult = await postalCodeService.validateStreetAddress(
             formData.receiverAddress.trim(),
             formData.receiverPostal.trim(),
+            provinceToUse,
           )
           if (!addrResult.valid) {
             newErrors.receiverAddress = addrResult.error ?? 'No se pudo verificar la dirección'
@@ -282,12 +334,19 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   // G1L-88: pide la cotización al backend (geocodifica destino y evalúa zona peligrosa).
   const handleCotizar = async () => {
     const peso = Number(formData.weight)
-    if (!formData.receiverAddress || !formData.receiverCity || !formData.receiverPostal || isNaN(peso) || peso <= 0) {
+    const selectedPickUp = pickups.find((p) => p.id === selectedPickUpId)
+    const address = deliveryMode === 'pickup' ? selectedPickUp?.direccion : formData.receiverAddress
+    const city = deliveryMode === 'pickup' ? selectedPickUp?.localidad : formData.receiverCity
+    const postal = deliveryMode === 'pickup' ? selectedPickUp?.codigoPostal : formData.receiverPostal
+    const province = deliveryMode === 'pickup' ? selectedPickUp?.provincia : formData.receiverProvince
+    if (!address || !city || !postal || isNaN(peso) || peso <= 0) {
       return
     }
     setCotizando(true)
-    const result = await tarifaService.cotizar(
-      peso, formData.receiverAddress, formData.receiverCity, formData.receiverPostal, formData.receiverProvince || undefined)
+    const result = await tarifaService.cotizar(peso, address, city, postal, province || undefined)
+    if (result && deliveryMode === 'pickup') {
+      result.total = Math.round(result.total * 0.75 * 100) / 100
+    }
     setCotizando(false)
     setCotizacion(result)
   }
@@ -297,6 +356,23 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
     if (!(await validateForm())) return
     const origin = branches.find((b) => b.id === selectedBranchId)
     if (!origin) return
+    const selectedPickUp = pickups.find((p) => p.id === selectedPickUpId)
+    if (deliveryMode === 'pickup' && !selectedPickUp) return
+    const destino = deliveryMode === 'pickup' && selectedPickUp
+      ? {
+          address: selectedPickUp.direccion,
+          city: selectedPickUp.localidad,
+          postalCode: selectedPickUp.codigoPostal,
+          province: selectedPickUp.provincia,
+          puntoPickUpId: selectedPickUp.id,
+        }
+      : {
+          address: formData.receiverAddress.trim(),
+          city: formData.receiverCity.trim(),
+          postalCode: formData.receiverPostal.trim(),
+          province: formData.receiverProvince.trim() || undefined,
+          puntoPickUpId: null,
+        }
 
     setLoading(true)
     try {
@@ -310,20 +386,22 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         },
         receiver: {
           name: formData.receiverName.trim(),
-          address: formData.receiverAddress.trim(),
-          city: formData.receiverCity.trim(),
-          postalCode: formData.receiverPostal.trim(),
-          province: formData.receiverProvince.trim() || undefined,
+          address: destino.address,
+          city: destino.city,
+          postalCode: destino.postalCode,
+          province: destino.province,
           phone: formData.receiverPhone.trim() || undefined,
+          email: formData.receiverEmail.trim() || undefined,
         },
         origin: origin.city,
-        destination: formData.receiverCity.trim(),
+        destination: destino.city,
         weight: Number(formData.weight),
         description: formData.description.trim(),
         estimatedDelivery: '',
         status: 'Pendiente de calendarización',
         tipoEnvio: formData.tipoEnvio,
         tipoPaquete: formData.tipoPaquete,
+        puntoPickUpId: destino.puntoPickUpId,
         createdDate: formatArgentinaDateInput(),
       })
 
@@ -334,11 +412,14 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
         receiverPostal: '',
         receiverProvince: '',
         receiverPhone: '',
+        receiverEmail: '',
         weight: '',
         description: '',
         tipoEnvio: 'Comun',
         tipoPaquete: 'Comun',
       })
+      setDeliveryMode('domicilio')
+      setSelectedPickUpId('')
       onClose()
     } catch (error) {
       setSubmitError(
@@ -353,6 +434,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   }
 
   const hasErrors = Object.values(errors).some((v) => !!v)
+  const selectedPickUp = pickups.find((p) => p.id === selectedPickUpId)
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -428,6 +510,64 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
             />
           )}
 
+          {!isEdit && (
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Modalidad de entrega
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mb: deliveryMode === 'pickup' ? 1 : 0 }}>
+                <InputLabel>Entrega</InputLabel>
+                <Select
+                  value={deliveryMode}
+                  label="Entrega"
+                  onChange={(e) => {
+                    setDeliveryMode(e.target.value as 'domicilio' | 'pickup')
+                    setCotizacion(null)
+                    setErrors((prev) => {
+                      const next = { ...prev }
+                      delete next.pickup
+                      return next
+                    })
+                  }}
+                >
+                  <MenuItem value="domicilio">A domicilio</MenuItem>
+                  <MenuItem value="pickup">Retiro en PickUp</MenuItem>
+                </Select>
+              </FormControl>
+              {deliveryMode === 'pickup' && (
+                <FormControl fullWidth size="small" required error={!!errors.pickup}>
+                  <InputLabel>Punto PickUp</InputLabel>
+                  <Select
+                    value={selectedPickUpId}
+                    label="Punto PickUp"
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setSelectedPickUpId(value)
+                      setCotizacion(null)
+                      setErrors((prev) => ({ ...prev, pickup: '' }))
+                    }}
+                  >
+                    {pickups.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.nombre} - {p.localidad}, {p.provincia} (CP {p.codigoPostal})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>
+                    {errors.pickup || (selectedPickUp
+                      ? `${selectedPickUp.direccion}. Horario: ${selectedPickUp.horarios}`
+                      : 'Solo se muestran PickUps dentro de la cobertura de tu sucursal.')}
+                  </FormHelperText>
+                </FormControl>
+              )}
+              {deliveryMode === 'pickup' && pickups.length === 0 && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  No hay puntos PickUp activos para la cobertura de tu sucursal.
+                </Alert>
+              )}
+            </Box>
+          )}
+
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
               Destinatario
@@ -446,7 +586,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   size="small"
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid item xs={12} sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}>
                 <TextField
                   label="Dirección"
                   name="receiverAddress"
@@ -457,9 +597,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   required
                   fullWidth
                   size="small"
+                  sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={6} sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}>
                 <TextField
                   label="Ciudad"
                   name="receiverCity"
@@ -470,9 +611,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   required
                   fullWidth
                   size="small"
+                  sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={6} sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}>
                 <TextField
                   label="CP"
                   name="receiverPostal"
@@ -492,10 +634,11 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   }}
                   fullWidth
                   size="small"
+                  sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}
                 />
               </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth size="small" required error={!!errors.receiverProvince}>
+              <Grid item xs={12} sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}>
+                <FormControl fullWidth size="small" required error={!!errors.receiverProvince} sx={{ display: deliveryMode === 'pickup' && !isEdit ? 'none' : undefined }}>
                   <InputLabel>Provincia</InputLabel>
                   <Select
                     value={formData.receiverProvince}
@@ -524,6 +667,18 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   onChange={handleChange}
                   error={!!errors.receiverPhone}
                   helperText={errors.receiverPhone}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Email para notificaciones (opcional)"
+                  name="receiverEmail"
+                  value={formData.receiverEmail}
+                  onChange={handleChange}
+                  error={!!errors.receiverEmail}
+                  helperText={errors.receiverEmail || 'Se usa para avisos de salida a ruta y entrega'}
                   fullWidth
                   size="small"
                 />

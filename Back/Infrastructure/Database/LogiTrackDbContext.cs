@@ -25,6 +25,9 @@ namespace Back.Infrastructure.Database
         public DbSet<ConfiguracionOjoPatron> ConfiguracionesOjoPatron { get; set; }
         public DbSet<Incidencia> Incidencias { get; set; }
         public DbSet<MensajeIncidencia> MensajesIncidencia { get; set; }
+        public DbSet<EmailNotificacion> EmailNotificaciones { get; set; }
+        public DbSet<OverrideOjoPatron> OverridesOjoPatron { get; set; }
+        public DbSet<PuntoPickUp> PuntosPickUp { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -41,6 +44,7 @@ namespace Back.Infrastructure.Database
                     r.Property(c => c.Nombre).HasColumnName("Remitente_Nombre");
                     r.Property(c => c.Apellido).HasColumnName("Remitente_Apellido");
                     r.Property(c => c.Telefono).HasColumnName("Remitente_Telefono");
+                    r.Property(c => c.Email).HasColumnName("Remitente_Email").HasMaxLength(160);
 
                     r.OwnsOne(x => x.Direccion, d =>
                     {
@@ -57,6 +61,7 @@ namespace Back.Infrastructure.Database
                     d.Property(c => c.Nombre).HasColumnName("Destinatario_Nombre");
                     d.Property(c => c.Apellido).HasColumnName("Destinatario_Apellido");
                     d.Property(c => c.Telefono).HasColumnName("Destinatario_Telefono");
+                    d.Property(c => c.Email).HasColumnName("Destinatario_Email").HasMaxLength(160);
 
                     d.OwnsOne(x => x.Direccion, dir =>
                     {
@@ -142,6 +147,7 @@ namespace Back.Infrastructure.Database
                 i.Property(x => x.Tipo).HasMaxLength(60);
                 i.Property(x => x.TipoLabel).HasMaxLength(120);
                 i.Property(x => x.Estado).HasMaxLength(40);
+                i.Property(x => x.Severidad).HasMaxLength(20);
                 i.Property(x => x.CodigoSeguimiento).HasMaxLength(80);
                 i.Property(x => x.EmailContacto).HasMaxLength(160);
                 i.Property(x => x.RepartidorNombre).HasMaxLength(160);
@@ -149,6 +155,44 @@ namespace Back.Infrastructure.Database
                 i.HasIndex(x => x.SucursalId);
                 i.HasIndex(x => x.PaqueteId);
                 i.HasIndex(x => x.FechaReporte);
+            });
+
+            modelBuilder.Entity<EmailNotificacion>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.Property(x => x.DestinatarioEmail).HasMaxLength(160).IsRequired();
+                e.Property(x => x.Asunto).HasMaxLength(250).IsRequired();
+                e.Property(x => x.Cuerpo).HasMaxLength(4000).IsRequired();
+                e.Property(x => x.CodigoSeguimiento).HasMaxLength(80);
+                e.Property(x => x.Error).HasMaxLength(1000);
+                e.HasIndex(x => x.PaqueteId);
+                e.HasIndex(x => x.SucursalId);
+                e.HasIndex(x => x.Estado);
+                e.HasIndex(x => x.CreadoEn);
+            });
+
+            modelBuilder.Entity<OverrideOjoPatron>(o =>
+            {
+                o.HasKey(x => x.Id);
+                o.Property(x => x.Motivo).HasMaxLength(500);
+                o.Property(x => x.ComentarioSupervisor).HasMaxLength(500);
+                o.HasIndex(x => x.RepartidorId);
+                o.HasIndex(x => x.SupervisorId);
+                o.HasIndex(x => x.SolicitadoEn);
+            });
+
+            modelBuilder.Entity<PuntoPickUp>(p =>
+            {
+                p.HasKey(x => x.Id);
+                p.Property(x => x.Nombre).HasMaxLength(160).IsRequired();
+                p.Property(x => x.Direccion).HasMaxLength(240).IsRequired();
+                p.Property(x => x.Localidad).HasMaxLength(120).IsRequired();
+                p.Property(x => x.CodigoPostal).HasMaxLength(20).IsRequired();
+                p.Property(x => x.Provincia).HasMaxLength(80).IsRequired();
+                p.Property(x => x.Horarios).HasMaxLength(300).IsRequired();
+                p.Property(x => x.Telefono).HasMaxLength(50);
+                p.HasIndex(x => x.Provincia);
+                p.HasIndex(x => x.Activo);
             });
         }
 

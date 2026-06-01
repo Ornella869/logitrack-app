@@ -42,6 +42,16 @@ namespace Back.Application.Services
         public List<string> Errores { get; init; } = new();
     }
 
+    public class ImportarEnviosResult
+    {
+        public int Procesados { get; init; }
+        public int Creados { get; init; }
+        public int Fallidos { get; init; }
+        public List<ImportarEnvioDetalleResult> Detalles { get; init; } = new();
+    }
+
+    public record ImportarEnvioDetalleResult(int Fila, bool Creado, string? CodigoSeguimiento, string? Error);
+
     public class EnviosService
     {
         private readonly IEnviosRepository _enviosRepository;
@@ -145,10 +155,41 @@ namespace Back.Application.Services
             return !sucursales.Any(s => string.Equals(s.Provincia?.Trim(), destino, StringComparison.OrdinalIgnoreCase));
         }
 
+        private async Task<PuntoPickUp?> ResolverPuntoPickUpAsync(Guid? puntoPickUpId, Guid? usuarioId)
+        {
+            if (!puntoPickUpId.HasValue) return null;
+
+            var punto = await _enviosRepository.GetPuntoPickUpById(puntoPickUpId.Value);
+            if (punto is null || !punto.Activo)
+                throw new InvalidOperationException("El punto PickUp seleccionado no existe o no esta activo.");
+
+            if (usuarioId.HasValue)
+            {
+                var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
+                if (usuario?.SucursalId is Guid sucursalId)
+                {
+                    var sucursal = (await _enviosRepository.GetSucursales(sucursalId: sucursalId)).FirstOrDefault();
+                    if (sucursal is null || !sucursal.Cubre(punto.Provincia))
+                        throw new InvalidOperationException("El punto PickUp seleccionado no pertenece a la cobertura de tu sucursal.");
+                }
+            }
+
+            return punto;
+        }
+
         // G1L-10
         public async Task<RegistrarPaqueteResult> RegistrarPaquete(RegistrarPaqueteRequest request, Guid? usuarioId)
         {
             ValidarPaqueteData(request);
+
+            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId);
+            if (puntoPickUp is not null)
+            {
+                request.Destinatario.Direccion = puntoPickUp.Direccion;
+                request.Destinatario.Localidad = puntoPickUp.Localidad;
+                request.Destinatario.CP = puntoPickUp.CodigoPostal;
+                request.Destinatario.Provincia = puntoPickUp.Provincia;
+            }
 
             var ubicacionDestinatario = await _geocoding.GeocodeAsync(
                 request.Destinatario.Direccion,
@@ -172,8 +213,8 @@ namespace Back.Application.Services
                 request.Peso,
                 0,
                 0,
-                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono),
-                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono),
+                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono, request.Remitente.Email),
+                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono, request.Destinatario.Email),
                 prioridad,
                 distancia,
                 request.Comentarios
@@ -183,10 +224,13 @@ namespace Back.Application.Services
                 TipoPaquete = request.TipoPaquete,
                 SucursalId = sucursalDestino?.Id,
                 ProvinciaDestino = request.Destinatario.Provincia?.Trim(),
-                EsEnvioADomicilio = esEnvioADomicilio,
+                EsEnvioADomicilio = puntoPickUp is null && esEnvioADomicilio,
             };
 
+            paquete.ActualizarEstimacionEntrega(distancia);
             await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
+            if (puntoPickUp is not null)
+                paquete.AsignarPuntoPickUp(puntoPickUp.Id);
 
             await _enviosRepository.Add(paquete);
 
@@ -249,7 +293,8 @@ namespace Back.Application.Services
                             destino.Nombre,
                             destino.Apellido,
                             new Direccion(destino.Direccion, destino.Localidad, destino.CP, ubicacion: new Ubicacion(destino.Latitud, destino.Longitud)),
-                            destino.Telefono),
+                            destino.Telefono,
+                            $"cliente{i + 1}@demo.logitrack.local"),
                         prioridad,
                         distancia,
                         $"Carga demo #{i + 1}")
@@ -261,6 +306,7 @@ namespace Back.Application.Services
                         EsEnvioADomicilio = esEnvioADomicilio,
                     };
 
+                    paquete.ActualizarEstimacionEntrega(distancia);
                     await AplicarCotizacion(paquete, peso, distancia, paquete.Destinatario.Direccion.Ubicacion, destino.Provincia);
                     await _enviosRepository.Add(paquete);
                     await _historial.RegistrarCambioAsync(paquete.Id, paquete.Status, usuarioId, OrigenCambioEstado.Sistema, "Alta masiva demo");
@@ -287,6 +333,45 @@ namespace Back.Application.Services
             };
         }
 
+        public async Task<ImportarEnviosResult> ImportarDesdeExcelAsync(IEnumerable<ImportarEnvioRow> rows, Guid? usuarioId)
+        {
+            var detalles = new List<ImportarEnvioDetalleResult>();
+            var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId);
+            foreach (var row in rows)
+            {
+                try
+                {
+                    if (sucursalOrigen is not null)
+                    {
+                        row.Request.Remitente = new RegistrarClienteRequest
+                        {
+                            Nombre = "Sucursal",
+                            Apellido = sucursalOrigen.Nombre,
+                            Direccion = sucursalOrigen.Direccion,
+                            Localidad = sucursalOrigen.Ciudad,
+                            CP = sucursalOrigen.CodigoPostal,
+                            Provincia = sucursalOrigen.Provincia,
+                            Telefono = sucursalOrigen.Telefono,
+                        };
+                    }
+                    var creado = await RegistrarPaquete(row.Request, usuarioId);
+                    detalles.Add(new ImportarEnvioDetalleResult(row.Fila, true, creado.CodigoSeguimiento, null));
+                }
+                catch (Exception ex)
+                {
+                    detalles.Add(new ImportarEnvioDetalleResult(row.Fila, false, null, ex.Message));
+                }
+            }
+
+            return new ImportarEnviosResult
+            {
+                Procesados = detalles.Count,
+                Creados = detalles.Count(d => d.Creado),
+                Fallidos = detalles.Count(d => !d.Creado),
+                Detalles = detalles,
+            };
+        }
+
         // G1L-12 / G1L-80
         public async Task EditarPaquete(Guid paqueteId, RegistrarPaqueteRequest request, Guid? usuarioId)
         {
@@ -310,6 +395,15 @@ namespace Back.Application.Services
                 throw new InvalidOperationException(mensaje);
             }
 
+            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId);
+            if (puntoPickUp is not null)
+            {
+                request.Destinatario.Direccion = puntoPickUp.Direccion;
+                request.Destinatario.Localidad = puntoPickUp.Localidad;
+                request.Destinatario.CP = puntoPickUp.CodigoPostal;
+                request.Destinatario.Provincia = puntoPickUp.Provincia;
+            }
+
             var ubicacionDestinatario = await _geocoding.GeocodeAsync(
                 request.Destinatario.Direccion,
                 request.Destinatario.Localidad,
@@ -326,8 +420,8 @@ namespace Back.Application.Services
             var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);
 
             paquete.ActualizarDatos(
-                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono),
-                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono),
+                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono, request.Remitente.Email),
+                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono, request.Destinatario.Email),
                 request.Peso,
                 request.TipoEnvio,
                 request.TipoPaquete,
@@ -336,9 +430,21 @@ namespace Back.Application.Services
                 prioridad);
             paquete.SucursalId = sucursalDestino?.Id;
             paquete.ProvinciaDestino = request.Destinatario.Provincia?.Trim();
-            paquete.EsEnvioADomicilio = esEnvioADomicilio;
+            paquete.EsEnvioADomicilio = puntoPickUp is null && !paquete.PuntoPickUpId.HasValue && esEnvioADomicilio;
+            paquete.ActualizarEstimacionEntrega(distancia);
 
             await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
+            if (puntoPickUp is not null)
+            {
+                var yaTeniaPickUp = paquete.PuntoPickUpId.HasValue;
+                paquete.AsignarPuntoPickUp(puntoPickUp.Id);
+                if (yaTeniaPickUp)
+                    paquete.AplicarDescuentoPickUp();
+            }
+            else if (paquete.PuntoPickUpId.HasValue)
+            {
+                paquete.AplicarDescuentoPickUp();
+            }
 
             await _historial.RegistrarCambioAsync(
                 paquete.Id,

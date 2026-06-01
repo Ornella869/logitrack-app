@@ -99,6 +99,7 @@ export interface Shipment {
     postalCode: string
     province?: string
     phone?: string
+    email?: string
   }
   receiver: {
     name: string
@@ -107,10 +108,12 @@ export interface Shipment {
     postalCode: string
     province?: string
     phone?: string
+    email?: string
   }
   receiverUbicacion?: { latitud: number; longitud: number } | null
   status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado'
   fechaCalendarizada?: string | null
+  fechaEstimadaEntrega?: string | null
   sucursalId?: string | null
   ubicacionActual?: { latitud: number; longitud: number } | null
   tipoEnvio?: TipoEnvio
@@ -131,6 +134,7 @@ export interface Shipment {
   costoEnvio?: number
   costoRecargoSeguridad?: number
   esZonaPeligrosa?: boolean
+  puntoPickUpId?: string | null
 }
 
 export interface LoginCredentials {

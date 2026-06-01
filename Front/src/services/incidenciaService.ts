@@ -1,6 +1,7 @@
 import api from './api'
 
 export type EstadoIncidencia = 'Abierta' | 'En Revisión' | 'Resuelta'
+export type SeveridadIncidencia = 'Baja' | 'Media' | 'Alta'
 export type TipoIncidencia = 'accident' | 'mechanical' | 'danger' | 'health' | 'delivery' | 'demorado' | 'otro' | 'no_llego' | 'llego_danado' | 'llego_tarde'
 
 export interface ObservacionIncidencia {
@@ -36,6 +37,9 @@ export interface Incidencia {
   emailContacto?: string
   chatFinalizado?: boolean
   sucursalId?: string
+  severidad?: SeveridadIncidencia
+  slaVenceEn?: string | null
+  slaVencido?: boolean
 }
 
 const normalizeEstado = (estado: string): EstadoIncidencia =>
@@ -63,6 +67,9 @@ const mapIncidencia = (raw: any): Incidencia => ({
   emailContacto: raw.emailContacto,
   chatFinalizado: raw.chatFinalizado,
   sucursalId: raw.sucursalId ?? undefined,
+  severidad: raw.severidad ?? 'Media',
+  slaVenceEn: raw.slaVenceEn ?? null,
+  slaVencido: raw.slaVencido ?? false,
 })
 
 function dispatch(): void {
@@ -90,12 +97,14 @@ export const incidenciaService = {
     tipoLabel: string
     descripcion: string
     paradasAfectadas?: string[]
+    severidad?: SeveridadIncidencia
   }): Promise<Incidencia> {
     const response = await api.post('/incidencias/repartidor', {
       tipo: data.tipo,
       tipoLabel: data.tipoLabel,
       descripcion: data.descripcion,
       paradasAfectadas: data.paradasAfectadas ?? [],
+      severidad: data.severidad ?? 'Media',
     })
     dispatch()
     return mapIncidencia(response.data)
@@ -120,6 +129,7 @@ export const incidenciaService = {
     envioId?: string
     emailContacto?: string
     paradasAfectadas?: string[]
+    severidad?: SeveridadIncidencia
   }): Promise<Incidencia> {
     return incidenciaService.createRepartidor(data)
   },
@@ -130,6 +140,7 @@ export const incidenciaService = {
     tipoLabel: string
     descripcion: string
     emailContacto?: string
+    severidad?: SeveridadIncidencia
   }): Promise<Incidencia> {
     const response = await api.post('/incidencias/publica', data)
     return mapIncidencia(response.data)
@@ -151,5 +162,10 @@ export const incidenciaService = {
     const response = await api.put(`/incidencias/${id}/finalizar-chat`)
     dispatch()
     return mapIncidencia(response.data)
+  },
+
+  async rankingZonas(): Promise<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number }>> {
+    const response = await api.get('/incidencias/ranking-zonas')
+    return response.data ?? []
   },
 }

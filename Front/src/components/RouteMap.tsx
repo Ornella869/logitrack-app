@@ -73,9 +73,20 @@ interface RouteMapProps {
   paradas: Parada[]
   proximaIdx: number
   origen?: Origen | null
+  ubicacionActual?: { latitud: number; longitud: number } | null
   height?: number | string
   showReturnRoute?: boolean
   animateReturnRoute?: boolean
+}
+
+function isValidPosition(position?: { latitud: number; longitud: number } | null) {
+  if (!position) return false
+  return Number.isFinite(position.latitud)
+    && Number.isFinite(position.longitud)
+    && position.latitud >= -56
+    && position.latitud <= -21
+    && position.longitud >= -75
+    && position.longitud <= -52
 }
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -97,7 +108,7 @@ function FitBounds({ positions }: { positions: [number, number][] }) {
 // Devuelve la geometría real por calles entre los puntos en orden.
 // Si falla (red caída, demasiados puntos), retornamos null para que
 // el caller decida el fallback (línea recta o midpoint geométrico).
-async function fetchOsrmRoute(
+export async function fetchOsrmRoute(
   points: [number, number][],
   signal: AbortSignal,
 ): Promise<[number, number][] | null> {
@@ -144,7 +155,7 @@ function haversineMeters(a: [number, number], b: [number, number]): number {
 }
 
 // Devuelve el punto exacto sobre la geometría OSRM al progreso t (0=inicio, 1=fin).
-function positionAlongRoute(geo: [number, number][], t: number): [number, number] {
+export function positionAlongRoute(geo: [number, number][], t: number): [number, number] {
   if (geo.length === 1) return geo[0]
   let total = 0
   const cum: number[] = [0]
@@ -163,6 +174,14 @@ function positionAlongRoute(geo: [number, number][], t: number): [number, number
     }
   }
   return geo[geo.length - 1]
+}
+
+function compactCloseRoutePoints(points: [number, number][], minMeters = 25) {
+  return points.reduce<[number, number][]>((acc, point) => {
+    const last = acc[acc.length - 1]
+    if (!last || haversineMeters(last, point) >= minMeters) acc.push(point)
+    return acc
+  }, [])
 }
 
 // Anima el camión a lo largo del segmento desde→hasta usando la geometría real de OSRM.
@@ -240,7 +259,8 @@ function spreadOverlappingMarkers<T extends { latitud: number; longitud: number 
   return out
 }
 
-export default function RouteMap({ paradas, proximaIdx, origen, height = 340, showReturnRoute = false, animateReturnRoute = false }: RouteMapProps) {
+export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual, height = 340, showReturnRoute = false, animateReturnRoute = false }: RouteMapProps) {
+  const ubicacionReal = isValidPosition(ubicacionActual) ? ubicacionActual : null
   const paradasConCoords = paradas.filter(
     (p): p is Parada & { latitud: number; longitud: number } =>
       p.latitud != null && p.longitud != null,
@@ -251,7 +271,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
 
   const tieneOrigen = origen?.latitud != null && origen?.longitud != null
 
-  if (paradasConCoords.length === 0 && !tieneOrigen) {
+  if (paradasConCoords.length === 0 && !tieneOrigen && !ubicacionReal) {
     return (
       <Box
         sx={{
@@ -280,8 +300,10 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
   const positions: [number, number][] = []
   if (tieneOrigen) positions.push([origen!.latitud, origen!.longitud])
   paradasConCoords.forEach((p) => positions.push([p.latitud, p.longitud]))
+  const routingPositions = compactCloseRoutePoints(positions)
 
   const DEFAULT_CENTER: [number, number] = positions[0] ??
+    (ubicacionReal ? [ubicacionReal.latitud, ubicacionReal.longitud] : undefined) ??
     (paradasConCoords[0] ? [paradasConCoords[0].latitud, paradasConCoords[0].longitud] : [-34.6037, -58.3816])
 
   // Detectar paquete en tránsito y última parada entregada.
@@ -323,8 +345,8 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
     truckLabel = `En sucursal — listo para salir`
   }
 
-  const routeGeo = useOsrmRoute(positions)
-  const trazo = routeGeo ?? positions
+  const routeGeo = useOsrmRoute(routingPositions)
+  const trazo = routeGeo ?? routingPositions
 
   // Return route: from last delivered stop back to the origin branch.
   const ultimaEntregadaParaRetorno = showReturnRoute
@@ -357,10 +379,16 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
     }
   }
 
+  if (ubicacionReal) {
+    truckPos = [ubicacionReal.latitud, ubicacionReal.longitud]
+    truckLabel = 'Ubicacion compartida por el repartidor'
+  }
+
   // FitBounds debe usar los puntos de paradas + origen.
   const fitPositions: [number, number][] = []
   if (tieneOrigen) fitPositions.push([origen!.latitud, origen!.longitud])
   paradasConCoords.forEach((p) => fitPositions.push([p.latitud, p.longitud]))
+  if (ubicacionReal) fitPositions.push([ubicacionReal.latitud, ubicacionReal.longitud])
 
   return (
     <Box sx={{ height, width: '100%', borderRadius: 1, overflow: 'hidden', border: '1px solid #ddd' }}>
@@ -421,11 +449,11 @@ export default function RouteMap({ paradas, proximaIdx, origen, height = 340, sh
           )
         })}
 
-        {/* Ubicación simulada del repartidor — sucursal, mitad de ruta o última entrega */}
+        {/* Ubicacion real si existe; simulada como fallback de demo. */}
         {truckPos && (
           <Marker position={truckPos} icon={TRUCK_ICON} zIndexOffset={1000}>
             <Popup>
-              🚚 Ubicación simulada del repartidor
+              🚚 {ubicacionReal ? 'Ubicacion actual del repartidor' : 'Ubicacion simulada del repartidor'}
               <br />
               {truckLabel}
             </Popup>

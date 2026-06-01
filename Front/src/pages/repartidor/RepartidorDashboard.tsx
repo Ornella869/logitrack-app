@@ -41,12 +41,15 @@ import DirectionsIcon from '@mui/icons-material/Directions'
 import GavelIcon from '@mui/icons-material/Gavel'
 import ChatIcon from '@mui/icons-material/Chat'
 import SendIcon from '@mui/icons-material/Send'
+import MyLocationIcon from '@mui/icons-material/MyLocation'
+import LocationDisabledIcon from '@mui/icons-material/LocationDisabled'
+import GpsFixedIcon from '@mui/icons-material/GpsFixed'
 import { shipmentService } from '../../services/shipmentService'
 import { notificationService } from '../../services/notificationService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
 import { ojoPatronService } from '../../services/ojoPatronService'
 import StatusBadge from '../../components/StatusBadge'
-import RouteMap from '../../components/RouteMap'
+import RouteMap, { fetchOsrmRoute, positionAlongRoute } from '../../components/RouteMap'
 import QrCameraScanner from '../../components/QrCameraScanner'
 import ConsentimientoOjoPatronDialog from '../../components/ConsentimientoOjoPatronDialog'
 import PruebaAcusticaDialog from '../../components/PruebaAcusticaDialog'
@@ -95,6 +98,10 @@ export default function RepartidorDashboard() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState(0)
   const [filtroEstado, setFiltroEstado] = useState<string | null>(null)
+  const [ubicacionActiva, setUbicacionActiva] = useState(false)
+  const [modoSimulacion, setModoSimulacion] = useState(false)
+  const [ubicacionReal, setUbicacionReal] = useState<{ latitud: number; longitud: number } | null>(null)
+  const [ubicacionMsg, setUbicacionMsg] = useState<{ severity: 'success' | 'info' | 'warning' | 'error'; message: string } | null>(null)
 
   // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
   const [estadoJornada, setEstadoJornada] = useState('Disponible')
@@ -109,6 +116,11 @@ export default function RepartidorDashboard() {
   // Para no dispararse contra el backend si el scanner devuelve la misma lectura
   // muchas veces seguidas (cosa que el detector hace normalmente).
   const lastScannedRef = useRef<{ code: string; at: number } | null>(null)
+  const locationWatchRef = useRef<number | null>(null)
+  const simulationTimerRef = useRef<number | null>(null)
+  const simulationStepRef = useRef(0)
+  const simulationRouteRef = useRef<[number, number][] | null>(null)
+  const simulationLegKeyRef = useRef('')
 
   const load = async (fecha?: string) => {
     setLoading(true)
@@ -122,6 +134,7 @@ export default function RepartidorDashboard() {
       ])
       setParadas(data.paradas)
       setFechaRuta(data.fecha)
+      setUbicacionReal(data.paradas.find((p) => p.ubicacionActual)?.ubicacionActual ?? null)
       setEstadoJornada(jornada)
       if (!origen) setOrigen(sucursal)
     } catch {
@@ -134,6 +147,154 @@ export default function RepartidorDashboard() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const hayRutaActiva = useMemo(
+    () => estadoJornada === 'EnRuta' && paradas.some((p) => p.status === 'En tránsito' || p.status === 'Demorado'),
+    [estadoJornada, paradas],
+  )
+
+  const detenerUbicacionReal = () => {
+    if (locationWatchRef.current != null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current)
+    }
+    locationWatchRef.current = null
+    setUbicacionActiva(false)
+  }
+
+  const detenerSimulacion = () => {
+    if (simulationTimerRef.current != null) {
+      window.clearInterval(simulationTimerRef.current)
+    }
+    simulationTimerRef.current = null
+    setModoSimulacion(false)
+  }
+
+  const calcularSegmentoSimulacion = () => {
+    const destino = paradas.find((p) =>
+      (p.status === 'En tránsito' || p.status === 'Demorado') &&
+      p.receiverUbicacion?.latitud != null &&
+      p.receiverUbicacion?.longitud != null,
+    ) ?? paradas.find((p) =>
+      p.status !== 'Entregado' &&
+      p.status !== 'Cancelado' &&
+      p.receiverUbicacion?.latitud != null &&
+      p.receiverUbicacion?.longitud != null,
+    )
+    if (!destino?.receiverUbicacion) return null
+
+    const ultimaEntregada = [...paradas]
+      .reverse()
+      .find((p) => p.status === 'Entregado' && p.receiverUbicacion?.latitud != null && p.receiverUbicacion?.longitud != null)
+
+    const origenLat = ultimaEntregada?.receiverUbicacion?.latitud ?? origen?.latitud
+    const origenLng = ultimaEntregada?.receiverUbicacion?.longitud ?? origen?.longitud
+    if (origenLat == null || origenLng == null) return null
+
+    return {
+      desde: [origenLat, origenLng] as [number, number],
+      hasta: [destino.receiverUbicacion.latitud, destino.receiverUbicacion.longitud] as [number, number],
+    }
+  }
+
+  const calcularUbicacionSimulada = async () => {
+    const segmento = calcularSegmentoSimulacion()
+    if (!segmento) return null
+
+    const legKey = `${segmento.desde[0]},${segmento.desde[1]}-${segmento.hasta[0]},${segmento.hasta[1]}`
+    if (simulationLegKeyRef.current !== legKey) {
+      simulationLegKeyRef.current = legKey
+      simulationRouteRef.current = null
+    }
+
+    if (!simulationRouteRef.current) {
+      const ctrl = new AbortController()
+      simulationRouteRef.current = await fetchOsrmRoute([segmento.desde, segmento.hasta], ctrl.signal) ?? [segmento.desde, segmento.hasta]
+    }
+
+    simulationStepRef.current = (simulationStepRef.current + 1) % 10
+    const t = 0.15 + simulationStepRef.current * 0.07
+    const [latitud, longitud] = positionAlongRoute(simulationRouteRef.current, t)
+    return {
+      latitud,
+      longitud,
+    }
+  }
+
+  const activarUbicacionReal = () => {
+    if (!navigator.geolocation) {
+      setUbicacionMsg({ severity: 'error', message: 'Tu navegador no permite compartir ubicacion.' })
+      return
+    }
+    if (!hayRutaActiva) {
+      setUbicacionMsg({ severity: 'warning', message: 'La ubicacion real se comparte solo cuando tenes una ruta en transito.' })
+      return
+    }
+    if (ubicacionActiva) {
+      detenerUbicacionReal()
+      setUbicacionMsg({ severity: 'info', message: 'Dejaste de compartir tu ubicacion real.' })
+      return
+    }
+    detenerSimulacion()
+
+    const sendPosition = (pos: GeolocationPosition) => {
+      setUbicacionReal({ latitud: pos.coords.latitude, longitud: pos.coords.longitude })
+      void shipmentService.actualizarMiUbicacion(pos.coords.latitude, pos.coords.longitude)
+    }
+
+    locationWatchRef.current = navigator.geolocation.watchPosition(
+      sendPosition,
+      () => {
+        detenerUbicacionReal()
+        setUbicacionMsg({ severity: 'error', message: 'No se pudo obtener tu ubicacion. Revisa los permisos del navegador.' })
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+    )
+    setUbicacionActiva(true)
+    setUbicacionMsg({ severity: 'success', message: 'Ubicacion real compartida con el supervisor.' })
+  }
+
+  const activarSimulacion = () => {
+    if (modoSimulacion) {
+      detenerSimulacion()
+      setUbicacionMsg({ severity: 'info', message: 'Simulacion detenida.' })
+      return
+    }
+    if (!hayRutaActiva) {
+      setUbicacionMsg({ severity: 'warning', message: 'La simulacion se activa solo con una ruta en transito.' })
+      return
+    }
+    const enviarSimulacion = async () => {
+      const ubicacion = await calcularUbicacionSimulada()
+      if (!ubicacion) {
+        setUbicacionMsg({ severity: 'warning', message: 'No hay coordenadas suficientes para simular la ruta.' })
+        detenerSimulacion()
+        return
+      }
+      setUbicacionReal(ubicacion)
+      void shipmentService.actualizarMiUbicacion(ubicacion.latitud, ubicacion.longitud)
+    }
+    detenerUbicacionReal()
+    simulationStepRef.current = 0
+    simulationRouteRef.current = null
+    simulationLegKeyRef.current = ''
+    setModoSimulacion(true)
+    enviarSimulacion()
+    simulationTimerRef.current = window.setInterval(enviarSimulacion, 4000)
+    setUbicacionMsg({ severity: 'info', message: 'Simulacion activa para demo. El supervisor vera esta ubicacion.' })
+  }
+
+  useEffect(() => {
+    if (!hayRutaActiva) {
+      if (ubicacionActiva) detenerUbicacionReal()
+      if (modoSimulacion) detenerSimulacion()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hayRutaActiva])
+
+  useEffect(() => () => {
+    detenerUbicacionReal()
+    detenerSimulacion()
   }, [])
 
   const paradasFiltradas = useMemo(() => {
@@ -448,6 +609,22 @@ export default function RepartidorDashboard() {
           >
             Escanear QR
           </Button>
+          <Button
+            variant={ubicacionActiva ? 'contained' : 'outlined'}
+            color={ubicacionActiva ? 'success' : 'primary'}
+            startIcon={ubicacionActiva ? <LocationDisabledIcon /> : <MyLocationIcon />}
+            onClick={activarUbicacionReal}
+          >
+            {ubicacionActiva ? 'Detener ubicacion' : 'Compartir ubicacion'}
+          </Button>
+          <Button
+            variant={modoSimulacion ? 'contained' : 'outlined'}
+            color="secondary"
+            startIcon={<GpsFixedIcon />}
+            onClick={activarSimulacion}
+          >
+            Simulacion
+          </Button>
           {/* Fase A: cerrar jornada al volver. Solo mientras está "Retornando". */}
           {showRetorno && estadoJornada === 'Retornando' && (
             <Button
@@ -482,6 +659,11 @@ export default function RepartidorDashboard() {
       )}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {ubicacionMsg && (
+        <Alert severity={ubicacionMsg.severity} sx={{ mb: 2 }} onClose={() => setUbicacionMsg(null)}>
+          {ubicacionMsg.message}
+        </Alert>
+      )}
 
       {inicioFeedback && (
         <Alert severity={inicioFeedback.severity} sx={{ mb: 2 }} onClose={() => setInicioFeedback(null)}>
@@ -682,6 +864,7 @@ export default function RepartidorDashboard() {
                       }
                     : null
                 }
+                ubicacionActual={ubicacionReal}
                 showReturnRoute={showRetorno}
                 animateReturnRoute={retornoAnimando}
                 height={380}

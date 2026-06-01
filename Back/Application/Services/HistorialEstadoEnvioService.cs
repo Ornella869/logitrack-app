@@ -22,13 +22,15 @@ namespace Back.Application.Services
     public class HistorialEstadoEnvioService
     {
         private readonly LogiTrackDbContext _context;
+        private readonly EmailNotificacionService _emails;
 
-        public HistorialEstadoEnvioService(LogiTrackDbContext context)
+        public HistorialEstadoEnvioService(LogiTrackDbContext context, EmailNotificacionService emails)
         {
             _context = context;
+            _emails = emails;
         }
 
-        public Task RegistrarCambioAsync(
+        public async Task RegistrarCambioAsync(
             Guid paqueteId,
             PaqueteStatus estadoNuevo,
             Guid? usuarioId,
@@ -36,7 +38,8 @@ namespace Back.Application.Services
             string? motivo = null)
         {
             var entry = new HistorialEstadoEnvio(paqueteId, estadoNuevo, usuarioId, origen, motivo);
-            return _context.HistorialEstadosEnvio.AddAsync(entry).AsTask();
+            await _context.HistorialEstadosEnvio.AddAsync(entry);
+            await _emails.NotificarCambioEstadoAsync(paqueteId, estadoNuevo);
         }
 
         public async Task<List<HistorialEstadoEnvioDto>> GetHistorialPorPaqueteAsync(Guid paqueteId)

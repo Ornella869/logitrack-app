@@ -4,6 +4,8 @@
 // Si la red falla, hace fallback a validar solo el formato (4 dígitos).
 // Referencia: G1L-10 ("código postal con formato válido") + UH nueva Sprint 2.
 
+import { normalizeProvincia } from '../utils/provincias'
+
 const AR_POSTAL_FORMAT = /^\d{4}$/
 
 // Cache persistente de geocodificación de direcciones (sobrevive recargas de página).
@@ -62,6 +64,7 @@ interface NominatimResult {
     province?: string
     country?: string
     country_code?: string
+    postcode?: string
   }
 }
 
@@ -165,8 +168,11 @@ export const postalCodeService = {
     return AR_POSTAL_FORMAT.test(cp.trim())
   },
 
-  async validateStreetAddress(street: string, cp: string): Promise<AddressValidation> {
-    const url = `https://nominatim.openstreetmap.org/search?street=${encodeURIComponent(street)}&postalcode=${encodeURIComponent(cp)}&country=Argentina&format=json&limit=1`
+  async validateStreetAddress(street: string, cp: string, province?: string): Promise<AddressValidation> {
+    let url = `https://nominatim.openstreetmap.org/search?street=${encodeURIComponent(street)}&postalcode=${encodeURIComponent(cp)}&country=Argentina&format=json&limit=1&addressdetails=1`
+    if (province) {
+      url += `&state=${encodeURIComponent(province)}`
+    }
     try {
       const res = await fetchWithTimeout(url, { headers: { 'Accept-Language': 'es' } })
       if (!res.ok) return { valid: true, fallback: true }
@@ -175,6 +181,20 @@ export const postalCodeService = {
         return {
           valid: false,
           error: 'No se encontró esta dirección. Verificá la calle y el código postal.',
+        }
+      }
+      
+      const addr = data[0].address
+      if (province && addr) {
+        const foundProvince = addr.state || addr.province || ''
+        // normalizeProvincia to compare apples to apples
+        const normalizedFound = normalizeProvincia(foundProvince)
+        const normalizedExpected = normalizeProvincia(province)
+        if (normalizedFound && normalizedExpected && normalizedFound !== normalizedExpected) {
+          return {
+            valid: false,
+            error: `La calle pertenece a ${normalizedFound}, no a ${normalizedExpected}.`,
+          }
         }
       }
       return { valid: true }
