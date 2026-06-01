@@ -65,6 +65,12 @@ namespace Back.Domain.Models
             Password = nuevoPasswordHash;
         }
 
+        public void ActualizarNombreApellido(string nombre, string apellido)
+        {
+            Nombre = nombre;
+            Apellido = apellido;
+        }
+
         public void ActualizarDatos(string nombre, string apellido, string email, string dni)
         {
             if (string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(apellido))

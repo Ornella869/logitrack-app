@@ -462,6 +462,21 @@ export const authService = {
     }
   },
 
+  updateMiPerfil: async (nombre: string, apellido: string): Promise<User> => {
+    const response = await api.put('/auth/mi-perfil', { Nombre: nombre, Apellido: apellido })
+    const u = response.data
+    return {
+      id: u.id,
+      name: u.nombre,
+      lastname: u.apellido,
+      email: u.email,
+      dni: u.dni,
+      role: normalizeUserRole(u.role ?? u.Role ?? ''),
+      activo: u.activo ?? true,
+      estado: u.estado,
+    }
+  },
+
   assignProvincias: async (userId: string, provincias: string[]): Promise<void> => {
     await api.put(`/auth/usuarios/${userId}/provincias`, { Provincias: provincias })
   },

@@ -252,6 +252,66 @@ namespace Back.Controllers
         }
 
         /// <summary>
+        /// Actualiza la ubicación GPS del repartidor en su ruta activa.
+        /// </summary>
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPut("mi-ubicacion")]
+        public async Task<ActionResult> ActualizarUbicacion([FromBody] UbicacionRequest request)
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return Unauthorized();
+
+            var ruta = await _rutasRepository.GetRutaActivaByRepartidorId(Guid.Parse(userId));
+            if (ruta is null) return NotFound("No hay ruta activa.");
+
+            try
+            {
+                ruta.ActualizarUbicacion(request.Lat, request.Lng);
+                await _context.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Recibe un lote de posiciones GPS acumuladas offline y persiste la más reciente.
+        /// </summary>
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("mi-ubicacion/lote")]
+        public async Task<ActionResult> ActualizarUbicacionLote([FromBody] List<UbicacionConTimestampRequest> posiciones)
+        {
+            if (posiciones == null || posiciones.Count == 0) return BadRequest("Lista vacía.");
+
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return Unauthorized();
+
+            var ruta = await _rutasRepository.GetRutaActivaByRepartidorId(Guid.Parse(userId));
+            if (ruta is null) return NotFound("No hay ruta activa.");
+
+            var ultima = posiciones.OrderBy(p => p.Timestamp).Last();
+
+            try
+            {
+                ruta.ActualizarUbicacion(ultima.Lat, ultima.Lng);
+                await _context.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
         /// Crea una nueva ruta con un vehículo, repartidor y paquetes.
         /// </summary>
         /// <param name="request">Datos para crear la ruta</param>
@@ -283,5 +343,18 @@ namespace Back.Controllers
     public class CancelarRutaRequest
     {
         public string Razon { get; set; } = string.Empty;
+    }
+
+    public class UbicacionRequest
+    {
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+    }
+
+    public class UbicacionConTimestampRequest
+    {
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+        public long Timestamp { get; set; }
     }
 }

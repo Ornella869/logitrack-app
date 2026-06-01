@@ -387,6 +387,25 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>Actualiza el nombre y apellido del usuario autenticado.</summary>
+        [Authorize]
+        [HttpPut("mi-perfil")]
+        public async Task<ActionResult<UserInfoResponse>> ActualizarMiPerfil([FromBody] ActualizarMiPerfilRequest request)
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(request.Nombre) || string.IsNullOrWhiteSpace(request.Apellido))
+                return BadRequest("Nombre y apellido son obligatorios.");
+
+            var user = await _userRepository.GetUsuarioById(Guid.Parse(userId));
+            if (user == null) return NotFound();
+
+            user.ActualizarNombreApellido(request.Nombre.Trim(), request.Apellido.Trim());
+            await _context.SaveChangesAsync();
+            return Ok(MapUsuario(user));
+        }
+
         /// <summary>Actualizar datos de usuario (nombre, apellido, email, DNI y, opcionalmente, provincia para Gerentes).</summary>
         [Authorize(Roles = Roles.Administrador)]
         [HttpPut("usuarios/{userId:guid}")]
@@ -636,6 +655,12 @@ namespace Back.Controllers
         public string DNI { get; set; } = string.Empty;
         /// <summary>Para Gerentes: una o más provincias separadas por comas.</summary>
         public string? Provincia { get; set; }
+    }
+
+    public class ActualizarMiPerfilRequest
+    {
+        [Required] public string Nombre { get; set; } = string.Empty;
+        [Required] public string Apellido { get; set; } = string.Empty;
     }
 
     public class AsignarProvinciasRequest

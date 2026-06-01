@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import {
   Box,
@@ -27,6 +27,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import type { User } from '../types'
 import { authService } from '../services/authService'
+import { branchService } from '../services/branchService'
 
 const ROLE_LABELS: Record<string, string> = {
   administrador: 'Administrador',
@@ -61,9 +62,51 @@ export default function ProfilePage() {
   const [name, setName] = useState(user.name)
   const [lastname, setLastname] = useState(user.lastname)
   const [phone, setPhone] = useState(() => localStorage.getItem(`logitrack_phone_${user.id}`) ?? '')
+  const [nameError, setNameError] = useState('')
+  const [lastnameError, setLastnameError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
   const [infoSaving, setInfoSaving] = useState(false)
   const [infoSuccess, setInfoSuccess] = useState(false)
   const [infoError, setInfoError] = useState('')
+
+  const [sucursalNombre, setSucursalNombre] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user.sucursalId) return
+    branchService.getBranchById(user.sucursalId).then(b => {
+      if (b) setSucursalNombre(b.name)
+    })
+  }, [user.sucursalId])
+
+  const onlyLetters = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]*$/
+  const onlyPhone = /^[0-9+\-\s()]*$/
+
+  const handleNameChange = (val: string) => {
+    if (!onlyLetters.test(val)) {
+      setNameError('El nombre no puede contener números')
+      return
+    }
+    setName(val)
+    setNameError(val.trim() ? '' : 'El nombre es obligatorio')
+  }
+
+  const handleLastnameChange = (val: string) => {
+    if (!onlyLetters.test(val)) {
+      setLastnameError('El apellido no puede contener números')
+      return
+    }
+    setLastname(val)
+    setLastnameError(val.trim() ? '' : 'El apellido es obligatorio')
+  }
+
+  const handlePhoneChange = (val: string) => {
+    if (!onlyPhone.test(val)) {
+      setPhoneError('El teléfono solo puede contener números')
+      return
+    }
+    setPhone(val)
+    setPhoneError('')
+  }
 
   // Password
   const [pwActual, setPwActual] = useState('')
@@ -105,31 +148,22 @@ export default function ProfilePage() {
   }
 
   const handleSaveInfo = async () => {
-    if (!name.trim() || !lastname.trim()) {
-      setInfoError('Nombre y apellido son obligatorios')
-      return
-    }
+    const nErr = name.trim() ? '' : 'El nombre es obligatorio'
+    const lErr = lastname.trim() ? '' : 'El apellido es obligatorio'
+    setNameError(nErr)
+    setLastnameError(lErr)
+    if (nErr || lErr || nameError || lastnameError || phoneError) return
     setInfoSaving(true)
     setInfoError('')
     setInfoSuccess(false)
     try {
-      const updated = await authService.updateUsuario(user.id, {
-        name: name.trim(),
-        lastname: lastname.trim(),
-        email: user.email,
-        dni: user.dni,
-      })
-      if (updated) {
-        localStorage.setItem(`logitrack_phone_${user.id}`, phone.trim())
-        // Persist updated user and notify App to re-sync state
-        const updatedUser: User = { ...user, name: name.trim(), lastname: lastname.trim() }
-        localStorage.setItem('user', JSON.stringify(updatedUser))
-        window.dispatchEvent(new Event('logitrack:userUpdate'))
-        setInfoSuccess(true)
-        setTimeout(() => setInfoSuccess(false), 3500)
-      } else {
-        setInfoError('No se pudo actualizar la información')
-      }
+      const updated = await authService.updateMiPerfil(name.trim(), lastname.trim())
+      localStorage.setItem(`logitrack_phone_${user.id}`, phone.trim())
+      const updatedUser: User = { ...user, name: updated.name, lastname: updated.lastname }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      window.dispatchEvent(new Event('logitrack:userUpdate'))
+      setInfoSuccess(true)
+      setTimeout(() => setInfoSuccess(false), 3500)
     } catch (err: any) {
       setInfoError(err?.message ?? 'Error al guardar')
     } finally {
@@ -280,7 +314,9 @@ export default function ProfilePage() {
                     label="Nombre"
                     fullWidth
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={e => handleNameChange(e.target.value)}
+                    error={!!nameError}
+                    helperText={nameError}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -288,7 +324,9 @@ export default function ProfilePage() {
                     label="Apellido"
                     fullWidth
                     value={lastname}
-                    onChange={e => setLastname(e.target.value)}
+                    onChange={e => handleLastnameChange(e.target.value)}
+                    error={!!lastnameError}
+                    helperText={lastnameError}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -296,9 +334,11 @@ export default function ProfilePage() {
                     label="Teléfono"
                     fullWidth
                     value={phone}
-                    onChange={e => setPhone(e.target.value)}
+                    onChange={e => handlePhoneChange(e.target.value)}
                     placeholder="+54 11 1234-5678"
                     inputProps={{ autoComplete: 'off' }}
+                    error={!!phoneError}
+                    helperText={phoneError}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -366,9 +406,9 @@ export default function ProfilePage() {
                 {user.sucursalId && (
                   <Grid item xs={12} sm={6}>
                     <TextField
-                      label="Sucursal (ID)"
+                      label="Sucursal"
                       fullWidth
-                      value={user.sucursalId}
+                      value={sucursalNombre ?? 'Cargando...'}
                       disabled
                     />
                   </Grid>
