@@ -181,7 +181,7 @@ export const shipmentService = {
           CP: shipment.sender.postalCode,
           Provincia: shipment.sender.province,
           Telefono: shipment.sender.phone,
-          Email: shipment.sender.email,
+          Email: shipment.sender.email || '',
         },
         Destinatario: {
           Nombre: destinatario.nombre,
@@ -191,7 +191,7 @@ export const shipmentService = {
           CP: shipment.receiver.postalCode,
           Provincia: shipment.receiver.province,
           Telefono: shipment.receiver.phone,
-          Email: shipment.receiver.email,
+          Email: shipment.receiver.email || '',
         }
       }
 
@@ -467,7 +467,7 @@ export const shipmentService = {
           CP: data.sender.postalCode,
           Provincia: data.sender.province,
           Telefono: data.sender.phone,
-          Email: data.sender.email,
+          Email: data.sender.email || '',
         },
         Destinatario: {
           Nombre: destinatario.nombre,
@@ -477,7 +477,7 @@ export const shipmentService = {
           CP: data.receiver.postalCode,
           Provincia: data.receiver.province,
           Telefono: data.receiver.phone,
-          Email: data.receiver.email,
+          Email: data.receiver.email || '',
         },
       })
       return { success: true }
