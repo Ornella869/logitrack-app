@@ -42,6 +42,12 @@ namespace Back.Application.Services
             await _emails.NotificarCambioEstadoAsync(paqueteId, estadoNuevo);
         }
 
+        public async Task RegistrarCambiosMasivosDemoAsync(IEnumerable<Paquete> paquetes, Guid? usuarioId)
+        {
+            var historiales = paquetes.Select(p => new HistorialEstadoEnvio(p.Id, p.Status, usuarioId, OrigenCambioEstado.Sistema, "Alta masiva demo"));
+            await _context.HistorialEstadosEnvio.AddRangeAsync(historiales);
+        }
+
         public async Task<List<HistorialEstadoEnvioDto>> GetHistorialPorPaqueteAsync(Guid paqueteId)
         {
             return await _context.HistorialEstadosEnvio

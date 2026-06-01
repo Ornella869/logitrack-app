@@ -118,9 +118,9 @@ namespace Back.Application.Services
 
         // Épica D: resuelve la sucursal responsable de un envío por la provincia de destino
         // y aplica el ruteo estricto (un operador no puede crear envíos fuera de su sucursal).
-        private async Task<Sucursal?> ResolverSucursalDestinoAsync(string? provinciaDestino, Guid? usuarioId)
+        private async Task<Sucursal?> ResolverSucursalDestinoAsync(string? provinciaDestino, Guid? usuarioId, List<Sucursal>? sucursalesPreCargadas = null)
         {
-            var sucursales = await _enviosRepository.GetSucursales();
+            var sucursales = sucursalesPreCargadas ?? await _enviosRepository.GetSucursales();
             if (sucursales.Count == 0) return null;
 
             var responsable = sucursales.FirstOrDefault(s => s.Cubre(provinciaDestino));
@@ -147,11 +147,11 @@ namespace Back.Application.Services
             return responsable;
         }
 
-        private async Task<bool> EsEnvioADomicilioAsync(string? provinciaDestino, Sucursal? sucursalDestino)
+        private async Task<bool> EsEnvioADomicilioAsync(string? provinciaDestino, Sucursal? sucursalDestino, List<Sucursal>? sucursalesPreCargadas = null)
         {
             if (sucursalDestino is null || string.IsNullOrWhiteSpace(provinciaDestino)) return false;
             var destino = provinciaDestino.Trim();
-            var sucursales = await _enviosRepository.GetSucursales();
+            var sucursales = sucursalesPreCargadas ?? await _enviosRepository.GetSucursales();
             return !sucursales.Any(s => string.Equals(s.Provincia?.Trim(), destino, StringComparison.OrdinalIgnoreCase));
         }
 
@@ -267,6 +267,11 @@ namespace Back.Application.Services
             var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId);
             var creados = new List<string>();
             var errores = new List<string>();
+            var paquetesAAgregar = new List<Paquete>();
+
+            var todasSucursales = await _enviosRepository.GetSucursales();
+            var configsCache = new Dictionary<string, ConfiguracionTarifa>();
+            var zonasCache = new Dictionary<string, List<ZonaPeligrosa>>();
 
             for (var i = 0; i < cantidad; i++)
             {
@@ -277,8 +282,8 @@ namespace Back.Application.Services
                     var peso = Math.Round(1.5 + (i * 3.7 % 38), 1);
                     var distancia = DistanciasService.CalcularDistancia(destino.Localidad);
                     var prioridad = await _mlPrioridadPrediction.Predecir((float)peso, distancia);
-                    var sucursalDestino = await ResolverSucursalDestinoAsync(destino.Provincia, usuarioId);
-                    var esEnvioADomicilio = await EsEnvioADomicilioAsync(destino.Provincia, sucursalDestino);
+                    var sucursalDestino = await ResolverSucursalDestinoAsync(destino.Provincia, usuarioId, todasSucursales);
+                    var esEnvioADomicilio = await EsEnvioADomicilioAsync(destino.Provincia, sucursalDestino, todasSucursales);
 
                     var paquete = new Paquete(
                         peso,
@@ -307,15 +312,36 @@ namespace Back.Application.Services
                     };
 
                     paquete.ActualizarEstimacionEntrega(distancia);
-                    await AplicarCotizacion(paquete, peso, distancia, paquete.Destinatario.Direccion.Ubicacion, destino.Provincia);
-                    await _enviosRepository.Add(paquete);
-                    await _historial.RegistrarCambioAsync(paquete.Id, paquete.Status, usuarioId, OrigenCambioEstado.Sistema, "Alta masiva demo");
+
+                    var provKey = (destino.Provincia ?? string.Empty).Trim();
+                    if (!configsCache.TryGetValue(provKey, out var config))
+                    {
+                        config = await _tarifas.GetConfiguracionAsync(provKey);
+                        configsCache[provKey] = config;
+                    }
+                    if (!zonasCache.TryGetValue(provKey, out var zonas))
+                    {
+                        zonas = await _tarifas.GetZonasAsync(provKey);
+                        zonasCache[provKey] = zonas;
+                    }
+                    var esPeligrosa = zonas.Where(z => z.Activa).Any(z => z.Contiene(destino.Latitud, destino.Longitud));
+                    
+                    var cotizacion = _tarifas.Calcular(peso, distancia, esPeligrosa, config, null);
+                    paquete.AsignarCotizacion(cotizacion.Total, cotizacion.CostoRecargo, esPeligrosa);
+
+                    paquetesAAgregar.Add(paquete);
                     creados.Add(paquete.CodigoSeguimiento);
                 }
                 catch (Exception ex)
                 {
                     errores.Add($"Fila {i + 1}: {ex.Message}");
                 }
+            }
+
+            if (paquetesAAgregar.Count > 0)
+            {
+                await _enviosRepository.AddRange(paquetesAAgregar);
+                await _historial.RegistrarCambiosMasivosDemoAsync(paquetesAAgregar, usuarioId);
             }
 
             await _auditoria.RegistrarAsync(

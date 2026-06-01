@@ -20,6 +20,11 @@ namespace Back.Infrastructure.Database.Repositories
             await _context.Paquetes.AddAsync(envio);
         }
 
+        public async Task AddRange(IEnumerable<Paquete> paquetes)
+        {
+            await _context.Paquetes.AddRangeAsync(paquetes);
+        }
+
         public async Task Add(Sucursal sucursal)
         {
             await _context.Sucursales.AddAsync(sucursal);
