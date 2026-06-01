@@ -213,8 +213,8 @@ namespace Back.Application.Services
                 request.Peso,
                 0,
                 0,
-                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono, request.Remitente.Email),
-                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono, request.Destinatario.Email),
+                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP, request.Remitente.Provincia), request.Remitente.Telefono, request.Remitente.Email),
+                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, request.Destinatario.Provincia, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono, request.Destinatario.Email),
                 prioridad,
                 distancia,
                 request.Comentarios
@@ -287,12 +287,12 @@ namespace Back.Application.Services
                         new Cliente(
                             remitente.Item1,
                             remitente.Item2,
-                            new Direccion(remitente.Item3, remitente.Item4, remitente.Item5),
+                            new Direccion(remitente.Item3, remitente.Item4, remitente.Item5, remitente.Item7),
                             remitente.Item6),
                         new Cliente(
                             destino.Nombre,
                             destino.Apellido,
-                            new Direccion(destino.Direccion, destino.Localidad, destino.CP, ubicacion: new Ubicacion(destino.Latitud, destino.Longitud)),
+                            new Direccion(destino.Direccion, destino.Localidad, destino.CP, destino.Provincia, ubicacion: new Ubicacion(destino.Latitud, destino.Longitud)),
                             destino.Telefono,
                             $"cliente{i + 1}@demo.logitrack.local"),
                         prioridad,
@@ -420,8 +420,8 @@ namespace Back.Application.Services
             var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);
 
             paquete.ActualizarDatos(
-                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP), request.Remitente.Telefono, request.Remitente.Email),
-                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono, request.Destinatario.Email),
+                new Cliente(request.Remitente.Nombre, request.Remitente.Apellido, new Direccion(request.Remitente.Direccion, request.Remitente.Localidad, request.Remitente.CP, request.Remitente.Provincia), request.Remitente.Telefono, request.Remitente.Email),
+                new Cliente(request.Destinatario.Nombre, request.Destinatario.Apellido, new Direccion(request.Destinatario.Direccion, request.Destinatario.Localidad, request.Destinatario.CP, request.Destinatario.Provincia, ubicacion: ubicacionDestinatario), request.Destinatario.Telefono, request.Destinatario.Email),
                 request.Peso,
                 request.TipoEnvio,
                 request.TipoPaquete,
@@ -865,12 +865,12 @@ namespace Back.Application.Services
             return (await _enviosRepository.GetSucursales()).FirstOrDefault(s => s.Id == sucursalId);
         }
 
-        private static (string, string, string, string, string, string) CrearRemitenteDemo(Sucursal? sucursal, DemoAddress destino)
+        private static (string, string, string, string, string, string, string) CrearRemitenteDemo(Sucursal? sucursal, DemoAddress destino)
         {
             if (sucursal is not null)
-                return ("Sucursal", sucursal.Nombre, sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal, sucursal.Telefono);
+                return ("Sucursal", sucursal.Nombre, sucursal.Direccion, sucursal.Ciudad, sucursal.CodigoPostal, sucursal.Telefono, sucursal.Provincia ?? string.Empty);
 
-            return ("Centro", "Logistico", destino.Direccion, destino.Localidad, destino.CP, destino.Telefono);
+            return ("Centro", "Logistico", destino.Direccion, destino.Localidad, destino.CP, destino.Telefono, destino.Provincia);
         }
 
         // Direcciones demo por provincia — cubre todas las sucursales seeded.
@@ -1219,6 +1219,12 @@ namespace Back.Application.Services
 
             if (string.IsNullOrWhiteSpace(request.Destinatario.CP) || !Regex.IsMatch(request.Destinatario.CP, @"^[A-Za-z0-9]{4,8}$"))
                 throw new InvalidOperationException("El código postal de destino no es válido.");
+
+            if (string.IsNullOrWhiteSpace(request.Destinatario.Email))
+                throw new InvalidOperationException("El correo electrónico del destinatario es obligatorio.");
+
+            if (!Regex.IsMatch(request.Destinatario.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                throw new InvalidOperationException("El formato del correo electrónico del destinatario no es válido.");
         }
     }
 }

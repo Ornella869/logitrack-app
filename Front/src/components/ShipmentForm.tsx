@@ -251,7 +251,9 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       if (formData.receiverPhone.trim() && !phoneRegex.test(formData.receiverPhone.trim())) {
         newErrors.receiverPhone = 'Teléfono inválido'
       }
-      if (formData.receiverEmail.trim() && !emailRegex.test(formData.receiverEmail.trim())) {
+      if (!formData.receiverEmail.trim()) {
+        newErrors.receiverEmail = 'Requerido'
+      } else if (!emailRegex.test(formData.receiverEmail.trim())) {
         newErrors.receiverEmail = 'Email invalido'
       }
       const weightNum = Number(formData.weight)
@@ -291,7 +293,9 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       newErrors.receiverPhone = 'Teléfono inválido'
     }
 
-    if (formData.receiverEmail.trim() && !emailRegex.test(formData.receiverEmail.trim())) {
+    if (!formData.receiverEmail.trim()) {
+      newErrors.receiverEmail = 'Requerido'
+    } else if (!emailRegex.test(formData.receiverEmail.trim())) {
       newErrors.receiverEmail = 'Email invalido'
     }
 
@@ -425,7 +429,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
       setSubmitError(
         extractApiError(
           error,
-          'No podés registrar envíos con destino en otra provincia. Solo se permiten envíos dentro de la provincia de tu sucursal o de las que cubra tu sucursal.',
+          'No se pudo registrar el envío. Verificá los datos e intentá de nuevo.',
         ),
       )
     } finally {
@@ -673,12 +677,13 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
               </Grid>
               <Grid item xs={12}>
                 <TextField
-                  label="Email para notificaciones (opcional)"
+                  label="Email para notificaciones"
                   name="receiverEmail"
                   value={formData.receiverEmail}
                   onChange={handleChange}
                   error={!!errors.receiverEmail}
                   helperText={errors.receiverEmail || 'Se usa para avisos de salida a ruta y entrega'}
+                  required
                   fullWidth
                   size="small"
                 />

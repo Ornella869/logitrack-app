@@ -1,5 +1,6 @@
 import type { PagedResult, Shipment, TipoEnvio, TipoPaquete } from '../types'
 import { formatArgentinaDateInput } from '../utils/argentinaDate'
+import { normalizeProvincia } from '../utils/provincias'
 import api from './api'
 
 // Tipos para requests al backend
@@ -17,7 +18,7 @@ interface RegistrarPaqueteRequest {
     CP: string
     Provincia?: string
     Telefono?: string
-    Email?: string
+    Email: string
   }
   Destinatario: {
     Nombre: string
@@ -27,7 +28,7 @@ interface RegistrarPaqueteRequest {
     CP: string
     Provincia?: string
     Telefono?: string
-    Email?: string
+    Email: string
   }
 }
 
@@ -89,6 +90,7 @@ const mapToShipment = (paquete: any): Shipment => ({
     address: paquete.remitente?.direccion?.calle ?? 'No disponible',
     city: paquete.remitente?.direccion?.ciudad ?? paquete.remitente?.ciudad ?? 'No disponible',
     postalCode: paquete.remitente?.direccion?.cp ?? paquete.remitente?.cp ?? 'No disponible',
+    province: normalizeProvincia(paquete.remitente?.direccion?.provincia) ?? undefined,
     phone: paquete.remitente.telefono,
     email: paquete.remitente.email ?? undefined,
   },
@@ -97,6 +99,7 @@ const mapToShipment = (paquete: any): Shipment => ({
     address: paquete.destinatario?.direccion?.calle ?? 'No disponible',
     city: paquete.destinatario?.direccion?.ciudad ?? paquete.destinatario?.ciudad ?? 'No disponible',
     postalCode: paquete.destinatario?.direccion?.cp ?? paquete.destinatario?.cp ?? 'No disponible',
+    province: normalizeProvincia(paquete.destinatario?.direccion?.provincia ?? paquete.provinciaDestino) ?? undefined,
     phone: paquete.destinatario.telefono,
     email: paquete.destinatario.email ?? undefined,
   },

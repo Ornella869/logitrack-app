@@ -8,6 +8,7 @@ namespace Back.Domain.Models
         public string Calle { get; set; } = string.Empty;
         public string Ciudad { get; set; } = string.Empty;
         public string CP { get; set; } = string.Empty;
+        public string? Provincia { get; set; }
         public string? Referencia { get; set; }
         public Ubicacion? Ubicacion { get; set; }
 
@@ -16,11 +17,12 @@ namespace Back.Domain.Models
             
         }
 
-        public Direccion(string calle, string ciudad, string cp, string? referencia = null, Ubicacion? ubicacion = null)
+        public Direccion(string calle, string ciudad, string cp, string? provincia = null, string? referencia = null, Ubicacion? ubicacion = null)
         {
             Calle = calle;
             Ciudad = ciudad;
             CP = cp;
+            Provincia = provincia;
             Referencia = referencia;
             Ubicacion = ubicacion;
         }

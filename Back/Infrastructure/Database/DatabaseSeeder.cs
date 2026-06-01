@@ -559,13 +559,13 @@ namespace Back.Infrastructure.Database
             // Destinatarios con coordenadas reales (Gran Buenos Aires)
             var destinatarios = new List<Cliente>
             {
-                new Cliente("Camila",    "Ramos",    new Direccion("Urquiza 450",      "San Vicente",       "2087", null, new Ubicacion(-35.0158, -58.4115))),
-                new Cliente("Sebastián", "Flores",   new Direccion("Belgrano 789",     "Quilmes",           "1878", null, new Ubicacion(-34.7224, -58.2526))),
-                new Cliente("Valentina", "Cruz",     new Direccion("San Martín 1234",  "Lomas de Zamora",   "1832", null, new Ubicacion(-34.7592, -58.4021))),
-                new Cliente("Diego",     "Méndez",   new Direccion("Mitre 567",        "Avellaneda",        "1870", null, new Ubicacion(-34.6641, -58.3617))),
-                new Cliente("Lucía",     "Herrera",  new Direccion("Rivadavia 2340",   "Lanús",             "1824", null, new Ubicacion(-34.7046, -58.3974))),
-                new Cliente("Facundo",   "Torres",   new Direccion("Corrientes 890",   "Florencio Varela",  "1888", null, new Ubicacion(-34.8074, -58.2771))),
-                new Cliente("Gabriela",  "Sánchez",  new Direccion("Moreno 456",       "Berazategui",       "1880", null, new Ubicacion(-34.7600, -58.2109))),
+                new Cliente("Camila",    "Ramos",    new Direccion("Urquiza 450",      "San Vicente",       "2087", "Buenos Aires", null, new Ubicacion(-35.0158, -58.4115))),
+                new Cliente("Sebastián", "Flores",   new Direccion("Belgrano 789",     "Quilmes",           "1878", "Buenos Aires", null, new Ubicacion(-34.7224, -58.2526))),
+                new Cliente("Valentina", "Cruz",     new Direccion("San Martín 1234",  "Lomas de Zamora",   "1832", "Buenos Aires", null, new Ubicacion(-34.7592, -58.4021))),
+                new Cliente("Diego",     "Méndez",   new Direccion("Mitre 567",        "Avellaneda",        "1870", "Buenos Aires", null, new Ubicacion(-34.6641, -58.3617))),
+                new Cliente("Lucía",     "Herrera",  new Direccion("Rivadavia 2340",   "Lanús",             "1824", "Buenos Aires", null, new Ubicacion(-34.7046, -58.3974))),
+                new Cliente("Facundo",   "Torres",   new Direccion("Corrientes 890",   "Florencio Varela",  "1888", "Buenos Aires", null, new Ubicacion(-34.8074, -58.2771))),
+                new Cliente("Gabriela",  "Sánchez",  new Direccion("Moreno 456",       "Berazategui",       "1880", "Buenos Aires", null, new Ubicacion(-34.7600, -58.2109))),
             };
 
             var paquetesData = new List<(string codigo, string estado, string descripcion)>

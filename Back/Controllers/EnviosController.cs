@@ -1056,6 +1056,8 @@ namespace Back.Controllers
         // correcta cuando el nombre de calle es ambiguo entre provincias.
         public string? Provincia { get; set; }
         public string? Telefono { get; set; }
+        
+        [EmailAddress(ErrorMessage = "El formato del correo electrónico no es válido.")]
         public string? Email { get; set; }
     }
 
