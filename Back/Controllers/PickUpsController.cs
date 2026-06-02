@@ -1,4 +1,5 @@
 using Back.Application.Common;
+using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
@@ -12,10 +13,12 @@ namespace Back.Controllers
     public class PickUpsController : ControllerBase
     {
         private readonly LogiTrackDbContext _context;
+        private readonly GeocodingService _geocoding;
 
-        public PickUpsController(LogiTrackDbContext context)
+        public PickUpsController(LogiTrackDbContext context, GeocodingService geocoding)
         {
             _context = context;
+            _geocoding = geocoding;
         }
 
         private Guid? CurrentUserId()
@@ -71,6 +74,41 @@ namespace Back.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [HttpPost("geocodificar")]
+        public async Task<ActionResult<object>> Geocodificar([FromBody] PuntoPickUpRequest request)
+        {
+            var error = await ValidarProvinciaGerente(request.Provincia);
+            if (error is not null) return BadRequest(error);
+            error = ValidarDatosBasicos(request);
+            if (error is not null) return BadRequest(error);
+
+            var validacion = await _geocoding.ValidarDireccionExactaAsync(
+                request.Direccion,
+                request.Localidad,
+                request.CodigoPostal,
+                request.Provincia);
+
+            if (!validacion.EsValida && validacion.Error?.Contains("pertenece a", StringComparison.OrdinalIgnoreCase) == true)
+                return BadRequest(validacion.Error);
+
+            var ubicacion = await _geocoding.GeocodeAsync(
+                request.Direccion,
+                request.Localidad,
+                request.CodigoPostal,
+                request.Provincia);
+
+            if (ubicacion is null)
+                return BadRequest(validacion.Error ?? "No se pudo ubicar el punto Pick Up.");
+
+            return Ok(new
+            {
+                latitud = ubicacion.Latitud,
+                longitud = ubicacion.Longitud,
+                advertencia = validacion.EsValida ? null : "Ubicacion aproximada. Verifica visualmente el punto antes de guardar."
+            });
         }
 
         [Authorize(Roles = Roles.GerenteOAdministrador)]

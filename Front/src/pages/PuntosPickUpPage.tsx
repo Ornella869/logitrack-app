@@ -170,19 +170,32 @@ export default function PuntosPickUpPage() {
     const localidad = (localidadOverride ?? form.localidad).trim()
     const cp = (cpOverride ?? form.codigoPostal).trim()
     if (!form.direccion.trim() || !localidad) {
-      setPreviewMsg('Completá dirección y localidad para ver el mapa.')
+      setPreviewMsg('Completa direccion y localidad para ver el mapa.')
+      return
+    }
+    const provincia = form.provincia.trim()
+    if (!provincia) {
+      setPreviewMsg('Completa provincia para ver el mapa.')
       return
     }
     setGeocodingPreview(true)
     setPreviewMsg('')
-    const coords = await postalCodeService.geocodeAddress(
-      form.direccion.trim(),
-      localidad,
-      cp || undefined,
-    )
-    setGeocodingPreview(false)
-    setPreviewCoords(coords ? [coords.lat, coords.lng] : null)
-    if (!coords) setPreviewMsg('No se pudo ubicar en el mapa. Revisá calle, localidad y CP.')
+    try {
+      const coords = await pickupService.geocodificar({
+        ...form,
+        direccion: form.direccion.trim(),
+        localidad,
+        codigoPostal: cp,
+        provincia,
+      })
+      setPreviewCoords([coords.latitud, coords.longitud])
+      setPreviewMsg(coords.advertencia ?? '')
+    } catch (e: any) {
+      setPreviewCoords(null)
+      setPreviewMsg(e.response?.data ?? 'No se pudo ubicar en el mapa. Revisa calle, localidad, CP y provincia.')
+    } finally {
+      setGeocodingPreview(false)
+    }
   }
 
   const checkPostalCode = async () => {

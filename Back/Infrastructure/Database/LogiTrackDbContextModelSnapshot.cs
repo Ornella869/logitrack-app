@@ -40,7 +40,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("ConfiguracionesOjoPatron");
+                    b.ToTable("ConfiguracionesOjoPatron", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.ConfiguracionTarifa", b =>
@@ -67,7 +67,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("ConfiguracionesTarifa");
+                    b.ToTable("ConfiguracionesTarifa", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.ConsentimientoOjoPatron", b =>
@@ -91,7 +91,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("ConsentimientosOjoPatron");
+                    b.ToTable("ConsentimientosOjoPatron", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.EmailNotificacion", b =>
@@ -154,7 +154,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("SucursalId");
 
-                    b.ToTable("EmailNotificaciones");
+                    b.ToTable("EmailNotificaciones", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Empresa", b =>
@@ -201,7 +201,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("Empresas");
+                    b.ToTable("Empresas", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.GerenteProvincia", b =>
@@ -222,7 +222,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("GerentesProvincias");
+                    b.ToTable("GerentesProvincias", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.HistorialEstadoEnvio", b =>
@@ -255,7 +255,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("PaqueteId");
 
-                    b.ToTable("HistorialEstadosEnvio");
+                    b.ToTable("HistorialEstadosEnvio", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Incidencia", b =>
@@ -345,7 +345,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("SucursalId");
 
-                    b.ToTable("Incidencias");
+                    b.ToTable("Incidencias", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.LogAuditoria", b =>
@@ -394,7 +394,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("UsuarioId");
 
-                    b.ToTable("LogsAuditoria");
+                    b.ToTable("LogsAuditoria", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.MensajeIncidencia", b =>
@@ -433,7 +433,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("MensajesIncidencia");
+                    b.ToTable("MensajesIncidencia", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.OverrideOjoPatron", b =>
@@ -477,7 +477,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("SupervisorId");
 
-                    b.ToTable("OverridesOjoPatron");
+                    b.ToTable("OverridesOjoPatron", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Paquete", b =>
@@ -569,7 +569,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("RutaId");
 
-                    b.ToTable("Paquetes");
+                    b.ToTable("Paquetes", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.PruebaOjoPatron", b =>
@@ -613,7 +613,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("PruebasOjoPatron");
+                    b.ToTable("PruebasOjoPatron", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.PuntoPickUp", b =>
@@ -668,7 +668,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("Provincia");
 
-                    b.ToTable("PuntosPickUp");
+                    b.ToTable("PuntosPickUp", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Ruta", b =>
@@ -710,7 +710,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("VehiculoId");
 
-                    b.ToTable("Rutas");
+                    b.ToTable("Rutas", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.SolicitudComercial", b =>
@@ -760,7 +760,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasIndex("Email");
 
-                    b.ToTable("SolicitudesComerciales");
+                    b.ToTable("SolicitudesComerciales", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Sucursal", b =>
@@ -801,7 +801,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("Sucursales");
+                    b.ToTable("Sucursales", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Usuario", b =>
@@ -855,7 +855,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("Usuarios");
+                    b.ToTable("Usuarios", (string)null);
 
                     b.HasDiscriminator<string>("Discriminator").HasValue("Usuario");
 
@@ -884,7 +884,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("Vehiculos");
+                    b.ToTable("Vehiculos", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.ZonaPeligrosa", b =>
@@ -921,7 +921,7 @@ namespace Back.Infrastructure.Database
 
                     b.HasKey("Id");
 
-                    b.ToTable("ZonasPeligrosas");
+                    b.ToTable("ZonasPeligrosas", (string)null);
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Administrador", b =>
@@ -1012,7 +1012,7 @@ namespace Back.Infrastructure.Database
 
                             b1.HasKey("PaqueteId");
 
-                            b1.ToTable("Paquetes");
+                            b1.ToTable("Paquetes", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("PaqueteId");
@@ -1042,7 +1042,7 @@ namespace Back.Infrastructure.Database
 
                                     b2.HasKey("ClientePaqueteId");
 
-                                    b2.ToTable("Paquetes");
+                                    b2.ToTable("Paquetes", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ClientePaqueteId");
@@ -1062,7 +1062,7 @@ namespace Back.Infrastructure.Database
 
                                             b3.HasKey("DireccionClientePaqueteId");
 
-                                            b3.ToTable("Paquetes");
+                                            b3.ToTable("Paquetes", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("DireccionClientePaqueteId");
@@ -1101,7 +1101,7 @@ namespace Back.Infrastructure.Database
 
                             b1.HasKey("PaqueteId");
 
-                            b1.ToTable("Paquetes");
+                            b1.ToTable("Paquetes", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("PaqueteId");
@@ -1131,7 +1131,7 @@ namespace Back.Infrastructure.Database
 
                                     b2.HasKey("ClientePaqueteId");
 
-                                    b2.ToTable("Paquetes");
+                                    b2.ToTable("Paquetes", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ClientePaqueteId");
@@ -1151,7 +1151,7 @@ namespace Back.Infrastructure.Database
 
                                             b3.HasKey("DireccionClientePaqueteId");
 
-                                            b3.ToTable("Paquetes");
+                                            b3.ToTable("Paquetes", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("DireccionClientePaqueteId");
@@ -1177,7 +1177,7 @@ namespace Back.Infrastructure.Database
 
                             b1.HasKey("PaqueteId");
 
-                            b1.ToTable("Paquetes");
+                            b1.ToTable("Paquetes", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("PaqueteId");

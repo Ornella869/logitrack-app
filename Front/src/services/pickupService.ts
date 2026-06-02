@@ -23,6 +23,12 @@ export interface PuntoPickUpPayload {
   telefono?: string
 }
 
+export interface PickUpGeocodingResult {
+  latitud: number
+  longitud: number
+  advertencia?: string | null
+}
+
 export const pickupService = {
   async getAll(): Promise<PuntoPickUp[]> {
     const r = await api.get('/pickups')
@@ -41,6 +47,11 @@ export const pickupService = {
 
   async setActivo(id: string, activo: boolean): Promise<void> {
     await api.post(`/pickups/${id}/estado`, { activo })
+  },
+
+  async geocodificar(payload: PuntoPickUpPayload): Promise<PickUpGeocodingResult> {
+    const r = await api.post('/pickups/geocodificar', payload)
+    return r.data
   },
 
   async asignarEnvio(pickupId: string, paqueteId: string): Promise<void> {
