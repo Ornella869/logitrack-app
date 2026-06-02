@@ -454,11 +454,12 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
             </Alert>
           )}
 
-            <FormControl fullWidth disabled={loading}>
-              <FormHelperText sx={{ mb: 1 }}>
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 <strong>Nota:</strong> Solo podés asignar cobertura de provincias que no tengan gerente activo asignado ni sucursal propia.
-              </FormHelperText>
-              <InputLabel>Cobertura adicional</InputLabel>
+              </Typography>
+              <FormControl fullWidth disabled={loading}>
+                <InputLabel>Cobertura adicional</InputLabel>
               <Select
                 multiple
                 value={formData.coveredProvinces}
@@ -504,12 +505,13 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
                   )
                 })}
               </Select>
-              <FormHelperText>
+                <FormHelperText>
                 {formData.coveredProvinces.length > 0
                   ? 'Estas coberturas se guardan solo si la provincia no tiene gerente asignado.'
                   : 'La provincia propia siempre queda cubierta.'}
-              </FormHelperText>
-            </FormControl>
+                </FormHelperText>
+              </FormControl>
+            </Box>
 
           <TextField
             label="Teléfono"
