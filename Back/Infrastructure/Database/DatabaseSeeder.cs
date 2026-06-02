@@ -66,10 +66,10 @@ namespace Back.Infrastructure.Database
             DatabaseSeederConfiguration config = _configuration.GetSection("DatabaseSeederConfiguration").Get<DatabaseSeederConfiguration>() ?? new DatabaseSeederConfiguration();
 
             // Guard de idempotencia: verificamos si el bulk seed ya corrió comprobando
-            // la existencia de Operadores (solo se crean en la fase masiva de abajo).
-            // NO usamos AnyAsync() sobre todos los Usuarios porque el Gerente y UsuarioPortal
-            // ya se crearon arriba y harían que el guard siempre cortara el seeder.
-            if (await _context.Usuarios.OfType<Operador>().AnyAsync())
+            // la existencia de Administrador (el admin genérico se crea en esta fase).
+            // NO usamos AnyAsync() sobre Operador porque AsegurarSucursalesMultiProvinciaAsync
+            // ahora crea operadores y haría que el guard siempre corte el seeder.
+            if (await _context.Usuarios.OfType<Administrador>().AnyAsync())
             {
                 return;
             }
