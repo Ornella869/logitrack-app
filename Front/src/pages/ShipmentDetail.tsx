@@ -72,11 +72,6 @@ const DEMORA_REASONS = [
 
 type CancelMode = 'Definitivo' | 'Reagendar'
 
-// Código de confirmación de entrega — temporal hardcodeado.
-// En el próximo sprint se va a generar uno por envío y se enviará al destinatario
-// por email cuando el paquete pasa a En Tránsito. Mientras tanto, todos los envíos
-// usan este mismo valor para que el equipo pueda probar el flujo end-to-end.
-const DEFAULT_ENTREGA_CONFIRMATION_CODE = '123456'
 
 function ShipmentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -255,7 +250,7 @@ function ShipmentDetail() {
       setEntregaError('El código debe tener 6 dígitos.')
       return
     }
-    const expectedCode = shipment.codigoEntrega ?? DEFAULT_ENTREGA_CONFIRMATION_CODE
+    const expectedCode = shipment.codigoEntrega
     if (codigo !== expectedCode) {
       setEntregaError('Código incorrecto. Verificá con el destinatario.')
       return
@@ -942,9 +937,6 @@ function ShipmentDetail() {
           <DialogContentText sx={{ mb: 2 }}>
             Pedile al destinatario el código de 6 dígitos que recibió por email.
           </DialogContentText>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Codigo para demo: <strong>{shipment?.codigoEntrega ?? DEFAULT_ENTREGA_CONFIRMATION_CODE}</strong>
-          </Alert>
           <TextField
             autoFocus
             fullWidth

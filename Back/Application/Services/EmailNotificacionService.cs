@@ -26,83 +26,63 @@ namespace Back.Application.Services
             var paquete = await _context.Paquetes.FirstOrDefaultAsync(p => p.Id == paqueteId);
             if (paquete?.Destinatario.Email is null) return;
 
+            var historial = await _context.HistorialEstadosEnvio
+                .Where(h => h.PaqueteId == paqueteId)
+                .OrderBy(h => h.FechaHora)
+                .ToListAsync();
+
             if (estado == PaqueteStatus.CargadoEnVehiculo)
             {
-                await CrearYEnviarAsync(
-                    paquete,
-                    EventoEmailNotificacion.CargadoEnVehiculo,
+                await CrearYEnviarAsync(paquete, EventoEmailNotificacion.CargadoEnVehiculo,
                     $"Tu envio {paquete.CodigoSeguimiento} fue cargado al vehiculo",
-                    BuildPaqueteEmail(
-                        paquete,
-                        "Tu envio fue cargado al vehiculo",
-                        "El paquete ya fue cargado y esta listo para salir a reparto.",
-                        "Ver seguimiento"));
+                    BuildEstadoEmail(paquete, estado, historial,
+                        "Envio cargado al vehiculo",
+                        "El paquete ya esta cargado y listo para salir a reparto."));
             }
 
             if (estado == PaqueteStatus.EnTransito)
             {
-                await CrearYEnviarAsync(
-                    paquete,
-                    EventoEmailNotificacion.SalidaRuta,
+                await CrearYEnviarAsync(paquete, EventoEmailNotificacion.SalidaRuta,
                     $"Tu envio {paquete.CodigoSeguimiento} salio a ruta",
-                    BuildPaqueteEmail(
-                        paquete,
+                    BuildEstadoEmail(paquete, estado, historial,
                         "Tu envio salio a ruta",
-                        "Ya esta en transito y podes seguir el avance desde el portal.",
-                        "Seguir envio"));
+                        "Ya esta en transito. Podes seguir el avance desde el portal."));
             }
 
             if (estado == PaqueteStatus.Entregado)
             {
-                await CrearYEnviarAsync(
-                    paquete,
-                    EventoEmailNotificacion.EntregaConfirmada,
+                await CrearYEnviarAsync(paquete, EventoEmailNotificacion.EntregaConfirmada,
                     $"Tu envio {paquete.CodigoSeguimiento} fue entregado",
-                    BuildPaqueteEmail(
-                        paquete,
+                    BuildEstadoEmail(paquete, estado, historial,
                         "Entrega confirmada",
-                        "Confirmamos que tu envio fue entregado correctamente.",
-                        "Ver seguimiento"));
+                        "Confirmamos que tu envio fue entregado correctamente."));
 
-                await CrearYEnviarAsync(
-                    paquete,
-                    EventoEmailNotificacion.EncuestaPostEntrega,
+                var token = await ObtenerOCrearTokenEncuestaAsync(paquete.Id);
+                await CrearYEnviarAsync(paquete, EventoEmailNotificacion.EncuestaPostEntrega,
                     $"Contanos como fue tu entrega {paquete.CodigoSeguimiento}",
-                    BuildPaqueteEmail(
-                        paquete,
-                        "Como fue tu experiencia?",
-                        "Tu opinion nos ayuda a mejorar la calidad del servicio.",
-                        "Ver envio"));
+                    BuildEncuestaEmail(paquete, token));
             }
 
             if (estado == PaqueteStatus.Demorado)
             {
-                await CrearYEnviarAsync(
-                    paquete,
-                    EventoEmailNotificacion.Demorado,
+                var motivo = string.IsNullOrWhiteSpace(paquete.RazonDemora)
+                    ? "Detectamos una demora operativa. Te avisaremos cuando el recorrido continue."
+                    : $"Detectamos una demora: {paquete.RazonDemora}. Te avisaremos cuando el recorrido continue.";
+
+                await CrearYEnviarAsync(paquete, EventoEmailNotificacion.Demorado,
                     $"Tu envio {paquete.CodigoSeguimiento} esta demorado",
-                    BuildPaqueteEmail(
-                        paquete,
-                        "Tu envio esta demorado",
-                        string.IsNullOrWhiteSpace(paquete.RazonDemora)
-                            ? "Detectamos una demora operativa. Te avisaremos cuando el recorrido continue."
-                            : $"Detectamos una demora operativa: {paquete.RazonDemora}. Te avisaremos cuando el recorrido continue.",
-                        "Ver seguimiento"));
+                    BuildEstadoEmail(paquete, estado, historial, "Tu envio esta demorado", motivo));
             }
 
             if (estado == PaqueteStatus.Cancelado)
             {
-                await CrearYEnviarAsync(
-                    paquete,
-                    EventoEmailNotificacion.Cancelado,
+                var motivo = string.IsNullOrWhiteSpace(paquete.RazonCancelacion)
+                    ? "El envio fue cancelado."
+                    : $"El envio fue cancelado. Motivo: {paquete.RazonCancelacion}.";
+
+                await CrearYEnviarAsync(paquete, EventoEmailNotificacion.Cancelado,
                     $"Tu envio {paquete.CodigoSeguimiento} fue cancelado",
-                    BuildPaqueteEmail(
-                        paquete,
-                        "Tu envio fue cancelado",
-                        string.IsNullOrWhiteSpace(paquete.RazonCancelacion)
-                            ? "El envio fue cancelado."
-                            : $"El envio fue cancelado. Motivo: {paquete.RazonCancelacion}.",
-                        "Ver seguimiento"));
+                    BuildEstadoEmail(paquete, estado, historial, "Envio cancelado", motivo));
             }
         }
 
@@ -110,30 +90,31 @@ namespace Back.Application.Services
         {
             if (paquete.Destinatario.Email is null) return;
 
-            await CrearYEnviarAsync(
-                paquete,
-                EventoEmailNotificacion.CodigoEntrega,
-                $"Codigo de entrega para tu envio {paquete.CodigoSeguimiento}",
-                BuildTemplate(
-                    "Codigo de entrega",
-                    $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
-                    "Este codigo se lo tenes que informar al repartidor cuando recibas el paquete.",
-                    "#",
-                    "Ver seguimiento",
-                    $"""
-                    <div style="background:#f4f9fd;border:1px solid #d8e6f0;border-radius:12px;padding:14px 16px;margin:16px 0;color:#263b50;line-height:1.7;">
-                      <div><strong>Codigo de seguimiento:</strong> {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
-                      <div style="font-size:28px;letter-spacing:8px;font-weight:800;margin-top:10px;color:#0b5f93;">{SecurityElement.Escape(paquete.CodigoEntrega)}</div>
-                    </div>
-                    """));
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var cuerpo = BuildTemplate(
+                "indigo",
+                "Codigo de entrega",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                "Este codigo se lo tenes que informar al repartidor cuando recibas el paquete.",
+                trackingUrl,
+                "Ver seguimiento",
+                $"""
+                <div style="background:#0f172a;border:1px solid #4f46e5;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
+                  <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Codigo: {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
+                  <div style="font-size:34px;letter-spacing:10px;font-weight:900;color:#a78bfa;">{SecurityElement.Escape(paquete.CodigoEntrega)}</div>
+                </div>
+                """);
+
+            await CrearYEnviarAsync(paquete, EventoEmailNotificacion.CodigoEntrega,
+                $"Codigo de entrega para tu envio {paquete.CodigoSeguimiento}", cuerpo);
         }
 
         public async Task CrearEmailLeadAsync(SolicitudComercial lead)
         {
             var email = new EmailNotificacion(
-                null,
-                null,
-                null,
+                null, null, null,
                 lead.Email,
                 "Informacion de planes LogiTrack",
                 BuildLeadEmail(lead),
@@ -150,6 +131,17 @@ namespace Back.Application.Services
             if (sucursalScope.HasValue && email.SucursalId != sucursalScope) return false;
             await EnviarAsync(email);
             return true;
+        }
+
+        private async Task<Guid> ObtenerOCrearTokenEncuestaAsync(Guid paqueteId)
+        {
+            var existente = await _context.SatisfaccionEncuestas.FirstOrDefaultAsync(e => e.PaqueteId == paqueteId);
+            if (existente != null) return existente.Token;
+
+            var encuesta = new SatisfaccionEncuesta(paqueteId);
+            _context.SatisfaccionEncuestas.Add(encuesta);
+            await _context.SaveChangesAsync();
+            return encuesta.Token;
         }
 
         private async Task CrearYEnviarAsync(Paquete paquete, EventoEmailNotificacion evento, string asunto, string cuerpo)
@@ -212,64 +204,142 @@ namespace Back.Application.Services
             }
         }
 
-        private string BuildPaqueteEmail(Paquete paquete, string titulo, string mensaje, string cta)
+        private string BuildEstadoEmail(Paquete paquete, PaqueteStatus estado, List<HistorialEstadoEnvio> historial, string titulo, string mensaje)
         {
             var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
-            var trackingUrl = string.IsNullOrWhiteSpace(urlBase)
-                ? "#"
-                : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
-            return BuildTemplate(
-                titulo,
-                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
-                mensaje,
-                trackingUrl,
-                cta,
-                $"""
-                <div style="background:#f4f9fd;border:1px solid #d8e6f0;border-radius:12px;padding:14px 16px;margin:16px 0;color:#263b50;line-height:1.7;">
-                  <div><strong>Codigo:</strong> {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
-                  <div><strong>Destino:</strong> {SecurityElement.Escape(paquete.Destinatario.Direccion.Calle)}, {SecurityElement.Escape(paquete.Destinatario.Direccion.Ciudad)}</div>
-                  <div><strong>Peso:</strong> {paquete.Peso:0.##} kg</div>
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+            var color = ColorPorEstado(estado);
+
+            var detalleHtml = $"""
+                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;margin:14px 0;font-size:13px;line-height:1.8;color:#cbd5e1;">
+                  <div><b style="color:#94a3b8;">Codigo:</b> {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
+                  <div><b style="color:#94a3b8;">Destino:</b> {SecurityElement.Escape(paquete.Destinatario.Direccion.Calle)}, {SecurityElement.Escape(paquete.Destinatario.Direccion.Ciudad)}</div>
+                  <div><b style="color:#94a3b8;">Peso:</b> {paquete.Peso:0.##} kg</div>
                 </div>
-                """);
+                {BuildTimelineHtml(historial)}
+                """;
+
+            return BuildTemplate(color, titulo,
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                SecurityElement.Escape(mensaje),
+                trackingUrl, "Ver seguimiento", detalleHtml);
+        }
+
+        private string BuildEncuestaEmail(Paquete paquete, Guid token)
+        {
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var surveyUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/encuesta/{token}";
+
+            var detalleHtml = $"""
+                <div style="text-align:center;padding:10px 0 6px;">
+                  <div style="font-size:28px;letter-spacing:2px;margin-bottom:8px;">⭐⭐⭐⭐⭐</div>
+                  <p style="font-size:14px;color:#94a3b8;margin:0 0 14px;">Toma solo 30 segundos y nos ayuda a mejorar.</p>
+                </div>
+                """;
+
+            return BuildTemplate("purple",
+                "Como fue tu experiencia?",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                "Tu opinion nos ayuda a mejorar la calidad del servicio. Contanos como salio tu entrega.",
+                surveyUrl, "Calificar mi entrega", detalleHtml);
         }
 
         private string BuildLeadEmail(SolicitudComercial lead)
         {
-            return BuildTemplate(
+            return BuildTemplate("blue",
                 "Gracias por tu interes en LogiTrack",
                 $"Hola {SecurityElement.Escape(lead.NombreContacto)},",
                 $"Recibimos tu solicitud por el plan {SecurityElement.Escape(lead.PlanInteres)}. Un asesor se va a contactar con vos para ayudarte a elegir la mejor opcion.",
                 "https://logitrack-app-1.onrender.com",
                 "Conocer LogiTrack",
                 $"""
-                <div style="background:#f4f9fd;border:1px solid #d8e6f0;border-radius:12px;padding:14px 16px;margin:16px 0;color:#263b50;line-height:1.7;">
-                  <div><strong>Empresa:</strong> {SecurityElement.Escape(lead.NombreEmpresa)}</div>
-                  <div><strong>Plan de interes:</strong> {SecurityElement.Escape(lead.PlanInteres)}</div>
+                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;margin:14px 0;font-size:13px;line-height:1.8;color:#cbd5e1;">
+                  <div><b style="color:#94a3b8;">Empresa:</b> {SecurityElement.Escape(lead.NombreEmpresa)}</div>
+                  <div><b style="color:#94a3b8;">Plan:</b> {SecurityElement.Escape(lead.PlanInteres)}</div>
                 </div>
                 """);
         }
 
-        private static string BuildTemplate(string titulo, string saludo, string mensaje, string ctaUrl, string cta, string detalleHtml)
+        private static string BuildTimelineHtml(List<HistorialEstadoEnvio> historial)
         {
+            if (historial.Count == 0) return string.Empty;
+
+            var items = historial.TakeLast(5).Select(h =>
+            {
+                var label = h.EstadoNuevo switch
+                {
+                    PaqueteStatus.PendienteDeCalendarizacion => "Registrado",
+                    PaqueteStatus.AsignadoAVehiculo => "Asignado",
+                    PaqueteStatus.CargadoEnVehiculo => "Cargado en vehiculo",
+                    PaqueteStatus.ListoParaSalir => "Listo para salir",
+                    PaqueteStatus.EnTransito => "En transito",
+                    PaqueteStatus.Demorado => "Demorado",
+                    PaqueteStatus.Entregado => "Entregado",
+                    PaqueteStatus.Cancelado => "Cancelado",
+                    _ => "Actualizado"
+                };
+                var dot = h.EstadoNuevo switch
+                {
+                    PaqueteStatus.Entregado => "#22c55e",
+                    PaqueteStatus.Cancelado => "#ef4444",
+                    PaqueteStatus.Demorado => "#f97316",
+                    PaqueteStatus.EnTransito => "#3b82f6",
+                    _ => "#64748b"
+                };
+                var fecha = h.FechaHora.ToLocalTime().ToString("dd/MM HH:mm");
+                return $"""<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:#94a3b8;"><span style="width:8px;height:8px;border-radius:50%;background:{dot};flex-shrink:0;display:inline-block;"></span><span style="color:#cbd5e1;">{SecurityElement.Escape(label)}</span><span style="margin-left:auto;">{fecha}</span></div>""";
+            });
+
             return $"""
-            <!doctype html>
-            <html>
-            <body style="margin:0;background:#eef5fb;font-family:Arial,sans-serif;color:#102033;">
-              <div style="max-width:620px;margin:0 auto;padding:28px 16px;">
-                <div style="background:#0b5f93;color:white;padding:22px 24px;border-radius:16px 16px 0 0;">
-                  <div style="font-size:14px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;">LogiTrack</div>
-                  <h1 style="margin:8px 0 0;font-size:26px;line-height:1.2;">{SecurityElement.Escape(titulo)}</h1>
+                <div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px 14px;margin:10px 0;">
+                  <div style="font-size:11px;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;">Historial</div>
+                  {string.Join("\n", items)}
                 </div>
-                <div style="background:white;padding:24px;border-radius:0 0 16px 16px;border:1px solid #d8e6f0;border-top:0;">
-                  <p style="font-size:17px;margin:0 0 10px;">{saludo}</p>
-                  <p style="font-size:15px;line-height:1.55;margin:0 0 18px;color:#425466;">{SecurityElement.Escape(mensaje)}</p>
-                  {detalleHtml}
-                  <a href="{ctaUrl}" style="display:inline-block;background:#1976d2;color:white;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px;margin-top:10px;">{SecurityElement.Escape(cta)}</a>
-                  <p style="font-size:12px;color:#78909c;margin-top:22px;">Este mensaje fue generado automaticamente por LogiTrack.</p>
-                </div>
+                """;
+        }
+
+        private const string EmailCss = "@keyframes go{0%,100%{transform:translateX(0)}50%{transform:translateX(12px)}}.t{animation:go 1.8s ease-in-out infinite;display:inline-block;font-size:38px;}";
+
+        private static string ColorPorEstado(PaqueteStatus estado) => estado switch
+        {
+            PaqueteStatus.CargadoEnVehiculo => "amber",
+            PaqueteStatus.EnTransito => "blue",
+            PaqueteStatus.Entregado => "green",
+            PaqueteStatus.Demorado => "orange",
+            PaqueteStatus.Cancelado => "red",
+            _ => "blue"
+        };
+
+        private static string BuildTemplate(string color, string titulo, string saludo, string mensaje, string ctaUrl, string cta, string detalleHtml)
+        {
+            var (grad1, grad2, btn) = color switch
+            {
+                "green" => ("#16a34a", "#15803d", "#16a34a"),
+                "amber" => ("#d97706", "#b45309", "#d97706"),
+                "orange" => ("#ea580c", "#c2410c", "#ea580c"),
+                "red" => ("#dc2626", "#b91c1c", "#dc2626"),
+                "indigo" => ("#7c3aed", "#6d28d9", "#7c3aed"),
+                "purple" => ("#9333ea", "#7e22ce", "#9333ea"),
+                _ => ("#1d4ed8", "#1e40af", "#1d4ed8")
+            };
+
+            return $"""
+            <!doctype html><html><head><style>{EmailCss}</style></head>
+            <body style="margin:0;background:#0f172a;font-family:Arial,sans-serif;">
+            <div style="max-width:580px;margin:0 auto;padding:20px 14px;">
+              <div style="background:linear-gradient(135deg,{grad1},{grad2});padding:26px 22px;border-radius:14px 14px 0 0;text-align:center;">
+                <div class="t">🚛</div>
+                <h1 style="margin:10px 0 0;font-size:21px;color:#fff;line-height:1.2;">{SecurityElement.Escape(titulo)}</h1>
               </div>
-            </body>
-            </html>
+              <div style="background:#1e293b;padding:22px;border-radius:0 0 14px 14px;border:1px solid #334155;border-top:0;color:#e2e8f0;">
+                <p style="font-size:16px;margin:0 0 10px;">{saludo}</p>
+                <p style="font-size:14px;color:#94a3b8;margin:0 0 14px;line-height:1.5;">{mensaje}</p>
+                {detalleHtml}
+                <a href="{ctaUrl}" style="display:inline-block;background:{btn};color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:9px;font-size:14px;margin-top:6px;">{SecurityElement.Escape(cta)}</a>
+                <p style="font-size:11px;color:#475569;margin-top:18px;border-top:1px solid #1e293b;padding-top:12px;">Este mensaje fue generado automaticamente por LogiTrack.</p>
+              </div>
+            </div>
+            </body></html>
             """;
         }
     }

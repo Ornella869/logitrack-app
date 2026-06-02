@@ -718,6 +718,40 @@ namespace Back.Infrastructure.Database
                     b.ToTable("Rutas", (string)null);
                 });
 
+            modelBuilder.Entity("Back.Domain.Models.SatisfaccionEncuesta", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Calificacion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Comentario")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PaqueteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RespuestaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Token")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaqueteId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("SatisfaccionEncuestas", (string)null);
+                });
+
             modelBuilder.Entity("Back.Domain.Models.SolicitudComercial", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1219,6 +1253,17 @@ namespace Back.Infrastructure.Database
             modelBuilder.Entity("Back.Domain.Models.Ruta", b =>
                 {
                     b.Navigation("Paquetes");
+                });
+
+            modelBuilder.Entity("Back.Domain.Models.SatisfaccionEncuesta", b =>
+                {
+                    b.HasOne("Back.Domain.Models.Paquete", "Paquete")
+                        .WithMany()
+                        .HasForeignKey("PaqueteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Paquete");
                 });
 #pragma warning restore 612, 618
         }

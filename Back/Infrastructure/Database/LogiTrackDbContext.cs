@@ -29,6 +29,7 @@ namespace Back.Infrastructure.Database
         public DbSet<EmailNotificacion> EmailNotificaciones { get; set; }
         public DbSet<OverrideOjoPatron> OverridesOjoPatron { get; set; }
         public DbSet<PuntoPickUp> PuntosPickUp { get; set; }
+        public DbSet<SatisfaccionEncuesta> SatisfaccionEncuestas { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -196,6 +197,17 @@ namespace Back.Infrastructure.Database
                 p.Property(x => x.Telefono).HasMaxLength(50);
                 p.HasIndex(x => x.Provincia);
                 p.HasIndex(x => x.Activo);
+            });
+
+            modelBuilder.Entity<SatisfaccionEncuesta>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.HasIndex(x => x.Token).IsUnique();
+                e.HasIndex(x => x.PaqueteId);
+                e.HasOne(x => x.Paquete)
+                    .WithMany()
+                    .HasForeignKey(x => x.PaqueteId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
 
