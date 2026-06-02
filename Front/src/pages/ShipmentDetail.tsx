@@ -76,7 +76,7 @@ type CancelMode = 'Definitivo' | 'Reagendar'
 // En el próximo sprint se va a generar uno por envío y se enviará al destinatario
 // por email cuando el paquete pasa a En Tránsito. Mientras tanto, todos los envíos
 // usan este mismo valor para que el equipo pueda probar el flujo end-to-end.
-const ENTREGA_CONFIRMATION_CODE = '123456'
+const DEFAULT_ENTREGA_CONFIRMATION_CODE = '123456'
 
 function ShipmentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -255,7 +255,8 @@ function ShipmentDetail() {
       setEntregaError('El código debe tener 6 dígitos.')
       return
     }
-    if (codigo !== ENTREGA_CONFIRMATION_CODE) {
+    const expectedCode = shipment.codigoEntrega ?? DEFAULT_ENTREGA_CONFIRMATION_CODE
+    if (codigo !== expectedCode) {
       setEntregaError('Código incorrecto. Verificá con el destinatario.')
       return
     }
@@ -942,7 +943,7 @@ function ShipmentDetail() {
             Pedile al destinatario el código de 6 dígitos que recibió por email.
           </DialogContentText>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Mientras el envío por email no esté integrado, usá el código <strong>{ENTREGA_CONFIRMATION_CODE}</strong> para todos los envíos. Próximamente se generará uno único por envío.
+            Codigo para demo: <strong>{shipment?.codigoEntrega ?? DEFAULT_ENTREGA_CONFIRMATION_CODE}</strong>
           </Alert>
           <TextField
             autoFocus

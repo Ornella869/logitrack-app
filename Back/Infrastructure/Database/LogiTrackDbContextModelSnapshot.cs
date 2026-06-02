@@ -496,6 +496,11 @@ namespace Back.Infrastructure.Database
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("CodigoEntrega")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)");
+
                     b.Property<double>("CostoEnvio")
                         .HasColumnType("double precision");
 

@@ -85,6 +85,7 @@ export interface ImportarEnviosResultado {
 const mapToShipment = (paquete: any): Shipment => ({
   id: paquete.id,
   trackingId: paquete.codigoSeguimiento,
+  codigoEntrega: paquete.codigoEntrega ?? null,
   sender: {
     name: [paquete.remitente?.nombre, paquete.remitente?.apellido].filter(Boolean).join(' ') || 'No disponible',
     address: paquete.remitente?.direccion?.calle ?? 'No disponible',

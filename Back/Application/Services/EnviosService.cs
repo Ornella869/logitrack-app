@@ -63,6 +63,7 @@ namespace Back.Application.Services
         private readonly AuditoriaService _auditoria;
         private readonly GeocodingService _geocoding;
         private readonly TarifaService _tarifas;
+        private readonly EmailNotificacionService _emails;
         private const int DemoAddressesPerProvince = 1200;
         private static readonly Lazy<List<DemoAddress>> DemoAddressesCache = new(() =>
             ExpandirDireccionesDemo(CargarDireccionesDemoBase()));
@@ -76,7 +77,8 @@ namespace Back.Application.Services
             QrService qrService,
             AuditoriaService auditoria,
             GeocodingService geocoding,
-            TarifaService tarifas)
+            TarifaService tarifas,
+            EmailNotificacionService emails)
         {
             _rutasRepository = rutasRepository;
             _enviosRepository = enviosRepository;
@@ -87,6 +89,7 @@ namespace Back.Application.Services
             _auditoria = auditoria;
             _geocoding = geocoding;
             _tarifas = tarifas;
+            _emails = emails;
         }
 
         // G1L-88 / Épica D: cotización con tarifas y zonas de la provincia de destino.
@@ -233,6 +236,7 @@ namespace Back.Application.Services
                 paquete.AsignarPuntoPickUp(puntoPickUp.Id);
 
             await _enviosRepository.Add(paquete);
+            await _emails.NotificarCodigoEntregaAsync(paquete);
 
             await _historial.RegistrarCambioAsync(
                 paquete.Id,

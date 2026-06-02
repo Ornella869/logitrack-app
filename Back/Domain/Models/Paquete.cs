@@ -34,6 +34,7 @@ namespace Back.Domain.Models
     {
         public Guid Id { get; init; } = Guid.NewGuid();
         public string CodigoSeguimiento { get; set; } = TrackIdGenerator.GenerateTrackId();
+        public string CodigoEntrega { get; private set; } = GenerarCodigoEntrega();
         public double Peso { get; set; }
         public double Altura { get; set; }
         public double Ancho { get; set; }
@@ -83,6 +84,9 @@ namespace Back.Domain.Models
         private Paquete()
         {
         }
+
+        private static string GenerarCodigoEntrega()
+            => Random.Shared.Next(0, 1_000_000).ToString("D6");
 
         public Paquete(double peso, double altura, double ancho, Cliente origen, Cliente destino, float prioridad,float distancia, string? descripcion)
         {

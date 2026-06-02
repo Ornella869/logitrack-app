@@ -93,6 +93,7 @@ export type TipoPaquete = 'Comun' | 'Fragil' | 'Pesado'
 export interface Shipment {
   id: string
   trackingId: string
+  codigoEntrega?: string | null
   sender: {
     name: string
     address: string

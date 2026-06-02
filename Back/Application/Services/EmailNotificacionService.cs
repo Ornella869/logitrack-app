@@ -21,10 +21,23 @@ namespace Back.Application.Services
 
         public async Task NotificarCambioEstadoAsync(Guid paqueteId, PaqueteStatus estado)
         {
-            if (estado is not (PaqueteStatus.EnTransito or PaqueteStatus.Entregado)) return;
+            if (estado is not (PaqueteStatus.EnTransito or PaqueteStatus.Entregado or PaqueteStatus.CargadoEnVehiculo or PaqueteStatus.Demorado or PaqueteStatus.Cancelado)) return;
 
             var paquete = await _context.Paquetes.FirstOrDefaultAsync(p => p.Id == paqueteId);
             if (paquete?.Destinatario.Email is null) return;
+
+            if (estado == PaqueteStatus.CargadoEnVehiculo)
+            {
+                await CrearYEnviarAsync(
+                    paquete,
+                    EventoEmailNotificacion.CargadoEnVehiculo,
+                    $"Tu envio {paquete.CodigoSeguimiento} fue cargado al vehiculo",
+                    BuildPaqueteEmail(
+                        paquete,
+                        "Tu envio fue cargado al vehiculo",
+                        "El paquete ya fue cargado y esta listo para salir a reparto.",
+                        "Ver seguimiento"));
+            }
 
             if (estado == PaqueteStatus.EnTransito)
             {
@@ -61,6 +74,58 @@ namespace Back.Application.Services
                         "Tu opinion nos ayuda a mejorar la calidad del servicio.",
                         "Ver envio"));
             }
+
+            if (estado == PaqueteStatus.Demorado)
+            {
+                await CrearYEnviarAsync(
+                    paquete,
+                    EventoEmailNotificacion.Demorado,
+                    $"Tu envio {paquete.CodigoSeguimiento} esta demorado",
+                    BuildPaqueteEmail(
+                        paquete,
+                        "Tu envio esta demorado",
+                        string.IsNullOrWhiteSpace(paquete.RazonDemora)
+                            ? "Detectamos una demora operativa. Te avisaremos cuando el recorrido continue."
+                            : $"Detectamos una demora operativa: {paquete.RazonDemora}. Te avisaremos cuando el recorrido continue.",
+                        "Ver seguimiento"));
+            }
+
+            if (estado == PaqueteStatus.Cancelado)
+            {
+                await CrearYEnviarAsync(
+                    paquete,
+                    EventoEmailNotificacion.Cancelado,
+                    $"Tu envio {paquete.CodigoSeguimiento} fue cancelado",
+                    BuildPaqueteEmail(
+                        paquete,
+                        "Tu envio fue cancelado",
+                        string.IsNullOrWhiteSpace(paquete.RazonCancelacion)
+                            ? "El envio fue cancelado."
+                            : $"El envio fue cancelado. Motivo: {paquete.RazonCancelacion}.",
+                        "Ver seguimiento"));
+            }
+        }
+
+        public async Task NotificarCodigoEntregaAsync(Paquete paquete)
+        {
+            if (paquete.Destinatario.Email is null) return;
+
+            await CrearYEnviarAsync(
+                paquete,
+                EventoEmailNotificacion.CodigoEntrega,
+                $"Codigo de entrega para tu envio {paquete.CodigoSeguimiento}",
+                BuildTemplate(
+                    "Codigo de entrega",
+                    $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                    "Este codigo se lo tenes que informar al repartidor cuando recibas el paquete.",
+                    "#",
+                    "Ver seguimiento",
+                    $"""
+                    <div style="background:#f4f9fd;border:1px solid #d8e6f0;border-radius:12px;padding:14px 16px;margin:16px 0;color:#263b50;line-height:1.7;">
+                      <div><strong>Codigo de seguimiento:</strong> {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
+                      <div style="font-size:28px;letter-spacing:8px;font-weight:800;margin-top:10px;color:#0b5f93;">{SecurityElement.Escape(paquete.CodigoEntrega)}</div>
+                    </div>
+                    """));
         }
 
         public async Task CrearEmailLeadAsync(SolicitudComercial lead)

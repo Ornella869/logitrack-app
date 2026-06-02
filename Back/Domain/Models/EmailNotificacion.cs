@@ -13,6 +13,10 @@ namespace Back.Domain.Models
         EntregaConfirmada = 1,
         LeadPlanes = 2,
         EncuestaPostEntrega = 3,
+        CodigoEntrega = 4,
+        CargadoEnVehiculo = 5,
+        Demorado = 6,
+        Cancelado = 7,
     }
 
     public class EmailNotificacion

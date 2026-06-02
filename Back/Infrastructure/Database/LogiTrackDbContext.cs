@@ -38,6 +38,8 @@ namespace Back.Infrastructure.Database
         {
             modelBuilder.Entity<Paquete>(p =>
             {
+                p.Property(x => x.CodigoEntrega).HasMaxLength(6).IsRequired();
+
                 // Esto le dice a EF: "Lo que ves en el objeto Remitente,
                 // guárdalo en estas columnas específicas de la tabla Paquetes"
                 p.OwnsOne(x => x.Remitente, r =>
