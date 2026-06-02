@@ -146,6 +146,27 @@ namespace Back.Application.Services
                 && o.Momento == momento);
         }
 
+        // Al cerrar una tanda o recibir una nueva, se debe volver a pasar el gate.
+        public async Task InvalidarPruebasAprobadasDelDiaAsync(Guid usuarioId, DateTime fecha)
+        {
+            var inicio = OperationalClock.StartUtcForOperationalDate(fecha);
+            var fin = OperationalClock.StartUtcForOperationalDate(fecha.Date.AddDays(1));
+
+            var pruebasAprobadas = await _context.PruebasOjoPatron
+                .Where(p => p.UsuarioId == usuarioId
+                            && p.FechaHora >= inicio && p.FechaHora < fin
+                            && p.Resultado == ResultadoPruebaOjoPatron.Aprobada)
+                .ToListAsync();
+            _context.PruebasOjoPatron.RemoveRange(pruebasAprobadas);
+
+            var overridesAprobados = await _context.OverridesOjoPatron
+                .Where(o => o.RepartidorId == usuarioId
+                            && o.SolicitadoEn >= inicio && o.SolicitadoEn < fin
+                            && o.Estado == EstadoOverrideOjoPatron.Aprobado)
+                .ToListAsync();
+            _context.OverridesOjoPatron.RemoveRange(overridesAprobados);
+        }
+
         // Fase B: ¿para entregar este paquete se requiere la prueba de mitad de recorrido?
         // Se exige cuando el repartidor ya finalizó >= la mitad de sus paradas del día
         // (ceil(total/2)), aún le quedan pendientes, y no aprobó hoy la prueba de mitad.

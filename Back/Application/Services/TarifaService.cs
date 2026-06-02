@@ -218,7 +218,7 @@ namespace Back.Application.Services
             var distancia = DistanciasService.CalcularDistancia(localidad);
 
             bool esPeligrosa = false;
-            var ubicacion = await _geocoding.GeocodeAsync(direccion, localidad, cp, provincia);
+            var ubicacion = await _geocoding.GeocodeExactAsync(direccion, localidad, cp, provincia);
             if (ubicacion is not null)
                 esPeligrosa = await EsZonaPeligrosaAsync(prov, ubicacion.Latitud, ubicacion.Longitud);
 

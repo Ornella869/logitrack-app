@@ -27,6 +27,7 @@ import PortalClientePublico from './pages/PortalClientePublico'
 import SatisfaccionPage from './pages/SatisfaccionPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
+import RepartidorHistorialPage from './pages/repartidor/RepartidorHistorialPage'
 import ClienteDashboard from './pages/ClienteDashboard'
 import LandingPage from './pages/landing/LandingPage'
 import AccessDenied from './pages/AccessDenied'
@@ -203,6 +204,16 @@ function App() {
             element={
               user && isRepartidorRole(user.role) ? (
                 <RepartidorDashboard />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
+            path="/repartidor/historial"
+            element={
+              user && isRepartidorRole(user.role) ? (
+                <RepartidorHistorialPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

@@ -221,8 +221,14 @@ namespace Back.Domain.Models
             // como ListoParaSalir en los listados y no se puede recalendarizar.
             if (Status == PaqueteStatus.AsignadoAVehiculo
                 || Status == PaqueteStatus.CargadoEnVehiculo
-                || Status == PaqueteStatus.ListoParaSalir)
+                || Status == PaqueteStatus.ListoParaSalir
+                || Status == PaqueteStatus.EnTransito
+                || Status == PaqueteStatus.Demorado)
+            {
                 Status = PaqueteStatus.PendienteDeCalendarizacion;
+                RazonDemora = null;
+                RazonCancelacion = null;
+            }
         }
 
         public void ActualizarDatos(

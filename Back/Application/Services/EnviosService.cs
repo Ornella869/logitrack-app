@@ -64,6 +64,7 @@ namespace Back.Application.Services
         private readonly GeocodingService _geocoding;
         private readonly TarifaService _tarifas;
         private readonly EmailNotificacionService _emails;
+        private readonly OjoPatronService _ojoPatron;
         private const int DemoAddressesPerProvince = 1200;
         private static readonly Lazy<List<DemoAddress>> DemoAddressesCache = new(() =>
             ExpandirDireccionesDemo(CargarDireccionesDemoBase()));
@@ -78,7 +79,8 @@ namespace Back.Application.Services
             AuditoriaService auditoria,
             GeocodingService geocoding,
             TarifaService tarifas,
-            EmailNotificacionService emails)
+            EmailNotificacionService emails,
+            OjoPatronService ojoPatron)
         {
             _rutasRepository = rutasRepository;
             _enviosRepository = enviosRepository;
@@ -90,6 +92,7 @@ namespace Back.Application.Services
             _geocoding = geocoding;
             _tarifas = tarifas;
             _emails = emails;
+            _ojoPatron = ojoPatron;
         }
 
         // G1L-88 / Épica D: cotización con tarifas y zonas de la provincia de destino.
@@ -112,7 +115,8 @@ namespace Back.Application.Services
             {
                 if (paquete.RepartidorAsignadoId != usuario.Id)
                     throw new InvalidOperationException("No podés operar envíos asignados a otro repartidor.");
-                if (paquete.FechaCalendarizada?.Date != OperationalClock.TodayUtcDate)
+                if (paquete.FechaCalendarizada?.Date != OperationalClock.TodayUtcDate
+                    && paquete.Status is not (PaqueteStatus.EnTransito or PaqueteStatus.Demorado))
                     throw new InvalidOperationException("Solo podés operar envíos calendarizados para hoy.");
             }
             if (usuario is not Repartidor && usuario.SucursalId.HasValue && paquete.SucursalId != usuario.SucursalId)
@@ -194,7 +198,7 @@ namespace Back.Application.Services
                 request.Destinatario.Provincia = puntoPickUp.Provincia;
             }
 
-            var ubicacionDestinatario = await _geocoding.GeocodeAsync(
+            var ubicacionDestinatario = await _geocoding.GeocodeExactAsync(
                 request.Destinatario.Direccion,
                 request.Destinatario.Localidad,
                 request.Destinatario.CP,
@@ -434,7 +438,7 @@ namespace Back.Application.Services
                 request.Destinatario.Provincia = puntoPickUp.Provincia;
             }
 
-            var ubicacionDestinatario = await _geocoding.GeocodeAsync(
+            var ubicacionDestinatario = await _geocoding.GeocodeExactAsync(
                 request.Destinatario.Direccion,
                 request.Destinatario.Localidad,
                 request.Destinatario.CP,
@@ -547,7 +551,7 @@ namespace Back.Application.Services
                             contexto: $"Motivo: {motivo}");
                     }
 
-                    if (debeRecalcular)
+                    if (debeRecalcular && mode != CancelarEnvioMode.Reagendar)
                         await TalvezMarcarTodosListosParaSalirAsync(repartidorParaRecalculo, fechaParaRecalculo, usuarioId);
                     break;
 
@@ -770,6 +774,7 @@ namespace Back.Application.Services
             if (await _userRepository.GetUsuarioById(repartidorId) is not Repartidor rep)
                 throw new InvalidOperationException("Repartidor no encontrado.");
             rep.CerrarJornada();
+            await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(repartidorId, OperationalClock.TodayUtcDate);
             await _auditoria.RegistrarAsync(
                 Domain.Models.TipoAccion.CambioEstadoEnvio,
                 "Repartidor cerró su jornada (volvió a la sucursal)",

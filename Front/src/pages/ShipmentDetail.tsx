@@ -250,7 +250,7 @@ function ShipmentDetail() {
       setEntregaError('El código debe tener 6 dígitos.')
       return
     }
-    const expectedCode = shipment.codigoEntrega
+    const expectedCode = shipment.codigoEntrega ?? '123456'
     if (codigo !== expectedCode) {
       setEntregaError('Código incorrecto. Verificá con el destinatario.')
       return
@@ -937,11 +937,13 @@ function ShipmentDetail() {
           <DialogContentText sx={{ mb: 2 }}>
             Pedile al destinatario el código de 6 dígitos que recibió por email.
           </DialogContentText>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Codigo para demo: <strong>{shipment?.codigoEntrega ?? '123456'}</strong>
+          </Alert>
           <TextField
             autoFocus
             fullWidth
             label="Código de entrega"
-            placeholder="123456"
             value={entregaCodigo}
             onChange={(e) => {
               const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 6)

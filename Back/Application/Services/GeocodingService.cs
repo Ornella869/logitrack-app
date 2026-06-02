@@ -42,13 +42,24 @@ namespace Back.Application.Services
             => GeocodeAsync(direccion, localidad, codigoPostal, provincia: null);
 
         public async Task<Ubicacion?> GeocodeAsync(string direccion, string localidad, string? codigoPostal, string? provincia)
+            => await GeocodeInternalAsync(direccion, localidad, codigoPostal, provincia, permitirFallbackLocalidad: true);
+
+        public async Task<Ubicacion?> GeocodeExactAsync(string direccion, string localidad, string? codigoPostal, string? provincia)
+            => await GeocodeInternalAsync(direccion, localidad, codigoPostal, provincia, permitirFallbackLocalidad: false);
+
+        private async Task<Ubicacion?> GeocodeInternalAsync(
+            string direccion,
+            string localidad,
+            string? codigoPostal,
+            string? provincia,
+            bool permitirFallbackLocalidad)
         {
             var direccionTrim = (direccion ?? string.Empty).Trim();
             var localidadTrim = (localidad ?? string.Empty).Trim();
             var cpTrim = (codigoPostal ?? string.Empty).Trim();
             var provinciaTrim = (provincia ?? string.Empty).Trim();
 
-            var cacheKey = $"{direccionTrim}|{localidadTrim}|{cpTrim}|{provinciaTrim}".ToLowerInvariant();
+            var cacheKey = $"{direccionTrim}|{localidadTrim}|{cpTrim}|{provinciaTrim}|strict:{!permitirFallbackLocalidad}".ToLowerInvariant();
             if (Cache.TryGetValue(cacheKey, out var cached) && cached is not null) return cached;
 
             var alturaPedida = ExtraerAltura(direccionTrim);
@@ -78,6 +89,8 @@ namespace Back.Application.Services
             // 4) Último recurso: localidad + CP (centro de la ciudad). Sirve para
             // la sucursal en el mapa: aunque la calle no resuelva, al menos se pinta
             // en el barrio/ciudad correctos.
+            if (!permitirFallbackLocalidad) return null;
+
             if (!string.IsNullOrEmpty(localidadTrim) || !string.IsNullOrEmpty(cpTrim))
             {
                 var fallbackQuery = string.IsNullOrEmpty(cpTrim)

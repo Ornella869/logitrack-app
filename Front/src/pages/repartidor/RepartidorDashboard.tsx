@@ -44,6 +44,7 @@ import SendIcon from '@mui/icons-material/Send'
 import MyLocationIcon from '@mui/icons-material/MyLocation'
 import LocationDisabledIcon from '@mui/icons-material/LocationDisabled'
 import GpsFixedIcon from '@mui/icons-material/GpsFixed'
+import HistoryIcon from '@mui/icons-material/History'
 import { useGpsTracking } from '../../hooks/useGpsTracking'
 import { shipmentService } from '../../services/shipmentService'
 import { notificationService } from '../../services/notificationService'
@@ -427,13 +428,23 @@ export default function RepartidorDashboard() {
   }, [])
 
   // Inicio de ruta con gating secuencial: consentimiento → prueba acústica → confirmar.
-  const intentarIniciarRuta = () => {
+  const intentarIniciarRuta = async () => {
     setInicioFeedback(null)
-    if (consentimientoAceptado === false) {
+    const [consent, prueba] = await Promise.all([
+      ojoPatronService.getConsentimiento(),
+      ojoPatronService.getEstadoPrueba(),
+    ])
+    const consentimientoVigente = consent?.aceptado ?? false
+    const pruebaVigente = prueba?.realizadaHoy ?? false
+    setConsentimientoAceptado(consentimientoVigente)
+    setPruebaRealizadaHoy(pruebaVigente)
+    if (prueba?.umbralAlertness != null) setUmbralPrueba(prueba.umbralAlertness)
+
+    if (!consentimientoVigente) {
       setConsentDialog('requerido')
       return
     }
-    if (pruebaRealizadaHoy === false) {
+    if (!pruebaVigente) {
       setPruebaOpen(true)
       return
     }
@@ -481,7 +492,7 @@ export default function RepartidorDashboard() {
 
   // El retorno se muestra solo si TODO el día que estoy viendo está entregado/cancelado.
   // (Antes arrastraba un flag global que lo dejaba visible al cambiar a otro día con pendientes.)
-  const showRetorno = todasEntregadas
+  const showRetorno = todasEntregadas || estadoJornada === 'Retornando'
 
   // Resetear animación de retorno si se recarga la ruta y ya no está en retorno.
   useEffect(() => {
@@ -496,6 +507,7 @@ export default function RepartidorDashboard() {
     if (res.success) {
       setRetornoAnimando(false)
       setEstadoJornada('Disponible')
+      setPruebaRealizadaHoy(false)
       void load(fechaRuta ?? undefined)
     }
   }
@@ -612,6 +624,14 @@ export default function RepartidorDashboard() {
             Escanear QR
           </Button>
           <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<HistoryIcon />}
+            onClick={() => navigate('/repartidor/historial')}
+          >
+            Envios pasados
+          </Button>
+          <Button
             variant={ubicacionActiva ? 'contained' : 'outlined'}
             color={ubicacionActiva ? 'success' : 'primary'}
             startIcon={ubicacionActiva ? <LocationDisabledIcon /> : <MyLocationIcon />}
@@ -628,7 +648,7 @@ export default function RepartidorDashboard() {
             Simulacion
           </Button>
           {/* Fase A: cerrar jornada al volver. Solo mientras está "Retornando". */}
-          {showRetorno && estadoJornada === 'Retornando' && (
+          {showRetorno && estadoJornada !== 'Disponible' && (
             <Button
               variant="outlined"
               color="success"

@@ -69,7 +69,8 @@ namespace Back.Controllers
             if (user is null) return false;
             if (User.IsInRole(Roles.Repartidor))
                 return paquete.RepartidorAsignadoId == user.Id
-                    && paquete.FechaCalendarizada?.Date == OperationalClock.TodayUtcDate;
+                    && (paquete.FechaCalendarizada?.Date == OperationalClock.TodayUtcDate
+                        || paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado);
             // Supervisor/Operador: debe pertenecer a la misma sucursal. Sin sucursal → sin acceso.
             return user.SucursalId.HasValue && paquete.SucursalId == user.SucursalId;
         }

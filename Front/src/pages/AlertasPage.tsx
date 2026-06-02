@@ -21,6 +21,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { alertService, type AlertaPaqueteSinEstadoFinal } from '../services/alertService'
 import { notificationService } from '../services/notificationService'
+import { shipmentService } from '../services/shipmentService'
 import type { User } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 
@@ -41,6 +42,7 @@ export default function AlertasPage() {
   const navigate = useNavigate()
   const [alertas, setAlertas] = useState<AlertaPaqueteSinEstadoFinal[]>([])
   const [loading, setLoading] = useState(true)
+  const [resolviendoId, setResolviendoId] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -71,6 +73,19 @@ export default function AlertasPage() {
     if (user.role === 'supervisor') void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const resolverAlerta = async (alerta: AlertaPaqueteSinEstadoFinal, accion: 'Reprogramar' | 'Cancelar') => {
+    const motivo = window.prompt(`Motivo para ${accion.toLowerCase()} ${alerta.trackingId}`)
+    if (!motivo?.trim()) return
+    setResolviendoId(alerta.paqueteId)
+    const result = await shipmentService.resolverIncidente(alerta.paqueteId, accion, motivo.trim())
+    setResolviendoId(null)
+    if (!result.success) {
+      window.alert(result.error ?? 'No se pudo resolver la alerta.')
+      return
+    }
+    await load()
+  }
 
   if (user.role !== 'supervisor') {
     return <Alert severity="warning">Solo el Supervisor puede ver las alertas.</Alert>
@@ -141,9 +156,17 @@ export default function AlertasPage() {
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/shipment/${a.paqueteId}`)}>
-                      Ver envío
-                    </Button>
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <Button size="small" onClick={() => void resolverAlerta(a, 'Reprogramar')} disabled={resolviendoId === a.paqueteId}>
+                        Reprogramar
+                      </Button>
+                      <Button size="small" color="error" onClick={() => void resolverAlerta(a, 'Cancelar')} disabled={resolviendoId === a.paqueteId}>
+                        Cancelar
+                      </Button>
+                      <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/shipment/${a.paqueteId}`)}>
+                        Ver envio
+                      </Button>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))}

@@ -83,17 +83,20 @@ namespace Back.Application.Services
         private readonly IUserRepository _userRepository;
         private readonly HistorialEstadoEnvioService _historial;
         private readonly AuditoriaService _auditoria;
+        private readonly OjoPatronService _ojoPatron;
 
         public CalendarizacionService(
             IEnviosRepository enviosRepository,
             IUserRepository userRepository,
             HistorialEstadoEnvioService historial,
-            AuditoriaService auditoria)
+            AuditoriaService auditoria,
+            OjoPatronService ojoPatron)
         {
             _enviosRepository = enviosRepository;
             _userRepository = userRepository;
             _historial = historial;
             _auditoria = auditoria;
+            _ojoPatron = ojoPatron;
         }
 
         // Épica D: si se pasa sucursalId, todo se filtra a esa sucursal (envíos y repartidores).
@@ -256,6 +259,7 @@ namespace Back.Application.Services
             }
 
             paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
+            await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(repartidorId, fechaUtc);
 
             // Recálculo post-asignación manual: si el repartidor ya estaba "Listo para
             // Salir", entra carga nueva → el vehículo deja de estar completo. Los paquetes
@@ -478,6 +482,9 @@ namespace Back.Application.Services
             }
 
             // Resumen por día — sólo de lo NUEVO calendarizado en esta corrida.
+            foreach (var asignacion in asignacionesNuevas.Keys)
+                await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(asignacion.Item1, asignacion.Item2);
+
             var resumen = asignacionesNuevas
                 .GroupBy(kv => kv.Key.Item2)
                 .OrderBy(g => g.Key)

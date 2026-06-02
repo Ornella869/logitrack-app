@@ -181,14 +181,92 @@ namespace Back.Infrastructure.Database.Repositories
             };
             var dia = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
             var diaSiguiente = dia.AddDays(1);
-            return await _context.Paquetes
+            var paquetes = await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
-                            && p.FechaCalendarizada >= dia
-                            && p.FechaCalendarizada < diaSiguiente
+                            && p.FechaCalendarizada != null
+                            && ((p.FechaCalendarizada >= dia && p.FechaCalendarizada < diaSiguiente)
+                                || (p.FechaCalendarizada < dia && (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado)))
                             && estadosVisibles.Contains(p.Status))
                 .OrderBy(p => p.Destinatario.Direccion.CP)
                 .ThenBy(p => p.CreadoEn)
                 .ToListAsync();
+
+            if (fecha.Date == OperationalClock.TodayUtcDate)
+            {
+                var activosHoy = paquetes
+                    .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date
+                                && p.Status != PaqueteStatus.Entregado
+                                && p.Status != PaqueteStatus.Cancelado)
+                    .Select(p => p.Id)
+                    .ToList();
+
+                if (activosHoy.Count > 0)
+                {
+                    var inicioTandaActual = await _context.HistorialEstadosEnvio
+                        .Where(h => activosHoy.Contains(h.PaqueteId)
+                                    && h.EstadoNuevo == PaqueteStatus.AsignadoAVehiculo)
+                        .MinAsync(h => (DateTime?)h.FechaHora);
+
+                    if (inicioTandaActual.HasValue)
+                    {
+                        var finalizadosHoy = paquetes
+                            .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date
+                                        && (p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado))
+                            .Select(p => p.Id)
+                            .ToList();
+
+                        var finalizadosDeTandaActual = await _context.HistorialEstadosEnvio
+                            .Where(h => finalizadosHoy.Contains(h.PaqueteId)
+                                        && (h.EstadoNuevo == PaqueteStatus.Entregado || h.EstadoNuevo == PaqueteStatus.Cancelado)
+                                        && h.FechaHora >= inicioTandaActual.Value)
+                            .Select(h => h.PaqueteId)
+                            .Distinct()
+                            .ToListAsync();
+
+                        paquetes = paquetes
+                            .Where(p => p.FechaCalendarizada!.Value.Date != dia.Date
+                                        || p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado
+                                        || finalizadosDeTandaActual.Contains(p.Id))
+                            .ToList();
+                    }
+                }
+
+                var paquetesHoyIds = paquetes
+                    .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date)
+                    .Select(p => p.Id)
+                    .ToList();
+
+                var inicioUltimaRuta = await _context.HistorialEstadosEnvio
+                    .Where(h => paquetesHoyIds.Contains(h.PaqueteId)
+                                && h.EstadoNuevo == PaqueteStatus.EnTransito
+                                && h.Motivo == "Inicializar Ruta")
+                    .MaxAsync(h => (DateTime?)h.FechaHora);
+
+                if (inicioUltimaRuta.HasValue)
+                {
+                    var finalizadosHoy = paquetes
+                        .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date
+                                    && (p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado))
+                        .Select(p => p.Id)
+                        .ToList();
+
+                    var finalizadosDeUltimaRuta = await _context.HistorialEstadosEnvio
+                        .Where(h => finalizadosHoy.Contains(h.PaqueteId)
+                                    && (h.EstadoNuevo == PaqueteStatus.Entregado || h.EstadoNuevo == PaqueteStatus.Cancelado)
+                                    && h.FechaHora >= inicioUltimaRuta.Value)
+                        .Select(h => h.PaqueteId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    paquetes = paquetes
+                        .Where(p => p.FechaCalendarizada!.Value.Date != dia.Date
+                                    || p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado
+                                    || finalizadosDeUltimaRuta.Contains(p.Id))
+                        .ToList();
+                }
+            }
+
+            return paquetes;
         }
 
         public async Task<List<Sucursal>> GetSucursales(string? provincia = null, Guid? sucursalId = null)
