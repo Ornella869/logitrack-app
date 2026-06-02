@@ -2,9 +2,12 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
+using Microsoft.EntityFrameworkCore.Infrastructure;
+
 namespace Back.Infrastructure.Database
 {
-    /// <inheritdoc />
+    [DbContext(typeof(LogiTrackDbContext))]
+    [Migration("20260602001000_AddCodigoEntregaToPaquete")]
     public partial class AddCodigoEntregaToPaquete : Migration
     {
         /// <inheritdoc />
