@@ -52,6 +52,19 @@ interface ShipmentFormProps {
 // G1L-54: capacidad por repartidor. Un paquete que la supere no podría calendarizarse.
 const MAX_WEIGHT_KG = 500
 
+// Capitaliza la primera letra de cada palabra que empieza con letra (deja números sin tocar).
+// "bongiovanni 2731" → "Bongiovanni 2731"   "av. corrientes 1234" → "Av. Corrientes 1234"
+function capitalizeAddress(value: string): string {
+  return value
+    .split(' ')
+    .map((word) =>
+      word && /^[a-záéíóúüñ]/i.test(word)
+        ? word[0].toUpperCase() + word.slice(1)
+        : word,
+    )
+    .join(' ')
+}
+
 // Solo letras + espacios + tildes/diéresis + apóstrofe/guion. Sin números.
 const nameRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,}$/
 const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
@@ -596,6 +609,12 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                   name="receiverAddress"
                   value={formData.receiverAddress}
                   onChange={handleChange}
+                  onBlur={() => {
+                    const normalized = capitalizeAddress(formData.receiverAddress)
+                    if (normalized !== formData.receiverAddress) {
+                      setFormData((prev) => ({ ...prev, receiverAddress: normalized }))
+                    }
+                  }}
                   error={!!errors.receiverAddress}
                   helperText={errors.receiverAddress ?? 'Formato: "Calle Altura" (ej. Rosa Castillo 2487)'}
                   required

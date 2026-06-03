@@ -22,4 +22,9 @@ export const leadService = {
       Comentarios: payload.comments?.trim() || null,
     })
   },
+
+  registrarEmailInteres: async (email: string): Promise<{ message: string }> => {
+    const r = await api.post('/leads/email', { Email: email })
+    return r.data
+  },
 }

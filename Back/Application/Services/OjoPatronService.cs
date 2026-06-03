@@ -188,15 +188,11 @@ namespace Back.Application.Services
             var total = delDia.Count;
             if (total == 0) return false;
 
-            var finalizadas = delDia.Count(p => p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado);
+            // Con un solo envío la prueba de voz se hace únicamente al inicio de ruta.
+            // No tiene sentido interrumpir a mitad de un viaje de una sola parada.
+            if (total == 1) return false;
 
-            // Caso especial: un solo envío → la "mitad" es cuando el paquete está en tránsito.
-            if (total == 1)
-            {
-                var enTransito = delDia.Any(p => p.Status == PaqueteStatus.EnTransito);
-                if (!enTransito) return false;
-                return !await TienePruebaAprobadaHoyAsync(repartidorId, MomentoPruebaOjoPatron.Mitad);
-            }
+            var finalizadas = delDia.Count(p => p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado);
 
             var umbralMitad = (int)Math.Ceiling(total / 2.0);
 
@@ -315,7 +311,7 @@ namespace Back.Application.Services
             return solicitud;
         }
 
-        public async Task<List<object>> GetMetricasHistoricasAsync(Guid supervisorId)
+        public async Task<List<object>> GetMetricasHistoricasAsync(Guid supervisorId, DateTime? desde = null, DateTime? hasta = null)
         {
             var supervisor = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == supervisorId);
             if (supervisor?.SucursalId is null) return new List<object>();
@@ -323,22 +319,35 @@ namespace Back.Application.Services
                 .Where(u => u.SucursalId == supervisor.SucursalId && u is Repartidor)
                 .ToListAsync();
             var ids = repartidores.Select(r => r.Id).ToList();
-            var pruebas = await _context.PruebasOjoPatron.Where(p => ids.Contains(p.UsuarioId)).ToListAsync();
-            var overrides = await _context.OverridesOjoPatron.Where(o => ids.Contains(o.RepartidorId)).ToListAsync();
+
+            var pruebasQuery = _context.PruebasOjoPatron.Where(p => ids.Contains(p.UsuarioId));
+            if (desde.HasValue) pruebasQuery = pruebasQuery.Where(p => p.FechaHora >= desde.Value.Date.ToUniversalTime());
+            if (hasta.HasValue) pruebasQuery = pruebasQuery.Where(p => p.FechaHora < hasta.Value.Date.AddDays(1).ToUniversalTime());
+            var pruebas = await pruebasQuery.ToListAsync();
+
+            var overridesQuery = _context.OverridesOjoPatron.Where(o => ids.Contains(o.RepartidorId));
+            if (desde.HasValue) overridesQuery = overridesQuery.Where(o => o.SolicitadoEn >= desde.Value.Date.ToUniversalTime());
+            if (hasta.HasValue) overridesQuery = overridesQuery.Where(o => o.SolicitadoEn < hasta.Value.Date.AddDays(1).ToUniversalTime());
+            var overrides = await overridesQuery.ToListAsync();
 
             return repartidores.Select(r =>
             {
                 var ps = pruebas.Where(p => p.UsuarioId == r.Id).ToList();
                 var os = overrides.Where(o => o.RepartidorId == r.Id).ToList();
+                var total = ps.Count;
+                var aprobadas = ps.Count(p => p.Resultado == ResultadoPruebaOjoPatron.Aprobada);
+                var fallidas = total - aprobadas;
+                var esCritico = fallidas >= 3 || (total >= 2 && fallidas > aprobadas);
                 return (object)new
                 {
                     repartidorId = r.Id,
                     repartidorNombre = $"{r.Nombre} {r.Apellido}",
-                    aprobadas = ps.Count(p => p.Resultado == ResultadoPruebaOjoPatron.Aprobada),
-                    fallidas = ps.Count(p => p.Resultado != ResultadoPruebaOjoPatron.Aprobada),
+                    aprobadas,
+                    fallidas,
                     overridesAprobados = os.Count(o => o.Estado == EstadoOverrideOjoPatron.Aprobado),
-                    promedioAlertness = ps.Count == 0 ? 0 : Math.Round(ps.Average(p => p.AlertnessScore), 3),
+                    promedioAlertness = total == 0 ? 0 : Math.Round(ps.Average(p => p.AlertnessScore), 3),
                     ultimaPrueba = ps.OrderByDescending(p => p.FechaHora).FirstOrDefault()?.FechaHora,
+                    esCritico,
                 };
             }).ToList();
         }

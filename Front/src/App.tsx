@@ -25,6 +25,7 @@ import ShipmentLabel from './pages/ShipmentLabel'
 import TrackingPublicPage from './pages/TrackingPublicPage'
 import PortalClientePublico from './pages/PortalClientePublico'
 import SatisfaccionPage from './pages/SatisfaccionPage'
+import SatisfaccionMetricasPage from './pages/SatisfaccionMetricasPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import RepartidorHistorialPage from './pages/repartidor/RepartidorHistorialPage'
@@ -416,6 +417,18 @@ function App() {
             element={
               user && (user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') ? (
                 <ReportesPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+
+          {/* Encuesta satisfacción — métricas (Supervisor / Gerente / Administrador) */}
+          <Route
+            path="/satisfaccion"
+            element={
+              user && (user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') ? (
+                <SatisfaccionMetricasPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

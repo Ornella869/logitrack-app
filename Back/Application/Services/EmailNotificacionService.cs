@@ -105,6 +105,9 @@ namespace Back.Application.Services
                   <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Codigo: {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
                   <div style="font-size:34px;letter-spacing:10px;font-weight:900;color:#a78bfa;">{SecurityElement.Escape(paquete.CodigoEntrega)}</div>
                 </div>
+                <div style="background:#1e1033;border:1px solid #7c3aed;border-radius:8px;padding:10px 14px;margin:8px 0;text-align:center;">
+                  <span style="font-size:13px;color:#c4b5fd;">&#128274; Por tu seguridad, no compartas este c&#243;digo con nadie. Solo el repartidor designado debe recibirlo.</span>
+                </div>
                 """);
 
             await CrearYEnviarAsync(paquete, EventoEmailNotificacion.CodigoEntrega,
@@ -227,8 +230,10 @@ namespace Back.Application.Services
 
         private string BuildEncuestaEmail(Paquete paquete, Guid token)
         {
-            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
-            var surveyUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/encuesta/{token}";
+            var appBase = (_configuration["PublicAppBaseUrl"] ?? _configuration["PublicTrackingBaseUrl"] ?? string.Empty)
+                .TrimEnd('/')
+                .Replace("/seguimiento", "");
+            var surveyUrl = string.IsNullOrWhiteSpace(appBase) ? "#" : $"{appBase}/encuesta/{token}";
 
             var detalleHtml = $"""
                 <div style="text-align:center;padding:10px 0 6px;">
@@ -246,18 +251,112 @@ namespace Back.Application.Services
 
         private string BuildLeadEmail(SolicitudComercial lead)
         {
-            return BuildTemplate("blue",
-                "Gracias por tu interes en LogiTrack",
-                $"Hola {SecurityElement.Escape(lead.NombreContacto)},",
-                $"Recibimos tu solicitud por el plan {SecurityElement.Escape(lead.PlanInteres)}. Un asesor se va a contactar con vos para ayudarte a elegir la mejor opcion.",
-                "https://logitrack-app-1.onrender.com",
-                "Conocer LogiTrack",
-                $"""
-                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;margin:14px 0;font-size:13px;line-height:1.8;color:#cbd5e1;">
-                  <div><b style="color:#94a3b8;">Empresa:</b> {SecurityElement.Escape(lead.NombreEmpresa)}</div>
-                  <div><b style="color:#94a3b8;">Plan:</b> {SecurityElement.Escape(lead.PlanInteres)}</div>
+            var appBase = (_configuration["PublicAppBaseUrl"]
+                ?? _configuration["PublicTrackingBaseUrl"]
+                ?? "https://logitrack-app-1.onrender.com")
+                .TrimEnd('/').Replace("/seguimiento", "");
+
+            var nombre = lead.NombreContacto is "-" or ""
+                ? null
+                : SecurityElement.Escape(lead.NombreContacto);
+            var saludo = nombre is null ? "¡Hola!" : $"Hola {nombre},";
+
+            var esPremium = lead.PlanInteres.Equals("Premium", StringComparison.OrdinalIgnoreCase);
+            var basicoBorder = !esPremium ? "#38bdf8" : "#334155";
+            var premiumBorder = esPremium ? "#c084fc" : "#334155";
+
+            static string Feat(string text) =>
+                $"""<div style="font-size:12.5px;color:#cbd5e1;padding:3px 0;"><span style="color:#4ade80;margin-right:5px;">✓</span>{text}</div>""";
+            static string NoFeat(string text) =>
+                $"""<div style="font-size:12.5px;color:#475569;padding:3px 0;"><span style="margin-right:5px;">—</span>{text}</div>""";
+
+            var basicoFeatures = string.Join("\n", new[]
+            {
+                Feat("1 sucursal"),
+                Feat("Hasta 50 envios activos"),
+                Feat("Hasta 5 usuarios"),
+                Feat("Hasta 3 repartidores"),
+                Feat("Seguimiento en tiempo real"),
+                Feat("Notificaciones por email"),
+                Feat("Pagina publica de tracking"),
+                Feat("Codigo OTP de entrega"),
+                Feat("Encuesta post-entrega"),
+                Feat("Dashboard operativo"),
+                NoFeat("Sucursales multiples"),
+                NoFeat("Planificacion de rutas avanzada"),
+                NoFeat("Lotes de envios masivos"),
+                NoFeat("Ojo del Patron"),
+                NoFeat("Prueba acustica de identidad"),
+                NoFeat("Reportes ejecutivos"),
+            });
+
+            var premiumFeatures = string.Join("\n", new[]
+            {
+                Feat("Sucursales ilimitadas"),
+                Feat("Envios ilimitados"),
+                Feat("Usuarios y repartidores ilimitados"),
+                Feat("Todo lo del plan Basico +"),
+                Feat("Planificacion de rutas avanzada"),
+                Feat("Lotes de envios masivos"),
+                Feat("Calendario de despachos"),
+                Feat("Ojo del Patron (supervision en tiempo real)"),
+                Feat("Prueba acustica de identidad (verificacion por voz)"),
+                Feat("Reportes ejecutivos y metricas ampliadas"),
+                Feat("Soporte prioritario y acompanamiento"),
+            });
+
+            var detalleHtml = $"""
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+                  <tr>
+                    <td width="48%" style="vertical-align:top;padding-right:6px;">
+                      <div style="background:#0f172a;border:2px solid {basicoBorder};border-radius:12px;padding:14px;">
+                        <div style="text-align:center;margin-bottom:10px;">
+                          <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Plan</div>
+                          <div style="font-size:19px;font-weight:700;color:#38bdf8;margin:4px 0;">Basico</div>
+                          <div style="font-size:20px;font-weight:700;color:#e2e8f0;margin:6px 0 2px;">$49.900<span style="font-size:11px;font-weight:400;color:#64748b;">&nbsp;/mes + IVA</span></div>
+                          <div style="font-size:11px;color:#475569;">$479.000 / año</div>
+                          <div style="font-size:11px;color:#60a5fa;margin-top:5px;">Hasta 50 cuentas</div>
+                        </div>
+                        <div style="border-top:1px solid #1e293b;padding-top:8px;">
+                          {basicoFeatures}
+                        </div>
+                      </div>
+                    </td>
+                    <td width="4%"></td>
+                    <td width="48%" style="vertical-align:top;padding-left:6px;">
+                      <div style="background:#0f172a;border:2px solid {premiumBorder};border-radius:12px;padding:14px;">
+                        <div style="text-align:center;margin-bottom:4px;">
+                          <span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:20px;letter-spacing:0.5px;">MAS FUNCIONES</span>
+                        </div>
+                        <div style="text-align:center;margin-bottom:10px;">
+                          <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Plan</div>
+                          <div style="font-size:19px;font-weight:700;color:#c084fc;margin:4px 0;">Premium</div>
+                          <div style="font-size:20px;font-weight:700;color:#e2e8f0;margin:6px 0 2px;">$189.900<span style="font-size:11px;font-weight:400;color:#64748b;">&nbsp;/mes + IVA</span></div>
+                          <div style="font-size:11px;color:#475569;">$1.819.000 / año</div>
+                          <div style="font-size:11px;color:#a78bfa;margin-top:5px;">Hasta 100 cuentas</div>
+                        </div>
+                        <div style="border-top:1px solid #1e293b;padding-top:8px;">
+                          {premiumFeatures}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px 16px;margin:0 0 4px;">
+                  <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">¿Tenes dudas?</div>
+                  <div style="font-size:13px;color:#cbd5e1;line-height:1.5;">Un asesor de LogiTrack se va a contactar con vos a la brevedad para guiarte en la eleccion del plan ideal para tu empresa.</div>
+                  <div style="font-size:12px;color:#475569;margin-top:8px;">📧 notificaciones.logitrack@gmail.com</div>
                 </div>
-                """);
+                """;
+
+            return BuildTemplate("blue",
+                "Informacion de planes LogiTrack",
+                saludo,
+                "Gracias por tu interes. Aca te dejamos la informacion completa de nuestros planes:",
+                appBase,
+                "Ir a LogiTrack",
+                detalleHtml);
         }
 
         private static string BuildTimelineHtml(List<HistorialEstadoEnvio> historial)
@@ -324,8 +423,9 @@ namespace Back.Application.Services
             };
 
             return $"""
-            <!doctype html><html><head><style>{EmailCss}</style></head>
+            <!doctype html><html><head></head>
             <body style="margin:0;background:#0f172a;font-family:Arial,sans-serif;">
+            <style>{EmailCss}</style>
             <div style="max-width:580px;margin:0 auto;padding:20px 14px;">
               <div style="background:linear-gradient(135deg,{grad1},{grad2});padding:26px 22px;border-radius:14px 14px 0 0;text-align:center;">
                 <div class="t">🚛</div>

@@ -169,38 +169,49 @@ export const postalCodeService = {
   },
 
   async validateStreetAddress(street: string, cp: string, province?: string): Promise<AddressValidation> {
-    let url = `https://nominatim.openstreetmap.org/search?street=${encodeURIComponent(street)}&postalcode=${encodeURIComponent(cp)}&country=Argentina&format=json&limit=1&addressdetails=1`
-    if (province) {
-      url += `&state=${encodeURIComponent(province)}`
+    const tryNominatim = async (url: string): Promise<NominatimResult[] | null> => {
+      try {
+        const res = await fetchWithTimeout(url, { headers: { 'Accept-Language': 'es' } })
+        if (!res.ok) return null
+        const data = (await res.json()) as NominatimResult[]
+        return data?.length ? data : null
+      } catch {
+        return null
+      }
     }
-    try {
-      const res = await fetchWithTimeout(url, { headers: { 'Accept-Language': 'es' } })
-      if (!res.ok) return { valid: true, fallback: true }
-      const data = (await res.json()) as NominatimResult[]
-      if (!data?.length) {
+
+    // 1) Búsqueda estructurada: calle + CP + provincia
+    let params = `street=${encodeURIComponent(street)}&postalcode=${encodeURIComponent(cp)}&country=Argentina&format=json&limit=1&addressdetails=1`
+    if (province) params += `&state=${encodeURIComponent(province)}`
+    let results = await tryNominatim(`https://nominatim.openstreetmap.org/search?${params}`)
+
+    // 2) Si no encontró, intenta free-text (Nominatim interpola mejor con texto libre)
+    if (!results) {
+      const query = province
+        ? `${street}, ${province}, Argentina`
+        : `${street}, Argentina`
+      results = await tryNominatim(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=ar&format=json&limit=1&addressdetails=1`,
+      )
+    }
+
+    // Si ninguna búsqueda encontró nada, el service no está disponible o la
+    // dirección no existe en OSM — dejamos pasar con fallback para no bloquear.
+    if (!results) return { valid: true, fallback: true }
+
+    const addr = results[0].address
+    if (province && addr) {
+      const foundProvince = addr.state || addr.province || ''
+      const normalizedFound = normalizeProvincia(foundProvince)
+      const normalizedExpected = normalizeProvincia(province)
+      if (normalizedFound && normalizedExpected && normalizedFound !== normalizedExpected) {
         return {
           valid: false,
-          error: 'No se encontró esta dirección. Verificá la calle y el código postal.',
+          error: `La calle pertenece a ${normalizedFound}, no a ${normalizedExpected}.`,
         }
       }
-      
-      const addr = data[0].address
-      if (province && addr) {
-        const foundProvince = addr.state || addr.province || ''
-        // normalizeProvincia to compare apples to apples
-        const normalizedFound = normalizeProvincia(foundProvince)
-        const normalizedExpected = normalizeProvincia(province)
-        if (normalizedFound && normalizedExpected && normalizedFound !== normalizedExpected) {
-          return {
-            valid: false,
-            error: `La calle pertenece a ${normalizedFound}, no a ${normalizedExpected}.`,
-          }
-        }
-      }
-      return { valid: true }
-    } catch {
-      return { valid: true, fallback: true }
     }
+    return { valid: true }
   },
 
   async geocodeAddress(

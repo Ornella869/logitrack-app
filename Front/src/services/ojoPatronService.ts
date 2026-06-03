@@ -50,6 +50,7 @@ export interface MetricaOjoPatron {
   overridesAprobados: number
   promedioAlertness: number
   ultimaPrueba?: string | null
+  esCritico: boolean
 }
 
 export interface RegistrarPruebaPayload {
@@ -182,8 +183,11 @@ export const ojoPatronService = {
     return r.data
   },
 
-  getMetricasHistoricas: async (): Promise<MetricaOjoPatron[]> => {
-    const r = await api.get('/ojo-patron/metricas-historicas')
+  getMetricasHistoricas: async (desde?: string, hasta?: string): Promise<MetricaOjoPatron[]> => {
+    const params: Record<string, string> = {}
+    if (desde) params.desde = desde
+    if (hasta) params.hasta = hasta
+    const r = await api.get('/ojo-patron/metricas-historicas', { params })
     return r.data ?? []
   },
 }

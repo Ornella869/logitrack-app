@@ -435,10 +435,11 @@ namespace Back.Application.Services
 
                 var expectedCp = expectedPostalCode?.Trim() ?? string.Empty;
 
-                // Si el operador puso altura, exigimos match EXACTO. Si ningún candidato
-                // de Nominatim tiene house_number == alturaPedida, devolvemos null para
-                // que el envío no quede con coordenadas de otra cuadra (problema que
-                // rompe la apertura en Google Maps y el render del marker en Leaflet).
+                // Si el operador puso altura, intentamos match exacto primero.
+                // Si ningún candidato tiene house_number == alturaPedida, aceptamos
+                // resultados sin house_number (nivel-calle): OSM mapea muchas calles
+                // argentinas sin datos de alturas individuales. Solo descartamos
+                // resultados con un número DISTINTO al solicitado (coordenadas wrongas).
                 if (alturaPedida.HasValue)
                 {
                     var conAlturaExacta = enArgentina
@@ -448,11 +449,16 @@ namespace Back.Application.Services
                             return hn.HasValue && hn.Value == alturaPedida.Value;
                         })
                         .ToList();
-                    if (conAlturaExacta.Count == 0) return null;
 
-                    // Entre los candidatos con altura exacta, preferimos el que matchea
-                    // el CP y el de mayor importance.
-                    var elegido = conAlturaExacta
+                    // Si no hay match exacto, usar candidatos sin house_number (nivel-calle).
+                    var candidatos = conAlturaExacta.Count > 0
+                        ? conAlturaExacta
+                        : enArgentina.Where(r => string.IsNullOrWhiteSpace(r.Address?.HouseNumber)).ToList();
+
+                    if (candidatos.Count == 0) return null;
+
+                    // Entre los candidatos preferimos el que matchea CP y luego mayor importance.
+                    var elegido = candidatos
                         .Select(r => new
                         {
                             R = r,

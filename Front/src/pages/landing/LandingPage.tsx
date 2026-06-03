@@ -8,6 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   Dialog,
   DialogActions,
@@ -292,6 +293,10 @@ export default function LandingPage() {
   const [leadSent, setLeadSent] = useState(false)
   const [leadError, setLeadError] = useState('')
   const [leadForm, setLeadForm] = useState(initialLeadForm)
+  const [quickEmail, setQuickEmail] = useState('')
+  const [quickEmailError, setQuickEmailError] = useState('')
+  const [quickEmailSending, setQuickEmailSending] = useState(false)
+  const [quickEmailSent, setQuickEmailSent] = useState(false)
   const [leadFormErrors, setLeadFormErrors] = useState<Partial<Record<'companyName' | 'contactName' | 'email' | 'phone', string>>>({})
   const [plans, setPlans] = useState<LandingPlan[]>(fallbackPlans)
   const [facturacion, setFacturacion] = useState<'mensual' | 'anual'>('mensual')
@@ -501,6 +506,29 @@ export default function LandingPage() {
       setLeadError(error?.response?.data?.message || error?.response?.data || 'No pudimos enviar tu solicitud. Probá nuevamente.')
     } finally {
       setLeadSubmitting(false)
+    }
+  }
+
+  const handleQuickEmailSubmit = async () => {
+    const trimmed = quickEmail.trim()
+    if (!trimmed) {
+      setQuickEmailError('Ingresá tu email.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setQuickEmailError('El formato del email no es válido.')
+      return
+    }
+    setQuickEmailError('')
+    setQuickEmailSending(true)
+    try {
+      await leadService.registrarEmailInteres(trimmed)
+      setQuickEmailSent(true)
+      setQuickEmail('')
+    } catch {
+      setQuickEmailError('No pudimos registrar tu email. Intentá de nuevo.')
+    } finally {
+      setQuickEmailSending(false)
     }
   }
 
@@ -1176,6 +1204,73 @@ export default function LandingPage() {
               </Grid>
             ))}
           </Grid>
+        </Container>
+      </Box>
+
+      {/* Sección captura rápida de email */}
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#071D31' }}>
+        <Container maxWidth="sm">
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <Typography variant="h5" sx={{ fontWeight: 900, color: '#fff', mb: 1 }}>
+              ¿Querés conocer nuestros planes?
+            </Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.95rem' }}>
+              Dejá tu email y te enviamos toda la información para que evalúes la opción que mejor se adapta a tu operación.
+            </Typography>
+          </Box>
+
+          {quickEmailSent ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, py: 1.5 }}>
+              <CheckCircleRoundedIcon sx={{ color: '#4FC3F7', fontSize: 28 }} />
+              <Typography sx={{ color: '#4FC3F7', fontWeight: 700 }}>
+                ¡Listo! Revisá tu casilla de correo.
+              </Typography>
+            </Box>
+          ) : (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  fullWidth
+                  placeholder="tu@empresa.com"
+                  value={quickEmail}
+                  onChange={(e) => { setQuickEmail(e.target.value); setQuickEmailError('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleQuickEmailSubmit() }}
+                  error={Boolean(quickEmailError)}
+                  helperText={quickEmailError}
+                  disabled={quickEmailSending}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      bgcolor: 'rgba(255,255,255,0.07)',
+                      color: '#fff',
+                      '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                      '&:hover fieldset': { borderColor: '#4FC3F7' },
+                      '&.Mui-focused fieldset': { borderColor: '#4FC3F7' },
+                    },
+                    '& input::placeholder': { color: 'rgba(255,255,255,0.4)' },
+                    '& .MuiFormHelperText-root': { color: '#ff8a80' },
+                  }}
+                  inputProps={{ maxLength: 160 }}
+                />
+              </Box>
+              <Button
+                variant="contained"
+                onClick={() => void handleQuickEmailSubmit()}
+                disabled={quickEmailSending}
+                endIcon={quickEmailSending ? <CircularProgress size={16} color="inherit" /> : <SendRoundedIcon />}
+                sx={{
+                  bgcolor: '#0288D1',
+                  fontWeight: 800,
+                  px: 3,
+                  whiteSpace: 'nowrap',
+                  height: 56,
+                  '&:hover': { bgcolor: '#0277BD' },
+                  '&:disabled': { bgcolor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.4)' },
+                }}
+              >
+                Recibir información
+              </Button>
+            </Stack>
+          )}
         </Container>
       </Box>
 

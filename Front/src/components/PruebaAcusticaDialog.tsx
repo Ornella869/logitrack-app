@@ -18,6 +18,8 @@ import GraphicEqIcon from '@mui/icons-material/GraphicEq'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import { ensureModel, analizarAudio, type AnalisisVoz } from '../services/voiceAnalysis'
 import { ojoPatronService } from '../services/ojoPatronService'
+import { notificationService } from '../services/notificationService'
+import type { User } from '../types'
 
 // Visualizador de onda de sonido usando Web Audio API + Canvas
 // Usa callback ref para evitar conflictos de tipos entre RefObject<T|null> y LegacyRef<T>
@@ -41,11 +43,12 @@ function SoundWaveCanvas({ onMount }: { onMount: (el: HTMLCanvasElement | null) 
 interface Props {
   open: boolean
   umbral: number
-  // Momento de la prueba: 0 = inicio de ruta, 1 = mitad de recorrido.
   momento?: 0 | 1
   onClose: () => void
-  // Se llama cuando la prueba quedó registrada (aprobada o por máximo de intentos).
   onCompletado: (aprobada: boolean) => void
+  repartidor?: Pick<User, 'id' | 'name' | 'sucursalId'>
+  /** Se llama cuando el override es aprobado para que el dashboard pueda rastrear si hay mic apagado */
+  onOverrideSolicitado?: (motivo: string) => void
 }
 
 const DURACION_MS = 5000
@@ -53,7 +56,7 @@ const DURACION_MS = 5000
 type Fase = 'cargando-modelo' | 'listo' | 'grabando' | 'analizando' | 'resultado' | 'error'
 
 // G1L-60: prueba acústica con análisis local (HuBERT). El audio no se transmite ni se guarda.
-export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClose, onCompletado }: Props) {
+export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClose, onCompletado, repartidor, onOverrideSolicitado }: Props) {
   const [fase, setFase] = useState<Fase>('cargando-modelo')
   const [progresoModelo, setProgresoModelo] = useState(0)
   const [intentos, setIntentos] = useState(0)
@@ -65,6 +68,7 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
   const [overrideMotivo, setOverrideMotivo] = useState('')
   const [overrideLoading, setOverrideLoading] = useState(false)
   const [overrideMsg, setOverrideMsg] = useState<{ sev: 'success' | 'error'; text: string } | null>(null)
+  const [overrideSolicitado, setOverrideSolicitado] = useState(false)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -115,7 +119,7 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
   useEffect(() => {
     if (!open) { stopWaveAnimation(); return }
     setIntentos(0); setUltimo(null); setAprobada(false); setError(''); setModeloOk(true); setRegistroError(false); setOverrideMotivo(''); setOverrideMsg(null)
-    setFase('cargando-modelo'); setProgresoModelo(0)
+    setFase('cargando-modelo'); setProgresoModelo(0); setOverrideSolicitado(false)
     // El gate es por energía de voz (RMS), así que aunque el modelo de emoción
     // no cargue, igual se puede hacer la prueba. La emoción es complementaria.
     ensureModel((p) => setProgresoModelo(p))
@@ -204,9 +208,28 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
     setOverrideMsg(null)
     const res = await ojoPatronService.solicitarOverride(momento, motivo)
     setOverrideLoading(false)
-    setOverrideMsg(res.success
-      ? { sev: 'success', text: 'Solicitud enviada al supervisor. Cuando la apruebe, intentá iniciar o continuar la ruta nuevamente.' }
-      : { sev: 'error', text: res.error ?? 'No se pudo enviar la solicitud.' })
+    if (res.success) {
+      setOverrideSolicitado(true)
+      setOverrideMsg({ sev: 'success', text: 'Solicitud enviada al supervisor. Cuando la apruebe, intentá iniciar o continuar la ruta nuevamente.' })
+      onOverrideSolicitado?.(motivo)
+      // Notificar al supervisor via campana de notificaciones
+      try {
+        const storedUser = localStorage.getItem('user')
+        const user = storedUser ? (JSON.parse(storedUser) as Pick<User, 'id' | 'name' | 'sucursalId'>) : repartidor
+        if (user) {
+          notificationService.add({
+            type: 'incidencia',
+            title: 'Solicitud de autorización — Ojo del Patrón',
+            message: `${user.name} solicita autorización manual: "${motivo}"`,
+            recipientId: 'supervisor',
+            sucursalId: user.sucursalId ?? undefined,
+            navigateTo: '/ojo-patron',
+          })
+        }
+      } catch { /* no bloquear si falla */ }
+    } else {
+      setOverrideMsg({ sev: 'error', text: res.error ?? 'No se pudo enviar la solicitud.' })
+    }
   }
 
   return (
@@ -258,17 +281,21 @@ export default function PruebaAcusticaDialog({ open, umbral, momento = 0, onClos
               )}
               {((intentos > 0 && !aprobada) || error) && fase === 'listo' && (
                 <Stack spacing={1}>
-                  <TextField
-                    size="small"
-                    label="Motivo para autorización manual"
-                    value={overrideMotivo}
-                    onChange={(e) => setOverrideMotivo(e.target.value)}
-                    placeholder="Ej: el micrófono del celular no funciona"
-                    fullWidth
-                  />
-                  <Button variant="outlined" onClick={solicitarOverride} disabled={overrideLoading}>
-                    {overrideLoading ? 'Enviando...' : 'Solicitar autorización del supervisor'}
-                  </Button>
+                  {!overrideSolicitado && (
+                    <>
+                      <TextField
+                        size="small"
+                        label="Motivo para autorización manual"
+                        value={overrideMotivo}
+                        onChange={(e) => setOverrideMotivo(e.target.value)}
+                        placeholder="Ej: el micrófono del celular no funciona"
+                        fullWidth
+                      />
+                      <Button variant="outlined" onClick={solicitarOverride} disabled={overrideLoading}>
+                        {overrideLoading ? 'Enviando...' : 'Solicitar autorización del supervisor'}
+                      </Button>
+                    </>
+                  )}
                   {overrideMsg && <Alert severity={overrideMsg.sev}>{overrideMsg.text}</Alert>}
                 </Stack>
               )}

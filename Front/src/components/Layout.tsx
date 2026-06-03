@@ -34,6 +34,7 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import BarChartIcon from '@mui/icons-material/BarChart'
 import PriceChangeIcon from '@mui/icons-material/PriceChange'
 import GraphicEqIcon from '@mui/icons-material/GraphicEq'
+import StarBorderIcon from '@mui/icons-material/StarBorder'
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import StoreIcon from '@mui/icons-material/Store'
 import PlaceIcon from '@mui/icons-material/Place'
@@ -293,6 +294,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/repartidores')) return '/repartidores'
     if (pathname.startsWith('/rutas-activas')) return '/rutas-activas'
     if (pathname.startsWith('/alertas')) return '/alertas'
+    if (pathname.startsWith('/satisfaccion')) return '/satisfaccion'
     if (pathname.startsWith('/reportes')) return '/reportes'
     if (pathname.startsWith('/auditoria-notificaciones')) return '/auditoria-notificaciones'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
@@ -602,6 +604,9 @@ function Layout({ user, onLogout }: LayoutProps) {
             )}
             {(user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') && (
               <Tab icon={<BarChartIcon fontSize="small" />} iconPosition="start" label="Reportes" value="/reportes" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {(user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') && (
+              <Tab icon={<StarBorderIcon fontSize="small" />} iconPosition="start" label="Satisfacción" value="/satisfaccion" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {(user.role === 'administrador' || user.role === 'supervisor') && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />

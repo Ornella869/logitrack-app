@@ -212,8 +212,7 @@ export const shipmentService = {
       )
       return createdShipment || allShipments[allShipments.length - 1] || null
     } catch (error) {
-      console.error('Register shipment error:', error)
-      return null
+      throw error
     }
   },
 

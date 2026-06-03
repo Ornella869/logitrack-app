@@ -39,10 +39,12 @@ namespace Back.Domain.Models
         {
             NombreEmpresa = nombreEmpresa.Trim();
             NombreContacto = nombreContacto.Trim();
-            Email = email.Trim();
+            Email = email.Trim().ToLowerInvariant();
             Telefono = telefono.Trim();
             PlanInteres = planInteres.Trim();
             Comentarios = string.IsNullOrWhiteSpace(comentarios) ? null : comentarios.Trim();
         }
+
+        public void RefrescarInteres() => CreadoEn = DateTime.UtcNow;
     }
 }

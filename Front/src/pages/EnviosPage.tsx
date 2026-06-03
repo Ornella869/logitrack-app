@@ -123,20 +123,15 @@ export default function EnviosPage() {
   }
 
   const handleCreateShipment = async (shipment: Omit<Shipment, 'id' | 'lastUpdate' | 'trackingId'>) => {
-    try {
-      const newShipment = await shipmentService.registerShipment(shipment)
-      if (newShipment) {
-        setPage(1)
-        void loadShipments(search, filters, 1, pageSize)
-        showActionToast(`Envío creado. Tracking ID: ${newShipment.trackingId}`, 'success')
-        setOpenShipmentForm(false)
-        return
-      }
-      throw new Error('No se pudo crear el envío')
-    } catch {
-      showActionToast('Error al crear el envío', 'error')
-      throw new Error('No se pudo crear el envío')
+    const newShipment = await shipmentService.registerShipment(shipment)
+    if (newShipment) {
+      setPage(1)
+      void loadShipments(search, filters, 1, pageSize)
+      showActionToast(`Envío creado. Tracking ID: ${newShipment.trackingId}`, 'success')
+      setOpenShipmentForm(false)
+      return
     }
+    throw new Error('No se pudo crear el envío')
   }
 
   const handleGenerateBulkDemo = async () => {

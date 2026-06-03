@@ -414,6 +414,8 @@ export default function RepartidorDashboard() {
   const [pruebaRealizadaHoy, setPruebaRealizadaHoy] = useState<boolean | null>(null)
   const [umbralPrueba, setUmbralPrueba] = useState(0.4)
   const [pruebaOpen, setPruebaOpen] = useState(false)
+  // true cuando el repartidor solicitó override indicando que el mic no funciona
+  const [overrideMicActivo, setOverrideMicActivo] = useState(false)
 
   useEffect(() => {
     void (async () => {
@@ -553,6 +555,17 @@ export default function RepartidorDashboard() {
         recipientId: user.id,
         navigateTo: '/repartidor',
       })
+      // Advertir al supervisor si el repartidor opera sin micrófono funcionando
+      if (overrideMicActivo) {
+        notificationService.add({
+          type: 'incidencia',
+          title: 'Repartidor operando sin micrófono',
+          message: `${user.name} está completando entregas con el micrófono reportado como no funcional. Revisá el Ojo del Patrón.`,
+          recipientId: 'supervisor',
+          sucursalId: user.sucursalId ?? undefined,
+          navigateTo: '/ojo-patron',
+        })
+      }
     }
     setQrFeedback({
       severity: 'success',
@@ -1200,6 +1213,11 @@ export default function RepartidorDashboard() {
       <PruebaAcusticaDialog
         open={pruebaOpen}
         umbral={umbralPrueba}
+        repartidor={user ? { id: user.id, name: user.name, sucursalId: user.sucursalId } : undefined}
+        onOverrideSolicitado={(motivo) => {
+          const esMic = /mic|micr[oó]fono/i.test(motivo)
+          if (esMic) setOverrideMicActivo(true)
+        }}
         onClose={() => setPruebaOpen(false)}
         onCompletado={() => {
           setPruebaRealizadaHoy(true)

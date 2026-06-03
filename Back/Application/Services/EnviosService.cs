@@ -198,15 +198,27 @@ namespace Back.Application.Services
                 request.Destinatario.Provincia = puntoPickUp.Provincia;
             }
 
-            var ubicacionDestinatario = await _geocoding.GeocodeExactAsync(
-                request.Destinatario.Direccion,
-                request.Destinatario.Localidad,
-                request.Destinatario.CP,
-                request.Destinatario.Provincia);
+            // Intento de geocodificación en dos pasos:
+            // 1) Exact: exige que la calle exista en Georef o Nominatim con número preciso.
+            // 2) Fallback: si la calle no está en ninguna base, usa coordenadas de la localidad
+            //    para que el envío no quede bloqueado. El repartidor sigue viendo la dirección
+            //    textual; las coords aproximadas solo afectan el pin en el mapa.
+            var ubicacionDestinatario =
+                await _geocoding.GeocodeExactAsync(
+                    request.Destinatario.Direccion,
+                    request.Destinatario.Localidad,
+                    request.Destinatario.CP,
+                    request.Destinatario.Provincia)
+                ?? await _geocoding.GeocodeAsync(
+                    request.Destinatario.Direccion,
+                    request.Destinatario.Localidad,
+                    request.Destinatario.CP,
+                    request.Destinatario.Provincia);
+
             if (ubicacionDestinatario is null)
                 throw new InvalidOperationException(
-                    $"No se pudo geocodificar la dirección del destinatario: \"{request.Destinatario.Direccion}, {request.Destinatario.Localidad}\". " +
-                    "Por favor, verificá que la dirección sea correcta e intentá nuevamente.");
+                    $"No se pudo ubicar la localidad \"{request.Destinatario.Localidad}\" en el mapa. " +
+                    "Verificá que la localidad y el código postal sean correctos.");
 
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
@@ -438,15 +450,22 @@ namespace Back.Application.Services
                 request.Destinatario.Provincia = puntoPickUp.Provincia;
             }
 
-            var ubicacionDestinatario = await _geocoding.GeocodeExactAsync(
-                request.Destinatario.Direccion,
-                request.Destinatario.Localidad,
-                request.Destinatario.CP,
-                request.Destinatario.Provincia);
+            var ubicacionDestinatario =
+                await _geocoding.GeocodeExactAsync(
+                    request.Destinatario.Direccion,
+                    request.Destinatario.Localidad,
+                    request.Destinatario.CP,
+                    request.Destinatario.Provincia)
+                ?? await _geocoding.GeocodeAsync(
+                    request.Destinatario.Direccion,
+                    request.Destinatario.Localidad,
+                    request.Destinatario.CP,
+                    request.Destinatario.Provincia);
+
             if (ubicacionDestinatario is null)
                 throw new InvalidOperationException(
-                    $"No se pudo geocodificar la dirección del destinatario: \"{request.Destinatario.Direccion}, {request.Destinatario.Localidad}\". " +
-                    "Por favor, verificá que la dirección sea correcta e intentá nuevamente.");
+                    $"No se pudo ubicar la localidad \"{request.Destinatario.Localidad}\" en el mapa. " +
+                    "Verificá que la localidad y el código postal sean correctos.");
 
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);

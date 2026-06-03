@@ -1,0 +1,14 @@
+{
+  "PublicTrackingBaseUrl": "http://localhost:5173/seguimiento",
+  "PublicAppBaseUrl": "http://localhost:5173",
+  "Email": {
+    "From": "notificaciones.logitrack@gmail.com",
+    "Smtp": {
+      "Host": "smtp.gmail.com",
+      "Port": 587,
+      "EnableSsl": true,
+      "User": "notificaciones.logitrack@gmail.com",
+      "Password": "PEDIRLE_LA_APP_PASSWORD_A_SARA"
+    }
+  }
+}

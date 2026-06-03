@@ -3,6 +3,7 @@ using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Back.Controllers
 {
@@ -37,6 +38,18 @@ namespace Back.Controllers
                 return BadRequest("El plan de interés debe ser Básico o Premium.");
             }
 
+            var emailNorm = request.Email.Trim().ToLowerInvariant();
+            var existente = await _context.SolicitudesComerciales
+                .FirstOrDefaultAsync(s => s.Email == emailNorm);
+
+            if (existente != null)
+            {
+                existente.RefrescarInteres();
+                await _emails.CrearEmailLeadAsync(existente);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Ya teníamos tu contacto registrado. Te reenviamos la información." });
+            }
+
             var lead = new SolicitudComercial(
                 request.NombreEmpresa,
                 request.NombreContacto,
@@ -49,10 +62,32 @@ namespace Back.Controllers
             await _emails.CrearEmailLeadAsync(lead);
             await _context.SaveChangesAsync();
 
-            return Ok(new
+            return Ok(new { message = "Recibimos tu solicitud. Te contactaremos a la brevedad" });
+        }
+
+        [HttpPost("email")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult> RegistrarEmailInteres([FromBody] EmailInteresRequest request)
+        {
+            var emailNorm = request.Email.Trim().ToLowerInvariant();
+            var existente = await _context.SolicitudesComerciales
+                .FirstOrDefaultAsync(s => s.Email == emailNorm);
+
+            if (existente != null)
             {
-                message = "Recibimos tu solicitud. Te contactaremos a la brevedad",
-            });
+                existente.RefrescarInteres();
+                await _emails.CrearEmailLeadAsync(existente);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Ya teníamos tu contacto. Te reenviamos información sobre nuestros planes." });
+            }
+
+            var lead = new SolicitudComercial("-", "-", request.Email, "-", "General", null);
+            _context.SolicitudesComerciales.Add(lead);
+            await _emails.CrearEmailLeadAsync(lead);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "¡Listo! Te enviamos información sobre nuestros planes al correo indicado." });
         }
     }
 
@@ -67,7 +102,7 @@ namespace Back.Controllers
         public string NombreContacto { get; set; } = string.Empty;
 
         [Required]
-        [EmailAddress]
+        [EmailAddress(ErrorMessage = "El formato del email no es válido.")]
         [MaxLength(160)]
         public string Email { get; set; } = string.Empty;
 
@@ -81,5 +116,13 @@ namespace Back.Controllers
 
         [MaxLength(2000)]
         public string? Comentarios { get; set; }
+    }
+
+    public class EmailInteresRequest
+    {
+        [Required(ErrorMessage = "El email es obligatorio.")]
+        [EmailAddress(ErrorMessage = "El formato del email no es válido.")]
+        [MaxLength(160)]
+        public string Email { get; set; } = string.Empty;
     }
 }

@@ -193,34 +193,40 @@ export default function TrackingPublicPage() {
     return !!slaVencido
   }, [shipment])
 
+  const enSucursal = shipment && (
+    shipment.status === 'Pendiente de calendarización' ||
+    shipment.status === 'Asignado a vehículo' ||
+    shipment.status === 'Listo para salir'
+  )
+
   return (
     <Box
       sx={{
         minHeight: '100vh',
         py: { xs: 4, md: 8 },
-        background: 'linear-gradient(180deg, #F4F7FB 0%, #FFFFFF 100%)',
+        background: 'linear-gradient(160deg, #060e1f 0%, #0d1f3c 50%, #122447 100%)',
       }}
     >
       <Container maxWidth="md">
         <Stack spacing={3}>
           <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="overline" sx={{ letterSpacing: 3, fontWeight: 800, color: '#0D47A1' }}>
+            <Typography variant="overline" sx={{ letterSpacing: 3, fontWeight: 800, color: '#60a5fa' }}>
               LOGITRACK
             </Typography>
-            <Typography variant="h3" sx={{ mt: 1, fontWeight: 800, fontSize: { xs: '2rem', md: '2.75rem' } }}>
+            <Typography variant="h3" sx={{ mt: 1, fontWeight: 800, fontSize: { xs: '2rem', md: '2.75rem' }, color: '#f0f6ff' }}>
               Seguimiento de envío
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
+            <Typography sx={{ mt: 1, color: '#94a3b8' }}>
               Consultá el estado actualizado de tu paquete con tu código de seguimiento.
             </Typography>
           </Box>
 
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-              <CircularProgress />
+              <CircularProgress sx={{ color: '#3b82f6' }} />
             </Box>
           ) : error || !shipment ? (
-            <Card sx={{ borderRadius: 3 }}>
+            <Card sx={{ borderRadius: 3, background: '#1e293b', border: '1px solid #334155' }}>
               <CardContent>
                 <Stack spacing={2} alignItems="flex-start">
                   <Alert severity="warning" sx={{ width: '100%' }}>{error || 'No pudimos cargar el seguimiento.'}</Alert>
@@ -230,13 +236,13 @@ export default function TrackingPublicPage() {
             </Card>
           ) : (
             <>
-              <Card sx={{ borderRadius: 4, boxShadow: '0 20px 45px rgba(15, 23, 42, 0.08)' }}>
+              <Card sx={{ borderRadius: 4, background: '#1e293b', border: '1px solid #334155', boxShadow: '0 20px 45px rgba(0,0,0,0.4)' }}>
                 <CardContent sx={{ p: { xs: 3, md: 4 } }}>
                   <Stack spacing={3}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
                       <Box>
-                        <Typography variant="body2" color="text.secondary">Tracking ID</Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 800 }}>{shipment.trackingId}</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Tracking ID</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#f0f6ff' }}>{shipment.trackingId}</Typography>
                       </Box>
                       <Chip
                         label={publicStatus.badge}
@@ -250,52 +256,79 @@ export default function TrackingPublicPage() {
                       />
                     </Stack>
 
-                    <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
-                      <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F172A' }}>
+                    <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 800, color: '#e2e8f0' }}>
                         {publicStatus.title}
                       </Typography>
-                      <Typography variant="body2" sx={{ mt: 0.75, color: '#334155' }}>
+                      <Typography variant="body2" sx={{ mt: 0.75, color: '#94a3b8' }}>
                         {publicStatus.description}
                       </Typography>
                     </Box>
 
-                    <Divider />
+                    {/* Mapa: tu paquete está en la sucursal */}
+                    {enSucursal && (
+                      <Box>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                          <Inventory2OutlinedIcon sx={{ color: '#60a5fa', fontSize: 20 }} />
+                          <Typography variant="subtitle2" sx={{ color: '#93c5fd', fontWeight: 700 }}>
+                            Tu paquete está en nuestra sucursal de {shipment.origin}
+                          </Typography>
+                        </Stack>
+                        <Box
+                          component="iframe"
+                          src={`https://maps.google.com/maps?q=${encodeURIComponent(shipment.origin + ', Argentina')}&output=embed&t=m&z=12`}
+                          sx={{
+                            width: '100%',
+                            height: 220,
+                            borderRadius: 2,
+                            border: '1px solid #334155',
+                            display: 'block',
+                          }}
+                          title="Ubicación de la sucursal"
+                          loading="lazy"
+                        />
+                        <Typography variant="caption" sx={{ color: '#475569', display: 'block', mt: 0.5 }}>
+                          Aún no salió a reparto. Te notificaremos cuando esté en camino.
+                        </Typography>
+                      </Box>
+                    )}
+
+                    <Divider sx={{ borderColor: '#334155' }} />
 
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                      <Box sx={{ flex: 1, p: 2.5, borderRadius: 3, bgcolor: '#F8FAFC' }}>
-                        <Typography variant="body2" color="text.secondary">Origen</Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>{shipment.origin}</Typography>
-                        <Typography variant="body2" color="text.secondary">CP {shipment.sender.postalCode}</Typography>
+                      <Box sx={{ flex: 1, p: 2.5, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid #1e3a5f' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Origen</Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#e2e8f0' }}>{shipment.origin}</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>CP {shipment.sender.postalCode}</Typography>
                       </Box>
-                      <Box sx={{ flex: 1, p: 2.5, borderRadius: 3, bgcolor: '#F8FAFC' }}>
-                        <Typography variant="body2" color="text.secondary">Destino</Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>{shipment.destination}</Typography>
-                        <Typography variant="body2" color="text.secondary">CP {shipment.receiver.postalCode}</Typography>
+                      <Box sx={{ flex: 1, p: 2.5, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid #1e3a5f' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Destino</Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#e2e8f0' }}>{shipment.destination}</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>CP {shipment.receiver.postalCode}</Typography>
                       </Box>
                     </Stack>
 
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Fecha de alta</Typography>
-                        <Typography sx={{ fontWeight: 600 }}>{formatDate(shipment.createdDate)}</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Fecha de alta</Typography>
+                        <Typography sx={{ fontWeight: 600, color: '#cbd5e1' }}>{formatDate(shipment.createdDate)}</Typography>
                       </Box>
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Tipo de envío</Typography>
-                        <Typography sx={{ fontWeight: 600 }}>{shipment.tipoEnvio ?? 'No disponible'}</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Tipo de envío</Typography>
+                        <Typography sx={{ fontWeight: 600, color: '#cbd5e1' }}>{shipment.tipoEnvio ?? 'No disponible'}</Typography>
                       </Box>
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Tipo de paquete</Typography>
-                        <Typography sx={{ fontWeight: 600 }}>{shipment.tipoPaquete ?? 'No disponible'}</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Tipo de paquete</Typography>
+                        <Typography sx={{ fontWeight: 600, color: '#cbd5e1' }}>{shipment.tipoPaquete ?? 'No disponible'}</Typography>
                       </Box>
                     </Stack>
 
-                    {/* G1L-17: fecha calendarizada como hito visible para el cliente. */}
                     {shipment.fechaCalendarizada && (
-                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: '#FFF7E6', border: '1px solid #F4C77B' }}>
-                        <Typography variant="body2" color="text.secondary">
+                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}>
+                        <Typography variant="body2" sx={{ color: '#92400e' }}>
                           {fechaEstimadaLabel(shipment.status)}
                         </Typography>
-                        <Typography sx={{ fontWeight: 700, color: '#7C4A00' }}>
+                        <Typography sx={{ fontWeight: 700, color: '#fbbf24' }}>
                           {formatDate(shipment.fechaCalendarizada)}
                         </Typography>
                       </Box>
@@ -312,11 +345,11 @@ export default function TrackingPublicPage() {
                           startIcon={<ReportProblemOutlinedIcon />}
                           onClick={() => setReportDialogOpen(true)}
                           sx={{
-                            color: '#c62828',
-                            borderColor: '#c62828',
+                            color: '#f87171',
+                            borderColor: '#f87171',
                             fontWeight: 600,
                             borderRadius: 2,
-                            '&:hover': { bgcolor: 'rgba(198,40,40,0.06)', borderColor: '#b71c1c' },
+                            '&:hover': { bgcolor: 'rgba(248,113,113,0.08)', borderColor: '#ef4444' },
                           }}
                         >
                           Reportar una incidencia
@@ -327,9 +360,9 @@ export default function TrackingPublicPage() {
                 </CardContent>
               </Card>
 
-              <Card sx={{ borderRadius: 4, boxShadow: '0 20px 45px rgba(15, 23, 42, 0.06)' }}>
+              <Card sx={{ borderRadius: 4, background: '#1e293b', border: '1px solid #334155', boxShadow: '0 20px 45px rgba(0,0,0,0.3)' }}>
                 <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 800 }}>
+                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 800, color: '#f0f6ff' }}>
                     Estado del envío
                   </Typography>
                   <Stack spacing={2.5}>
@@ -337,12 +370,12 @@ export default function TrackingPublicPage() {
                       const isCancelledFinal = shipment.status === 'Cancelado' && index === timeline.length - 1
                       const isDeliveredFinal = shipment.status === 'Entregado' && index === timeline.length - 1
                       const iconColor = isCancelledFinal
-                        ? '#B71C1C'
+                        ? '#f87171'
                         : isDeliveredFinal
-                          ? '#1B5E20'
+                          ? '#4ade80'
                           : step.done
-                            ? '#1565C0'
-                            : '#94A3B8'
+                            ? '#60a5fa'
+                            : '#475569'
                       const icon = isCancelledFinal
                         ? <CancelOutlinedIcon sx={{ color: iconColor }} />
                         : index === timeline.length - 1
@@ -358,7 +391,8 @@ export default function TrackingPublicPage() {
                               width: 42,
                               height: 42,
                               borderRadius: '50%',
-                              bgcolor: step.done ? `${iconColor}18` : '#E2E8F0',
+                              bgcolor: step.done ? `${iconColor}22` : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${step.done ? iconColor + '44' : '#334155'}`,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -368,20 +402,18 @@ export default function TrackingPublicPage() {
                             {icon}
                           </Box>
                           <Box sx={{ pt: 0.5 }}>
-                            <Typography sx={{ fontWeight: step.active || step.done ? 700 : 500 }}>
+                            <Typography sx={{ fontWeight: step.active || step.done ? 700 : 500, color: step.done ? '#e2e8f0' : '#64748b' }}>
                               {step.label}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{ color: '#64748b' }}>
                               {step.active
                                 ? 'Este es el estado actual informado por LogiTrack.'
                                 : step.done
                                   ? 'Hito completado.'
                                   : 'Pendiente de actualización.'}
                             </Typography>
-                            {/* G1L-17: en el primer hito mostramos la fecha estimada de entrega
-                                (criterio "Estado Inicial" del AC). */}
                             {index === 0 && shipment.fechaCalendarizada && (
-                              <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: '#B26A00', fontWeight: 600 }}>
+                              <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: '#fbbf24', fontWeight: 600 }}>
                                 Entrega estimada: {formatDate(shipment.fechaCalendarizada)}
                               </Typography>
                             )}

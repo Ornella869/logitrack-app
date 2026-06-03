@@ -153,11 +153,11 @@ namespace Back.Controllers
 
         [Authorize(Roles = Roles.Supervisor)]
         [HttpGet("metricas-historicas")]
-        public async Task<ActionResult<List<object>>> MetricasHistoricas()
+        public async Task<ActionResult<List<object>>> MetricasHistoricas([FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {
             var userId = CurrentUserId();
             if (userId is null) return Unauthorized();
-            return Ok(await _service.GetMetricasHistoricasAsync(userId.Value));
+            return Ok(await _service.GetMetricasHistoricasAsync(userId.Value, desde, hasta));
         }
 
         /// <summary>Configuración del umbral de la provincia del usuario logueado.</summary>
