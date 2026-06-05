@@ -18,6 +18,7 @@ import AlertasPage from './pages/AlertasPage'
 import IncidenciasPage from './pages/IncidenciasPage'
 import SucursalesPage from './pages/SucursalesPage'
 import PuntosPickUpPage from './pages/PuntosPickUpPage'
+import PickUpOperacionPage from './pages/PickUpOperacionPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
@@ -177,7 +178,7 @@ function App() {
           path="/login"
           element={
             user
-              ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : '/app'} />
+              ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app'} />
               : <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} />
           }
         />
@@ -238,7 +239,8 @@ function App() {
             path="/app"
             element={
               user && !isRepartidorRole(user.role) && user.role !== 'cliente' ? (
-                user.role === 'operador' ? <Navigate to="/envios" replace />
+                user.role === 'socio_pickup' ? <Navigate to="/pickup-operacion" replace />
+                  : user.role === 'operador' ? <Navigate to="/envios" replace />
                   : user.role === 'gerente' ? <Navigate to="/sucursales" replace />
                   : <Dashboard />
               ) : (
@@ -366,6 +368,16 @@ function App() {
             }
           />
           <Route
+            path="/pickup-operacion"
+            element={
+              user && user.role === 'socio_pickup' ? (
+                <PickUpOperacionPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
             path="/tarifas"
             element={
               user && user.role === 'gerente' ? (
@@ -448,7 +460,7 @@ function App() {
           />
         </Route>
 
-        <Route path="*" element={<Navigate to={user ? (isRepartidorRole(user.role) ? '/repartidor' : '/app') : '/login'} />} />
+        <Route path="*" element={<Navigate to={user ? (isRepartidorRole(user.role) ? '/repartidor' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app') : '/login'} />} />
       </Routes>
     </BrowserRouter>
   )

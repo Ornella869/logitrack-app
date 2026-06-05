@@ -52,6 +52,7 @@ namespace Back.Infrastructure.Database.Repositories
                     "operador" => query.OfType<Operador>(),
                     "repartidor" => query.OfType<Repartidor>(),
                     "gerente" => query.OfType<Gerente>(),
+                    "sociopickup" or "socio_pickup" => query.OfType<SocioPickUp>(),
                     _ => query,
                 };
             }

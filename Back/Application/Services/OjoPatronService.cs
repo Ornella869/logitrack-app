@@ -17,6 +17,7 @@ namespace Back.Application.Services
     {
         public required bool RealizadaHoy { get; init; }
         public required double UmbralAlertness { get; init; }
+        public required bool Activo { get; init; }
     }
 
     public class OjoPatronService
@@ -37,6 +38,8 @@ namespace Back.Application.Services
         // Consentimiento vigente = aceptado, no revocado y de la versión actual.
         public async Task<bool> TieneConsentimientoVigenteAsync(Guid usuarioId)
         {
+            if (!await EstaActivoParaUsuarioAsync(usuarioId)) return true;
+
             return await _context.ConsentimientosOjoPatron.AnyAsync(c =>
                 c.UsuarioId == usuarioId
                 && c.RevocadoEn == null
@@ -116,14 +119,24 @@ namespace Back.Application.Services
         }
 
         public async Task<ConfiguracionOjoPatron> ActualizarConfiguracionAsync(string provincia, double umbral)
+            => await ActualizarConfiguracionAsync(provincia, umbral, true);
+
+        public async Task<ConfiguracionOjoPatron> ActualizarConfiguracionAsync(string provincia, double umbral, bool activo)
         {
             var config = await GetConfiguracionAsync(provincia);
-            config.Actualizar(umbral);
+            config.Actualizar(umbral, activo);
             await _auditoria.RegistrarAsync(
                 TipoAccion.Otro,
-                $"Actualizó el umbral del Ojo del Patrón a {umbral:0.##} (provincia {provincia})");
+                $"Actualizó Ojo del Patrón: {(activo ? "activo" : "inactivo")}, umbral {umbral:0.##} (provincia {provincia})");
             await _context.SaveChangesAsync();
             return config;
+        }
+
+        public async Task<bool> EstaActivoParaUsuarioAsync(Guid usuarioId)
+        {
+            var provincia = await ResolverProvinciaUsuarioAsync(usuarioId);
+            var config = await GetConfiguracionAsync(provincia);
+            return config.Activo;
         }
 
         // ===== G1L-60 / G1L-61: prueba acústica =====
@@ -131,6 +144,8 @@ namespace Back.Application.Services
         // Gate estricto: solo una prueba APROBADA hoy (del momento indicado) habilita continuar.
         public async Task<bool> TienePruebaAprobadaHoyAsync(Guid usuarioId, MomentoPruebaOjoPatron momento = MomentoPruebaOjoPatron.Inicio)
         {
+            if (!await EstaActivoParaUsuarioAsync(usuarioId)) return true;
+
             var hoy = OperationalClock.TodayStartUtc;
             var manana = OperationalClock.TomorrowStartUtc;
             var pruebaAprobada = await _context.PruebasOjoPatron.AnyAsync(p =>
@@ -177,6 +192,8 @@ namespace Back.Application.Services
                 return false;
 
             var repartidorId = paquete.RepartidorAsignadoId.Value;
+            if (!await EstaActivoParaUsuarioAsync(repartidorId)) return false;
+
             var dia = paquete.FechaCalendarizada.Value.Date;
             var manana = dia.AddDays(1);
 
@@ -210,8 +227,9 @@ namespace Back.Application.Services
             var config = await GetConfiguracionAsync(provincia);
             return new EstadoPruebaDia
             {
-                RealizadaHoy = await TienePruebaAprobadaHoyAsync(usuarioId),
+                RealizadaHoy = !config.Activo || await TienePruebaAprobadaHoyAsync(usuarioId),
                 UmbralAlertness = config.UmbralAlertness,
+                Activo = config.Activo,
             };
         }
 

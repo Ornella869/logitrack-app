@@ -416,6 +416,7 @@ export default function RepartidorDashboard() {
   const [consentDialog, setConsentDialog] = useState<null | 'requerido' | 'gestion'>(null)
   const [pruebaRealizadaHoy, setPruebaRealizadaHoy] = useState<boolean | null>(null)
   const [umbralPrueba, setUmbralPrueba] = useState(0.4)
+  const [ojoPatronActivo, setOjoPatronActivo] = useState(true)
   const [pruebaOpen, setPruebaOpen] = useState(false)
   // true cuando el repartidor solicitó override indicando que el mic no funciona
   const [overrideMicActivo, setOverrideMicActivo] = useState(false)
@@ -429,6 +430,7 @@ export default function RepartidorDashboard() {
       setConsentimientoAceptado(consent?.aceptado ?? false)
       setPruebaRealizadaHoy(prueba?.realizadaHoy ?? false)
       if (prueba?.umbralAlertness != null) setUmbralPrueba(prueba.umbralAlertness)
+      setOjoPatronActivo(prueba?.activo ?? true)
     })()
   }, [])
 
@@ -441,10 +443,16 @@ export default function RepartidorDashboard() {
     ])
     const consentimientoVigente = consent?.aceptado ?? false
     const pruebaVigente = prueba?.realizadaHoy ?? false
+    const ojoActivo = prueba?.activo ?? true
     setConsentimientoAceptado(consentimientoVigente)
     setPruebaRealizadaHoy(pruebaVigente)
+    setOjoPatronActivo(ojoActivo)
     if (prueba?.umbralAlertness != null) setUmbralPrueba(prueba.umbralAlertness)
 
+    if (!ojoActivo) {
+      setConfirmInicioOpen(true)
+      return
+    }
     if (!consentimientoVigente) {
       setConsentDialog('requerido')
       return
@@ -679,10 +687,11 @@ export default function RepartidorDashboard() {
           {/* G1L-59: gestión del consentimiento (equivale a "Mi Perfil"). */}
           <Button
             startIcon={<GavelIcon />}
-            color={consentimientoAceptado === false ? 'warning' : 'inherit'}
+            color={!ojoPatronActivo ? 'success' : consentimientoAceptado === false ? 'warning' : 'inherit'}
             onClick={() => setConsentDialog('gestion')}
+            disabled={!ojoPatronActivo}
           >
-            Consentimiento
+            {!ojoPatronActivo ? 'Ojo desactivado' : 'Consentimiento'}
           </Button>
           <Button startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
             Actualizar

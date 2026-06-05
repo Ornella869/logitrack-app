@@ -75,6 +75,7 @@ const mapUsuario = (usuario: any): User => ({
   sucursalId: usuario.sucursalId ?? usuario.SucursalId ?? null,
   provincia: usuario.provincia ?? usuario.Provincia ?? null,
   provincias: usuario.provincias ?? usuario.Provincias ?? null,
+  puntoPickUpId: usuario.puntoPickUpId ?? usuario.PuntoPickUpId ?? null,
 })
 
 const mapPagedUsuarios = (data: any): PagedResult<User> => ({
@@ -115,6 +116,7 @@ export const authService = {
         sucursalId: userInfo?.sucursalId ?? userInfo?.SucursalId ?? null,
         provincia: userInfo?.provincia ?? userInfo?.Provincia ?? null,
         provincias: userInfo?.provincias ?? userInfo?.Provincias ?? null,
+        puntoPickUpId: userInfo?.puntoPickUpId ?? userInfo?.PuntoPickUpId ?? null,
       }
 
       console.log('✓ Login exitoso:', user)
@@ -374,6 +376,7 @@ export const authService = {
       administrador: 'Administrador',
       gerente: 'Gerente',
       cliente: 'UsuarioPortal',
+      socio_pickup: 'SocioPickUp',
     }
     try {
       const response = await api.post('/auth/usuarios', {
@@ -386,6 +389,7 @@ export const authService = {
         ...(data.licencia ? { Licencia: data.licencia } : {}),
         ...(data.sucursalId ? { SucursalId: data.sucursalId } : {}),
         ...(data.provincia ? { Provincia: data.provincia } : {}),
+        ...(data.puntoPickUpId ? { PuntoPickUpId: data.puntoPickUpId } : {}),
       })
       const u = response.data
       return {
@@ -399,6 +403,7 @@ export const authService = {
           activo: u.activo ?? true,
           licencia: u.licencia,
           estado: (u.estado as UserEstado) || 'Activo',
+          puntoPickUpId: u.puntoPickUpId ?? u.PuntoPickUpId ?? null,
         },
         temporaryPassword: u.temporaryPassword || '',
       }

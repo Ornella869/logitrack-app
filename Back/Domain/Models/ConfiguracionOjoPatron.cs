@@ -8,6 +8,7 @@ namespace Back.Domain.Models
         // Épica D: umbral por provincia (lo configura el Gerente de esa provincia).
         public string Provincia { get; private set; } = string.Empty;
         public double UmbralAlertness { get; private set; }
+        public bool Activo { get; private set; } = true;
         public DateTime ActualizadoEn { get; private set; } = DateTime.UtcNow;
 
         private ConfiguracionOjoPatron() { }
@@ -15,14 +16,15 @@ namespace Back.Domain.Models
         public ConfiguracionOjoPatron(string provincia, double umbralAlertness)
         {
             Provincia = provincia;
-            Actualizar(umbralAlertness);
+            Actualizar(umbralAlertness, true);
         }
 
-        public void Actualizar(double umbralAlertness)
+        public void Actualizar(double umbralAlertness, bool activo)
         {
             if (umbralAlertness < 0 || umbralAlertness > 1)
                 throw new InvalidOperationException("El umbral debe estar entre 0 y 1.");
             UmbralAlertness = umbralAlertness;
+            Activo = activo;
             ActualizadoEn = DateTime.UtcNow;
         }
     }

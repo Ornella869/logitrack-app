@@ -8,6 +8,7 @@ namespace Back.Application.Common
         public const string Repartidor = "Repartidor";
         public const string Gerente = "Gerente";
         public const string UsuarioPortal = "UsuarioPortal";
+        public const string SocioPickUp = "SocioPickUp";
 
         public const string OperadorOSupervisor = Operador + "," + Supervisor;
         public const string OperadorOSupervisorOAdministrador = Operador + "," + Supervisor + "," + Administrador;

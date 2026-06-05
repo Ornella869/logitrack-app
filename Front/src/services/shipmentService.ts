@@ -43,6 +43,7 @@ const mapStatus = (status: string): Shipment['status'] => {
     case 'AsignadoAVehiculo': return 'Asignado a vehículo'
     case 'CargadoEnVehiculo': return 'Cargado en vehículo'
     case 'Demorado': return 'Demorado'
+    case 'ListoParaRetirar': return 'Listo para retirar'
     default: return 'Pendiente de calendarización'
   }
 }
@@ -61,6 +62,7 @@ const mapStatusToBackend = (status: string): string => {
     case 'Asignado a vehículo': return 'AsignadoAVehiculo'
     case 'Cargado en vehículo': return 'CargadoEnVehiculo'
     case 'Demorado': return 'Demorado'
+    case 'Listo para retirar': return 'ListoParaRetirar'
     default:
       return 'PendienteDeCalendarizacion'
   }

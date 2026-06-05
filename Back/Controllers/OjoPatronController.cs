@@ -177,7 +177,7 @@ namespace Back.Controllers
             try
             {
                 var provincia = CurrentUserId() is Guid uid ? await _service.ResolverProvinciaUsuarioAsync(uid) : string.Empty;
-                return Ok(await _service.ActualizarConfiguracionAsync(provincia, request.UmbralAlertness));
+                return Ok(await _service.ActualizarConfiguracionAsync(provincia, request.UmbralAlertness, request.Activo));
             }
             catch (InvalidOperationException ex)
             {
@@ -212,6 +212,7 @@ namespace Back.Controllers
     public class ConfiguracionOjoPatronRequest
     {
         public double UmbralAlertness { get; set; }
+        public bool Activo { get; set; } = true;
     }
 
     public class SolicitarOverrideOjoPatronRequest

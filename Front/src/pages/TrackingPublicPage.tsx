@@ -72,6 +72,14 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
         badgeColor: '#E65100',
         badgeBg: '#FFF3E0',
       }
+    case 'Listo para retirar':
+      return {
+        badge: 'Listo para retirar',
+        title: 'Tu paquete ya esta en el punto Pick Up',
+        description: 'Acercate al punto Pick Up con el codigo de entrega para retirarlo.',
+        badgeColor: '#00695C',
+        badgeBg: '#E0F2F1',
+      }
     case 'En tránsito':
       return {
         badge: 'En camino',
@@ -114,6 +122,7 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
     'Cargado en vehículo': 1,
     'Listo para salir': 1,
     'En tránsito': 2,
+    'Listo para retirar': 2,
     // G1L-82: en el flujo público, "Demorado" sigue en la etapa de tránsito (no es estado final).
     Demorado: 2,
     Entregado: 3,

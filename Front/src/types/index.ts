@@ -1,4 +1,4 @@
-export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador' | 'gerente' | 'cliente'
+export type UserRole = 'supervisor' | 'operador' | 'repartidor' | 'administrador' | 'gerente' | 'cliente' | 'socio_pickup'
 export type UserEstado = 'Activo' | 'Inactivo'
 export type RepartidorEstado = 'Activo' | 'Suspendido' | 'Inhabilitado'
 
@@ -24,6 +24,7 @@ export interface User {
   sucursalId?: string | null
   provincia?: string | null
   provincias?: string[] | null
+  puntoPickUpId?: string | null
 }
 
 export interface CreateRepartidorData {
@@ -45,6 +46,7 @@ export interface CreateUsuarioData {
   // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).
   sucursalId?: string
   provincia?: string
+  puntoPickUpId?: string
 }
 
 export interface Vehicle {
@@ -113,7 +115,7 @@ export interface Shipment {
     email?: string
   }
   receiverUbicacion?: { latitud: number; longitud: number } | null
-  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado'
+  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado' | 'Listo para retirar'
   fechaCalendarizada?: string | null
   fechaEstimadaEntrega?: string | null
   sucursalId?: string | null

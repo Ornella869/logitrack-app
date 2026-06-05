@@ -106,7 +106,7 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
 
       if (user) {
         onLogin(user)
-        navigate(isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : '/app')
+        navigate(isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app')
       } else {
         setError('Email o contraseña incorrectos')
       }

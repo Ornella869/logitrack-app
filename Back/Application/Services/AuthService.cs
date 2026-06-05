@@ -121,6 +121,7 @@ namespace Back.Application.Services
                     email = user.Email,
                     role = user.GetType().Name,
                     sucursalId = user.SucursalId?.ToString(),
+                    puntoPickUpId = user is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
                     provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null
                 }
             };
@@ -238,6 +239,8 @@ namespace Back.Application.Services
             if ((request.Role == Roles.Supervisor || request.Role == Roles.Operador || request.Role == Roles.Repartidor)
                 && !request.SucursalId.HasValue)
                 throw new InvalidOperationException("La sucursal es obligatoria para supervisores, operadores y repartidores.");
+            if (request.Role == Roles.SocioPickUp && !request.PuntoPickUpId.HasValue)
+                throw new InvalidOperationException("El punto Pick Up es obligatorio para socios Pick Up.");
 
             var existingByEmail = await _userRepository.GetUsuarioByEmail(request.Email.Trim());
             if (existingByEmail is not null)
@@ -257,6 +260,7 @@ namespace Back.Application.Services
                 Roles.Supervisor => new Supervisor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
                 Roles.Operador => new Operador(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim()),
                 Roles.Repartidor => CrearRepartidorValidado(request, hash),
+                Roles.SocioPickUp => new SocioPickUp(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), request.PuntoPickUpId!.Value),
                 _ => throw new InvalidOperationException("Rol no válido."),
             };
 

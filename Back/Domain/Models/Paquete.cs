@@ -15,6 +15,7 @@ namespace Back.Domain.Models
         AsignadoAVehiculo = 5,
         CargadoEnVehiculo = 6,
         Demorado = 7,
+        ListoParaRetirar = 8,
     }
 
     public enum TipoEnvio
@@ -127,7 +128,7 @@ namespace Back.Domain.Models
                 throw new InvalidOperationException("No se puede entregar un paquete cancelado.");
 
             // G1L-82: la entrega es válida también desde "Demorado" (no es estado final).
-            if (Status != PaqueteStatus.EnTransito && Status != PaqueteStatus.Demorado)
+            if (Status != PaqueteStatus.EnTransito && Status != PaqueteStatus.Demorado && Status != PaqueteStatus.ListoParaRetirar)
                 throw new InvalidOperationException("Solo se pueden entregar paquetes que están en tránsito o demorados.");
 
             Status = PaqueteStatus.Entregado;
@@ -135,6 +136,17 @@ namespace Back.Domain.Models
         }
 
         // G1L-82: el repartidor o supervisor registra un imprevisto sobre un envío En Tránsito.
+        public void MarcarListoParaRetirar()
+        {
+            if (!PuntoPickUpId.HasValue)
+                throw new InvalidOperationException("El envio no tiene punto Pick Up asignado.");
+            if (Status != PaqueteStatus.EnTransito && Status != PaqueteStatus.Demorado)
+                throw new InvalidOperationException("Solo se pueden recibir envios que estan en transito o demorados.");
+
+            Status = PaqueteStatus.ListoParaRetirar;
+            RazonDemora = null;
+        }
+
         public void MarcarDemorado(string motivo)
         {
             if (string.IsNullOrWhiteSpace(motivo))
@@ -223,7 +235,8 @@ namespace Back.Domain.Models
                 || Status == PaqueteStatus.CargadoEnVehiculo
                 || Status == PaqueteStatus.ListoParaSalir
                 || Status == PaqueteStatus.EnTransito
-                || Status == PaqueteStatus.Demorado)
+                || Status == PaqueteStatus.Demorado
+                || Status == PaqueteStatus.ListoParaRetirar)
             {
                 Status = PaqueteStatus.PendienteDeCalendarizacion;
                 RazonDemora = null;

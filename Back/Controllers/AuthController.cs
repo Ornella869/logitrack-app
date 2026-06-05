@@ -366,6 +366,12 @@ namespace Back.Controllers
             try
             {
                 await using var tx = await _context.Database.BeginTransactionAsync();
+                if (request.Role == Roles.SocioPickUp)
+                {
+                    if (!request.PuntoPickUpId.HasValue) return BadRequest("El punto Pick Up es obligatorio para socios Pick Up.");
+                    var exists = await _context.PuntosPickUp.AnyAsync(p => p.Id == request.PuntoPickUpId.Value && p.Activo);
+                    if (!exists) return BadRequest("El punto Pick Up seleccionado no existe o esta inactivo.");
+                }
                 var result = await _authService.CrearUsuario(request);
                 await _context.SaveChangesAsync();
 
@@ -568,6 +574,7 @@ namespace Back.Controllers
             SucursalId = u.SucursalId?.ToString(),
             Provincia = u is Gerente ger ? ger.Provincia : null,
             Provincias = u is Gerente ger2 ? ger2.ProvinciasAsignadas.ToList() : null,
+            PuntoPickUpId = u is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
             Role = u switch
             {
                 Administrador => Roles.Administrador,
@@ -575,6 +582,7 @@ namespace Back.Controllers
                 Supervisor => Roles.Supervisor,
                 Operador => Roles.Operador,
                 Repartidor => Roles.Repartidor,
+                SocioPickUp => Roles.SocioPickUp,
                 UsuarioPortal => Roles.UsuarioPortal,
                 _ => "Usuario"
             }
@@ -611,6 +619,7 @@ namespace Back.Controllers
         public string? SucursalId { get; set; }
         public string? Provincia { get; set; }
         public List<string>? Provincias { get; set; }
+        public string? PuntoPickUpId { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse
@@ -672,6 +681,7 @@ namespace Back.Controllers
         // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).
         public Guid? SucursalId { get; set; }
         public string? Provincia { get; set; }
+        public Guid? PuntoPickUpId { get; set; }
     }
 
     public class ActualizarUsuarioRequest

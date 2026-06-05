@@ -172,6 +172,21 @@ namespace Back.Domain.Models
             : base(nombre, apellido, email, password, dni) { }
     }
 
+    public class SocioPickUp : Usuario
+    {
+        public Guid PuntoPickUpId { get; private set; }
+
+        public SocioPickUp() { }
+
+        public SocioPickUp(string nombre, string apellido, string email, string password, string dni, Guid puntoPickUpId)
+            : base(nombre, apellido, email, password, dni)
+        {
+            PuntoPickUpId = puntoPickUpId;
+        }
+
+        public void AsignarPuntoPickUp(Guid puntoPickUpId) => PuntoPickUpId = puntoPickUpId;
+    }
+
     public class Repartidor : Usuario
     {
         public enum EstadoRepartidor

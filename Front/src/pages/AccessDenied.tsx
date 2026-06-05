@@ -15,6 +15,8 @@ function AccessDenied({ user }: AccessDeniedProps) {
     ? '/login'
     : user.role === 'repartidor'
     ? '/repartidor'
+    : user.role === 'socio_pickup'
+    ? '/pickup-operacion'
     : '/app'
 
   return (
@@ -71,6 +73,7 @@ function AccessDenied({ user }: AccessDeniedProps) {
                     operador: 'Operador',
                     repartidor: 'Repartidor',
                     cliente: 'Cliente Portal',
+                    socio_pickup: 'Socio Pick Up',
                   }[user.role] ?? user.role}
                 </strong>
                 .

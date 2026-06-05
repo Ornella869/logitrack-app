@@ -16,11 +16,14 @@ export interface TextoLegal {
 export interface EstadoPruebaDia {
   realizadaHoy: boolean
   umbralAlertness: number
+  activo: boolean
 }
 
 export interface ConfiguracionOjoPatron {
   id: string
+  provincia: string
   umbralAlertness: number
+  activo: boolean
   actualizadoEn: string
 }
 
@@ -155,9 +158,9 @@ export const ojoPatronService = {
     }
   },
 
-  actualizarConfiguracion: async (umbralAlertness: number): Promise<{ success: boolean; error?: string }> => {
+  actualizarConfiguracion: async (umbralAlertness: number, activo: boolean): Promise<{ success: boolean; error?: string }> => {
     try {
-      await api.put('/ojo-patron/configuracion', { UmbralAlertness: umbralAlertness })
+      await api.put('/ojo-patron/configuracion', { UmbralAlertness: umbralAlertness, Activo: activo })
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.response?.data ?? 'No se pudo actualizar' }

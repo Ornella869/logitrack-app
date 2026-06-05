@@ -3,6 +3,7 @@ using System;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Back.Infrastructure.Database
 {
     [DbContext(typeof(LogiTrackDbContext))]
-    partial class LogiTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260605183547_AddActivoOjoPatronIfMissing")]
+    partial class AddActivoOjoPatronIfMissing
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1016,16 +1019,6 @@ namespace Back.Infrastructure.Database
                         .HasColumnType("text");
 
                     b.HasDiscriminator().HasValue("Repartidor");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.SocioPickUp", b =>
-                {
-                    b.HasBaseType("Back.Domain.Models.Usuario");
-
-                    b.Property<Guid>("PuntoPickUpId")
-                        .HasColumnType("uuid");
-
-                    b.HasDiscriminator().HasValue("SocioPickUp");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Supervisor", b =>

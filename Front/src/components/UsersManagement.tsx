@@ -51,6 +51,7 @@ import { generateTempPassword } from '../utils/passwordGenerator'
 import type { User, UserRole, UserEstado, Branch } from '../types'
 import { authService } from '../services/authService'
 import { branchService } from '../services/branchService'
+import { pickupService, type PuntoPickUp } from '../services/pickupService'
 import { AR_PROVINCIAS } from '../utils/provincias'
 import { formatInstantArgentina } from '../utils/argentinaDate'
 import ConfirmDialog from './ConfirmDialog'
@@ -62,6 +63,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   operador: 'Operador',
   repartidor: 'Repartidor',
   cliente: 'Cliente Portal',
+  socio_pickup: 'Socio PickUp',
 }
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
@@ -71,6 +73,7 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string }> = {
   operador: { bg: '#E3F2FD', color: '#0D47A1' },
   repartidor: { bg: '#E8F5E9', color: '#1B5E20' },
   cliente: { bg: '#E0F7FA', color: '#006064' },
+  socio_pickup: { bg: '#E0F2F1', color: '#00695C' },
 }
 
 const ROLE_COLORS_DARK: Record<UserRole, { bg: string; color: string }> = {
@@ -80,6 +83,7 @@ const ROLE_COLORS_DARK: Record<UserRole, { bg: string; color: string }> = {
   operador: { bg: 'rgba(13,71,161,0.25)', color: '#90CAF9' },
   repartidor: { bg: 'rgba(27,94,32,0.25)', color: '#A5D6A7' },
   cliente: { bg: 'rgba(0,96,100,0.25)', color: '#80DEEA' },
+  socio_pickup: { bg: 'rgba(0,105,92,0.25)', color: '#80CBC4' },
 }
 
 type RoleFilter = UserRole | 'all'
@@ -163,6 +167,7 @@ const emptyForm = {
   // Épica D: vínculo de ámbito.
   sucursalId: '',
   provincia: '',
+  puntoPickUpId: '',
 }
 
 interface UsersManagementProps {
@@ -175,12 +180,14 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const [users, setUsers] = useState<User[]>([])
   const [provinceOwners, setProvinceOwners] = useState<User[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
+  const [pickups, setPickups] = useState<PuntoPickUp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     void branchService.getAllBranches().then(setBranches).catch(() => setBranches([]))
+    void pickupService.getAll().then(setPickups).catch(() => setPickups([]))
   }, [])
 
   useEffect(() => {
@@ -309,6 +316,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         // Épica D: gerente lleva provincia; los demás roles operativos llevan sucursal.
         ...(formData.role === 'gerente' && formData.provincia ? { provincia: formData.provincia } : {}),
         ...(formData.role !== 'gerente' && formData.role !== 'administrador' && formData.sucursalId ? { sucursalId: formData.sucursalId } : {}),
+        ...(formData.role === 'socio_pickup' && formData.puntoPickUpId ? { puntoPickUpId: formData.puntoPickUpId } : {}),
       })
       await loadUsers()
       setOpenCreate(false)
@@ -337,6 +345,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       passwordTemporal: '',
       sucursalId: user.sucursalId ?? '',
       provincia: user.provincias && user.provincias.length > 0 ? user.provincias.join(', ') : (user.provincia ?? ''),
+      puntoPickUpId: user.puntoPickUpId ?? '',
     })
     setFormError('')
     setShowResetSection(false)
@@ -547,6 +556,10 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         setFormError('La sucursal es obligatoria para supervisores, operadores y repartidores.')
         return false
       }
+      if (formData.role === 'socio_pickup' && !formData.puntoPickUpId) {
+        setFormError('El punto Pick Up es obligatorio para socios Pick Up.')
+        return false
+      }
       if (formData.role === 'repartidor') {
         if (!formData.licencia.trim()) {
           setFormError('La licencia es obligatoria para repartidores.')
@@ -726,6 +739,9 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               }}
             >
               Gerentes
+            </ToggleButton>
+            <ToggleButton value="socio_pickup">
+              Socios PickUp
             </ToggleButton>
           </ToggleButtonGroup>
 
@@ -929,6 +945,10 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                             <Chip key={prov} label={prov} size="small" sx={{ fontSize: '0.7rem', height: 20 }} />
                           ))}
                         </Box>
+                      ) : user.role === 'socio_pickup' && user.puntoPickUpId ? (
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                          {pickups.find((p) => p.id === user.puntoPickUpId)?.nombre ?? 'Pick Up'}
+                        </Typography>
                       ) : user.sucursalId ? (
                         <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
                           {branches.find((b) => b.id === user.sucursalId)?.name ?? '—'}
@@ -1051,12 +1071,14 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                   provincia: '',
                   sucursalId: '',
                   licencia: '',
+                  puntoPickUpId: '',
                 }))}
               >
                 <MenuItem value="gerente">Gerente</MenuItem>
                 <MenuItem value="supervisor">Supervisor</MenuItem>
                 <MenuItem value="operador">Operador</MenuItem>
                 <MenuItem value="repartidor">Repartidor</MenuItem>
+                <MenuItem value="socio_pickup">Socio PickUp</MenuItem>
               </Select>
             </FormControl>
             {/* Épica D: el Gerente lleva provincias (múltiple); los roles operativos, sucursal. */}
@@ -1120,6 +1142,20 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 >
                   {branches.map((b) => (
                     <MenuItem key={b.id} value={b.id}>{b.name} {b.province ? `(${b.province})` : ''}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            {formData.role === 'socio_pickup' && (
+              <FormControl fullWidth>
+                <InputLabel>Punto Pick Up *</InputLabel>
+                <Select
+                  label="Punto Pick Up *"
+                  value={formData.puntoPickUpId}
+                  onChange={(e) => setFormData((p) => ({ ...p, puntoPickUpId: e.target.value }))}
+                >
+                  {pickups.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>{p.nombre} ({p.localidad}, {p.provincia})</MenuItem>
                   ))}
                 </Select>
               </FormControl>

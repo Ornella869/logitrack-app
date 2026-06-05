@@ -31,6 +31,7 @@ const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; 
   'Asignado a vehículo': { label: 'Programado', color: '#4527A0', bg: '#EDE7F6', icon: <LocalShippingOutlinedIcon /> },
   'Cargado en vehículo': { label: 'Cargado', color: '#311B92', bg: '#D1C4E9', icon: <LocalShippingOutlinedIcon /> },
   'Listo para salir': { label: 'Listo para despacho', color: '#E65100', bg: '#FFF3E0', icon: <LocalShippingOutlinedIcon /> },
+  'Listo para retirar': { label: 'Listo para retirar', color: '#00695C', bg: '#E0F2F1', icon: <LocalShippingOutlinedIcon /> },
   'En tránsito': { label: 'En camino', color: '#0D47A1', bg: '#E3F2FD', icon: <LocalShippingOutlinedIcon /> },
   'Demorado': { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2', icon: <LocalShippingOutlinedIcon /> },
   'Entregado': { label: 'Entregado', color: '#1B5E20', bg: '#E8F5E9', icon: <CheckCircleOutlineIcon /> },

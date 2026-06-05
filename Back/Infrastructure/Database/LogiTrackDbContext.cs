@@ -86,7 +86,8 @@ namespace Back.Infrastructure.Database
                 .HasValue<Operador>("Operador")
                 .HasValue<Administrador>("Administrador")
                 .HasValue<Gerente>("Gerente")
-                .HasValue<UsuarioPortal>("UsuarioPortal");
+                .HasValue<UsuarioPortal>("UsuarioPortal")
+                .HasValue<SocioPickUp>("SocioPickUp");
 
             // Épica D: cobertura de provincias por sucursal, persistida como JSON.
             modelBuilder.Entity<Sucursal>(s =>
@@ -184,6 +185,11 @@ namespace Back.Infrastructure.Database
                 o.HasIndex(x => x.RepartidorId);
                 o.HasIndex(x => x.SupervisorId);
                 o.HasIndex(x => x.SolicitadoEn);
+            });
+
+            modelBuilder.Entity<ConfiguracionOjoPatron>(c =>
+            {
+                c.Property(x => x.Activo).HasDefaultValue(true);
             });
 
             modelBuilder.Entity<PuntoPickUp>(p =>

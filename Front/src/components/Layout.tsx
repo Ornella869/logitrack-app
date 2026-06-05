@@ -273,6 +273,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     supervisor: 'error',
     operador: 'primary',
     repartidor: 'success',
+    socio_pickup: 'primary',
   }
 
   const roleLabel: Record<string, string> = {
@@ -280,6 +281,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     supervisor: 'Supervisor',
     operador: 'Operador',
     repartidor: 'Repartidor',
+    socio_pickup: 'Socio Pick Up',
   }
 
   const selectedTab = (() => {
@@ -301,6 +303,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
     if (pathname.startsWith('/pickups')) return '/pickups'
+    if (pathname.startsWith('/pickup-operacion')) return '/pickup-operacion'
     if (pathname.startsWith('/tarifas')) return '/tarifas'
     if (pathname.startsWith('/ojo-patron')) return '/ojo-patron'
     return false
@@ -338,7 +341,7 @@ function Layout({ user, onLogout }: LayoutProps) {
               alignItems: 'center',
               gap: 1,
             }}
-            onClick={() => navigate(user.role === 'repartidor' ? '/repartidor' : '/app')}
+            onClick={() => navigate(user.role === 'repartidor' ? '/repartidor' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app')}
           >
             <Box
               sx={{
@@ -537,7 +540,7 @@ function Layout({ user, onLogout }: LayoutProps) {
       </AppBar>
 
       {/* Tabs nav */}
-      {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador' || user.role === 'gerente') && (
+      {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador' || user.role === 'gerente' || user.role === 'socio_pickup') && (
         <Box sx={{
           bgcolor: isDarkPremium ? '#1B2D42' : 'white',
           borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
@@ -563,6 +566,9 @@ function Layout({ user, onLogout }: LayoutProps) {
             )}
             {(user.role === 'supervisor' || user.role === 'operador') && (
               <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/envios" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'socio_pickup' && (
+              <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Mi PickUp" value="/pickup-operacion" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'supervisor' && (
               <Tab icon={<BoltIcon fontSize="small" />} iconPosition="start" label="Calendarizar" value="/calendarizar" sx={{ minHeight: 48, textTransform: 'none' }} />
