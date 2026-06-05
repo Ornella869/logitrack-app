@@ -158,9 +158,12 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                   const seleccionado = repartidorId === rep.repartidorId
                   const quedaExcedido = carga.peso + (shipment.weight ?? 0) > CAPACIDAD_KG
                   const enTransitoHoy = fecha === hoy && rep.estadoJornada === 'EnRuta'
-                  const bloqueado = enTransitoHoy || quedaExcedido
+                  const retornando = rep.estadoJornada === 'Retornando'
+                  const bloqueado = enTransitoHoy || retornando || quedaExcedido
                   const tooltipTitle = enTransitoHoy
                     ? 'Está en tránsito. Elegí otro día para asignarle un envío.'
+                    : retornando
+                    ? 'Está regresando a sucursal. Esperá a que cierre su jornada.'
                     : quedaExcedido
                     ? 'No hay capacidad para este envío en este día. Elegí otro día.'
                     : ''
@@ -189,7 +192,14 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                                 sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
                               />
                             )}
-                            {quedaExcedido && !enTransitoHoy && (
+                            {retornando && !enTransitoHoy && (
+                              <Chip
+                                label="Retornando"
+                                size="small"
+                                sx={{ bgcolor: '#ede7f6', color: '#5e35b1', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                              />
+                            )}
+                            {quedaExcedido && !enTransitoHoy && !retornando && (
                               <Chip
                                 label="Capacidad llena"
                                 size="small"

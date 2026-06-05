@@ -3,15 +3,19 @@ import {
   AppBar,
   Badge,
   Box,
+  BottomNavigation,
+  BottomNavigationAction,
   Chip,
   Container,
   Divider,
   IconButton,
   List,
+  ListItemIcon,
   ListItemButton,
   ListItemText,
   Menu,
   MenuItem,
+  Paper,
   Avatar,
   Popover,
   Tab,
@@ -48,6 +52,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
 import { alertService } from '../services/alertService'
@@ -74,6 +79,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [isDarkPremium, setIsDarkPremium] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => localStorage.getItem('miPlanTipo') === 'Premium')
+  const [repartidorNavAnchor, setRepartidorNavAnchor] = useState<null | HTMLElement>(null)
 
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
@@ -310,6 +316,12 @@ function Layout({ user, onLogout }: LayoutProps) {
   })()
 
   const isAccessDeniedPage = location.pathname === '/access-denied'
+  const isRepartidorArea = user.role === 'repartidor' && location.pathname.startsWith('/repartidor')
+  const repartidorNavValue = (() => {
+    if (location.pathname.startsWith('/repartidor/historial')) return '/repartidor/historial'
+    if (location.pathname.startsWith('/repartidor/paradas')) return '/repartidor/paradas'
+    return '/repartidor'
+  })()
 
   return (
     <Box data-dark={isDarkPremium ? 'true' : undefined} sx={{ minHeight: '100vh', bgcolor: isDarkPremium ? '#0A1628' : 'background.default', color: isDarkPremium ? 'rgba(255,255,255,0.87)' : undefined, transition: 'background-color 0.5s ease' }}>
@@ -640,6 +652,66 @@ function Layout({ user, onLogout }: LayoutProps) {
         </Box>
       )}
 
+      {isMobile && isRepartidorArea && (
+        <>
+          <Paper
+            elevation={8}
+            sx={{
+              position: 'fixed',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 120,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              overflow: 'hidden',
+            }}
+          >
+            <BottomNavigation
+              showLabels
+              value={repartidorNavValue}
+              onChange={(_, value) => {
+                if (value === 'more') return
+                navigate(value)
+              }}
+            >
+              <BottomNavigationAction label="Ruta" value="/repartidor" icon={<RouteIcon />} />
+              <BottomNavigationAction label="Paradas" value="/repartidor/paradas" icon={<Inventory2Icon />} />
+              <BottomNavigationAction label="Historial" value="/repartidor/historial" icon={<HistoryIcon />} />
+              <BottomNavigationAction
+                label="Más"
+                value="more"
+                icon={<MoreHorizIcon />}
+                onClick={(event) => setRepartidorNavAnchor(event.currentTarget)}
+              />
+            </BottomNavigation>
+          </Paper>
+
+          <Menu
+            anchorEl={repartidorNavAnchor}
+            open={Boolean(repartidorNavAnchor)}
+            onClose={() => setRepartidorNavAnchor(null)}
+            anchorOrigin={{ horizontal: 'center', vertical: 'top' }}
+            transformOrigin={{ horizontal: 'center', vertical: 'bottom' }}
+            slotProps={{ paper: { sx: { mb: 1, minWidth: 220, borderRadius: 2 } } }}
+          >
+            <MenuItem onClick={() => { setRepartidorNavAnchor(null); navigate('/perfil') }}>
+              <ListItemIcon><AccountCircleIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Mi perfil</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={() => { setRepartidorNavAnchor(null); setOpenChangePassword(true) }}>
+              <ListItemIcon><LockIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Cambiar contraseña</ListItemText>
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={() => { setRepartidorNavAnchor(null); handleLogout() }} sx={{ color: 'error.main' }}>
+              <ListItemIcon><LogoutIcon fontSize="small" color="error" /></ListItemIcon>
+              <ListItemText>Cerrar sesión</ListItemText>
+            </MenuItem>
+          </Menu>
+        </>
+      )}
+
       {/* Dialog para cambiar contraseña */}
       <ChangePasswordDialog open={openChangePassword} onClose={() => setOpenChangePassword(false)} />
 
@@ -670,6 +742,7 @@ function Layout({ user, onLogout }: LayoutProps) {
             sx={{
               py: { xs: 2, sm: 3 },
               px: { xs: 2, sm: 3 },
+              pb: isMobile && isRepartidorArea ? 11 : undefined,
               color: isDarkPremium ? 'rgba(255,255,255,0.87)' : undefined,
             }}
           >

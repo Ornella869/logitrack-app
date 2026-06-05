@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
   Badge,
@@ -14,14 +14,23 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
+  Drawer,
   Grid,
   IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   Tab,
   Tabs,
   TextField,
   Typography,
+  useMediaQuery,
   useTheme,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -45,6 +54,12 @@ import MyLocationIcon from '@mui/icons-material/MyLocation'
 import LocationDisabledIcon from '@mui/icons-material/LocationDisabled'
 import GpsFixedIcon from '@mui/icons-material/GpsFixed'
 import HistoryIcon from '@mui/icons-material/History'
+import ApartmentIcon from '@mui/icons-material/Apartment'
+import PersonIcon from '@mui/icons-material/Person'
+import PhoneIcon from '@mui/icons-material/Phone'
+import BoltIcon from '@mui/icons-material/Bolt'
+import ListAltIcon from '@mui/icons-material/ListAlt'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { useGpsTracking } from '../../hooks/useGpsTracking'
 import { shipmentService } from '../../services/shipmentService'
 import { notificationService } from '../../services/notificationService'
@@ -90,11 +105,41 @@ const originForMaps = (origen: BranchOrigin | null) =>
   origen ? { direccion: origen.address, ciudad: origen.city, codigoPostal: origen.postalCode } : null
 
 const routeDateForDisplay = dateOnlyForDisplay
+const ARRIVAL_RADIUS_METERS = 120
+
+function distanceInMeters(a: { latitud: number; longitud: number }, b: { latitud: number; longitud: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180
+  const earthRadius = 6371000
+  const dLat = toRad(b.latitud - a.latitud)
+  const dLng = toRad(b.longitud - a.longitud)
+  const lat1 = toRad(a.latitud)
+  const lat2 = toRad(b.latitud)
+  const haversine = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return 2 * earthRadius * Math.asin(Math.sqrt(haversine))
+}
+
+function getParadaTone(status: Shipment['status'], isCurrent: boolean, isDark: boolean) {
+  if (status === 'Entregado') {
+    return { accent: '#2e7d32', bg: isDark ? 'rgba(46,125,50,0.12)' : '#f4fbf5', soft: isDark ? 'rgba(46,125,50,0.18)' : '#e8f5e9', label: 'Completada' }
+  }
+  if (status === 'Cancelado') {
+    return { accent: '#c62828', bg: isDark ? 'rgba(198,40,40,0.12)' : '#fff5f5', soft: isDark ? 'rgba(198,40,40,0.18)' : '#fdecea', label: 'Cancelada' }
+  }
+  if (status === 'Demorado') {
+    return { accent: '#8d6e63', bg: isDark ? 'rgba(141,110,99,0.16)' : '#fbf6f4', soft: isDark ? 'rgba(141,110,99,0.22)' : '#efebe9', label: 'Demorada' }
+  }
+  if (isCurrent) {
+    return { accent: '#ed6c02', bg: isDark ? 'rgba(237,108,2,0.12)' : '#fff8f1', soft: isDark ? 'rgba(237,108,2,0.18)' : '#fff3e0', label: 'Actual' }
+  }
+  return { accent: '#1976d2', bg: isDark ? '#162032' : '#ffffff', soft: isDark ? 'rgba(25,118,210,0.2)' : '#e3f2fd', label: 'Pendiente' }
+}
 
 export default function RepartidorDashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const user = useOutletContext<User>()
   const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const isDark = theme.palette.mode === 'dark'
   const [paradas, setParadas] = useState<Shipment[]>([])
   const [fechaRuta, setFechaRuta] = useState<string | null>(null)
@@ -103,6 +148,7 @@ export default function RepartidorDashboard() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState(0)
   const [filtroEstado, setFiltroEstado] = useState<string | null>(null)
+  const [accionesAnchorEl, setAccionesAnchorEl] = useState<null | HTMLElement>(null)
   const [ubicacionActiva, setUbicacionActiva] = useState(false)
   const [modoSimulacion, setModoSimulacion] = useState(false)
   const [ubicacionReal, setUbicacionReal] = useState<{ latitud: number; longitud: number } | null>(null)
@@ -127,6 +173,7 @@ export default function RepartidorDashboard() {
   const simulationStepRef = useRef(0)
   const simulationRouteRef = useRef<[number, number][] | null>(null)
   const simulationLegKeyRef = useRef('')
+  const autoCierreRef = useRef(false)
 
   const load = async (fecha?: string) => {
     setLoading(true)
@@ -155,6 +202,10 @@ export default function RepartidorDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    setTab(location.pathname.startsWith('/repartidor/paradas') ? 1 : 0)
+  }, [location.pathname])
+
   const hayRutaActiva = useMemo(
     () => estadoJornada === 'EnRuta' && paradas.some((p) => p.status === 'En tránsito' || p.status === 'Demorado'),
     [estadoJornada, paradas],
@@ -177,6 +228,25 @@ export default function RepartidorDashboard() {
   }
 
   const calcularSegmentoSimulacion = () => {
+    if (showRetorno) {
+      const destinoLat = origen?.latitud
+      const destinoLng = origen?.longitud
+      if (destinoLat == null || destinoLng == null) return null
+
+      const ultimaEntregada = [...paradas]
+        .reverse()
+        .find((p) => p.status === 'Entregado' && p.receiverUbicacion?.latitud != null && p.receiverUbicacion?.longitud != null)
+
+      const origenLat = ubicacionReal?.latitud ?? ultimaEntregada?.receiverUbicacion?.latitud
+      const origenLng = ubicacionReal?.longitud ?? ultimaEntregada?.receiverUbicacion?.longitud
+      if (origenLat == null || origenLng == null) return null
+
+      return {
+        desde: [origenLat, origenLng] as [number, number],
+        hasta: [destinoLat, destinoLng] as [number, number],
+      }
+    }
+
     const destino = paradas.find((p) =>
       (p.status === 'En tránsito' || p.status === 'Demorado') &&
       p.receiverUbicacion?.latitud != null &&
@@ -211,6 +281,7 @@ export default function RepartidorDashboard() {
     if (simulationLegKeyRef.current !== legKey) {
       simulationLegKeyRef.current = legKey
       simulationRouteRef.current = null
+      simulationStepRef.current = 0
     }
 
     if (!simulationRouteRef.current) {
@@ -218,8 +289,8 @@ export default function RepartidorDashboard() {
       simulationRouteRef.current = await fetchOsrmRoute([segmento.desde, segmento.hasta], ctrl.signal) ?? [segmento.desde, segmento.hasta]
     }
 
-    simulationStepRef.current = (simulationStepRef.current + 1) % 10
-    const t = 0.15 + simulationStepRef.current * 0.07
+    simulationStepRef.current = Math.min(simulationStepRef.current + 1, 12)
+    const t = Math.min(0.1 + simulationStepRef.current * 0.075, 0.985)
     const [latitud, longitud] = positionAlongRoute(simulationRouteRef.current, t)
     return {
       latitud,
@@ -232,8 +303,8 @@ export default function RepartidorDashboard() {
       setUbicacionMsg({ severity: 'error', message: 'Tu navegador no permite compartir ubicacion.' })
       return
     }
-    if (!hayRutaActiva) {
-      setUbicacionMsg({ severity: 'warning', message: 'La ubicacion real se comparte solo cuando tenes una ruta en transito.' })
+    if (!puedeCompartirUbicacion) {
+      setUbicacionMsg({ severity: 'warning', message: 'La ubicacion solo se comparte durante la ruta o el retorno a sucursal.' })
       return
     }
     if (ubicacionActiva) {
@@ -263,11 +334,12 @@ export default function RepartidorDashboard() {
   const activarSimulacion = () => {
     if (modoSimulacion) {
       detenerSimulacion()
+      setRetornoAnimando(false)
       setUbicacionMsg({ severity: 'info', message: 'Simulacion detenida.' })
       return
     }
-    if (!hayRutaActiva) {
-      setUbicacionMsg({ severity: 'warning', message: 'La simulacion se activa solo con una ruta en transito.' })
+    if (!puedeCompartirUbicacion) {
+      setUbicacionMsg({ severity: 'warning', message: 'La simulacion se activa solo durante la ruta o el retorno a sucursal.' })
       return
     }
     const enviarSimulacion = async () => {
@@ -279,24 +351,20 @@ export default function RepartidorDashboard() {
       }
       setUbicacionReal(ubicacion)
       void shipmentService.actualizarMiUbicacion(ubicacion.latitud, ubicacion.longitud)
+      if (showRetorno && simulationStepRef.current >= 12) {
+        void handleCerrarJornada('radio')
+      }
     }
     detenerUbicacionReal()
     simulationStepRef.current = 0
     simulationRouteRef.current = null
     simulationLegKeyRef.current = ''
     setModoSimulacion(true)
+    if (showRetorno) setRetornoAnimando(true)
     enviarSimulacion()
     simulationTimerRef.current = window.setInterval(enviarSimulacion, 4000)
-    setUbicacionMsg({ severity: 'info', message: 'Simulacion activa para demo. El supervisor vera esta ubicacion.' })
+    setUbicacionMsg({ severity: 'info', message: showRetorno ? 'Simulación de regreso activa. Al entrar al radio de la sucursal se cerrará la jornada.' : 'Simulacion activa para demo. El supervisor vera esta ubicacion.' })
   }
-
-  useEffect(() => {
-    if (!hayRutaActiva) {
-      if (ubicacionActiva) detenerUbicacionReal()
-      if (modoSimulacion) detenerSimulacion()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hayRutaActiva])
 
   useEffect(() => () => {
     detenerUbicacionReal()
@@ -504,26 +572,57 @@ export default function RepartidorDashboard() {
     if (todasEntregadas) setParadaEnCurso(null)
   }, [todasEntregadas])
 
-  // El retorno se muestra solo si TODO el día que estoy viendo está entregado/cancelado.
-  // (Antes arrastraba un flag global que lo dejaba visible al cambiar a otro día con pendientes.)
-  const showRetorno = todasEntregadas || estadoJornada === 'Retornando'
+  // El retorno solo debe verse mientras la jornada sigue operativamente abierta.
+  // Si ya volvió a "Disponible", aunque todas las entregas estén finalizadas,
+  // no mostramos más la ruta de regreso ni sus acciones.
+  const showRetorno = estadoJornada === 'Retornando'
+  const puedeCompartirUbicacion = hayRutaActiva || showRetorno
+  const jornadaFinalizada = estadoJornada === 'Disponible' && todasEntregadas
 
   // Resetear animación de retorno si se recarga la ruta y ya no está en retorno.
   useEffect(() => {
     if (!showRetorno) setRetornoAnimando(false)
   }, [showRetorno])
 
+  useEffect(() => {
+    if (!hayRutaActiva && !showRetorno) {
+      if (ubicacionActiva) detenerUbicacionReal()
+      if (modoSimulacion) detenerSimulacion()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hayRutaActiva, showRetorno])
+
+  useEffect(() => {
+    if (estadoJornada !== 'Retornando') {
+      autoCierreRef.current = false
+    }
+  }, [estadoJornada])
+
   // Fase A: el repartidor confirma que volvió a la sucursal → vuelve a estar disponible.
-  const handleCerrarJornada = async () => {
+  const handleCerrarJornada = async (origenCierre: 'manual' | 'radio' = 'manual') => {
+    if (cerrandoJornada || autoCierreRef.current) return
+    autoCierreRef.current = origenCierre === 'radio'
     setCerrandoJornada(true)
     const res = await shipmentService.cerrarJornada()
     setCerrandoJornada(false)
     if (res.success) {
+      detenerUbicacionReal()
+      detenerSimulacion()
       setRetornoAnimando(false)
       setEstadoJornada('Disponible')
       setPruebaRealizadaHoy(false)
+      setUbicacionMsg({
+        severity: 'success',
+        message: origenCierre === 'radio'
+          ? 'Detectamos que llegaste a la sucursal. La jornada quedó cerrada automáticamente.'
+          : 'Jornada cerrada. Volviste a estar disponible para nuevas asignaciones.',
+      })
       void load(fechaRuta ?? undefined)
+      autoCierreRef.current = false
+      return
     }
+    autoCierreRef.current = false
+    setUbicacionMsg({ severity: 'error', message: res.error ?? 'No se pudo cerrar la jornada.' })
   }
 
   const buildReturnUrl = (): string | null => {
@@ -532,6 +631,25 @@ export default function RepartidorDashboard() {
     const dest = encodeURIComponent(`${origen.address}, ${origen.city}${cp}, Argentina`)
     return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`
   }
+
+  const abrirQr = () => {
+    setQrCode('')
+    setQrFeedback(null)
+    setOpenQr(true)
+  }
+
+  const abrirRutaEnMaps = () => {
+    const url = buildMapsUrl(stopsForMaps(paradas), originForMaps(origen))
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  useEffect(() => {
+    if (estadoJornada !== 'Retornando' || !ubicacionReal || origen?.latitud == null || origen.longitud == null || autoCierreRef.current) return
+    const distance = distanceInMeters(ubicacionReal, { latitud: origen.latitud, longitud: origen.longitud })
+    if (distance <= ARRIVAL_RADIUS_METERS) {
+      void handleCerrarJornada('radio')
+    }
+  }, [estadoJornada, ubicacionReal, origen])
 
   // G1L-43: Escaneo de QR — el repartidor confirma carga / inicia tránsito / abre ficha.
   // Aceptamos un código optional para usar directamente lo decodificado por la cámara
@@ -602,102 +720,151 @@ export default function RepartidorDashboard() {
     void handleScanQr(code)
   }
 
+  const accionesMenuOpen = Boolean(accionesAnchorEl)
+  const cerrarAcciones = () => setAccionesAnchorEl(null)
+
+  const ctaOperativa = showRetorno
+    ? {
+        label: 'Llegué a sucursal',
+        icon: cerrandoJornada ? <CircularProgress size={18} color="inherit" /> : <CheckCircleIcon />,
+        onClick: () => { void handleCerrarJornada() },
+        disabled: cerrandoJornada,
+        color: 'success' as const,
+      }
+    : metrics.listosParaSalir > 0
+      ? {
+          label: `Inicializar ruta (${metrics.listosParaSalir})`,
+          icon: iniciandoRuta ? <CircularProgress size={18} color="inherit" /> : <PlayArrowIcon />,
+          onClick: intentarIniciarRuta,
+          disabled: iniciandoRuta,
+          color: 'success' as const,
+        }
+      : proxima
+        ? {
+            label: 'Gestionar próxima parada',
+            icon: <NavigationIcon />,
+            onClick: () => setParadaAccionOpen(true),
+            disabled: false,
+            color: 'primary' as const,
+          }
+        : {
+            label: 'Escanear QR',
+            icon: <QrCodeScannerIcon />,
+            onClick: abrirQr,
+            disabled: false,
+            color: 'primary' as const,
+          }
+
   return (
     <Box>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', md: 'center' }}
-        sx={{ mb: 2, gap: 2 }}
-      >
-        <Box>
-          <Typography variant="h4" fontWeight={700}>
-            <RouteIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            {esHoy ? 'Mi Ruta del Día' : 'Mi Ruta'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-            {fechaHoy} · {paradas.length} paradas{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
-          </Typography>
-          {user && (
-            <Typography variant="caption" color="text.secondary">
-              {getGreeting(user.name)}
-            </Typography>
-          )}
-          {origen && (
-            <Typography variant="caption" color="text.secondary" display="block">
-              🏢 Salís desde: <strong>{origen.name}</strong> — {origen.address}, {origen.city}
-            </Typography>
-          )}
+      <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
+        <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} sx={{ gap: 2 }}>
+              <Box>
+                <Typography variant="h4" fontWeight={700}>
+                  <RouteIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
+                  {esHoy ? 'Mi Ruta del Día' : 'Mi Ruta'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                  {fechaHoy} · {paradas.length} paradas{metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}
+                </Typography>
+                {user && <Typography variant="caption" color="text.secondary">{getGreeting(user.name)}</Typography>}
+                {origen && (
+                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.75 }}>
+                    <ApartmentIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Salís desde <strong>{origen.name}</strong> - {origen.address}, {origen.city}
+                    </Typography>
+                  </Stack>
+                )}
+              </Box>
+
+              <Box sx={{ width: { xs: '100%', md: 'auto' }, minWidth: { md: 220 }, p: 1.5, borderRadius: 2, bgcolor: isDark ? 'rgba(46,125,50,0.14)' : '#f6fbf7', border: '1px solid', borderColor: isDark ? 'rgba(76,175,80,0.25)' : '#d7eadb' }}>
+                <Typography variant="caption" color="text.secondary">Avance de hoy</Typography>
+                <Typography variant="h4" fontWeight={700} sx={{ color: '#2e7d32', lineHeight: 1.1 }}>
+                  {metrics.entregadas} / {paradas.length}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {showRetorno
+                    ? 'Ruta terminada, falta regreso a sucursal.'
+                    : proxima
+                      ? `Siguiente parada: ${proxima.receiver.name}`
+                      : 'Esperando asignación o inicio de ruta.'}
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip size="small" label={`${metrics.entregadas} entregadas`} color="success" variant="outlined" />
+              <Chip size="small" label={`${paradas.length - metrics.entregadas} pendientes`} variant="outlined" />
+              {metrics.cpZona && <Chip size="small" label={`Zona CP ${metrics.cpZona}`} variant="outlined" />}
+              <Chip size="small" label={!ojoPatronActivo ? 'Ojo desactivado' : consentimientoAceptado === false ? 'Consentimiento pendiente' : 'Consentimiento OK'} color={!ojoPatronActivo ? 'success' : consentimientoAceptado === false ? 'warning' : 'default'} variant={!ojoPatronActivo || consentimientoAceptado === false ? 'filled' : 'outlined'} />
+              <Chip size="small" label={ubicacionActiva ? 'Ubicación activa' : 'Ubicación pausada'} color={ubicacionActiva ? 'success' : 'default'} variant={ubicacionActiva ? 'filled' : 'outlined'} />
+              {modoSimulacion && <Chip size="small" label="Simulación activa" color="secondary" />}
+              {proxima && <Chip size="small" label={`Sigue: parada ${metrics.proximaIdx + 1}`} color="primary" variant="outlined" />}
+            </Stack>
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+              <Button variant="contained" color="primary" startIcon={<QrCodeScannerIcon />} onClick={abrirQr} fullWidth={isMobile}>
+                Escanear QR
+              </Button>
+              <Button variant={ubicacionActiva ? 'contained' : 'outlined'} color={ubicacionActiva ? 'success' : 'primary'} startIcon={ubicacionActiva ? <LocationDisabledIcon /> : <MyLocationIcon />} onClick={activarUbicacionReal} fullWidth={isMobile}>
+                {ubicacionActiva ? 'Detener ubicación' : 'Compartir ubicación'}
+              </Button>
+              <Button variant="text" color="inherit" startIcon={<MoreVertIcon />} onClick={(event) => setAccionesAnchorEl(event.currentTarget)} fullWidth={isMobile}>
+                Más acciones
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Menu anchorEl={accionesAnchorEl} open={!isMobile && accionesMenuOpen} onClose={cerrarAcciones} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <MenuItem onClick={() => { cerrarAcciones(); navigate('/repartidor/historial') }}>
+          <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Envíos pasados</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { cerrarAcciones(); setConsentDialog('gestion') }} disabled={!ojoPatronActivo}>
+          <ListItemIcon><GavelIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{!ojoPatronActivo ? 'Ojo desactivado' : 'Consentimiento'}</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={() => { cerrarAcciones(); activarSimulacion() }}>
+          <ListItemIcon><GpsFixedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{modoSimulacion ? 'Detener simulación' : 'Activar simulación'}</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { cerrarAcciones(); void load(fechaRuta ?? undefined) }} disabled={loading}>
+          <ListItemIcon><RefreshIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Actualizar</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      <Drawer anchor="bottom" open={isMobile && accionesMenuOpen} onClose={cerrarAcciones} PaperProps={{ sx: { borderTopLeftRadius: 18, borderTopRightRadius: 18, pb: 1 } }}>
+        <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+          <Box sx={{ width: 42, height: 4, borderRadius: 999, bgcolor: 'divider', mx: 'auto', mb: 1.5 }} />
+          <Typography variant="subtitle1" fontWeight={700}>Más acciones</Typography>
+          <Typography variant="body2" color="text.secondary">Accesos secundarios para la jornada.</Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" color="text.secondary">Avance</Typography>
-            <Typography variant="h5" fontWeight={700} sx={{ color: '#2e7d32' }}>
-              {metrics.entregadas} / {paradas.length}
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<QrCodeScannerIcon />}
-            onClick={() => {
-              setQrCode('')
-              setQrFeedback(null)
-              setOpenQr(true)
-            }}
-          >
-            Escanear QR
-          </Button>
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<HistoryIcon />}
-            onClick={() => navigate('/repartidor/historial')}
-          >
-            Envios pasados
-          </Button>
-          <Button
-            variant={ubicacionActiva ? 'contained' : 'outlined'}
-            color={ubicacionActiva ? 'success' : 'primary'}
-            startIcon={ubicacionActiva ? <LocationDisabledIcon /> : <MyLocationIcon />}
-            onClick={activarUbicacionReal}
-          >
-            {ubicacionActiva ? 'Detener ubicacion' : 'Compartir ubicacion'}
-          </Button>
-          <Button
-            variant={modoSimulacion ? 'contained' : 'outlined'}
-            color="secondary"
-            startIcon={<GpsFixedIcon />}
-            onClick={activarSimulacion}
-          >
-            Simulacion
-          </Button>
-          {/* Fase A: cerrar jornada al volver. Solo mientras está "Retornando". */}
-          {showRetorno && estadoJornada !== 'Disponible' && (
-            <Button
-              variant="outlined"
-              color="success"
-              startIcon={cerrandoJornada ? <CircularProgress size={16} /> : <CheckCircleIcon />}
-              onClick={handleCerrarJornada}
-              disabled={cerrandoJornada}
-            >
-              Llegué a sucursal
-            </Button>
-          )}
-          {/* G1L-59: gestión del consentimiento (equivale a "Mi Perfil"). */}
-          <Button
-            startIcon={<GavelIcon />}
-            color={!ojoPatronActivo ? 'success' : consentimientoAceptado === false ? 'warning' : 'inherit'}
-            onClick={() => setConsentDialog('gestion')}
-            disabled={!ojoPatronActivo}
-          >
-            {!ojoPatronActivo ? 'Ojo desactivado' : 'Consentimiento'}
-          </Button>
-          <Button startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
-            Actualizar
-          </Button>
-        </Stack>
-      </Stack>
+        <List sx={{ pt: 0 }}>
+          <ListItemButton onClick={() => { cerrarAcciones(); navigate('/repartidor/historial') }}>
+            <ListItemIcon><HistoryIcon /></ListItemIcon>
+            <ListItemText primary="Envíos pasados" secondary="Consultá entregas y jornadas anteriores" />
+          </ListItemButton>
+          <ListItemButton onClick={() => { cerrarAcciones(); setConsentDialog('gestion') }} disabled={!ojoPatronActivo}>
+            <ListItemIcon><GavelIcon /></ListItemIcon>
+            <ListItemText primary={!ojoPatronActivo ? 'Ojo desactivado' : 'Consentimiento'} secondary="Revisá permisos y aceptación del Ojo del Patrón" />
+          </ListItemButton>
+          <ListItemButton onClick={() => { cerrarAcciones(); activarSimulacion() }}>
+            <ListItemIcon><GpsFixedIcon /></ListItemIcon>
+            <ListItemText primary={modoSimulacion ? 'Detener simulación' : 'Activar simulación'} secondary="Modo demo para pruebas controladas" />
+          </ListItemButton>
+          <ListItemButton onClick={() => { cerrarAcciones(); void load(fechaRuta ?? undefined) }} disabled={loading}>
+            <ListItemIcon><RefreshIcon /></ListItemIcon>
+            <ListItemText primary="Actualizar" secondary="Recargá el estado de la ruta y las paradas" />
+          </ListItemButton>
+        </List>
+      </Drawer>
 
       {origen && (origen.latitud == null || origen.longitud == null) && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -759,55 +926,101 @@ export default function RepartidorDashboard() {
         </Alert>
       )}
 
-      {/* Barra de tabs — siempre visible, "Reportar Incidente" abre el chatbot */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs
-          value={tab}
-          onChange={(_, v: number) => {
-            if (v === 2) {
-              if (paradaParaIncidencia) setIncidenteOpen(true)
-              return
-            }
-            setTab(v)
-          }}
-        >
-          <Tab label="🗺️ Mapa" />
-          <Tab label="📋 Mis paradas" />
+      {!jornadaFinalizada && (isMobile ? (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
           {paradas.length > 0 && (
-            <Tab
-              disabled={!paradaParaIncidencia}
-              label={
-                <Stack direction="row" alignItems="center" spacing={0.6}>
-                  <WarningAmberIcon sx={{ fontSize: 15 }} />
-                  <span>Reportar Incidente</span>
-                </Stack>
-              }
-              sx={{
-                ml: 'auto',
-                color: '#c62828',
-                '&:hover': { color: '#b71c1c', bgcolor: 'rgba(198,40,40,0.06)' },
-                '&.Mui-selected': { color: '#c62828' },
-              }}
-            />
+            <Button fullWidth variant="outlined" color="error" startIcon={<WarningAmberIcon />} onClick={() => { if (paradaParaIncidencia) setIncidenteOpen(true) }} disabled={!paradaParaIncidencia}>
+              Reportar incidente
+            </Button>
           )}
           {hasActiveIncidencias && (
-            <IconButton
-              size="small"
-              onClick={() => void openMensajes()}
-              sx={{ ml: 0.5, color: mensajesUnread > 0 ? '#1565C0' : 'text.secondary' }}
-            >
+            <IconButton onClick={() => void openMensajes()} sx={{ flexShrink: 0, border: '1px solid', borderColor: 'divider', borderRadius: 2, color: mensajesUnread > 0 ? '#1565C0' : 'text.secondary' }}>
               <Badge badgeContent={mensajesUnread > 0 ? mensajesUnread : undefined} color="error">
                 <ChatIcon fontSize="small" />
               </Badge>
             </IconButton>
           )}
-        </Tabs>
-      </Box>
+        </Stack>
+      ) : (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v: number) => {
+              if (v === 2) {
+                if (paradaParaIncidencia) setIncidenteOpen(true)
+                return
+              }
+              navigate(v === 1 ? '/repartidor/paradas' : '/repartidor')
+            }}
+          >
+            <Tab icon={<MapIcon fontSize="small" />} iconPosition="start" label="Mapa" />
+            <Tab icon={<ListAltIcon fontSize="small" />} iconPosition="start" label="Mis paradas" />
+            {paradas.length > 0 && (
+              <Tab
+                disabled={!paradaParaIncidencia}
+                label={<Stack direction="row" alignItems="center" spacing={0.6}><WarningAmberIcon sx={{ fontSize: 15 }} /><span>Reportar Incidente</span></Stack>}
+                sx={{ ml: 'auto', color: '#c62828', '&:hover': { color: '#b71c1c', bgcolor: 'rgba(198,40,40,0.06)' }, '&.Mui-selected': { color: '#c62828' } }}
+              />
+            )}
+            {hasActiveIncidencias && (
+              <IconButton size="small" onClick={() => void openMensajes()} sx={{ ml: 0.5, color: mensajesUnread > 0 ? '#1565C0' : 'text.secondary' }}>
+                <Badge badgeContent={mensajesUnread > 0 ? mensajesUnread : undefined} color="error">
+                  <ChatIcon fontSize="small" />
+                </Badge>
+              </IconButton>
+            )}
+          </Tabs>
+        </Box>
+      ))}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
-      ) : paradas.length === 0 ? (
-        showRetorno ? null : (
+      ) : paradas.length === 0 || jornadaFinalizada ? (
+        jornadaFinalizada ? (
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 3,
+              borderStyle: 'dashed',
+              borderColor: '#c8e6c9',
+              bgcolor: isDark ? 'rgba(46,125,50,0.08)' : '#fbfdfb',
+            }}
+          >
+            <CardContent>
+              <Stack spacing={2}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.5}>
+                  <Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircleIcon sx={{ color: '#2e7d32' }} />
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Jornada finalizada
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      Regresaste a sucursal. La ruta quedó cerrada y pasó al historial operativo.
+                    </Typography>
+                  </Box>
+                  <Chip label="Disponible nuevamente" color="success" sx={{ fontWeight: 700 }} />
+                </Stack>
+
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip label={`${metrics.entregadas} entregadas`} color="success" variant="outlined" />
+                  <Chip label={`${paradas.filter((p) => p.status === 'Cancelado').length} canceladas`} variant="outlined" />
+                  <Chip label={`${paradas.length} paradas totales`} variant="outlined" />
+                </Stack>
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <Button variant="contained" startIcon={<HistoryIcon />} onClick={() => navigate('/repartidor/historial')}>
+                    Ver envíos pasados
+                  </Button>
+                  <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => load(fechaRuta ?? undefined)} disabled={loading}>
+                    Actualizar
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        ) : showRetorno ? null : (
           <Alert severity="info">
             No tenés paradas asignadas para hoy. Esperá a que el supervisor calendarice los envíos.
           </Alert>
@@ -829,7 +1042,7 @@ export default function RepartidorDashboard() {
           </Grid>
 
           {tab === 0 && (
-            <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden' }}>
+            <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden', borderRadius: 3 }}>
               <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderBottom: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
@@ -846,16 +1059,7 @@ export default function RepartidorDashboard() {
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<MapIcon />}
-                    disabled={paradas.length === 0}
-                    onClick={() => {
-                      const url = buildMapsUrl(stopsForMaps(paradas), originForMaps(origen))
-                      if (url) window.open(url, '_blank', 'noopener,noreferrer')
-                    }}
-                  >
+                  <Button size="small" variant="outlined" startIcon={<MapIcon />} disabled={paradas.length === 0} onClick={abrirRutaEnMaps}>
                     Abrir ruta en Maps
                   </Button>
                   {metrics.listosParaSalir > 0 && (
@@ -879,16 +1083,27 @@ export default function RepartidorDashboard() {
                     Navegar a próxima parada
                   </Button>
                   {showRetorno && (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<DirectionsIcon />}
-                      onClick={() => setRetornoAnimando(true)}
-                      disabled={retornoAnimando}
-                      sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
-                    >
-                      Retorno a Sucursal
-                    </Button>
+                    <>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        startIcon={cerrandoJornada ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+                        onClick={() => { void handleCerrarJornada() }}
+                        disabled={cerrandoJornada}
+                      >
+                        Llegué a sucursal
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={modoSimulacion ? <GpsFixedIcon /> : <DirectionsIcon />}
+                        onClick={activarSimulacion}
+                        sx={{ bgcolor: '#5e35b1', '&:hover': { bgcolor: '#4527a0' } }}
+                      >
+                        {modoSimulacion ? 'Detener simulación' : 'Simular retorno'}
+                      </Button>
+                    </>
                   )}
                 </Stack>
               </Box>
@@ -922,13 +1137,14 @@ export default function RepartidorDashboard() {
                 height={380}
               />
               {proxima && (
-                <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#f8fdf8', borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e8f5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                  <Typography variant="body2">
-                    <strong>Próxima parada:</strong> {proxima.receiver.address}, {proxima.receiver.city} · {proxima.receiver.name} · {Math.round(proxima.weight)} kg
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    CP {proxima.receiver.postalCode}
-                  </Typography>
+                <Box sx={{ p: 2, bgcolor: isDark ? 'rgba(237,108,2,0.12)' : '#fff8f1', borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #ffe0b2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#ed6c02', fontWeight: 700 }}>PRÓXIMA PARADA</Typography>
+                    <Typography variant="body2">
+                      {proxima.receiver.address}, {proxima.receiver.city} · {proxima.receiver.name} · {Math.round(proxima.weight)} kg
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">CP {proxima.receiver.postalCode}</Typography>
                 </Box>
               )}
               {/* Mini lista de todas las paradas */}
@@ -941,17 +1157,17 @@ export default function RepartidorDashboard() {
                 <Box sx={{ maxHeight: 180, overflowY: 'auto', px: 1, pb: 1 }}>
                   {paradas.map((p, idx) => {
                     const isProxima = idx === metrics.proximaIdx
-                    const statusColor = p.status === 'Entregado' ? '#2e7d32' : p.status === 'En tránsito' ? '#ed6c02' : p.status === 'Cancelado' ? '#c62828' : '#546e7a'
+                    const tone = getParadaTone(p.status, isProxima, isDark)
                     const hasCoordsP = p.receiverUbicacion?.latitud != null
                     return (
                       <Box key={p.id} sx={{
                         display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.5, borderRadius: 1,
-                        bgcolor: isProxima ? (isDark ? 'rgba(25,118,210,0.18)' : '#e3f2fd') : 'transparent',
+                        bgcolor: isProxima ? tone.soft : 'transparent',
                         mb: 0.3,
                       }}>
                         <Box sx={{
                           minWidth: 24, height: 24, borderRadius: '50%',
-                          bgcolor: statusColor, color: '#fff',
+                          bgcolor: tone.accent, color: '#fff',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: 11, fontWeight: 700, flexShrink: 0,
                         }}>
@@ -968,8 +1184,8 @@ export default function RepartidorDashboard() {
                         {!hasCoordsP && (
                           <Typography variant="caption" sx={{ fontSize: 10, color: '#90a4ae', flexShrink: 0 }}>sin GPS</Typography>
                         )}
-                        <Typography variant="caption" sx={{ fontSize: 10, color: statusColor, fontWeight: 600, flexShrink: 0 }}>
-                          {p.status}
+                        <Typography variant="caption" sx={{ fontSize: 10, color: tone.accent, fontWeight: 700, flexShrink: 0 }}>
+                          {isProxima && p.status !== 'Entregado' && p.status !== 'Cancelado' ? 'Actual' : p.status}
                         </Typography>
                       </Box>
                     )
@@ -1020,56 +1236,62 @@ export default function RepartidorDashboard() {
               const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
               const isCurrent = p.id === proxima?.id
               const numeroParada = paradas.indexOf(p) + 1
+              const tone = getParadaTone(p.status, isCurrent, isDark)
               return (
                 <Card
                   key={p.id}
                   variant="outlined"
                   sx={{
                     borderLeft: '4px solid',
-                    borderLeftColor: isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#1976d2',
-                    bgcolor: isCompleted
-                    ? (isDark ? 'rgba(46,125,50,0.12)' : '#f8fdf8')
-                    : isCurrent
-                      ? (isDark ? 'rgba(237,108,2,0.12)' : '#fffbf5')
-                      : (isDark ? '#162032' : 'white'),
+                    borderLeftColor: tone.accent,
+                    borderRadius: isMobile ? 3 : undefined,
+                    bgcolor: tone.bg,
                     opacity: isCompleted ? 0.85 : 1,
+                    boxShadow: isCurrent && isMobile ? '0 8px 24px rgba(237,108,2,0.12)' : 'none',
                   }}
                 >
-                  <CardContent>
-                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                  <CardContent sx={isMobile ? { p: 1.5, '&:last-child': { pb: 1.5 } } : undefined}>
+                    <Stack direction="row" spacing={isMobile ? 1.25 : 2} alignItems="flex-start">
                       <Box
                         sx={{
-                          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                          width: isMobile ? 34 : 40, height: isMobile ? 34 : 40, borderRadius: '50%', flexShrink: 0,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          bgcolor: isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#1976d2',
-                          color: 'white', fontWeight: 700, fontSize: 16,
+                          bgcolor: tone.accent,
+                          color: 'white', fontWeight: 700, fontSize: isMobile ? 14 : 16,
                         }}
                       >
                         {numeroParada}
                       </Box>
                       <Box sx={{ flex: 1 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
-                          <Typography variant="subtitle1" fontWeight={600}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5, gap: 1 }}>
+                          <Typography variant={isMobile ? 'body1' : 'subtitle1'} fontWeight={600}>
                             {p.receiver.address}, {p.receiver.city}
                           </Typography>
                           <StatusBadge status={p.status} />
                         </Stack>
-                        <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                            📦 {p.trackingId}
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
+                          <Chip size="small" label={`${tone.label} · parada ${numeroParada}`} sx={{ bgcolor: tone.soft, color: tone.accent, fontWeight: 700 }} />
+                        </Stack>
+                        <Stack direction="row" spacing={isMobile ? 1 : 2} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                            <Inventory2Icon sx={{ fontSize: 14 }} />
+                            {p.trackingId}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            👤 {p.receiver.name} · {Math.round(p.weight)} kg
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                            <PersonIcon sx={{ fontSize: 14 }} />
+                            {p.receiver.name} · {Math.round(p.weight)} kg
                           </Typography>
                           {p.receiver.phone && (
-                            <Typography variant="caption" color="text.secondary">
-                              📱 {p.receiver.phone}
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                              <PhoneIcon sx={{ fontSize: 14 }} />
+                              {p.receiver.phone}
                             </Typography>
                           )}
                           {p.tipoEnvio === 'Prioritario' && (
                             <Chip
                               size="small"
-                              label="⚡ Prioritario"
+                              icon={<BoltIcon sx={{ fontSize: '14px !important' }} />}
+                              label="Prioritario"
                               sx={{ bgcolor: '#fdecea', color: '#c62828', border: '1px solid #c62828', height: 18, fontSize: 10, fontWeight: 600 }}
                             />
                           )}
@@ -1080,23 +1302,29 @@ export default function RepartidorDashboard() {
                           </Typography>
                         )}
                         {isCurrent && (
-                          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }}>
                             <Button
                               variant="contained"
                               color="primary"
-                              size="small"
+                              size={isMobile ? 'medium' : 'small'}
+                              fullWidth={isMobile}
+                              startIcon={<NavigationIcon />}
+                              onClick={() => setParadaAccionOpen(true)}
+                            >
+                              Gestionar parada
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size={isMobile ? 'medium' : 'small'}
+                              fullWidth={isMobile}
                               onClick={() => navigate(`/shipment/${p.id}`)}
                             >
-                              Ver y gestionar
+                              Ver detalle
                             </Button>
                           </Stack>
                         )}
                         {!isCurrent && !isCompleted && (
-                          <Button
-                            size="small"
-                            sx={{ mt: 1 }}
-                            onClick={() => navigate(`/shipment/${p.id}`)}
-                          >
+                          <Button size={isMobile ? 'medium' : 'small'} fullWidth={isMobile} sx={{ mt: 1 }} onClick={() => navigate(`/shipment/${p.id}`)}>
                             Ver detalle
                           </Button>
                         )}
@@ -1109,6 +1337,14 @@ export default function RepartidorDashboard() {
           </Stack>
           )}
         </>
+      )}
+
+      {isMobile && paradas.length > 0 && (tab === 0 || tab === 1) && (
+        <Paper elevation={10} sx={{ position: 'fixed', left: 12, right: 12, bottom: 78, zIndex: 115, borderRadius: 3, p: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Button fullWidth size="large" variant="contained" color={ctaOperativa.color} startIcon={ctaOperativa.icon} onClick={ctaOperativa.onClick} disabled={ctaOperativa.disabled}>
+            {ctaOperativa.label}
+          </Button>
+        </Paper>
       )}
 
       {/* Chatbot Tracky — Reportar Incidente */}

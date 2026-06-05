@@ -212,6 +212,16 @@ function App() {
             }
           />
           <Route
+            path="/repartidor/paradas"
+            element={
+              user && isRepartidorRole(user.role) ? (
+                <RepartidorDashboard />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
             path="/repartidor/historial"
             element={
               user && isRepartidorRole(user.role) ? (
