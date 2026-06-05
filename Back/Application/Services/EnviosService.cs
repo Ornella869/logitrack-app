@@ -220,7 +220,7 @@ namespace Back.Application.Services
                     $"No se pudo ubicar la localidad \"{request.Destinatario.Localidad}\" en el mapa. " +
                     "Verificá que la localidad y el código postal sean correctos.");
 
-            var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
+            var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad, request.Destinatario.Provincia);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
 
             // Épica D: sucursal responsable por provincia de destino + ruteo estricto.

@@ -851,7 +851,7 @@ namespace Back.Controllers
         }
 
         // Épica D: multi-sucursal. El Gerente crea sucursales (idealmente de su provincia).
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize(Roles = Roles.Gerente)]
         [HttpPost("sucursales/registrar-sucursal")]
         public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
         {
@@ -928,7 +928,7 @@ namespace Back.Controllers
             return null;
         }
 
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize(Roles = Roles.Gerente)]
         [HttpPut("sucursales/{id:guid}")]
         public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request)
         {
@@ -950,7 +950,7 @@ namespace Back.Controllers
             return Ok();
         }
 
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize(Roles = Roles.Gerente)]
         [HttpDelete("sucursales/{id:guid}")]
         public async Task<ActionResult> EliminarSucursal(Guid id)
         {

@@ -130,9 +130,14 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
   ]
 }
 
+import { formatDateOnlyEs } from '../utils/argentinaDate'
+
 const formatDate = (date: string) => {
   if (!date) return 'No disponible'
-  return formatInstantArgentinaDate(date, {
+  // El backend envía fechas en UTC o strings YYYY-MM-DD. 
+  // Para las fechas estáticas (como fecha de alta o de entrega programada)
+  // queremos mostrar el día exacto que es (sin importar que el shift horario lo pase al día anterior).
+  return formatDateOnlyEs(date, {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
@@ -323,13 +328,13 @@ export default function TrackingPublicPage() {
                       </Box>
                     </Stack>
 
-                    {shipment.fechaCalendarizada && (
+                    {(shipment.fechaEstimadaEntrega || shipment.fechaCalendarizada) && (
                       <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}>
                         <Typography variant="body2" sx={{ color: '#92400e' }}>
                           {fechaEstimadaLabel(shipment.status)}
                         </Typography>
                         <Typography sx={{ fontWeight: 700, color: '#fbbf24' }}>
-                          {formatDate(shipment.fechaCalendarizada)}
+                          {formatDate(shipment.fechaEstimadaEntrega ?? shipment.fechaCalendarizada ?? '')}
                         </Typography>
                       </Box>
                     )}
@@ -412,9 +417,9 @@ export default function TrackingPublicPage() {
                                   ? 'Hito completado.'
                                   : 'Pendiente de actualización.'}
                             </Typography>
-                            {index === 0 && shipment.fechaCalendarizada && (
+                            {index === 0 && (shipment.fechaEstimadaEntrega || shipment.fechaCalendarizada) && (
                               <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: '#fbbf24', fontWeight: 600 }}>
-                                Entrega estimada: {formatDate(shipment.fechaCalendarizada)}
+                                Entrega estimada: {formatDate(shipment.fechaEstimadaEntrega ?? shipment.fechaCalendarizada ?? '')}
                               </Typography>
                             )}
                           </Box>

@@ -259,10 +259,26 @@ namespace Back.Domain.Models
 
         public void ActualizarEstimacionEntrega(float distanciaKm)
         {
-            const double kmPorJornada = 560;
-            DiasEstimadosEntrega = Math.Max(1, (int)Math.Ceiling(distanciaKm / kmPorJornada));
+            const int JORNADA_HORAS = 8;
+            double distanciaRealKm = distanciaKm < 50 ? distanciaKm * 1.4 : distanciaKm * 1.25;
+            double velocidadPromedioKmH = 70;
+            double kmPorJornada = JORNADA_HORAS * velocidadPromedioKmH;
+
+            DiasEstimadosEntrega = Math.Max(1, (int)Math.Ceiling(distanciaRealKm / kmPorJornada));
             if (FechaCalendarizada.HasValue)
-                FechaEstimadaEntrega = DateTime.SpecifyKind(FechaCalendarizada.Value.Date.AddDays(DiasEstimadosEntrega - 1), DateTimeKind.Utc);
+            {
+                var current = FechaCalendarizada.Value.Date;
+                int diasHabilesAAgregar = DiasEstimadosEntrega - 1;
+                while (diasHabilesAAgregar > 0)
+                {
+                    current = current.AddDays(1);
+                    if (current.DayOfWeek != DayOfWeek.Sunday)
+                    {
+                        diasHabilesAAgregar--;
+                    }
+                }
+                FechaEstimadaEntrega = DateTime.SpecifyKind(current, DateTimeKind.Utc);
+            }
         }
 
         public void AsignarPuntoPickUp(Guid puntoPickUpId)

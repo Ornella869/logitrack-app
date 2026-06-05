@@ -154,9 +154,9 @@ namespace Back.Domain.Models
                 .Select(p => p.Trim())
                 .Where(p => !string.IsNullOrEmpty(p))
                 .ToList();
-            if (lista.Count == 0)
-                throw new InvalidOperationException("Debe asignarse al menos una provincia.");
-            Provincia = string.Join(",", lista);
+            if (lista.Count != 1)
+                throw new InvalidOperationException("Un gerente debe tener exactamente una provincia asignada.");
+            Provincia = lista[0];
         }
 
         /// <summary>Compatibilidad con asignación de una sola provincia.</summary>

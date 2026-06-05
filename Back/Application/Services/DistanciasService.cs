@@ -136,12 +136,35 @@ namespace Back.Application.Services
             };
 
 
-        public static float CalcularDistancia(string destino)
+        public static float CalcularDistancia(string destino, string provincia = null)
         {
             if (_distancias_de_municipios.TryGetValue(destino, out float distancia))
             {
                 return distancia;
             }
+
+            if (!string.IsNullOrEmpty(provincia))
+            {
+                string prov = provincia.Trim().ToLowerInvariant();
+                if (prov.Contains("tierra del fuego")) return 3000;
+                if (prov.Contains("santa cruz")) return 2500;
+                if (prov.Contains("chubut")) return 1500;
+                if (prov.Contains("rio negro") || prov.Contains("río negro")) return 1000;
+                if (prov.Contains("neuquen") || prov.Contains("neuquén")) return 1100;
+                if (prov.Contains("mendoza")) return 1000;
+                if (prov.Contains("san juan")) return 1100;
+                if (prov.Contains("la rioja")) return 1150;
+                if (prov.Contains("catamarca")) return 1100;
+                if (prov.Contains("salta")) return 1400;
+                if (prov.Contains("jujuy")) return 1500;
+                if (prov.Contains("formosa")) return 1200;
+                if (prov.Contains("chaco")) return 1000;
+                if (prov.Contains("misiones")) return 1000;
+                if (prov.Contains("corrientes")) return 900;
+                if (prov.Contains("tucuman") || prov.Contains("tucumán")) return 1200;
+                if (prov.Contains("santiago del estero")) return 1000;
+            }
+
             return 150;
         }
     }

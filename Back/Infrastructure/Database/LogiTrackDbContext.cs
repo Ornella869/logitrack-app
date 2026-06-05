@@ -28,6 +28,7 @@ namespace Back.Infrastructure.Database
         public DbSet<MensajeIncidencia> MensajesIncidencia { get; set; }
         public DbSet<EmailNotificacion> EmailNotificaciones { get; set; }
         public DbSet<OverrideOjoPatron> OverridesOjoPatron { get; set; }
+
         public DbSet<PuntoPickUp> PuntosPickUp { get; set; }
         public DbSet<SatisfaccionEncuesta> SatisfaccionEncuestas { get; set; }
 
@@ -209,6 +210,8 @@ namespace Back.Infrastructure.Database
                     .HasForeignKey(x => x.PaqueteId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
+
+
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

@@ -24,7 +24,7 @@ import { shipmentService } from '../services/shipmentService'
 import { incidenciaService, type Incidencia } from '../services/incidenciaService'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment, User } from '../types'
-import { formatInstantArgentinaDate } from '../utils/argentinaDate'
+import { formatInstantArgentinaDate, formatDateOnlyEs } from '../utils/argentinaDate'
 
 const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   'Pendiente de calendarización': { label: 'En preparación', color: '#7B5E00', bg: '#FFF3CD', icon: <LocalShippingOutlinedIcon /> },
@@ -68,7 +68,7 @@ function canReportIncidencia(shipment: Shipment): boolean {
 
 function formatFecha(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return formatInstantArgentinaDate(iso, { day: '2-digit', month: 'long', year: 'numeric' })
+  return formatDateOnlyEs(iso, { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 export default function ClienteDashboard() {
@@ -187,10 +187,10 @@ export default function ClienteDashboard() {
                   <Typography variant="caption" color="text.secondary">Fecha de alta</Typography>
                   <Typography fontWeight={600}>{formatFecha(shipment.createdDate)}</Typography>
                 </Box>
-                {shipment.fechaCalendarizada && (
+                {(shipment.fechaEstimadaEntrega || shipment.fechaCalendarizada) && (
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Entrega programada</Typography>
-                    <Typography fontWeight={600}>{formatFecha(shipment.fechaCalendarizada)}</Typography>
+                    <Typography variant="caption" color="text.secondary">Entrega estimada</Typography>
+                    <Typography fontWeight={600}>{formatFecha(shipment.fechaEstimadaEntrega ?? shipment.fechaCalendarizada)}</Typography>
                   </Box>
                 )}
                 <Box sx={{ flex: 1 }}>

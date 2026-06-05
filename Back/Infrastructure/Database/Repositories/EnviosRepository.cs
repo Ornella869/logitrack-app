@@ -297,5 +297,7 @@ namespace Back.Infrastructure.Database.Repositories
         {
             _context.Sucursales.Remove(sucursal);
         }
+
+
     }
 }

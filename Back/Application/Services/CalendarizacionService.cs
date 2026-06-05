@@ -121,10 +121,29 @@ namespace Back.Application.Services
                 .Where(p => sucursalId == null || p.SucursalId == sucursalId)
                 .ToList();
 
-            var paquetesPorRepartidorYDia = asignados
-                .Where(p => p.FechaCalendarizada.HasValue && p.RepartidorAsignadoId.HasValue)
-                .GroupBy(p => (p.RepartidorAsignadoId!.Value, p.FechaCalendarizada!.Value.Date))
-                .ToDictionary(g => g.Key, g => g.ToList());
+            var paquetesExpandidos = new List<(Guid RepId, DateTime Fecha, Paquete Pk)>();
+            foreach (var p in asignados)
+            {
+                if (p.FechaCalendarizada.HasValue && p.RepartidorAsignadoId.HasValue)
+                {
+                    var current = p.FechaCalendarizada.Value.Date;
+                    int diasHabilesRestantes = p.DiasEstimadosEntrega;
+                    while (diasHabilesRestantes > 0)
+                    {
+                        paquetesExpandidos.Add((p.RepartidorAsignadoId.Value, current, p));
+                        
+                        if (current.DayOfWeek != DayOfWeek.Sunday)
+                        {
+                            diasHabilesRestantes--;
+                        }
+                        if (diasHabilesRestantes > 0) current = current.AddDays(1);
+                    }
+                }
+            }
+
+            var paquetesPorRepartidorYDia = paquetesExpandidos
+                .GroupBy(x => (x.RepId, x.Fecha))
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Pk).ToList());
 
             var calendarioReps = repartidores.Select(r =>
             {
@@ -357,7 +376,8 @@ namespace Back.Application.Services
 
             // Orden requerido: Prioritarios primero, luego Comunes; ambos por orden de creación.
             var cola = pendientes
-                .OrderByDescending(p => p.TipoEnvio == TipoEnvio.Prioritario)
+                .OrderByDescending(p => p.Distancia)
+                .ThenByDescending(p => p.Prioridad)
                 .ThenBy(p => p.CreadoEn)
                 .ToList();
 
@@ -367,7 +387,18 @@ namespace Back.Application.Services
                 if (!existente.RepartidorAsignadoId.HasValue || !existente.FechaCalendarizada.HasValue) continue;
                 // Paquetes ya en tránsito no cuentan para la carga futura (están en el viaje actual).
                 if (existente.Status == PaqueteStatus.EnTransito) continue;
-                AsignarEnMemoria(carga, existente.RepartidorAsignadoId.Value, existente.FechaCalendarizada.Value.Date, existente);
+
+                var current = existente.FechaCalendarizada.Value.Date;
+                int dias = existente.DiasEstimadosEntrega;
+                while (dias > 0)
+                {
+                    AsignarEnMemoria(carga, existente.RepartidorAsignadoId.Value, current, existente);
+                    if (current.DayOfWeek != DayOfWeek.Sunday)
+                    {
+                        dias--;
+                    }
+                    if (dias > 0) current = current.AddDays(1);
+                }
             }
 
             // Total histórico por repartidor → para round-robin entre libres
@@ -524,8 +555,20 @@ namespace Back.Application.Services
 
             void Asignar(Repartidor rep, DateTime fecha, Paquete pk)
             {
-                AsignarEnMemoria(carga, rep.Id, fecha, pk);
-                AsignarEnMemoria(asignacionesNuevas, rep.Id, fecha, pk);
+                var current = fecha;
+                int diasHabilesAAgregar = pk.DiasEstimadosEntrega;
+                while (diasHabilesAAgregar > 0)
+                {
+                    AsignarEnMemoria(carga, rep.Id, current, pk);
+                    AsignarEnMemoria(asignacionesNuevas, rep.Id, current, pk);
+                    
+                    if (current.DayOfWeek != DayOfWeek.Sunday)
+                    {
+                        diasHabilesAAgregar--;
+                    }
+                    if (diasHabilesAAgregar > 0) current = current.AddDays(1);
+                }
+
                 pk.AsignarParaCalendarizacion(rep.Id, fecha);
                 totalHistorico[rep.Id] = totalHistorico[rep.Id] + 1;
             }

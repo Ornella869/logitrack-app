@@ -343,6 +343,9 @@ namespace Back.Application.Services
             var lista = provincias?.Select(p => p?.Trim()).Where(p => !string.IsNullOrEmpty(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
                 ?? new List<string>();
 
+            if (lista.Count != 1)
+                throw new InvalidOperationException("Un Gerente solo puede tener una única provincia asignada.");
+
             // Validar que ninguna provincia esté asignada a otro gerente
             foreach (var p in lista)
             {

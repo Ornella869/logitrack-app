@@ -379,7 +379,7 @@ function App() {
           <Route
             path="/ojo-patron"
             element={
-              user && (user.role === 'gerente' || user.role === 'supervisor') ? (
+              user && (user.role === 'gerente' || user.role === 'supervisor' || user.role === 'administrador') ? (
                 <OjoPatronConfigPage />
               ) : (
                 <Navigate to="/access-denied" replace />

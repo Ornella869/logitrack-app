@@ -1067,20 +1067,12 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 <FormControl fullWidth>
                   <InputLabel>Provincias a cargo *</InputLabel>
                     <Select
-                      label="Provincias a cargo *"
-                      multiple
-                      open={createProvinceOpen}
-                      onOpen={() => setCreateProvinceOpen(true)}
-                      onClose={() => setCreateProvinceOpen(false)}
-                      value={splitProvinces(formData.provincia)}
+                      label="Provincia a cargo *"
+                      value={formData.provincia}
                       onChange={(e) => {
-                        const val = e.target.value as string[]
-                        setFormData((p) => ({ ...p, provincia: val.join(',') }))
-                        // Al crear un gerente desde el administrador, tras elegir una provincia
-                        // cerramos el selector para evitar que el admin seleccione varias a la vez.
-                        if ((val?.length ?? 0) >= 1) setCreateProvinceOpen(false)
+                        setFormData((p) => ({ ...p, provincia: e.target.value as string }))
                       }}
-                      renderValue={(selected) => (selected as string[]).join(', ')}
+                      renderValue={(selected) => selected as string}
                     >
                     {AR_PROVINCIAS.map((prov) => {
                       const isSelected = splitProvinces(formData.provincia).some((selected) => selected.toLowerCase() === prov.toLowerCase())
@@ -1093,10 +1085,8 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                           disabled={isBlocked}
                           sx={{
                             opacity: isBlocked ? 0.55 : 1,
-                            '&.Mui-disabled': { opacity: 0.55 },
                           }}
                         >
-                          <Checkbox checked={isSelected} size="small" disabled={isBlocked} />
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
                             <span>{prov}</span>
                             {ownerGerente && (
@@ -1238,45 +1228,44 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
             {/* Provincias a cargo (solo para Gerente) */}
             {selectedUser?.role === 'gerente' && (
               <FormControl fullWidth>
-                <InputLabel>Provincias a cargo</InputLabel>
+                <InputLabel>Provincia a cargo</InputLabel>
                 <Select
-                  label="Provincias a cargo"
-                  multiple
-                  value={splitProvinces(formData.provincia)}
+                  label="Provincia a cargo"
+                  value={formData.provincia}
                   onChange={(e) => {
-                    const val = e.target.value as string[]
-                    const current = splitProvinces(formData.provincia)
+                    const val = e.target.value as string
+                    const current = formData.provincia
 
-                    // BLOQUEO: no permitir agregar provincia ya cubierta por otro gerente activo
-                    const added = val.filter((p) => !current.includes(p))
-                    if (added.length > 0) {
-                      const conflicts = added.flatMap((prov) => {
-                        const owner = findProvinceOwner(prov, selectedUser?.id)
-                        return owner ? [`${prov} (ya cubierta por ${owner.name} ${owner.lastname})`] : []
-                      })
-                      if (conflicts.length > 0) {
-                        setFormError(`No podés asignar: ${conflicts.join(', ')}. Cada provincia solo puede tener un gerente.`)
+                    if (val !== current) {
+                      const owner = findProvinceOwner(val, selectedUser?.id)
+                      if (owner) {
+                        setFormError(`No podés asignar: ${val} (ya cubierta por ${owner.name} ${owner.lastname}). Cada provincia solo puede tener un gerente.`)
                         return // No aplica el cambio
                       }
-                    }
+                      
+                      // Check for existing sucursales
+                      if (current) {
+                        const hasSucursales = branches.some((b) => b.province?.toLowerCase() === current.toLowerCase())
+                        if (hasSucursales) {
+                          setFormError(`El gerente ya tiene sucursales registradas en ${current}, no se puede cambiar su provincia.`)
+                          return // No aplica el cambio
+                        }
 
-                    // ADVERTENCIA: provincias removidas que quedan sin gerente (orphan check)
-                    const removed = current.filter((p) => !val.includes(p))
-                    if (removed.length > 0) {
-                      const orphans = removed.filter((prov) =>
-                        !provinceOwners.some((u) => u.id !== selectedUser?.id && splitProvinces(u.provincias?.join(', ') ?? u.provincia).some((assigned) => assigned.toLowerCase() === prov.toLowerCase())),
-                      )
-                      if (orphans.length > 0) {
-                        setFormError(`Atención: ${orphans.join(', ')} quedarán sin supervisión gerencial. Podés continuar igual.`)
+                        // Check for orphans
+                        const isOrphaned = !provinceOwners.some((u) => u.id !== selectedUser?.id && splitProvinces(u.provincias?.join(', ') ?? u.provincia).some((assigned) => assigned.toLowerCase() === current.toLowerCase()))
+                        if (isOrphaned) {
+                          setFormError(`Atención: ${current} quedará sin supervisión gerencial. Podés continuar igual.`)
+                        } else {
+                          setFormError('')
+                        }
                       } else {
                         setFormError('')
                       }
-                    } else {
-                      setFormError('')
                     }
-                    setFormData((p) => ({ ...p, provincia: val.join(',') }))
+
+                    setFormData((p) => ({ ...p, provincia: val }))
                   }}
-                  renderValue={(selected) => (selected as string[]).join(', ') || '— Sin provincias —'}
+                  renderValue={(selected) => (selected as string) || '— Sin provincia —'}
                 >
                   {AR_PROVINCIAS.map((prov) => {
                     const selected = splitProvinces(formData.provincia).some((value) => value.toLowerCase() === prov.toLowerCase())
@@ -1292,7 +1281,6 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                           '&.Mui-disabled': { opacity: 0.55 },
                         }}
                       >
-                        <Checkbox checked={selected} size="small" disabled={isBlocked} />
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
                           <span>{prov}</span>
                           {ownerGerente && (

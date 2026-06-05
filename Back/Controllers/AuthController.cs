@@ -421,7 +421,22 @@ namespace Back.Controllers
                     var provincias = request.Provincia
                         .Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries)
                         .ToList();
-                    gerente.AsignarProvincias(provincias);
+
+                    if (provincias.Count != 1)
+                        return BadRequest("Un Gerente solo puede tener una única provincia asignada.");
+
+                    var newProv = provincias.First();
+                    if (gerente.ProvinciasAsignadas.Any() && !gerente.ProvinciasAsignadas.Contains(newProv, StringComparer.OrdinalIgnoreCase))
+                    {
+                        foreach (var oldProv in gerente.ProvinciasAsignadas)
+                        {
+                            bool hasSucursales = await _context.Sucursales.AnyAsync(s => s.Provincia == oldProv);
+                            if (hasSucursales) return BadRequest($"El gerente ya tiene sucursales registradas en {oldProv}, no se puede cambiar su provincia.");
+                        }
+                    }
+
+                    // Asignamos usando AuthService para que modifique la base y haga chequeos de ocupación.
+                    await _authService.AsignarProvinciasGerente(userId, provincias);
                 }
 
                 await _context.SaveChangesAsync();
@@ -440,9 +455,25 @@ namespace Back.Controllers
         {
             try
             {
-                var gerente = await _authService.AsignarProvinciasGerente(userId, request.Provincias);
+                if (request.Provincias.Count != 1) return BadRequest("Un Gerente solo puede tener una única provincia asignada.");
+
+                var gerente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId) as Gerente;
+                if (gerente != null)
+                {
+                    var newProv = request.Provincias.First();
+                    if (gerente.ProvinciasAsignadas.Any() && !gerente.ProvinciasAsignadas.Contains(newProv, StringComparer.OrdinalIgnoreCase))
+                    {
+                        foreach (var oldProv in gerente.ProvinciasAsignadas)
+                        {
+                            bool hasSucursales = await _context.Sucursales.AnyAsync(s => s.Provincia == oldProv);
+                            if (hasSucursales) return BadRequest($"El gerente ya tiene sucursales registradas en {oldProv}, no se puede cambiar su provincia.");
+                        }
+                    }
+                }
+
+                var updatedGerente = await _authService.AsignarProvinciasGerente(userId, request.Provincias);
                 await _context.SaveChangesAsync();
-                return Ok(MapUsuario(gerente));
+                return Ok(MapUsuario(updatedGerente));
             }
             catch (InvalidOperationException ex)
             {
