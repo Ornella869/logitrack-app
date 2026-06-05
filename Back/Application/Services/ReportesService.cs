@@ -44,11 +44,12 @@ namespace Back.Application.Services
             if (provinciasGerente != null && provinciasGerente.Any())
             {
                 var normalized = provinciasGerente.Select(p => p.Trim()).ToList();
-                sucursalesProvincia = await _context.Sucursales
+                var sucursales = await _context.Sucursales.ToListAsync();
+                sucursalesProvincia = sucursales
                     .Where(s => normalized.Any(n => string.Equals(n, s.Provincia, StringComparison.OrdinalIgnoreCase))
                                 || s.ProvinciasCubiertas.Any(pc => normalized.Any(n => string.Equals(n, pc, StringComparison.OrdinalIgnoreCase))))
                     .Select(s => s.Id)
-                    .ToListAsync();
+                    .ToList();
             }
 
             // CA: se filtran todos los paquetes cuya fecha de creación cae en el rango.

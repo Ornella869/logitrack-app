@@ -24,6 +24,7 @@ import StatusBadge from '../components/StatusBadge'
 import RouteMap from '../components/RouteMap'
 import { branchService, type BranchOrigin } from '../services/branchService'
 import { shipmentService } from '../services/shipmentService'
+import { subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 import { buildMapsUrl } from '../utils/mapsUrl'
 import type { User } from '../types'
@@ -100,8 +101,15 @@ export default function DetalleRutaPage() {
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
     void loadUbicacion()
-    const timer = window.setInterval(() => void loadUbicacion(), 5000)
-    return () => window.clearInterval(timer)
+    return subscribeUbicacionActualizada((event) => {
+      if (event.repartidorId !== repartidorId) return
+      setUbicacionActual({
+        latitud: event.latitud,
+        longitud: event.longitud,
+        actualizadaEn: event.actualizadaEn,
+        codigoSeguimiento: event.codigoSeguimiento,
+      })
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repartidorId, user.role, fecha])
 

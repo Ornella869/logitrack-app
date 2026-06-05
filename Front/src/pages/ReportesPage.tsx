@@ -19,7 +19,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
 import PercentIcon from '@mui/icons-material/Percent'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { reportService, type ReporteVolumen } from '../services/reportService'
+import { incidenciaService, type RankingZonaIncidencia } from '../services/incidenciaService'
 import type { User } from '../types'
 import { addArgentinaDays, formatArgentinaDateInput } from '../utils/argentinaDate'
 
@@ -32,6 +34,7 @@ export default function ReportesPage() {
   const [to, setTo] = useState(today())
   const [dateError, setDateError] = useState('')
   const [data, setData] = useState<ReporteVolumen | null>(null)
+  const [rankingZonas, setRankingZonas] = useState<RankingZonaIncidencia[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -54,9 +57,13 @@ export default function ReportesPage() {
     setLoading(true)
     setError('')
     try {
-      const result = await reportService.getVolumen(from, to)
+      const [result, ranking] = await Promise.all([
+        reportService.getVolumen(from, to),
+        incidenciaService.rankingZonas(from, to).catch(() => []),
+      ])
       if (result) setData(result)
       else setError('No se pudo cargar el reporte')
+      setRankingZonas(ranking)
     } finally {
       setLoading(false)
     }
@@ -140,11 +147,65 @@ export default function ReportesPage() {
             <Stack spacing={2}>
               <VolumeChart data={data} />
               <HomeDeliveryReport data={data} />
+              {(user.role === 'gerente' || user.role === 'administrador') && (
+                <RankingIncidenciasGerente data={rankingZonas} />
+              )}
             </Stack>
           )}
         </>
       )}
     </Box>
+  )
+}
+
+function RankingIncidenciasGerente({ data }: { data: RankingZonaIncidencia[] }) {
+  if (data.length === 0) {
+    return (
+      <Alert severity="info">
+        No hay incidencias asociadas a envios para el periodo seleccionado.
+      </Alert>
+    )
+  }
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+          <WarningAmberIcon color="warning" />
+          <Typography variant="subtitle1" fontWeight={700}>
+            Ranking de zonas con mas incidencias
+          </Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          Para Gerencia: agrupa incidencias de todas las sucursales dentro de tus provincias asignadas.
+        </Typography>
+        <Grid container spacing={1.5}>
+          {data.map((item, index) => (
+            <Grid item xs={12} md={6} key={`${item.provincia}-${item.localidad}`}>
+              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    {index + 1}. {item.localidad}
+                  </Typography>
+                  <Typography variant="h6" color="error.main" fontWeight={700}>
+                    {item.total}
+                  </Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {item.provincia}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Altas: {item.altas} · SLA vencido: {item.vencidas}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Predomina: {item.tipoPredominante} · {item.severidadPredominante}
+                </Typography>
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </CardContent>
+    </Card>
   )
 }
 

@@ -267,16 +267,31 @@ namespace Back.Controllers
             return Ok(ToDto(incidencia));
         }
 
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.GerenteOAdministrador)]
         [HttpGet("ranking-zonas")]
-        public async Task<ActionResult<List<RankingZonaIncidenciaDto>>> RankingZonas()
+        public async Task<ActionResult<List<RankingZonaIncidenciaDto>>> RankingZonas([FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null)
         {
             var user = await CurrentUserAsync();
-            if (user?.SucursalId is null) return Ok(new List<RankingZonaIncidenciaDto>());
+            if (user is null) return Ok(new List<RankingZonaIncidenciaDto>());
 
-            var incidencias = await _context.Incidencias
-                .Where(i => i.SucursalId == user.SucursalId)
-                .ToListAsync();
+            var query = _context.Incidencias.AsQueryable();
+            if (desde.HasValue)
+            {
+                var desdeUtc = DateTime.SpecifyKind(desde.Value.Date, DateTimeKind.Utc);
+                query = query.Where(i => i.FechaReporte >= desdeUtc);
+            }
+            if (hasta.HasValue)
+            {
+                var hastaUtc = DateTime.SpecifyKind(hasta.Value.Date.AddDays(1), DateTimeKind.Utc);
+                query = query.Where(i => i.FechaReporte < hastaUtc);
+            }
+            if (User.IsInRole(Roles.Supervisor))
+            {
+                if (user.SucursalId is null) return Ok(new List<RankingZonaIncidenciaDto>());
+                query = query.Where(i => i.SucursalId == user.SucursalId);
+            }
+
+            var incidencias = await query.ToListAsync();
 
             var paqueteIds = incidencias
                 .SelectMany(i => i.PaqueteId.HasValue
@@ -302,6 +317,18 @@ namespace Back.Controllers
                 })
                 .Where(x => x.Paquete is not null)
                 .ToList();
+
+            if (User.IsInRole(Roles.Gerente))
+            {
+                var provincias = (user as Gerente)?.ProvinciasAsignadas ?? Array.Empty<string>();
+                data = data
+                    .Where(x =>
+                    {
+                        var provincia = x.Paquete!.ProvinciaDestino ?? x.Paquete.Destinatario.Direccion.Provincia;
+                        return provincias.Any(p => string.Equals(p, provincia, StringComparison.OrdinalIgnoreCase));
+                    })
+                    .ToList();
+            }
 
             var ranking = data
                 .GroupBy(x => new

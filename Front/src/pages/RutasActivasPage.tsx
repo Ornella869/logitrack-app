@@ -37,6 +37,7 @@ import PlaceIcon from '@mui/icons-material/Place'
 import api from '../services/api'
 import { shipmentService } from '../services/shipmentService'
 import { pickupService, type PuntoPickUp } from '../services/pickupService'
+import { subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
 import type { PagedResult, User } from '../types'
 import { dateOnly, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
@@ -73,6 +74,15 @@ type RutasActivasResponse = PagedResult<RutaActiva> & {
   kpis: RutasActivasKpis
 }
 
+type UbicacionRepartidor = {
+  repartidorId: string
+  repartidorNombre?: string
+  codigoSeguimiento: string
+  latitud: number
+  longitud: number
+  actualizadaEn?: string
+}
+
 export default function RutasActivasPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
@@ -94,7 +104,7 @@ export default function RutasActivasPage() {
     avancePct: 0,
     totalRutas: 0,
   })
-  const [ubicaciones, setUbicaciones] = useState<Array<{ repartidorId: string; repartidorNombre: string; codigoSeguimiento: string; latitud: number; longitud: number; actualizadaEn?: string }>>([])
+  const [ubicaciones, setUbicaciones] = useState<UbicacionRepartidor[]>([])
   const [simulandoId, setSimulandoId] = useState<string | null>(null)
   const [pickupsOpen, setPickupsOpen] = useState(false)
   const [pickups, setPickups] = useState<PuntoPickUp[]>([])
@@ -107,10 +117,23 @@ export default function RutasActivasPage() {
 
   useEffect(() => {
     if (user.role !== 'supervisor' && user.role !== 'administrador') return
-    const timer = window.setInterval(() => {
-      void shipmentService.getRepartidoresUbicacion().then(setUbicaciones).catch(() => undefined)
-    }, 5000)
-    return () => window.clearInterval(timer)
+    return subscribeUbicacionActualizada((event) => {
+      if (!event.repartidorId) return
+      setUbicaciones((prev) => {
+        const actual = prev.find((u) => u.repartidorId === event.repartidorId)
+        const next: UbicacionRepartidor = {
+          repartidorId: event.repartidorId!,
+          repartidorNombre: actual?.repartidorNombre,
+          codigoSeguimiento: event.codigoSeguimiento ?? actual?.codigoSeguimiento ?? '',
+          latitud: event.latitud,
+          longitud: event.longitud,
+          actualizadaEn: event.actualizadaEn,
+        }
+        return actual
+          ? prev.map((u) => u.repartidorId === event.repartidorId ? next : u)
+          : [...prev, next]
+      })
+    })
   }, [user.role])
 
   const load = async () => {
@@ -223,7 +246,7 @@ export default function RutasActivasPage() {
 
       {ubicaciones.length > 0 && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Ubicacion en vivo: {ubicaciones.map((u) => `${u.repartidorNombre} (${u.codigoSeguimiento})`).join(' · ')}
+          Ubicacion en vivo: {ubicaciones.map((u) => `${u.repartidorNombre || 'Repartidor'} (${u.codigoSeguimiento})`).join(' · ')}
         </Alert>
       )}
 

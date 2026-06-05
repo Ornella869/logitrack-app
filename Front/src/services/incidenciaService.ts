@@ -45,6 +45,16 @@ export interface Incidencia {
   minutosResolucion?: number | null
 }
 
+export interface RankingZonaIncidencia {
+  provincia: string
+  localidad: string
+  total: number
+  altas: number
+  vencidas: number
+  severidadPredominante: string
+  tipoPredominante: string
+}
+
 const normalizeEstado = (estado: string): EstadoIncidencia =>
   estado === 'En Revision' || estado === 'EnRevision' || estado === 'En RevisiÃ³n' ? 'En Revisión' : estado as EstadoIncidencia
 
@@ -176,8 +186,8 @@ export const incidenciaService = {
     return mapIncidencia(response.data)
   },
 
-  async rankingZonas(): Promise<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number; severidadPredominante: string; tipoPredominante: string }>> {
-    const response = await api.get('/incidencias/ranking-zonas')
+  async rankingZonas(desde?: string, hasta?: string): Promise<RankingZonaIncidencia[]> {
+    const response = await api.get('/incidencias/ranking-zonas', { params: { desde, hasta } })
     return response.data ?? []
   },
 }
