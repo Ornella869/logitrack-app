@@ -162,7 +162,7 @@ namespace Back.Application.Services
             return !sucursales.Any(s => string.Equals(s.Provincia?.Trim(), destino, StringComparison.OrdinalIgnoreCase));
         }
 
-        private async Task<PuntoPickUp?> ResolverPuntoPickUpAsync(Guid? puntoPickUpId, Guid? usuarioId)
+        private async Task<PuntoPickUp?> ResolverPuntoPickUpAsync(Guid? puntoPickUpId, Guid? usuarioId, Guid? paqueteActualId = null)
         {
             if (!puntoPickUpId.HasValue) return null;
 
@@ -181,14 +181,20 @@ namespace Back.Application.Services
                 }
             }
 
+            var ocupados = (await _enviosRepository.GetAll())
+                .Count(p => p.PuntoPickUpId == punto.Id
+                    && p.Id != paqueteActualId
+                    && p.Status != PaqueteStatus.Entregado
+                    && p.Status != PaqueteStatus.Cancelado);
+            if (ocupados >= punto.CapacidadDiaria)
+                throw new InvalidOperationException($"El punto PickUp alcanzo su capacidad diaria ({punto.CapacidadDiaria} envios activos).");
+
             return punto;
         }
 
         // G1L-10
         public async Task<RegistrarPaqueteResult> RegistrarPaquete(RegistrarPaqueteRequest request, Guid? usuarioId)
         {
-            ValidarPaqueteData(request);
-
             var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId);
             if (puntoPickUp is not null)
             {
@@ -197,6 +203,7 @@ namespace Back.Application.Services
                 request.Destinatario.CP = puntoPickUp.CodigoPostal;
                 request.Destinatario.Provincia = puntoPickUp.Provincia;
             }
+            ValidarPaqueteData(request);
 
             // Intento de geocodificación en dos pasos:
             // 1) Exact: exige que la calle exista en Georef o Nominatim con número preciso.
@@ -421,8 +428,6 @@ namespace Back.Application.Services
         // G1L-12 / G1L-80
         public async Task EditarPaquete(Guid paqueteId, RegistrarPaqueteRequest request, Guid? usuarioId)
         {
-            ValidarPaqueteData(request);
-
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
             await ValidarAccesoPaqueteAsync(paquete, usuarioId);
@@ -441,7 +446,7 @@ namespace Back.Application.Services
                 throw new InvalidOperationException(mensaje);
             }
 
-            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId);
+            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId, paquete.Id);
             if (puntoPickUp is not null)
             {
                 request.Destinatario.Direccion = puntoPickUp.Direccion;
@@ -449,6 +454,7 @@ namespace Back.Application.Services
                 request.Destinatario.CP = puntoPickUp.CodigoPostal;
                 request.Destinatario.Provincia = puntoPickUp.Provincia;
             }
+            ValidarPaqueteData(request);
 
             var ubicacionDestinatario =
                 await _geocoding.GeocodeExactAsync(
@@ -467,7 +473,7 @@ namespace Back.Application.Services
                     $"No se pudo ubicar la localidad \"{request.Destinatario.Localidad}\" en el mapa. " +
                     "Verificá que la localidad y el código postal sean correctos.");
 
-            var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad);
+            var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad, request.Destinatario.Provincia);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
             var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
             var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);

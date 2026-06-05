@@ -44,6 +44,7 @@ import {
   incidenciaService,
   type EstadoIncidencia,
   type Incidencia,
+  type SeveridadIncidencia,
 } from '../services/incidenciaService'
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../services/mensajeIncidenciaService'
 import { shipmentService } from '../services/shipmentService'
@@ -106,6 +107,14 @@ function formatFecha(iso: string): string {
   })
 }
 
+function formatMinutosResolucion(minutos?: number | null): string {
+  if (!minutos) return '—'
+  if (minutos < 60) return `${minutos} min`
+  const horas = Math.floor(minutos / 60)
+  const resto = minutos % 60
+  return resto ? `${horas} h ${resto} min` : `${horas} h`
+}
+
 interface DetalleDialogProps {
   incidencia: Incidencia
   supervisor: User
@@ -117,6 +126,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [nuevoEstado, setNuevoEstado] = useState<EstadoIncidencia>(inc.estado)
+  const [nuevaSeveridad, setNuevaSeveridad] = useState<SeveridadIncidencia>((inc.severidad ?? 'Media') as SeveridadIncidencia)
   const [observacion, setObservacion] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -203,6 +213,19 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
     }
   }
 
+  const handleGuardarSeveridad = async () => {
+    setGuardando(true)
+    try {
+      const updated = await incidenciaService.cambiarSeveridad(inc.id, nuevaSeveridad)
+      if (updated) {
+        onUpdated(updated)
+        setFeedback(`Severidad actualizada a "${nuevaSeveridad}"`)
+      }
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   const handleAgregarObservacion = async () => {
     if (!observacion.trim()) return
     const updated = await incidenciaService.agregarObservacion(inc.id, observacion.trim())
@@ -255,10 +278,40 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
           </Box>
 
           {inc.slaVenceEn && (
-            <Alert severity={inc.slaVencido ? 'error' : 'info'} sx={{ py: 0.5 }}>
+            <Alert severity={inc.slaVencido || inc.slaResueltoFueraDePlazo ? 'error' : 'info'} sx={{ py: 0.5 }}>
               SLA: vence {formatFecha(inc.slaVenceEn)}
+              {inc.resueltaEn && ` · resuelta ${formatFecha(inc.resueltaEn)} · tiempo ${formatMinutosResolucion(inc.minutosResolucion)}`}
+              {inc.slaResueltoFueraDePlazo && ' · fuera de plazo'}
             </Alert>
           )}
+
+          <Box>
+            <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase" sx={{ display: 'block', mb: 1 }}>
+              Prioridad operativa
+            </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Severidad</InputLabel>
+                <Select
+                  value={nuevaSeveridad}
+                  label="Severidad"
+                  onChange={(e) => setNuevaSeveridad(e.target.value as SeveridadIncidencia)}
+                >
+                  <MenuItem value="Baja">Baja</MenuItem>
+                  <MenuItem value="Media">Media</MenuItem>
+                  <MenuItem value="Alta">Alta</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleGuardarSeveridad}
+                disabled={guardando || nuevaSeveridad === inc.severidad}
+              >
+                Guardar severidad
+              </Button>
+            </Stack>
+          </Box>
 
           {/* Descripción */}
           <Box>
@@ -702,10 +755,12 @@ export default function IncidenciasPage() {
   const [incidencias, setIncidencias] = useState<Incidencia[]>([])
   const [tabVista, setTabVista] = useState<'repartidores' | 'clientes'>('repartidores')
   const [filtroEstado, setFiltroEstado] = useState<EstadoIncidencia | 'Todas'>('Todas')
+  const [filtroSeveridad, setFiltroSeveridad] = useState<SeveridadIncidencia | 'Todas'>('Todas')
+  const [soloSlaVencido, setSoloSlaVencido] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [detalle, setDetalle] = useState<Incidencia | null>(null)
   const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
-  const [rankingZonas, setRankingZonas] = useState<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number }>>([])
+  const [rankingZonas, setRankingZonas] = useState<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number; severidadPredominante: string; tipoPredominante: string }>>([])
 
   const cargar = async () => {
     setIncidencias(await incidenciaService.getAll())
@@ -752,13 +807,15 @@ export default function IncidenciasPage() {
 
   const incidenciasFiltradas = incidenciasBase.filter((inc) => {
     const matchEstado = filtroEstado === 'Todas' || inc.estado === filtroEstado
+    const matchSeveridad = filtroSeveridad === 'Todas' || inc.severidad === filtroSeveridad
+    const matchSla = !soloSlaVencido || inc.slaVencido || inc.slaResueltoFueraDePlazo
     const q = busqueda.toLowerCase()
     const matchBusqueda = !q
       || inc.repartidorNombre.toLowerCase().includes(q)
       || inc.tipoLabel.toLowerCase().includes(q)
       || inc.descripcion.toLowerCase().includes(q)
       || (inc.envioId ?? '').toLowerCase().includes(q)
-    return matchEstado && matchBusqueda
+    return matchEstado && matchSeveridad && matchSla && matchBusqueda
   })
 
   const counts = {
@@ -766,6 +823,7 @@ export default function IncidenciasPage() {
     abiertas: incidenciasBase.filter((i) => i.estado === 'Abierta').length,
     enRevision: incidenciasBase.filter((i) => i.estado === 'En Revisión').length,
     resueltas: incidenciasBase.filter((i) => i.estado === 'Resuelta').length,
+    slaVencidas: incidenciasBase.filter((i) => i.slaVencido || i.slaResueltoFueraDePlazo).length,
   }
 
   return (
@@ -792,7 +850,7 @@ export default function IncidenciasPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs
           value={tabVista}
-          onChange={(_, v: 'repartidores' | 'clientes') => { setTabVista(v); setFiltroEstado('Todas'); setBusqueda('') }}
+          onChange={(_, v: 'repartidores' | 'clientes') => { setTabVista(v); setFiltroEstado('Todas'); setFiltroSeveridad('Todas'); setSoloSlaVencido(false); setBusqueda('') }}
         >
           <Tab
             value="repartidores"
@@ -858,10 +916,10 @@ export default function IncidenciasPage() {
           </Card>
         </Grid>
         <Grid item xs={6} md={3}>
-          <Card variant="outlined" sx={{ borderLeft: '4px solid #2e7d32' }}>
+          <Card variant="outlined" sx={{ borderLeft: `4px solid ${counts.slaVencidas > 0 ? '#b71c1c' : '#2e7d32'}` }}>
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">Resueltas</Typography>
-              <Typography variant="h4" fontWeight={700} color="#2e7d32">{counts.resueltas}</Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">SLA vencidas</Typography>
+              <Typography variant="h4" fontWeight={700} color={counts.slaVencidas > 0 ? '#b71c1c' : '#2e7d32'}>{counts.slaVencidas}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -887,6 +945,9 @@ export default function IncidenciasPage() {
                     <Typography variant="caption" color="text.secondary">{zona.provincia}</Typography>
                     <Typography variant="caption" display="block" color="text.secondary">
                       Altas: {zona.altas} · SLA vencido: {zona.vencidas}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Predomina: {zona.tipoPredominante} · {zona.severidadPredominante}
                     </Typography>
                   </Box>
                 </Grid>
@@ -920,6 +981,27 @@ export default function IncidenciasPage() {
                   sx={{ cursor: 'pointer' }}
                 />
               ))}
+            </Stack>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap">
+              {(['Todas', 'Alta', 'Media', 'Baja'] as const).map((f) => (
+                <Chip
+                  key={f}
+                  label={f === 'Todas' ? 'Todas las severidades' : f}
+                  size="small"
+                  onClick={() => setFiltroSeveridad(f)}
+                  variant={filtroSeveridad === f ? 'filled' : 'outlined'}
+                  color={filtroSeveridad === f ? 'warning' : 'default'}
+                  sx={{ cursor: 'pointer' }}
+                />
+              ))}
+              <Chip
+                label="Solo SLA vencido"
+                size="small"
+                onClick={() => setSoloSlaVencido((v) => !v)}
+                variant={soloSlaVencido ? 'filled' : 'outlined'}
+                color={soloSlaVencido ? 'error' : 'default'}
+                sx={{ cursor: 'pointer' }}
+              />
             </Stack>
           </Stack>
         </CardContent>

@@ -40,6 +40,7 @@ const emptyForm: PuntoPickUpPayload = {
   codigoPostal: '',
   provincia: '',
   horarios: 'Lunes a Viernes de 09:00 a 18:00',
+  capacidadDiaria: 100,
   telefono: '',
 }
 
@@ -125,6 +126,7 @@ export default function PuntosPickUpPage() {
       codigoPostal: item.codigoPostal,
       provincia: item.provincia,
       horarios: item.horarios,
+      capacidadDiaria: item.capacidadDiaria ?? 100,
       telefono: item.telefono ?? '',
     })
     setScheduleMode('manual')
@@ -256,6 +258,7 @@ export default function PuntosPickUpPage() {
     }
 
     if (!form.horarios.trim()) newErrors.horarios = 'Requerido'
+    if (!form.capacidadDiaria || form.capacidadDiaria <= 0) newErrors.capacidadDiaria = 'Debe ser mayor a 0'
 
     if (!newErrors.codigoPostal) {
       const cpResult = await postalCodeService.validate(form.codigoPostal)
@@ -365,6 +368,7 @@ export default function PuntosPickUpPage() {
                     <Typography variant="body2">{item.localidad} · CP {item.codigoPostal}</Typography>
                     <Typography variant="body2">{item.provincia}</Typography>
                     <Typography variant="body2" color="text.secondary">{item.horarios}</Typography>
+                    <Typography variant="body2" color="text.secondary">Capacidad: {item.capacidadDiaria ?? 100} envíos activos</Typography>
                     {item.telefono && <Typography variant="body2" color="text.secondary">{item.telefono}</Typography>}
                   </Stack>
                   {puedeEditar && (
@@ -514,6 +518,20 @@ export default function PuntosPickUpPage() {
             </Box>
 
             <TextField label="Teléfono de contacto" name="telefono" value={form.telefono ?? ''} onChange={handleChange} error={!!formErrors.telefono} helperText={formErrors.telefono} fullWidth />
+            <TextField
+              label="Capacidad diaria *"
+              name="capacidadDiaria"
+              type="number"
+              value={form.capacidadDiaria}
+              onChange={(e) => {
+                setForm({ ...form, capacidadDiaria: Number(e.target.value) })
+                if (formErrors.capacidadDiaria) setFormErrors((prev) => ({ ...prev, capacidadDiaria: '' }))
+              }}
+              error={!!formErrors.capacidadDiaria}
+              helperText={formErrors.capacidadDiaria || 'Cantidad máxima de envíos activos que puede manejar este punto.'}
+              inputProps={{ min: 1, step: 1 }}
+              fullWidth
+            />
             {msg && <Alert severity="error">{msg}</Alert>}
           </Stack>
         </DialogContent>

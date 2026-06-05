@@ -311,6 +311,9 @@ namespace Back.Infrastructure.Database
                     b.Property<Guid?>("RepartidorId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ResueltaEn")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("RepartidorNombre")
                         .IsRequired()
                         .HasMaxLength(160)
@@ -647,6 +650,11 @@ namespace Back.Infrastructure.Database
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
+
+                    b.Property<int>("CapacidadDiaria")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(100);
 
                     b.Property<string>("Localidad")
                         .IsRequired()

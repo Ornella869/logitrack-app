@@ -205,8 +205,6 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const [formData, setFormData] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [showCreatePassword, setShowCreatePassword] = useState(false)
-  const [createProvinceOpen, setCreateProvinceOpen] = useState(false)
-
   // Reset password desde el diálogo de edición
   const [showResetSection, setShowResetSection] = useState(false)
   const [resetPassValue, setResetPassValue] = useState('')

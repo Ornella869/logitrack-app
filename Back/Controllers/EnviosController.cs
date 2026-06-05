@@ -160,10 +160,22 @@ namespace Back.Controllers
 
         [Authorize(Roles = Roles.Operador)]
         [HttpGet("importacion/template")]
-        public ActionResult DescargarTemplateImportacion([FromServices] EnviosExcelImportService excel)
+        public async Task<ActionResult> DescargarTemplateImportacion([FromServices] EnviosExcelImportService excel)
         {
+            var user = await CurrentUserAsync();
+            var pickupsQuery = _context.PuntosPickUp.Where(p => p.Activo);
+            if (user?.SucursalId is Guid sucursalId)
+            {
+                var sucursal = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == sucursalId);
+                if (sucursal is null)
+                    pickupsQuery = pickupsQuery.Where(_ => false);
+                else
+                    pickupsQuery = pickupsQuery.Where(p => p.Provincia == sucursal.Provincia || sucursal.ProvinciasCubiertas.Contains(p.Provincia));
+            }
+            var pickups = await pickupsQuery.OrderBy(p => p.Provincia).ThenBy(p => p.Nombre).ToListAsync();
+
             return File(
-                excel.GenerarTemplate(),
+                excel.GenerarTemplate(pickups),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "template_envios_logitrack.xlsx");
         }
@@ -542,6 +554,21 @@ namespace Back.Controllers
             if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             try
             {
+                if (paquete.PuntoPickUpId is Guid puntoPickUpId)
+                {
+                    var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == puntoPickUpId && p.Activo);
+                    if (punto is null)
+                        return BadRequest("El punto Pick Up del envio no existe o no esta activo.");
+
+                    var ocupados = await _context.Paquetes.CountAsync(p =>
+                        p.PuntoPickUpId == puntoPickUpId &&
+                        p.Id != paquete.Id &&
+                        p.Status != PaqueteStatus.Entregado &&
+                        p.Status != PaqueteStatus.Cancelado);
+                    if (ocupados >= punto.CapacidadDiaria)
+                        return BadRequest($"El punto Pick Up alcanzo su capacidad diaria ({punto.CapacidadDiaria} envios activos).");
+                }
+
                 paquete.ReEnviar();
                 paquete.LiberarAsignacion();
                 await _historialService.RegistrarCambioAsync(paquete.Id, paquete.Status, CurrentUserId(), OrigenCambioEstado.Manual, "Reenvío del paquete");

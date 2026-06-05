@@ -21,7 +21,7 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import { shipmentService } from '../services/shipmentService'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment } from '../types'
-import { formatInstantArgentinaDate } from '../utils/argentinaDate'
+import { formatDateOnlyEs } from '../utils/argentinaDate'
 
 type TimelineStep = {
   key: string
@@ -129,8 +129,6 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
     { key: 'final', label: status === 'Cancelado' ? 'Envío cancelado' : 'Entregado', done: status === 'Entregado' || status === 'Cancelado', active: currentIndex === 3 },
   ]
 }
-
-import { formatDateOnlyEs } from '../utils/argentinaDate'
 
 const formatDate = (date: string) => {
   if (!date) return 'No disponible'

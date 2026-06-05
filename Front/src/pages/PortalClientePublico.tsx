@@ -24,7 +24,7 @@ import { shipmentService } from '../services/shipmentService'
 import { incidenciaService, type Incidencia } from '../services/incidenciaService'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
 import type { Shipment } from '../types'
-import { formatInstantArgentinaDate, formatDateOnlyEs } from '../utils/argentinaDate'
+import { formatDateOnlyEs } from '../utils/argentinaDate'
 
 const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; bg: string }> = {
   'Pendiente de calendarización': { label: 'En preparación', color: '#7B5E00', bg: '#FFF3CD' },

@@ -65,7 +65,7 @@ namespace Back.Controllers
             if (error is not null) return BadRequest(error);
             try
             {
-                var punto = new PuntoPickUp(request.Nombre, request.Direccion, request.Localidad, request.CodigoPostal, request.Provincia, request.Horarios, request.Telefono);
+                var punto = new PuntoPickUp(request.Nombre, request.Direccion, request.Localidad, request.CodigoPostal, request.Provincia, request.Horarios, request.Telefono, request.CapacidadDiaria);
                 _context.PuntosPickUp.Add(punto);
                 await _context.SaveChangesAsync();
                 return Ok(punto);
@@ -123,7 +123,7 @@ namespace Back.Controllers
             if (error is not null) return BadRequest(error);
             try
             {
-                punto.Actualizar(request.Nombre, request.Direccion, request.Localidad, request.CodigoPostal, request.Provincia, request.Horarios, request.Telefono);
+                punto.Actualizar(request.Nombre, request.Direccion, request.Localidad, request.CodigoPostal, request.Provincia, request.Horarios, request.Telefono, request.CapacidadDiaria);
                 await _context.SaveChangesAsync();
                 return Ok(punto);
             }
@@ -160,6 +160,9 @@ namespace Back.Controllers
             var sucursal = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == supervisor.SucursalId);
             if (sucursal is null || (punto.Provincia != sucursal.Provincia && !sucursal.ProvinciasCubiertas.Contains(punto.Provincia)))
                 return BadRequest("El punto Pick Up no pertenece a la cobertura de la sucursal.");
+            var ocupados = await ContarEnviosActivosPickUp(id);
+            if (ocupados >= punto.CapacidadDiaria)
+                return BadRequest($"El punto Pick Up alcanzo su capacidad diaria ({punto.CapacidadDiaria} envios activos).");
 
             paquete.AsignarPuntoPickUp(punto.Id);
             await _context.SaveChangesAsync();
@@ -186,7 +189,17 @@ namespace Back.Controllers
                 return "La localidad es obligatoria.";
             if (string.IsNullOrWhiteSpace(request.Provincia))
                 return "La provincia es obligatoria.";
+            if (request.CapacidadDiaria <= 0)
+                return "La capacidad diaria debe ser mayor a 0.";
             return null;
+        }
+
+        private async Task<int> ContarEnviosActivosPickUp(Guid puntoPickUpId)
+        {
+            return await _context.Paquetes.CountAsync(p =>
+                p.PuntoPickUpId == puntoPickUpId &&
+                p.Status != PaqueteStatus.Entregado &&
+                p.Status != PaqueteStatus.Cancelado);
         }
     }
 
@@ -198,6 +211,7 @@ namespace Back.Controllers
         public string CodigoPostal { get; set; } = string.Empty;
         public string Provincia { get; set; } = string.Empty;
         public string Horarios { get; set; } = string.Empty;
+        public int CapacidadDiaria { get; set; } = 100;
         public string? Telefono { get; set; }
     }
 

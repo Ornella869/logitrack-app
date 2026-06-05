@@ -35,6 +35,7 @@ namespace Back.Domain.Models
         public DateTime FechaReporte { get; private set; } = DateTime.UtcNow;
         public string Severidad { get; private set; } = "Media";
         public DateTime? SlaVenceEn { get; private set; }
+        public DateTime? ResueltaEn { get; private set; }
         public string? EmailContacto { get; private set; }
         public bool ChatFinalizado { get; private set; }
         public string ParadasAfectadasJson { get; private set; } = "[]";
@@ -98,7 +99,14 @@ namespace Back.Domain.Models
             var anterior = Estado;
             Estado = nuevoEstado.Trim();
             if (string.Equals(Estado, "Resuelta", StringComparison.OrdinalIgnoreCase))
+            {
                 ChatFinalizado = true;
+                ResueltaEn ??= DateTime.UtcNow;
+            }
+            else
+            {
+                ResueltaEn = null;
+            }
             var historial = GetHistorial();
             historial.Add(new HistorialEstadoIncidencia
             {

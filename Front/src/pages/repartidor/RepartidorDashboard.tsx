@@ -83,6 +83,9 @@ const stopsForMaps = (paradas: Shipment[]) =>
     status: p.status,
   }))
 
+const puedeReportarIncidenciaSobre = (parada: Shipment) =>
+  parada.status.toLowerCase().includes('tr') || parada.status === 'Demorado'
+
 const originForMaps = (origen: BranchOrigin | null) =>
   origen ? { direccion: origen.address, ciudad: origen.city, codigoPostal: origen.postalCode } : null
 
@@ -482,6 +485,7 @@ export default function RepartidorDashboard() {
   })
   const esHoy = fechaRuta ? dateOnly(fechaRuta) === formatArgentinaDateInput() : false
   const proxima = metrics.proximaIdx >= 0 ? paradas[metrics.proximaIdx] : null
+  const paradaParaIncidencia = paradas.find(puedeReportarIncidenciaSobre) ?? null
 
   const todasEntregadas =
     paradas.length > 0 &&
@@ -751,7 +755,10 @@ export default function RepartidorDashboard() {
         <Tabs
           value={tab}
           onChange={(_, v: number) => {
-            if (v === 2) { setIncidenteOpen(true); return }
+            if (v === 2) {
+              if (paradaParaIncidencia) setIncidenteOpen(true)
+              return
+            }
             setTab(v)
           }}
         >
@@ -759,6 +766,7 @@ export default function RepartidorDashboard() {
           <Tab label="📋 Mis paradas" />
           {paradas.length > 0 && (
             <Tab
+              disabled={!paradaParaIncidencia}
               label={
                 <Stack direction="row" alignItems="center" spacing={0.6}>
                   <WarningAmberIcon sx={{ fontSize: 15 }} />
@@ -1099,6 +1107,8 @@ export default function RepartidorDashboard() {
         open={incidenteOpen}
         onClose={() => setIncidenteOpen(false)}
         user={user}
+        paradaAfectadaId={paradaParaIncidencia?.id ?? null}
+        canReport={!!paradaParaIncidencia}
       />
 
       {/* Próxima parada: QR + demora rápida */}

@@ -161,7 +161,11 @@ export default function EnviosPage() {
       setImportResult(result)
       setPage(1)
       void loadShipments(search, filters, 1, pageSize)
-      showActionToast(`Importacion lista: ${result.creados} envios creados`, result.fallidos ? 'warning' : 'success')
+      if (result.creados === 0 && result.fallidos > 0) {
+        showActionToast(`No se importo ningun envio. ${result.detalles?.find((d) => !d.creado)?.error ?? 'Revisa los errores del archivo.'}`, 'error')
+      } else {
+        showActionToast(`Importacion lista: ${result.creados} envios creados`, result.fallidos ? 'warning' : 'success')
+      }
     } catch (error: any) {
       showActionToast(error?.response?.data || error?.message || 'Error al importar el archivo', 'error')
     } finally {
@@ -356,7 +360,7 @@ export default function EnviosPage() {
               </Alert>
             )}
             {importResult && (
-              <Alert severity={importResult.fallidos ? 'warning' : 'success'}>
+              <Alert severity={importResult.creados === 0 && importResult.fallidos > 0 ? 'error' : importResult.fallidos ? 'warning' : 'success'}>
                 Importados: {importResult.creados} / {importResult.procesados}
                 {importResult.fallidos ? ` - Fallidos: ${importResult.fallidos}` : ''}
               </Alert>

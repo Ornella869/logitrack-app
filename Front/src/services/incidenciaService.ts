@@ -40,6 +40,9 @@ export interface Incidencia {
   severidad?: SeveridadIncidencia
   slaVenceEn?: string | null
   slaVencido?: boolean
+  resueltaEn?: string | null
+  slaResueltoFueraDePlazo?: boolean
+  minutosResolucion?: number | null
 }
 
 const normalizeEstado = (estado: string): EstadoIncidencia =>
@@ -70,6 +73,9 @@ const mapIncidencia = (raw: any): Incidencia => ({
   severidad: raw.severidad ?? 'Media',
   slaVenceEn: raw.slaVenceEn ?? null,
   slaVencido: raw.slaVencido ?? false,
+  resueltaEn: raw.resueltaEn ?? null,
+  slaResueltoFueraDePlazo: raw.slaResueltoFueraDePlazo ?? false,
+  minutosResolucion: raw.minutosResolucion ?? null,
 })
 
 function dispatch(): void {
@@ -152,6 +158,12 @@ export const incidenciaService = {
     return mapIncidencia(response.data)
   },
 
+  async cambiarSeveridad(id: string, severidad: SeveridadIncidencia): Promise<Incidencia | null> {
+    const response = await api.put(`/incidencias/${id}/severidad`, { severidad })
+    dispatch()
+    return mapIncidencia(response.data)
+  },
+
   async agregarObservacion(id: string, texto: string): Promise<Incidencia | null> {
     const response = await api.post(`/incidencias/${id}/observaciones`, { texto })
     dispatch()
@@ -164,7 +176,7 @@ export const incidenciaService = {
     return mapIncidencia(response.data)
   },
 
-  async rankingZonas(): Promise<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number }>> {
+  async rankingZonas(): Promise<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number; severidadPredominante: string; tipoPredominante: string }>> {
     const response = await api.get('/incidencias/ranking-zonas')
     return response.data ?? []
   },

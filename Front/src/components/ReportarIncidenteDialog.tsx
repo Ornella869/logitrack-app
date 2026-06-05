@@ -39,6 +39,8 @@ interface Props {
   open: boolean
   onClose: () => void
   user: User
+  paradaAfectadaId?: string | null
+  canReport?: boolean
 }
 
 const TEMPLATES = [
@@ -222,7 +224,7 @@ function ChatBubble({ msg, isDark, onFollowUp }: {
   )
 }
 
-export default function ReportarIncidenteDialog({ open, onClose, user }: Props) {
+export default function ReportarIncidenteDialog({ open, onClose, user, paradaAfectadaId, canReport = true }: Props) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMsg()])
@@ -334,6 +336,11 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
   }
 
   const handleNotificarSupervisor = (tipoId?: string) => {
+    if (!canReport || !paradaAfectadaId) {
+      addTrackyMessage('Solo podés reportar incidencias cuando tenés una parada en tránsito.', true)
+      return
+    }
+
     const tipoTemplate = tipoId ?? lastTemplateId ?? 'otro'
     const tipoLabel = TEMPLATES.find((t) => t.id === tipoTemplate)?.label ?? 'Incidente'
 
@@ -359,7 +366,8 @@ export default function ReportarIncidenteDialog({ open, onClose, user }: Props) 
       try {
         const ruta = await shipmentService.getMiRutaDelDia()
         paradasAfectadas = ruta.paradas
-          .filter((p) => p.status === 'En tránsito' || p.status === 'Demorado')
+          .filter((p) => p.status.toLowerCase().includes('tr') || p.status === 'Demorado')
+          .slice(0, 1)
           .map((p) => p.id)
       } catch {
         // no bloqueamos si falla

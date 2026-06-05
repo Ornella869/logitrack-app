@@ -74,11 +74,18 @@ namespace Back.Controllers
                 return BadRequest("Ya existe una incidencia abierta de este tipo reportada recientemente.");
 
             var paradasIds = request.ParadasAfectadas?.Distinct().ToList() ?? new List<Guid>();
+            var paradasEnTransito = await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidor.Id &&
+                    (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado))
+                .ToListAsync();
+            if (paradasEnTransito.Count == 0)
+                return BadRequest("Solo podés reportar incidencias cuando tenés envíos en tránsito.");
+
             var paradas = paradasIds.Count == 0
-                ? new List<Paquete>()
-                : await _context.Paquetes
-                    .Where(p => paradasIds.Contains(p.Id) && p.RepartidorAsignadoId == repartidor.Id)
-                    .ToListAsync();
+                ? paradasEnTransito.Take(1).ToList()
+                : paradasEnTransito.Where(p => paradasIds.Contains(p.Id)).Take(1).ToList();
+            if (paradas.Count == 0)
+                return BadRequest("La parada afectada ya no se encuentra en tránsito.");
 
             var paquetePrincipal = paradas.FirstOrDefault();
             var incidencia = new Incidencia(
@@ -244,32 +251,72 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor)]
+        [HttpPut("{id:guid}/severidad")]
+        public async Task<ActionResult<IncidenciaDto>> CambiarSeveridad(Guid id, [FromBody] CambiarSeveridadIncidenciaRequest request)
+        {
+            var incidencia = await GetIncidenciaSupervisorAsync(id);
+            if (incidencia is null) return NotFound();
+
+            incidencia.CambiarSeveridad(request.Severidad);
+            await _auditoria.RegistrarAsync(
+                TipoAccion.Otro,
+                $"Cambio de severidad de incidencia a {incidencia.Severidad}",
+                incidencia.CodigoSeguimiento,
+                $"Incidencia: {incidencia.Id}");
+            await _context.SaveChangesAsync();
+            return Ok(ToDto(incidencia));
+        }
+
+        [Authorize(Roles = Roles.Supervisor)]
         [HttpGet("ranking-zonas")]
         public async Task<ActionResult<List<RankingZonaIncidenciaDto>>> RankingZonas()
         {
             var user = await CurrentUserAsync();
             if (user?.SucursalId is null) return Ok(new List<RankingZonaIncidenciaDto>());
 
-            var data = await _context.Incidencias
+            var incidencias = await _context.Incidencias
                 .Where(i => i.SucursalId == user.SucursalId)
-                .GroupJoin(_context.Paquetes,
-                    i => i.PaqueteId,
-                    p => p.Id,
-                    (i, ps) => new { Incidencia = i, Paquete = ps.FirstOrDefault() })
                 .ToListAsync();
+
+            var paqueteIds = incidencias
+                .SelectMany(i => i.PaqueteId.HasValue
+                    ? new List<Guid> { i.PaqueteId.Value }
+                    : i.GetParadasAfectadas())
+                .Distinct()
+                .ToList();
+
+            var paquetes = await _context.Paquetes
+                .Where(p => paqueteIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            var data = incidencias
+                .Select(i =>
+                {
+                    Paquete? paquete = null;
+                    if (i.PaqueteId.HasValue)
+                        paquetes.TryGetValue(i.PaqueteId.Value, out paquete);
+                    paquete ??= i.GetParadasAfectadas()
+                        .Select(id => paquetes.TryGetValue(id, out var p) ? p : null)
+                        .FirstOrDefault(p => p is not null);
+                    return new { Incidencia = i, Paquete = paquete };
+                })
+                .Where(x => x.Paquete is not null)
+                .ToList();
 
             var ranking = data
                 .GroupBy(x => new
                 {
-                    Provincia = x.Paquete?.ProvinciaDestino ?? "Sin provincia",
-                    Localidad = x.Paquete?.Destinatario.Direccion.Ciudad ?? "Sin localidad",
+                    Provincia = x.Paquete!.ProvinciaDestino ?? x.Paquete.Destinatario.Direccion.Provincia ?? "Sin provincia",
+                    Localidad = x.Paquete.Destinatario.Direccion.Ciudad,
                 })
                 .Select(g => new RankingZonaIncidenciaDto(
                     g.Key.Provincia,
                     g.Key.Localidad,
                     g.Count(),
                     g.Count(x => x.Incidencia.Severidad == "Alta"),
-                    g.Count(x => x.Incidencia.Estado != "Resuelta" && x.Incidencia.SlaVenceEn < DateTime.UtcNow)))
+                    g.Count(x => x.Incidencia.Estado != "Resuelta" && x.Incidencia.SlaVenceEn < DateTime.UtcNow),
+                    g.GroupBy(x => x.Incidencia.Severidad).OrderByDescending(sg => sg.Count()).ThenBy(sg => sg.Key).First().Key,
+                    g.GroupBy(x => x.Incidencia.TipoLabel).OrderByDescending(tg => tg.Count()).ThenBy(tg => tg.Key).First().Key))
                 .OrderByDescending(x => x.Total)
                 .ThenByDescending(x => x.Altas)
                 .Take(10)
@@ -375,12 +422,16 @@ namespace Back.Controllers
             i.SucursalId?.ToString(),
             i.Severidad,
             i.SlaVenceEn,
-            i.Estado != "Resuelta" && i.SlaVenceEn.HasValue && i.SlaVenceEn.Value < DateTime.UtcNow);
+            i.Estado != "Resuelta" && i.SlaVenceEn.HasValue && i.SlaVenceEn.Value < DateTime.UtcNow,
+            i.ResueltaEn,
+            i.SlaVenceEn.HasValue && i.ResueltaEn.HasValue && i.ResueltaEn.Value > i.SlaVenceEn.Value,
+            i.ResueltaEn.HasValue ? (int)Math.Round((i.ResueltaEn.Value - i.FechaReporte).TotalMinutes) : null);
     }
 
     public record CrearIncidenciaPublicaRequest(string TrackingId, string Tipo, string? TipoLabel, string Descripcion, string? EmailContacto, string? Severidad);
     public record CrearIncidenciaRepartidorRequest(string Tipo, string? TipoLabel, string Descripcion, List<Guid>? ParadasAfectadas, string? Severidad);
     public record CambiarEstadoIncidenciaRequest(string Estado);
+    public record CambiarSeveridadIncidenciaRequest(string Severidad);
     public record AgregarObservacionIncidenciaRequest(string Texto);
     public record SendMensajeRequest(string Texto);
 
@@ -415,7 +466,10 @@ namespace Back.Controllers
         string? SucursalId,
         string Severidad,
         DateTime? SlaVenceEn,
-        bool SlaVencido);
+        bool SlaVencido,
+        DateTime? ResueltaEn,
+        bool SlaResueltoFueraDePlazo,
+        int? MinutosResolucion);
 
-    public record RankingZonaIncidenciaDto(string Provincia, string Localidad, int Total, int Altas, int Vencidas);
+    public record RankingZonaIncidenciaDto(string Provincia, string Localidad, int Total, int Altas, int Vencidas, string SeveridadPredominante, string TipoPredominante);
 }

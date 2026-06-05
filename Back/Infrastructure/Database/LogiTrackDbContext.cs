@@ -195,6 +195,7 @@ namespace Back.Infrastructure.Database
                 p.Property(x => x.CodigoPostal).HasMaxLength(20).IsRequired();
                 p.Property(x => x.Provincia).HasMaxLength(80).IsRequired();
                 p.Property(x => x.Horarios).HasMaxLength(300).IsRequired();
+                p.Property(x => x.CapacidadDiaria).HasDefaultValue(100);
                 p.Property(x => x.Telefono).HasMaxLength(50);
                 p.HasIndex(x => x.Provincia);
                 p.HasIndex(x => x.Activo);

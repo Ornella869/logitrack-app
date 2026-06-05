@@ -8,6 +8,7 @@ export interface PuntoPickUp {
   codigoPostal: string
   provincia: string
   horarios: string
+  capacidadDiaria: number
   telefono?: string | null
   activo: boolean
   creadoEn: string
@@ -20,6 +21,7 @@ export interface PuntoPickUpPayload {
   codigoPostal: string
   provincia: string
   horarios: string
+  capacidadDiaria: number
   telefono?: string
 }
 
