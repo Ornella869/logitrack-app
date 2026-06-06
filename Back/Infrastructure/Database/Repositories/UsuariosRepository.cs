@@ -63,26 +63,20 @@ namespace Back.Infrastructure.Database.Repositories
             }
 
             if (sucursalId.HasValue)
-            {
-                if (normalizedRole == "gerente")
-                {
-                    // Gerentes no tienen SucursalId; se filtran por la provincia de la sucursal seleccionada.
-                    var sucursal = await _context.Sucursales.FindAsync(sucursalId.Value);
-                    if (!string.IsNullOrWhiteSpace(sucursal?.Provincia))
-                    {
-                        var prov = sucursal.Provincia;
-                        query = query.OfType<Gerente>().Where(g => _context.GerentesProvincias.Any(gp => gp.Provincia == prov && gp.GerenteId == g.Id));
-                    }
-                    else
-                    {
-                        query = query.Where(_ => false);
-                    }
-                }
-                else
-                {
-                    query = query.Where(u => u.SucursalId == sucursalId.Value);
-                }
-            }
+{
+    var sucursal = await _context.Sucursales.FindAsync(sucursalId.Value);
+    var prov = sucursal?.Provincia;
+
+    query = query.Where(u =>
+        u.SucursalId == sucursalId.Value
+        || (
+            !string.IsNullOrWhiteSpace(prov)
+            && u is Gerente
+            && _context.GerentesProvincias.Any(gp =>
+                gp.Provincia == prov && gp.GerenteId == u.Id)
+        )
+    );
+}
 
             var totalItems = await query.CountAsync();
             var items = await query

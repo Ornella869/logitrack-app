@@ -418,6 +418,34 @@ namespace Back.Application.Services
             tramo?.VolverAPendiente();
         }
 
+        public async Task<DateTime> CalcularFechaEstimadaEntregaAsync(Guid paqueteId)
+        {
+            var tramos = _context.TramosEnvio.Local.Where(t => t.PaqueteId == paqueteId).ToList();
+            if (tramos.Count == 0)
+            {
+                tramos = await _context.TramosEnvio
+                    .Where(t => t.PaqueteId == paqueteId)
+                    .ToListAsync();
+            }
+
+            var horasTotales = tramos.Sum(t => t.HorasEstimadas);
+            var diasViaje = (int)Math.Ceiling(horasTotales / 8.0);
+
+            var fechaEstimada = DateTime.UtcNow;
+
+            while (diasViaje > 0)
+            {
+                fechaEstimada = fechaEstimada.AddDays(1);
+                // Si no es domingo, contamos el día como día de viaje laboral
+                if (fechaEstimada.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    diasViaje--;
+                }
+            }
+
+            return fechaEstimada;
+        }
+
         private async Task<TramoEnvio?> TramoActualAsync(Guid paqueteId)
             => await _context.TramosEnvio
                 .Where(t => t.PaqueteId == paqueteId

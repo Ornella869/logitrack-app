@@ -114,6 +114,55 @@ namespace Back.Application.Services
                 $"Codigo de entrega para tu envio {paquete.CodigoSeguimiento}", cuerpo);
         }
 
+        public async Task NotificarLlegadaSucursalAsync(Paquete paquete, string nombreSucursal)
+        {
+            if (paquete.Destinatario.Email is null) return;
+
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var cuerpo = BuildTemplate(
+                "blue",
+                "Actualizacion de tu envio",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                $"Te avisamos que tu envio llego y fue procesado en la {SecurityElement.Escape(nombreSucursal)}.",
+                trackingUrl,
+                "Ver seguimiento",
+                "");
+
+            await CrearYEnviarAsync(paquete, EventoEmailNotificacion.LlegadaSucursalIntermedia,
+                $"Tu envio {paquete.CodigoSeguimiento} llego a {nombreSucursal}", cuerpo);
+        }
+
+        public async Task NotificarFechaEstimadaEntregaAsync(Paquete paquete, DateTime fechaEstimada)
+        {
+            if (paquete.Destinatario.Email is null) return;
+
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var fechaStr = fechaEstimada.ToString("dd/MM/yyyy");
+            
+            var detalleHtml = $"""
+                <div style="background:#0f172a;border:1px solid #3b82f6;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
+                  <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Fecha estimada de entrega:</div>
+                  <div style="font-size:24px;font-weight:900;color:#60a5fa;">{fechaStr}</div>
+                </div>
+                """;
+
+            var cuerpo = BuildTemplate(
+                "indigo",
+                "Fecha estimada de tu envio",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                "Ya tenemos una fecha estimada para la llegada de tu paquete basandonos en el itinerario de viaje.",
+                trackingUrl,
+                "Ver seguimiento",
+                detalleHtml);
+
+            await CrearYEnviarAsync(paquete, EventoEmailNotificacion.FechaEstimadaEntrega,
+                $"Fecha estimada para tu envio {paquete.CodigoSeguimiento}", cuerpo);
+        }
+
         public async Task CrearEmailLeadAsync(SolicitudComercial lead)
         {
             var email = new EmailNotificacion(
@@ -150,7 +199,7 @@ namespace Back.Application.Services
         private async Task CrearYEnviarAsync(Paquete paquete, EventoEmailNotificacion evento, string asunto, string cuerpo)
         {
             var yaExiste = await _context.EmailNotificaciones.AnyAsync(e =>
-                e.PaqueteId == paquete.Id && e.Evento == evento);
+                e.PaqueteId == paquete.Id && e.Evento == evento && e.Asunto == asunto);
             if (yaExiste) return;
 
             var email = new EmailNotificacion(

@@ -257,7 +257,12 @@ namespace Back.Domain.Models
             RazonDemora = null;
             RazonCancelacion = null;
             RequiereRepartidorFullTime = requiereFullTime;
-            ActualizarEstimacionEntrega((float)distanciaKm);
+        }
+
+        public void AsignarFechaEstimada(DateTime fechaEstimada)
+        {
+            FechaEstimadaEntrega = DateTime.SpecifyKind(fechaEstimada.Date, DateTimeKind.Utc);
+            DiasEstimadosEntrega = Math.Max(1, (int)Math.Ceiling((fechaEstimada.Date - CreadoEn.Date).TotalDays));
         }
 
         public void LiberarAsignacion()

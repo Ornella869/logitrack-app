@@ -265,7 +265,12 @@ namespace Back.Application.Services
 
             await _enviosRepository.Add(paquete);
             if (sucursalDestino is not null)
+            {
                 await _tramos.PlanificarAsync(paquete, sucursalDestino.Id);
+                var fechaEstimada = await _tramos.CalcularFechaEstimadaEntregaAsync(paquete.Id);
+                paquete.AsignarFechaEstimada(fechaEstimada);
+                await _emails.NotificarFechaEstimadaEntregaAsync(paquete, fechaEstimada);
+            }
             await _emails.NotificarCodigoEntregaAsync(paquete);
 
             await _historial.RegistrarCambioAsync(
@@ -739,6 +744,17 @@ namespace Back.Application.Services
             if (usuarioId.HasValue
                 && await _tramos.IntentarRecibirEnSucursalAsync(paquete, usuarioId.Value))
             {
+                var operador = await _userRepository.GetUsuarioById(usuarioId.Value);
+                if (operador?.SucursalId is Guid sucursalId)
+                {
+                    var sucursales = await _enviosRepository.GetSucursales(sucursalId: sucursalId);
+                    var sucursal = sucursales.FirstOrDefault();
+                    if (sucursal is not null)
+                    {
+                        await _emails.NotificarLlegadaSucursalAsync(paquete, sucursal.Nombre);
+                    }
+                }
+
                 await _historial.RegistrarCambioAsync(
                     paquete.Id,
                     PaqueteStatus.PendienteDeCalendarizacion,
