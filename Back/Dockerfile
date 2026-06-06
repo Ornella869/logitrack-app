@@ -22,4 +22,4 @@ ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 
 # 4. El punto de entrada debe coincidir con el nombre del proyecto
-ENTRYPOINT ["dotnet", "Back.dll"]
+ENTRYPOINT ["dotnet", "LogiTrackBackend.dll"]
