@@ -295,6 +295,15 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                             size="small"
                             variant="filled"
                           />
+                          <Chip
+                            label={repartidor.tipoJornada ?? 'Full Time'}
+                            size="small"
+                            sx={{
+                              bgcolor: repartidor.tipoJornada === 'Part Time' ? '#fff3e0' : '#e3f2fd',
+                              color: repartidor.tipoJornada === 'Part Time' ? '#e65100' : '#1565c0',
+                              fontWeight: 600,
+                            }}
+                          />
                         </Box>
                         <Button
                           size="small"

@@ -33,6 +33,8 @@ const mapRepartidor = (t: any): User => ({
   activo: t.activo ?? true,
   licencia: t.licencia,
   estado: (t.estado as RepartidorEstado) || 'Activo',
+  horasTrabajo: t.horasTrabajo ?? 8,
+  tipoJornada: (t.tipoJornada as 'Part Time' | 'Full Time') ?? 'Full Time',
 })
 
 const mapRepartidorListItem = (t: any): RepartidorListItem => ({
@@ -287,6 +289,18 @@ export const authService = {
       return mapRepartidor(response.data)
     } catch (error) {
       console.error('Update repartidor licencia error:', error)
+      return null
+    }
+  },
+
+  updateRepartidorHorasTrabajo: async (repartidorId: string, horasTrabajo: number): Promise<User | null> => {
+    try {
+      const response = await api.put(`/auth/repartidores/${repartidorId}/horas-trabajo`, {
+        HorasTrabajo: horasTrabajo,
+      })
+      return mapRepartidor(response.data)
+    } catch (error) {
+      console.error('Update repartidor horas trabajo error:', error)
       return null
     }
   },

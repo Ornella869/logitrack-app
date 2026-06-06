@@ -123,6 +123,17 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Envío <strong>{shipment.trackingId}</strong> · {(shipment.weight ?? 0).toFixed(1)} kg · destino CP {shipment.receiver.postalCode}
+              {shipment.horasEstimadasRuta !== undefined && (
+                <> · <strong>~{shipment.horasEstimadasRuta.toFixed(1)} h de ruta</strong>
+                  {shipment.horasEstimadasRuta > 6 && (
+                    <Chip
+                      label="Solo Full Time"
+                      size="small"
+                      sx={{ ml: 0.5, bgcolor: '#e3f2fd', color: '#1565c0', fontWeight: 700, fontSize: '0.65rem', height: 20, verticalAlign: 'middle' }}
+                    />
+                  )}
+                </>
+              )}
             </Typography>
 
             <FormControl fullWidth size="small">
@@ -159,13 +170,17 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                   const quedaExcedido = carga.peso + (shipment.weight ?? 0) > CAPACIDAD_KG
                   const enTransitoHoy = fecha === hoy && rep.estadoJornada === 'EnRuta'
                   const retornando = rep.estadoJornada === 'Retornando'
-                  const bloqueado = enTransitoHoy || retornando || quedaExcedido
+                  const esPartTime = (rep.horasTrabajo ?? 8) <= 6
+                  const incompatibleJornada = esPartTime && (shipment.horasEstimadasRuta ?? 0) > 6
+                  const bloqueado = enTransitoHoy || retornando || quedaExcedido || incompatibleJornada
                   const tooltipTitle = enTransitoHoy
                     ? 'Está en tránsito. Elegí otro día para asignarle un envío.'
                     : retornando
                     ? 'Está regresando a sucursal. Esperá a que cierre su jornada.'
                     : quedaExcedido
                     ? 'No hay capacidad para este envío en este día. Elegí otro día.'
+                    : incompatibleJornada
+                    ? `Este envío requiere ~${(shipment.horasEstimadasRuta ?? 0).toFixed(1)} h de ruta. Los repartidores Part Time solo pueden recibir envíos de hasta 6 h.`
                     : ''
                   return (
                     <Tooltip key={rep.repartidorId} title={tooltipTitle} placement="top">
@@ -182,8 +197,17 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                       >
                         <Radio checked={seleccionado} size="small" disabled={bloqueado} />
                         <Box sx={{ flex: 1 }}>
-                          <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap">
                             <Typography variant="body2" fontWeight={600}>{rep.nombre}</Typography>
+                            <Chip
+                              label={rep.tipoJornada ?? 'Full Time'}
+                              size="small"
+                              sx={{
+                                bgcolor: esPartTime ? '#fff3e0' : '#e3f2fd',
+                                color: esPartTime ? '#e65100' : '#1565c0',
+                                fontWeight: 700, fontSize: '0.65rem', height: 20,
+                              }}
+                            />
                             {enTransitoHoy && (
                               <Chip
                                 icon={<DirectionsBikeIcon sx={{ fontSize: '12px !important' }} />}
@@ -199,9 +223,16 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                                 sx={{ bgcolor: '#ede7f6', color: '#5e35b1', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
                               />
                             )}
-                            {quedaExcedido && !enTransitoHoy && !retornando && (
+                            {quedaExcedido && !enTransitoHoy && !retornando && !incompatibleJornada && (
                               <Chip
                                 label="Capacidad llena"
+                                size="small"
+                                sx={{ bgcolor: '#ffebee', color: '#c62828', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                              />
+                            )}
+                            {incompatibleJornada && (
+                              <Chip
+                                label="Solo Full Time"
                                 size="small"
                                 sx={{ bgcolor: '#ffebee', color: '#c62828', fontWeight: 700, fontSize: '0.65rem', height: 20 }}
                               />

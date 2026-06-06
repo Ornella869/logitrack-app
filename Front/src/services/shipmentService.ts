@@ -124,6 +124,7 @@ const mapToShipment = (paquete: any): Shipment => ({
   costoRecargoSeguridad: paquete.costoRecargoSeguridad ?? undefined,
   esZonaPeligrosa: paquete.esZonaPeligrosa ?? undefined,
   puntoPickUpId: paquete.puntoPickUpId ?? null,
+  horasEstimadasRuta: paquete.horasEstimadasRuta ?? undefined,
   fechaCalendarizada: paquete.fechaCalendarizada ?? null,
   fechaEstimadaEntrega: paquete.fechaEstimadaEntrega ?? null,
   sucursalId: paquete.sucursalId ?? paquete.SucursalId ?? null,
@@ -726,6 +727,8 @@ export interface CalendarioRepartidor {
   nombre: string
   email: string
   estadoJornada?: string
+  horasTrabajo?: number
+  tipoJornada?: string
   celdas: CalendarioCelda[]
 }
 

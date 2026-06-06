@@ -53,6 +53,7 @@ namespace Back.Domain.Models
         // G1L-82: motivo del estado "Demorado" (Problema mecánico, Corte de ruta, etc.)
         public string? RazonDemora { get; private set; }
         public float Distancia { get; set; } = 0;
+        public float HorasEstimadasRuta { get; private set; } = 8f;
         // G1L-88: cotización congelada al momento del alta (no cambia si luego cambian las tarifas).
         public double CostoEnvio { get; private set; }
         public double CostoRecargoSeguridad { get; private set; }
@@ -278,6 +279,7 @@ namespace Back.Domain.Models
             double kmPorJornada = JORNADA_HORAS * velocidadPromedioKmH;
 
             DiasEstimadosEntrega = Math.Max(1, (int)Math.Ceiling(distanciaRealKm / kmPorJornada));
+            HorasEstimadasRuta = (float)(distanciaRealKm / velocidadPromedioKmH);
             if (FechaCalendarizada.HasValue)
             {
                 var current = FechaCalendarizada.Value.Date;

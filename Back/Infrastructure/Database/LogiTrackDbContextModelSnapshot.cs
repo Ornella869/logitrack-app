@@ -527,6 +527,10 @@ namespace Back.Infrastructure.Database
                     b.Property<float>("Distancia")
                         .HasColumnType("real");
 
+                    b.Property<float>("HorasEstimadasRuta")
+                        .HasColumnType("real")
+                        .HasDefaultValue(8f);
+
                     b.Property<bool>("EsEnvioADomicilio")
                         .HasColumnType("boolean");
 
@@ -1009,6 +1013,9 @@ namespace Back.Infrastructure.Database
                         .HasColumnType("integer");
 
                     b.Property<int>("EstadoJornada")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HorasTrabajo")
                         .HasColumnType("integer");
 
                     b.Property<string>("Licencia")

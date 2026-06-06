@@ -60,6 +60,9 @@ namespace Back.Application.Services
         public required string Email { get; init; }
         /// <summary>"Disponible", "EnRuta" o "Retornando".</summary>
         public required string EstadoJornada { get; init; }
+        public required int HorasTrabajo { get; init; }
+        /// <summary>"Part Time" (≤ 6 h) o "Full Time" (≥ 7 h).</summary>
+        public required string TipoJornada { get; init; }
         public required List<CalendarioCelda> Celdas { get; init; }
     }
 
@@ -176,6 +179,8 @@ namespace Back.Application.Services
                     Nombre = $"{r.Nombre} {r.Apellido}",
                     Email = r.Email,
                     EstadoJornada = r.EstadoJornada.ToString(),
+                    HorasTrabajo = r.HorasTrabajo,
+                    TipoJornada = r.TipoJornada,
                     Celdas = celdas,
                 };
             }).ToList();
@@ -250,6 +255,14 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("El repartidor está retornando a la sucursal. Debe cerrar su jornada antes de recibir nuevos envíos.");
 
             var fechaUtc = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
+
+            // Validar compatibilidad de jornada: un repartidor Part Time no puede recibir
+            // envíos que superen sus horas de trabajo diario (umbral: > 6 h de ruta).
+            if (rep.EsPartTime && paquete.HorasEstimadasRuta > 6f)
+                throw new InvalidOperationException(
+                    $"Este envío requiere aproximadamente {paquete.HorasEstimadasRuta:0.#} horas de ruta " +
+                    $"y no puede asignarse a repartidores de jornada Part Time ({rep.HorasTrabajo} h/día). " +
+                    "Elegí un repartidor Full Time.");
 
             // Si el repartidor está en ruta HOY y el supervisor eligió hoy, bloqueamos:
             // no se puede agregar al viaje en curso. El supervisor debe elegir otro día.
@@ -421,9 +434,13 @@ namespace Back.Application.Services
 
                 // Solo se usan repartidores de la misma sucursal que el paquete.
                 // Si el paquete no tiene sucursal asignada, se usan todos los disponibles.
-                var repsElegibles = paquete.SucursalId.HasValue
-                    ? repartidores.Where(r => r.SucursalId == paquete.SucursalId).ToList()
-                    : repartidores;
+                // Los repartidores Part Time (≤ 6 h/día) solo reciben envíos con
+                // HorasEstimadasRuta ≤ 6; para rutas más largas solo Full Time.
+                var repsElegibles = (paquete.SucursalId.HasValue
+                    ? repartidores.Where(r => r.SucursalId == paquete.SucursalId)
+                    : repartidores.AsEnumerable())
+                    .Where(r => !r.EsPartTime || paquete.HorasEstimadasRuta <= 6f)
+                    .ToList();
 
                 if (repsElegibles.Count == 0) { sinAsignar++; continue; }
 

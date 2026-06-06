@@ -25,6 +25,8 @@ export interface User {
   provincia?: string | null
   provincias?: string[] | null
   puntoPickUpId?: string | null
+  horasTrabajo?: number
+  tipoJornada?: 'Part Time' | 'Full Time'
 }
 
 export interface CreateRepartidorData {
@@ -139,6 +141,7 @@ export interface Shipment {
   costoRecargoSeguridad?: number
   esZonaPeligrosa?: boolean
   puntoPickUpId?: string | null
+  horasEstimadasRuta?: number
 }
 
 export interface LoginCredentials {

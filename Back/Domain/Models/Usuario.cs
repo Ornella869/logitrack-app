@@ -210,6 +210,10 @@ namespace Back.Domain.Models
         public string Licencia { get; private set; }
         public EstadoRepartidor Estado { get; private set; } = EstadoRepartidor.Activo;
         public EstadoJornadaRepartidor EstadoJornada { get; private set; } = EstadoJornadaRepartidor.Disponible;
+        public int HorasTrabajo { get; private set; } = 8;
+
+        public string TipoJornada => HorasTrabajo <= 6 ? "Part Time" : "Full Time";
+        public bool EsPartTime => HorasTrabajo <= 6;
 
         public Repartidor()
         {
@@ -219,6 +223,13 @@ namespace Back.Domain.Models
         public Repartidor(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada") : base(nombre, apellido, email, password, dni)
         {
             Licencia = licencia;
+        }
+
+        public void ActualizarHorasTrabajo(int horas)
+        {
+            if (horas < 1 || horas > 24)
+                throw new InvalidOperationException("Las horas de trabajo deben estar entre 1 y 24.");
+            HorasTrabajo = horas;
         }
 
         public void ActualizarLicencia(string licencia)

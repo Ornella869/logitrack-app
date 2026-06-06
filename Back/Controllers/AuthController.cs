@@ -217,6 +217,8 @@ namespace Back.Controllers
                     AssignedRoutesCount = assignedRoutesCount,
                     RouteStatusKey = routeStatusKey,
                     RouteStatusLabel = routeStatusLabel,
+                    HorasTrabajo = t.HorasTrabajo,
+                    TipoJornada = t.TipoJornada,
                 };
             });
 
@@ -310,6 +312,26 @@ namespace Back.Controllers
                 var repartidor = await _authService.ActualizarLicenciaRepartidor(repartidorId, request.Licencia);
                 await _context.SaveChangesAsync();
                 return Ok(MapRepartidor(repartidor));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPut("repartidores/{repartidorId:guid}/horas-trabajo")]
+        public async Task<ActionResult<UserInfoResponse>> ActualizarHorasTrabajoRepartidor(Guid repartidorId, [FromBody] ActualizarHorasTrabajoRequest request)
+        {
+            try
+            {
+                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                if (scopeError is not null) return scopeError;
+                var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
+                    ?? throw new InvalidOperationException("Repartidor no encontrado.");
+                rep.ActualizarHorasTrabajo(request.HorasTrabajo);
+                await _context.SaveChangesAsync();
+                return Ok(MapRepartidor(rep));
             }
             catch (InvalidOperationException ex)
             {
@@ -599,7 +621,9 @@ namespace Back.Controllers
             Role = Roles.Repartidor,
             Licencia = r.Licencia,
             Estado = r.EstadoLabel,
-            SucursalId = r.SucursalId?.ToString()
+            SucursalId = r.SucursalId?.ToString(),
+            HorasTrabajo = r.HorasTrabajo,
+            TipoJornada = r.TipoJornada,
         };
     }
 
@@ -620,6 +644,8 @@ namespace Back.Controllers
         public string? Provincia { get; set; }
         public List<string>? Provincias { get; set; }
         public string? PuntoPickUpId { get; set; }
+        public int? HorasTrabajo { get; set; }
+        public string? TipoJornada { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse
@@ -647,6 +673,13 @@ namespace Back.Controllers
     public class ActualizarLicenciaRepartidorRequest
     {
         [Required] public string Licencia { get; set; } = string.Empty;
+    }
+
+    public class ActualizarHorasTrabajoRequest
+    {
+        [Required]
+        [Range(1, 24, ErrorMessage = "Las horas de trabajo deben estar entre 1 y 24.")]
+        public int HorasTrabajo { get; set; }
     }
 
     public class CambiarEstadoRepartidorRequest

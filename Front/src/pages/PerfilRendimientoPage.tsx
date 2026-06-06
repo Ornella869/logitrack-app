@@ -25,6 +25,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import api from '../services/api'
+import { authService } from '../services/authService'
 import type { User } from '../types'
 import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs } from '../utils/argentinaDate'
 
@@ -40,6 +41,8 @@ type Rendimiento = {
   efectividadOnTimePct: number
   tasaIncidenciasPct: number
   tieneActividad: boolean
+  horasTrabajo: number
+  tipoJornada: string
 }
 
 const today = () => formatArgentinaDateInput()
@@ -77,6 +80,10 @@ export default function PerfilRendimientoPage() {
   const [prevData, setPrevData] = useState<Rendimiento | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [horasInput, setHorasInput] = useState<string>('')
+  const [savingHoras, setSavingHoras] = useState(false)
+  const [horasError, setHorasError] = useState('')
+  const [horasSuccess, setHorasSuccess] = useState('')
 
   useEffect(() => {
     if (!repartidorId) return
@@ -106,10 +113,31 @@ export default function PerfilRendimientoPage() {
       ])
       setData(res.data)
       setPrevData(prevRes?.data ?? null)
+      if (horasInput === '') setHorasInput(String(res.data?.horasTrabajo ?? 8))
     } catch (e: any) {
       setError(e.response?.data ?? 'No se pudo cargar el rendimiento')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSaveHoras = async () => {
+    const horas = parseInt(horasInput, 10)
+    if (isNaN(horas) || horas < 1 || horas > 24) {
+      setHorasError('Ingresá un valor entre 1 y 24.')
+      return
+    }
+    if (!repartidorId) return
+    setSavingHoras(true)
+    setHorasError('')
+    setHorasSuccess('')
+    const result = await authService.updateRepartidorHorasTrabajo(repartidorId, horas)
+    setSavingHoras(false)
+    if (!result) {
+      setHorasError('No se pudo actualizar. Intentá de nuevo.')
+    } else {
+      setData((prev) => prev ? { ...prev, horasTrabajo: result.horasTrabajo ?? horas, tipoJornada: result.tipoJornada ?? (horas <= 6 ? 'Part Time' : 'Full Time') } : prev)
+      setHorasSuccess('Jornada actualizada correctamente.')
     }
   }
 
@@ -132,14 +160,58 @@ export default function PerfilRendimientoPage() {
       </Stack>
 
       {data && (
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-          <Box sx={{ width: 48, height: 48, borderRadius: '50%', bgcolor: '#1976d2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <PersonIcon sx={{ color: 'white' }} />
-          </Box>
-          <Box>
-            <Typography variant="h4" fontWeight={700}>{data.nombre}</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{data.email}</Typography>
-          </Box>
+        <Stack spacing={2} sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Box sx={{ width: 48, height: 48, borderRadius: '50%', bgcolor: '#1976d2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <PersonIcon sx={{ color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700}>{data.nombre}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{data.email}</Typography>
+            </Box>
+          </Stack>
+
+          {/* Jornada editable por Supervisor */}
+          {(user.role === 'supervisor' || user.role === 'administrador') && (
+            <Card variant="outlined">
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Typography variant="subtitle2" gutterBottom>Jornada laboral</Typography>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <Chip
+                    label={data.tipoJornada ?? 'Full Time'}
+                    size="small"
+                    sx={{
+                      bgcolor: data.tipoJornada === 'Part Time' ? '#fff3e0' : '#e3f2fd',
+                      color: data.tipoJornada === 'Part Time' ? '#e65100' : '#1565c0',
+                      fontWeight: 700,
+                    }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Horas de trabajo / día"
+                    type="number"
+                    value={horasInput}
+                    onChange={(e) => { setHorasInput(e.target.value); setHorasError(''); setHorasSuccess('') }}
+                    inputProps={{ min: 1, max: 24, style: { width: 70 } }}
+                    sx={{ maxWidth: 160 }}
+                  />
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => void handleSaveHoras()}
+                    disabled={savingHoras}
+                  >
+                    {savingHoras ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
+                  </Button>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  ≤ 6 h = Part Time · ≥ 7 h = Full Time. Los Part Time solo reciben envíos de hasta 6 h de ruta.
+                </Typography>
+                {horasError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{horasError}</Alert>}
+                {horasSuccess && <Alert severity="success" sx={{ mt: 1, py: 0 }}>{horasSuccess}</Alert>}
+              </CardContent>
+            </Card>
+          )}
         </Stack>
       )}
 
