@@ -142,6 +142,12 @@ export interface Shipment {
   esZonaPeligrosa?: boolean
   puntoPickUpId?: string | null
   horasEstimadasRuta?: number
+  tramoOperativoId?: string | null
+  ordenTramoOperativo?: number | null
+  estadoTramoOperativo?: string | null
+  origenTramoOperativo?: string | null
+  destinoTramoOperativo?: string | null
+  esTramoOperativoActual?: boolean
 }
 
 export interface LoginCredentials {

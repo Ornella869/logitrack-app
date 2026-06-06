@@ -87,19 +87,22 @@ namespace Back.Application.Services
         private readonly HistorialEstadoEnvioService _historial;
         private readonly AuditoriaService _auditoria;
         private readonly OjoPatronService _ojoPatron;
+        private readonly PlanificacionTramosService _tramos;
 
         public CalendarizacionService(
             IEnviosRepository enviosRepository,
             IUserRepository userRepository,
             HistorialEstadoEnvioService historial,
             AuditoriaService auditoria,
-            OjoPatronService ojoPatron)
+            OjoPatronService ojoPatron,
+            PlanificacionTramosService tramos)
         {
             _enviosRepository = enviosRepository;
             _userRepository = userRepository;
             _historial = historial;
             _auditoria = auditoria;
             _ojoPatron = ojoPatron;
+            _tramos = tramos;
         }
 
         // Épica D: si se pasa sucursalId, todo se filtra a esa sucursal (envíos y repartidores).
@@ -258,7 +261,7 @@ namespace Back.Application.Services
 
             // Validar compatibilidad de jornada: un repartidor Part Time no puede recibir
             // envíos que superen sus horas de trabajo diario (umbral: > 6 h de ruta).
-            if (rep.EsPartTime && paquete.HorasEstimadasRuta > 6f)
+            if (rep.EsPartTime && (paquete.RequiereRepartidorFullTime || paquete.HorasEstimadasRuta > 6f))
                 throw new InvalidOperationException(
                     $"Este envío requiere aproximadamente {paquete.HorasEstimadasRuta:0.#} horas de ruta " +
                     $"y no puede asignarse a repartidores de jornada Part Time ({rep.HorasTrabajo} h/día). " +
@@ -291,6 +294,7 @@ namespace Back.Application.Services
             }
 
             paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
+            await _tramos.SincronizarAsignacionAsync(paquete);
             await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(repartidorId, fechaUtc);
 
             // Recálculo post-asignación manual: si el repartidor ya estaba "Listo para
@@ -439,7 +443,8 @@ namespace Back.Application.Services
                 var repsElegibles = (paquete.SucursalId.HasValue
                     ? repartidores.Where(r => r.SucursalId == paquete.SucursalId)
                     : repartidores.AsEnumerable())
-                    .Where(r => !r.EsPartTime || paquete.HorasEstimadasRuta <= 6f)
+                    .Where(r => !r.EsPartTime
+                        || (!paquete.RequiereRepartidorFullTime && paquete.HorasEstimadasRuta <= 6f))
                     .ToList();
 
                 if (repsElegibles.Count == 0) { sinAsignar++; continue; }
@@ -532,6 +537,8 @@ namespace Back.Application.Services
             // Resumen por día — sólo de lo NUEVO calendarizado en esta corrida.
             foreach (var asignacion in asignacionesNuevas.Keys)
                 await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(asignacion.Item1, asignacion.Item2);
+            foreach (var paqueteAsignado in asignacionesNuevas.Values.SelectMany(x => x).DistinctBy(p => p.Id))
+                await _tramos.SincronizarAsignacionAsync(paqueteAsignado);
 
             var resumen = asignacionesNuevas
                 .GroupBy(kv => kv.Key.Item2)

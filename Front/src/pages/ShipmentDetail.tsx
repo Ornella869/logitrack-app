@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
+import { useParams, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -42,8 +42,9 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import EmailIcon from '@mui/icons-material/Email'
 import ReplayIcon from '@mui/icons-material/Replay'
+import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import { Tab, Tabs } from '@mui/material'
-import { shipmentService, type HistorialEstadoEnvio } from '../services/shipmentService'
+import { shipmentService, type HistorialEstadoEnvio, type TramoEnvio } from '../services/shipmentService'
 import { emailNotificacionService, type EmailNotificacion } from '../services/emailNotificacionService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
@@ -75,9 +76,11 @@ type CancelMode = 'Definitivo' | 'Reagendar'
 
 function ShipmentDetail() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const user = useOutletContext<User>()
   const [shipment, setShipment] = useState<Shipment | null>(null)
+  const [tramos, setTramos] = useState<TramoEnvio[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [openCancelDialog, setOpenCancelDialog] = useState(false)
@@ -146,8 +149,20 @@ function ShipmentDetail() {
   // G1L-9: Repartidor cancela solo En Tránsito (Entrega Fallida).
   // La transición Tránsito→Entregado va por el botón "Confirmar entrega" con código.
   const status = shipment?.status
+  const tramoActual = tramos.find((tramo) =>
+    !['RecibidoEnSucursal', 'Entregado', 'Cancelado'].includes(tramo.estado))
+  const tramoIdSeleccionado = searchParams.get('tramo')
+  const tramoDeMiSucursal =
+    tramos.find((tramo) => tramo.id === tramoIdSeleccionado && tramo.esDeMiSucursal)
+    ?? tramos.find((tramo) => tramo.esDeMiSucursal)
+  const puedeGestionarTramo =
+    !tramoDeMiSucursal || tramoDeMiSucursal.esTramoActual === true
+  const tramoDeMiSucursalFinalizado = tramoDeMiSucursal
+    ? ['RecibidoEnSucursal', 'Entregado', 'Cancelado'].includes(tramoDeMiSucursal.estado)
+    : false
+  const esUltimaMillaActual = !tramoActual || tramoActual.esUltimaMilla
   const canCancel =
-    ((isOperador || isSupervisor) &&
+    ((isOperador || isSupervisor) && puedeGestionarTramo &&
       (status === 'Pendiente de calendarización' ||
         status === 'Asignado a vehículo' ||
         status === 'Cargado en vehículo' ||
@@ -155,13 +170,13 @@ function ShipmentDetail() {
     // G1L-82: el repartidor cancela desde "En tránsito" o "Demorado" (entrega fallida).
     (isRepartidor && (status === 'En tránsito' || status === 'Demorado'))
   // G1L-12, G1L-41: Editar solo si está pendiente de calendarización (paquete.isEditable)
-  const canEdit = isOperador && shipment?.isEditable === true
+  const canEdit = isOperador && puedeGestionarTramo && shipment?.isEditable === true
   // G1L-82: marcar como Demorado lo pueden hacer Repartidor o Supervisor sobre un envío En Tránsito.
-  const canMarcarDemorado = (isRepartidor || isSupervisor) && status === 'En tránsito'
+  const canMarcarDemorado = (isRepartidor || (isSupervisor && puedeGestionarTramo)) && status === 'En tránsito'
   // G1L-82: continuar ruta tras la demora — solo el repartidor.
   const canContinuarRuta = isRepartidor && status === 'Demorado'
   // G1L-83: el Supervisor asigna manualmente un envío pendiente de calendarización.
-  const canPrecalendarizar = isSupervisor && status === 'Pendiente de calendarización'
+  const canPrecalendarizar = isSupervisor && puedeGestionarTramo && status === 'Pendiente de calendarización'
   const [openPrecalendarizar, setOpenPrecalendarizar] = useState(false)
 
   useEffect(() => {
@@ -192,6 +207,11 @@ function ShipmentDetail() {
       const data = await shipmentService.getShipmentTracking(id)
       if (data) {
         setShipment(data)
+        try {
+          setTramos(await shipmentService.getTramos(data.id))
+        } catch {
+          setTramos([])
+        }
         // G1L-42: cargar repartidor asignado para Supervisor / Admin / Operador
         if ((isSupervisor || isAdmin || isOperador) && data.id) {
           const rep = await shipmentService.getRepartidorDePaquete(data.id)
@@ -566,7 +586,7 @@ function ShipmentDetail() {
               </Button>
             )}
           {/* G1L-9 / G1L-82: confirmación de entrega habilitada para "En Tránsito" y "Demorado". */}
-          {isRepartidor && (status === 'En tránsito' || status === 'Demorado') && (
+          {isRepartidor && esUltimaMillaActual && (status === 'En tránsito' || status === 'Demorado') && (
             <Button
               variant="contained"
               color="success"
@@ -674,7 +694,7 @@ function ShipmentDetail() {
                 Motivo: {shipment.cancellationReason}
               </Typography>
             )}
-            {(isOperador || isSupervisor) && (
+            {(isOperador || isSupervisor) && puedeGestionarTramo && (
               <Button
                 variant="contained"
                 size="small"
@@ -697,6 +717,125 @@ function ShipmentDetail() {
       )}
 
       <Grid container spacing={3}>
+        {tramos.length > 0 && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <LocalShippingIcon color="primary" />
+                  <Typography variant="h6">Itinerario entre sucursales</Typography>
+                </Stack>
+                <Stack spacing={1}>
+                  {tramos.map((tramo) => (
+                    <Box
+                      key={tramo.id}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: 2,
+                        alignItems: { xs: 'flex-start', sm: 'center' },
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        border: tramo.esDeMiSucursal ? '1px solid' : 0,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: tramo.esDeMiSucursal ? 'action.selected' : 'transparent',
+                        borderRadius: tramo.esDeMiSucursal ? 1 : 0,
+                        p: tramo.esDeMiSucursal ? 1.5 : 0,
+                        pb: tramo.esDeMiSucursal ? 1.5 : 1,
+                      }}
+                    >
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                          <Typography fontWeight={700}>
+                            {tramo.orden}. {tramo.sucursalOrigen} → {tramo.sucursalDestino}
+                          </Typography>
+                          {tramo.esDeMiSucursal && <Chip size="small" label="Tu sucursal" color="primary" variant="outlined" />}
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          {tramo.esUltimaMilla ? 'Entrega final' : 'Traslado entre sucursales'} · {tramo.distanciaKm.toFixed(0)} km · {tramo.horasEstimadas.toFixed(1)} h
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        label={tramo.estado.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                        color={tramo.estado === 'Entregado' || tramo.estado === 'RecibidoEnSucursal' ? 'success' : tramo === tramoActual ? 'primary' : 'default'}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {(isOperador || isSupervisor) && tramoDeMiSucursal && (
+          <Grid item xs={12}>
+            <Card sx={{ borderLeft: '4px solid', borderLeftColor: tramoDeMiSucursal.esTramoActual ? 'primary.main' : 'grey.500' }}>
+              <CardContent>
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  justifyContent="space-between"
+                  spacing={2}
+                  alignItems={{ xs: 'flex-start', md: 'center' }}
+                >
+                  <Box>
+                    <Typography variant="overline" color="text.secondary">
+                      Operación de tu sucursal · Tramo {tramoDeMiSucursal.orden}
+                    </Typography>
+                    <Typography variant="h6">
+                      {tramoDeMiSucursal.sucursalOrigen} → {tramoDeMiSucursal.sucursalDestino}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {tramoDeMiSucursal.distanciaKm.toFixed(0)} km · {tramoDeMiSucursal.horasEstimadas.toFixed(1)} h estimadas
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip
+                      label={tramoDeMiSucursal.estado.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                      color={tramoDeMiSucursal.esTramoActual ? 'primary' : 'default'}
+                    />
+                    <Chip
+                      label={
+                        tramoDeMiSucursal.esTramoActual
+                          ? 'Gestión activa'
+                          : tramoDeMiSucursalFinalizado
+                            ? 'Tramo finalizado'
+                            : 'Pendiente de recepción'
+                      }
+                      variant="outlined"
+                    />
+                  </Stack>
+                </Stack>
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="caption" color="text.secondary">Repartidor del tramo</Typography>
+                    <Typography>{tramoDeMiSucursal.repartidor ?? 'Sin asignar'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="caption" color="text.secondary">Inicio</Typography>
+                    <Typography>
+                      {tramoDeMiSucursal.iniciadoEn ? formatInstantArgentina(tramoDeMiSucursal.iniciadoEn) : 'Todavía no iniciado'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="caption" color="text.secondary">Finalización</Typography>
+                    <Typography>
+                      {tramoDeMiSucursal.finalizadoEn ? formatInstantArgentina(tramoDeMiSucursal.finalizadoEn) : 'Pendiente'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+                {!tramoDeMiSucursal.esTramoActual && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    {tramoDeMiSucursalFinalizado
+                      ? 'Este tramo queda registrado en tu sucursal, pero ya no admite acciones porque el envío continuó su recorrido.'
+                      : 'Este tramo ya está planificado, pero se habilitará cuando el operador confirme la recepción física del envío.'}
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
         {/* Información general */}
         <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 3 : undefined }}>
           <Card>
@@ -870,7 +1009,7 @@ function ShipmentDetail() {
         )}
 
         {/* G1L-42: Repartidor asignado (Supervisor / Admin / Operador, solo lectura) */}
-        {(isSupervisor || isAdmin || isOperador) && repartidorAsignado && (
+        {(isSupervisor || isAdmin || isOperador) && puedeGestionarTramo && repartidorAsignado && (
           <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 1 : undefined }}>
             <Card>
               <CardContent>

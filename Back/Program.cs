@@ -57,6 +57,7 @@ builder.Services.AddDbContext<LogiTrackDbContext>(options =>
 // Inyección de Dependencias de la Lógica de Negocio
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EnviosService>();
+builder.Services.AddScoped<PlanificacionTramosService>();
 builder.Services.AddScoped<RutasService>();
 builder.Services.AddScoped<CalendarizacionService>();
 builder.Services.AddScoped<RutasActivasService>();

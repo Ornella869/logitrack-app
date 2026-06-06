@@ -31,6 +31,7 @@ namespace Back.Infrastructure.Database
 
         public DbSet<PuntoPickUp> PuntosPickUp { get; set; }
         public DbSet<SatisfaccionEncuesta> SatisfaccionEncuestas { get; set; }
+        public DbSet<TramoEnvio> TramosEnvio { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -216,6 +217,26 @@ namespace Back.Infrastructure.Database
                     .WithMany()
                     .HasForeignKey(x => x.PaqueteId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<TramoEnvio>(t =>
+            {
+                t.HasKey(x => x.Id);
+                t.HasIndex(x => new { x.PaqueteId, x.Orden }).IsUnique();
+                t.HasIndex(x => new { x.SucursalOrigenId, x.Estado });
+                t.HasIndex(x => new { x.SucursalDestinoId, x.Estado });
+                t.HasOne<Paquete>()
+                    .WithMany()
+                    .HasForeignKey(x => x.PaqueteId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                t.HasOne<Sucursal>()
+                    .WithMany()
+                    .HasForeignKey(x => x.SucursalOrigenId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                t.HasOne<Sucursal>()
+                    .WithMany()
+                    .HasForeignKey(x => x.SucursalDestinoId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
 

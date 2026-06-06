@@ -25,14 +25,22 @@ function getStatusLabel(status: string): string {
     case 'EnTransito': return 'En tránsito'
     case 'Entregado': return 'Entregado'
     case 'Cancelado': return 'Cancelado'
+    case 'Bloqueado': return 'Próximo tramo'
+    case 'Asignado': return 'Asignado'
+    case 'RecibidoEnSucursal': return 'Recibido en destino'
     default: return status
   }
 }
 
 function ShipmentCard({ shipment }: ShipmentCardProps) {
   const navigate = useNavigate()
-  const statusLabel = getStatusLabel(shipment.status)
+  const statusLabel = getStatusLabel(shipment.estadoTramoOperativo ?? shipment.status)
   const statusStyle = STATUS_STYLES[statusLabel] ?? { color: '#555', bg: '#eee' }
+  const operationalScopeLabel = shipment.esTramoOperativoActual
+    ? 'Gestión activa'
+    : shipment.estadoTramoOperativo === 'Bloqueado'
+      ? 'Pendiente de recepción'
+      : 'Registro histórico'
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -46,24 +54,31 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
         <Stack spacing={1}>
           <Box>
             <Typography variant="body2" color="textSecondary">
-              Origen → Destino
+              {shipment.tramoOperativoId ? `Tramo ${shipment.ordenTramoOperativo}` : 'Origen → Destino'}
             </Typography>
             <Typography variant="body1">
-              {shipment.origin} → {shipment.destination}
+              {shipment.origenTramoOperativo ?? shipment.origin} → {shipment.destinoTramoOperativo ?? shipment.destination}
             </Typography>
           </Box>
-          <Box>
-            <Typography variant="body2" color="textSecondary">
-              Remitente
-            </Typography>
-            <Typography variant="body1">{shipment.sender.name}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="body2" color="textSecondary">
-              Destinatario
-            </Typography>
-            <Typography variant="body1">{shipment.receiver.name}</Typography>
-          </Box>
+          {shipment.tramoOperativoId ? (
+            <Box>
+              <Typography variant="body2" color="textSecondary">
+                Envío global
+              </Typography>
+              <Typography variant="body1">{shipment.sender.name} → {shipment.receiver.name}</Typography>
+            </Box>
+          ) : (
+            <>
+              <Box>
+                <Typography variant="body2" color="textSecondary">Remitente</Typography>
+                <Typography variant="body1">{shipment.sender.name}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" color="textSecondary">Destinatario</Typography>
+                <Typography variant="body1">{shipment.receiver.name}</Typography>
+              </Box>
+            </>
+          )}
           <Box>
             <Typography variant="body2" color="textSecondary">
               Estado
@@ -73,6 +88,15 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
               size="small"
               sx={{ color: statusStyle.color, bgcolor: statusStyle.bg, border: `1px solid ${statusStyle.color}33`, fontWeight: 600, borderRadius: 1 }}
             />
+            {shipment.tramoOperativoId && (
+              <Chip
+                label={operationalScopeLabel}
+                size="small"
+                color={shipment.esTramoOperativoActual ? 'primary' : 'default'}
+                variant="outlined"
+                sx={{ ml: 1, borderRadius: 1 }}
+              />
+            )}
           </Box>
           {shipment.createdDate && (
             <Box>
@@ -85,7 +109,10 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
         </Stack>
       </CardContent>
       <CardActions>
-        <Button size="small" onClick={() => navigate(`/shipment/${shipment.id}`)}>
+        <Button
+          size="small"
+          onClick={() => navigate(`/shipment/${shipment.id}${shipment.tramoOperativoId ? `?tramo=${shipment.tramoOperativoId}` : ''}`)}
+        >
           Ver detalles
         </Button>
       </CardActions>

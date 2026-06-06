@@ -22,6 +22,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd'
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import { shipmentService, type GenerarLoteDemoResultado, type ImportarEnviosResultado } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
@@ -29,6 +30,7 @@ import ShipmentForm from '../components/ShipmentForm'
 import SearchBar from '../components/SearchBar'
 import ShipmentFilters, { type ShipmentFiltersValue } from '../components/ShipmentFilters'
 import { formatArgentinaDateInput } from '../utils/argentinaDate'
+import QrCameraScanner from '../components/QrCameraScanner'
 
 const EMPTY_FILTERS: ShipmentFiltersValue = { status: [], from: '', to: '' }
 const BULK_OPTIONS = [100, 250, 500, 1000]
@@ -61,6 +63,10 @@ export default function EnviosPage() {
   const [bulkResult, setBulkResult] = useState<GenerarLoteDemoResultado | null>(null)
   const [importLoading, setImportLoading] = useState(false)
   const [importResult, setImportResult] = useState<ImportarEnviosResultado | null>(null)
+  const [receiveOpen, setReceiveOpen] = useState(false)
+  const [receiveCode, setReceiveCode] = useState('')
+  const [receiveLoading, setReceiveLoading] = useState(false)
+  const [receiveError, setReceiveError] = useState('')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<ShipmentFiltersValue>(EMPTY_FILTERS)
   const [hasQuery, setHasQuery] = useState(false)
@@ -92,6 +98,7 @@ export default function EnviosPage() {
         activeFilters.status.length ? activeFilters.status : undefined,
         activeFilters.from || undefined,
         activeFilters.to || undefined,
+        user.role === 'operador' || user.role === 'supervisor',
       )
       setShipments(result.items)
       setTotalItems(result.totalItems)
@@ -210,6 +217,28 @@ export default function EnviosPage() {
     showActionToast('CSV descargado correctamente', 'info')
   }
 
+  const handleReceiveShipment = async (detectedCode?: string) => {
+    const code = (detectedCode ?? receiveCode).trim()
+    if (!code || receiveLoading) return
+    setReceiveLoading(true)
+    setReceiveError('')
+    const result = await shipmentService.escanearQr(code)
+    setReceiveLoading(false)
+    if (!result.success) {
+      setReceiveError(result.error ?? 'No se pudo recibir el envío.')
+      return
+    }
+    if (result.data?.accion !== 'RecibidoEnSucursal') {
+      setReceiveError('El envío no está esperando recepción en esta sucursal.')
+      return
+    }
+    setReceiveOpen(false)
+    setReceiveCode('')
+    setPage(1)
+    void loadShipments(search, filters, 1, pageSize)
+    showActionToast('Envío recibido. Ya está pendiente de calendarización en esta sucursal.', 'success')
+  }
+
   const handleClearFilters = () => {
     setPage(1)
     setFilters(EMPTY_FILTERS)
@@ -250,6 +279,11 @@ export default function EnviosPage() {
         </Box>
 
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          {showCreateButton && (
+            <Button variant="outlined" startIcon={<QrCodeScannerIcon />} onClick={() => { setReceiveError(''); setReceiveOpen(true) }}>
+              Recibir envío
+            </Button>
+          )}
           {showCreateButton && (
             <Button variant="outlined" startIcon={<PlaylistAddIcon />} onClick={() => { setBulkResult(null); setImportResult(null); setBulkOpen(true) }}>
               Carga masiva
@@ -294,7 +328,7 @@ export default function EnviosPage() {
         <>
           <Grid container spacing={3}>
             {shipments.map((shipment) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={shipment.id}>
+              <Grid item xs={12} sm={6} md={4} lg={3} key={shipment.tramoOperativoId ?? shipment.id}>
                 <ShipmentCard shipment={shipment} />
               </Grid>
             ))}
@@ -314,6 +348,36 @@ export default function EnviosPage() {
       )}
 
       <ShipmentForm open={openShipmentForm} onClose={() => setOpenShipmentForm(false)} onSubmit={handleCreateShipment} />
+
+      <Dialog open={receiveOpen} onClose={() => !receiveLoading && setReceiveOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Recibir envío de otra sucursal</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="info">
+              Escaneá el QR cuando el paquete llegue físicamente. El envío quedará disponible para calendarizar desde esta sucursal.
+            </Alert>
+            <QrCameraScanner onDetect={(code) => void handleReceiveShipment(code)} height={220} />
+            <TextField
+              label="Código de seguimiento"
+              value={receiveCode}
+              onChange={(event) => setReceiveCode(event.target.value)}
+              disabled={receiveLoading}
+              fullWidth
+            />
+            {receiveError && <Alert severity="error">{receiveError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReceiveOpen(false)} disabled={receiveLoading}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleReceiveShipment()}
+            disabled={receiveLoading || !receiveCode.trim()}
+          >
+            {receiveLoading ? 'Recibiendo...' : 'Confirmar recepción'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={bulkOpen} onClose={() => !bulkLoading && setBulkOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Carga masiva demo</DialogTitle>

@@ -15,11 +15,16 @@ namespace Back.Controllers
     {
         private readonly LogiTrackDbContext _context;
         private readonly HistorialEstadoEnvioService _historial;
+        private readonly PlanificacionTramosService _tramos;
 
-        public PickUpOperacionController(LogiTrackDbContext context, HistorialEstadoEnvioService historial)
+        public PickUpOperacionController(
+            LogiTrackDbContext context,
+            HistorialEstadoEnvioService historial,
+            PlanificacionTramosService tramos)
         {
             _context = context;
             _historial = historial;
+            _tramos = tramos;
         }
 
         private Guid? CurrentUserId()
@@ -117,6 +122,7 @@ namespace Back.Controllers
             try
             {
                 paquete.Entregar();
+                await _tramos.SincronizarEntregaAsync(paquete);
                 await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, socio.Id, OrigenCambioEstado.Manual, "Entrega en punto Pick Up");
                 await _context.SaveChangesAsync();
                 return Ok(MapPaquete(paquete));

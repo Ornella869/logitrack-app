@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations.Schema;
 using Back.Application.Services;
 using Back.Application.Util;
 using Microsoft.EntityFrameworkCore;
@@ -69,6 +70,29 @@ namespace Back.Domain.Models
         public string? ProvinciaDestino { get; set; }
         public bool EsEnvioADomicilio { get; set; }
         public Guid? PuntoPickUpId { get; private set; }
+        public bool RequiereRepartidorFullTime { get; private set; }
+        [NotMapped]
+        public string? NombreDestinoOperativo { get; set; }
+        [NotMapped]
+        public string? DireccionDestinoOperativo { get; set; }
+        [NotMapped]
+        public string? CiudadDestinoOperativo { get; set; }
+        [NotMapped]
+        public string? CpDestinoOperativo { get; set; }
+        [NotMapped]
+        public Ubicacion? UbicacionDestinoOperativa { get; set; }
+        [NotMapped]
+        public Guid? TramoOperativoId { get; set; }
+        [NotMapped]
+        public int? OrdenTramoOperativo { get; set; }
+        [NotMapped]
+        public string? EstadoTramoOperativo { get; set; }
+        [NotMapped]
+        public string? OrigenTramoOperativo { get; set; }
+        [NotMapped]
+        public string? DestinoTramoOperativo { get; set; }
+        [NotMapped]
+        public bool EsTramoOperativoActual { get; set; }
 
 
         [JsonPropertyName("prioridad")]
@@ -221,6 +245,19 @@ namespace Back.Domain.Models
             FechaCalendarizada = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
             FechaEstimadaEntrega = DateTime.SpecifyKind(fecha.Date.AddDays(Math.Max(1, DiasEstimadosEntrega) - 1), DateTimeKind.Utc);
             Status = PaqueteStatus.AsignadoAVehiculo;
+        }
+
+        public void PrepararTramo(Guid sucursalId, double distanciaKm, bool requiereFullTime)
+        {
+            SucursalId = sucursalId;
+            RepartidorAsignadoId = null;
+            FechaCalendarizada = null;
+            FechaEstimadaEntrega = null;
+            Status = PaqueteStatus.PendienteDeCalendarizacion;
+            RazonDemora = null;
+            RazonCancelacion = null;
+            RequiereRepartidorFullTime = requiereFullTime;
+            ActualizarEstimacionEntrega((float)distanciaKm);
         }
 
         public void LiberarAsignacion()

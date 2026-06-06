@@ -1020,7 +1020,52 @@ export default function RepartidorDashboard() {
               </Stack>
             </CardContent>
           </Card>
-        ) : showRetorno ? null : (
+        ) : showRetorno ? (
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 3,
+              borderColor: '#d1c4e9',
+              bgcolor: isDark ? 'rgba(94,53,177,0.08)' : '#fbfaff',
+            }}
+          >
+            <CardContent>
+              <Stack spacing={2}>
+                <Box>
+                  <Typography variant="h6" fontWeight={700}>
+                    Regreso a la sucursal
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Finalizaste una ruta anterior. Confirmá tu llegada para cerrar la jornada y volver a estar disponible.
+                  </Typography>
+                </Box>
+                {origen && (
+                  <Alert severity="info">
+                    Destino: <strong>{origen.name}</strong> · {origen.address}, {origen.city}
+                  </Alert>
+                )}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={cerrandoJornada ? <CircularProgress size={16} color="inherit" /> : <CheckCircleIcon />}
+                    onClick={() => { void handleCerrarJornada() }}
+                    disabled={cerrandoJornada}
+                  >
+                    Llegué a sucursal
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={modoSimulacion ? <GpsFixedIcon /> : <DirectionsIcon />}
+                    onClick={activarSimulacion}
+                  >
+                    {modoSimulacion ? 'Detener simulación' : 'Simular retorno'}
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        ) : (
           <Alert severity="info">
             No tenés paradas asignadas para hoy. Esperá a que el supervisor calendarice los envíos.
           </Alert>

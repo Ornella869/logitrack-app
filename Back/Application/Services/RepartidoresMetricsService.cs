@@ -68,15 +68,17 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("Repartidor no encontrado.");
 
             var now = OperationalClock.Now;
-            var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
-            var toUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            var fromDate = (from ?? now.AddDays(-30)).Date;
+            var toDate = (to ?? now).Date;
+            var fromUtc = OperationalClock.StartUtcForOperationalDate(fromDate);
+            var toExclusiveUtc = OperationalClock.StartUtcForOperationalDate(toDate.AddDays(1));
 
             // Paquetes cuya FechaCalendarizada cae en el rango, más cualquier paquete
             // que haya sido entregado dentro del rango aunque haya sido calendarizado antes.
             var entregadosEnRangoIds = await _context.HistorialEstadosEnvio
                 .Where(h => h.EstadoNuevo == PaqueteStatus.Entregado
                             && h.FechaHora >= fromUtc
-                            && h.FechaHora <= toUtc)
+                            && h.FechaHora < toExclusiveUtc)
                 .Select(h => h.PaqueteId)
                 .Distinct()
                 .ToListAsync();
@@ -84,15 +86,30 @@ namespace Back.Application.Services
             var paquetes = await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
                             && (sucursalId == null || p.SucursalId == sucursalId)
+                            && !_context.TramosEnvio.Any(t => t.PaqueteId == p.Id)
                             && ((p.FechaCalendarizada.HasValue
                                     && p.FechaCalendarizada >= fromUtc
-                                    && p.FechaCalendarizada <= toUtc)
+                                    && p.FechaCalendarizada < toExclusiveUtc)
                                 || entregadosEnRangoIds.Contains(p.Id)))
                 .ToListAsync();
 
-            var totalAsignados = paquetes.Count;
-            var totalEntregas = paquetes.Count(p => p.Status == PaqueteStatus.Entregado);
-            var totalCancelaciones = paquetes.Count(p => p.Status == PaqueteStatus.Cancelado);
+            var tramos = await _context.TramosEnvio
+                .Where(t => t.RepartidorId == repartidorId
+                    && (!sucursalId.HasValue || t.SucursalOrigenId == sucursalId.Value)
+                    && ((t.IniciadoEn.HasValue
+                            && t.IniciadoEn >= fromUtc
+                            && t.IniciadoEn < toExclusiveUtc)
+                        || (t.FinalizadoEn.HasValue
+                            && t.FinalizadoEn >= fromUtc
+                            && t.FinalizadoEn < toExclusiveUtc)))
+                .ToListAsync();
+
+            var tramosCompletados = tramos.Count(t =>
+                t.Estado is TramoEnvioStatus.RecibidoEnSucursal or TramoEnvioStatus.Entregado);
+            var totalAsignados = paquetes.Count + tramos.Count;
+            var totalEntregas = paquetes.Count(p => p.Status == PaqueteStatus.Entregado) + tramosCompletados;
+            var totalCancelaciones = paquetes.Count(p => p.Status == PaqueteStatus.Cancelado)
+                + tramos.Count(t => t.Estado == TramoEnvioStatus.Cancelado);
 
             // Efectividad on-time: cantidad de entregas cuyo historial muestra paso a Entregado
             // dentro del día programado. Aproximación simple: contamos las que están Entregadas
@@ -110,6 +127,11 @@ namespace Back.Application.Services
                     if (ev is null || !p.FechaCalendarizada.HasValue) continue;
                     if (ev.FechaHora.Date <= p.FechaCalendarizada.Value.Date) onTime++;
                 }
+                onTime += tramos.Count(t =>
+                    (t.Estado is TramoEnvioStatus.RecibidoEnSucursal or TramoEnvioStatus.Entregado)
+                    && t.IniciadoEn.HasValue
+                    && t.FinalizadoEn.HasValue
+                    && t.FinalizadoEn.Value <= t.IniciadoEn.Value.AddHours(t.HorasEstimadas));
             }
 
             var efectividad = totalEntregas == 0 ? 0 : (double)onTime / totalEntregas * 100;
@@ -120,8 +142,8 @@ namespace Back.Application.Services
                 RepartidorId = rep.Id,
                 Nombre = $"{rep.Nombre} {rep.Apellido}",
                 Email = rep.Email,
-                From = fromUtc,
-                To = toUtc,
+                From = DateTime.SpecifyKind(fromDate, DateTimeKind.Utc),
+                To = DateTime.SpecifyKind(toDate, DateTimeKind.Utc),
                 TotalEntregas = totalEntregas,
                 TotalCancelaciones = totalCancelaciones,
                 TotalAsignados = totalAsignados,

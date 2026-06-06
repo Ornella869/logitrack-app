@@ -83,6 +83,25 @@ export interface ImportarEnviosResultado {
   detalles: Array<{ fila: number; creado: boolean; codigoSeguimiento?: string | null; error?: string | null }>
 }
 
+export interface TramoEnvio {
+  id: string
+  orden: number
+  esUltimaMilla: boolean
+  distanciaKm: number
+  horasEstimadas: number
+  estado: string
+  iniciadoEn?: string | null
+  finalizadoEn?: string | null
+  sucursalOrigenId: string
+  sucursalOrigen: string
+  sucursalDestinoId?: string | null
+  sucursalDestino: string
+  repartidorId?: string | null
+  repartidor?: string | null
+  esDeMiSucursal?: boolean
+  esTramoActual?: boolean
+}
+
 // Convertir respuesta del backend a tipo Shipment
 const mapToShipment = (paquete: any): Shipment => ({
   id: paquete.id,
@@ -98,10 +117,10 @@ const mapToShipment = (paquete: any): Shipment => ({
     email: paquete.remitente.email ?? undefined,
   },
   receiver: {
-    name: [paquete.destinatario?.nombre, paquete.destinatario?.apellido].filter(Boolean).join(' ') || 'No disponible',
-    address: paquete.destinatario?.direccion?.calle ?? 'No disponible',
-    city: paquete.destinatario?.direccion?.ciudad ?? paquete.destinatario?.ciudad ?? 'No disponible',
-    postalCode: paquete.destinatario?.direccion?.cp ?? paquete.destinatario?.cp ?? 'No disponible',
+    name: paquete.nombreDestinoOperativo ?? ([paquete.destinatario?.nombre, paquete.destinatario?.apellido].filter(Boolean).join(' ') || 'No disponible'),
+    address: paquete.direccionDestinoOperativo ?? paquete.destinatario?.direccion?.calle ?? 'No disponible',
+    city: paquete.ciudadDestinoOperativo ?? paquete.destinatario?.direccion?.ciudad ?? paquete.destinatario?.ciudad ?? 'No disponible',
+    postalCode: paquete.cpDestinoOperativo ?? paquete.destinatario?.direccion?.cp ?? paquete.destinatario?.cp ?? 'No disponible',
     province: normalizeProvincia(paquete.destinatario?.direccion?.provincia ?? paquete.provinciaDestino) ?? undefined,
     phone: paquete.destinatario.telefono,
     email: paquete.destinatario.email ?? undefined,
@@ -125,14 +144,23 @@ const mapToShipment = (paquete: any): Shipment => ({
   esZonaPeligrosa: paquete.esZonaPeligrosa ?? undefined,
   puntoPickUpId: paquete.puntoPickUpId ?? null,
   horasEstimadasRuta: paquete.horasEstimadasRuta ?? undefined,
+  tramoOperativoId: paquete.tramoOperativoId ?? null,
+  ordenTramoOperativo: paquete.ordenTramoOperativo ?? null,
+  estadoTramoOperativo: paquete.estadoTramoOperativo ?? null,
+  origenTramoOperativo: paquete.origenTramoOperativo ?? null,
+  destinoTramoOperativo: paquete.destinoTramoOperativo ?? null,
+  esTramoOperativoActual: paquete.esTramoOperativoActual ?? false,
   fechaCalendarizada: paquete.fechaCalendarizada ?? null,
   fechaEstimadaEntrega: paquete.fechaEstimadaEntrega ?? null,
   sucursalId: paquete.sucursalId ?? paquete.SucursalId ?? null,
   ubicacionActual: paquete.ubicacionActual
     ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
     : null,
-  receiverUbicacion: paquete.destinatario?.direccion?.ubicacion
-    ? { latitud: paquete.destinatario.direccion.ubicacion.latitud, longitud: paquete.destinatario.direccion.ubicacion.longitud }
+  receiverUbicacion: paquete.ubicacionDestinoOperativa ?? paquete.destinatario?.direccion?.ubicacion
+    ? {
+        latitud: (paquete.ubicacionDestinoOperativa ?? paquete.destinatario.direccion.ubicacion).latitud,
+        longitud: (paquete.ubicacionDestinoOperativa ?? paquete.destinatario.direccion.ubicacion).longitud,
+      }
     : null,
 })
 
@@ -268,6 +296,11 @@ export const shipmentService = {
   },
 
   // Obtener seguimiento por código de seguimiento
+  getTramos: async (paqueteId: string): Promise<TramoEnvio[]> => {
+    const response = await api.get(`/envios/paquete/${paqueteId}/tramos`)
+    return Array.isArray(response.data) ? response.data : []
+  },
+
   getShipmentByTrackingCode: async (codigoSeguimiento: string): Promise<Shipment | null> => {
     try {
       const response = await api.get(`/envios/seguimiento/${codigoSeguimiento}`)
@@ -398,6 +431,7 @@ export const shipmentService = {
     status?: string[],
     from?: string,
     to?: string,
+    operational = false,
   ): Promise<PagedResult<Shipment>> => {
     try {
       const params = new URLSearchParams()
@@ -407,7 +441,8 @@ export const shipmentService = {
       if (status && status.length > 0) status.forEach((value) => params.append('status', value))
       if (from) params.set('from', from)
       if (to) params.set('to', to)
-      const response = await api.get(`/envios/paquetes?${params.toString()}`)
+      const endpoint = operational ? '/envios/tramos-operativos' : '/envios/paquetes'
+      const response = await api.get(`${endpoint}?${params.toString()}`)
       return mapPagedShipments(response.data)
     } catch (error) {
       console.error('Get shipments page error:', error)

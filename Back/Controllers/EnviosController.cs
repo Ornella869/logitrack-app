@@ -23,6 +23,7 @@ namespace Back.Controllers
         private readonly HistorialEstadoEnvioService _historialService;
         private readonly QrService _qrService;
         private readonly LogiTrackDbContext _context;
+        private readonly PlanificacionTramosService _tramosService;
 
 
         public EnviosController(
@@ -32,7 +33,8 @@ namespace Back.Controllers
             IVehiculoRepository vehiculoRepository,
             EnviosService enviosService,
             HistorialEstadoEnvioService historialService,
-            QrService qrService)
+            QrService qrService,
+            PlanificacionTramosService tramosService)
         {
             _context = context;
             _rutasRepository = rutasRepository;
@@ -41,6 +43,7 @@ namespace Back.Controllers
             _enviosRepository = enviosRepository;
             _historialService = historialService;
             _qrService = qrService;
+            _tramosService = tramosService;
         }
 
         private Guid? CurrentUserId()
@@ -72,7 +75,11 @@ namespace Back.Controllers
                     && (paquete.FechaCalendarizada?.Date == OperationalClock.TodayUtcDate
                         || paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado);
             // Supervisor/Operador: debe pertenecer a la misma sucursal. Sin sucursal → sin acceso.
-            return user.SucursalId.HasValue && paquete.SucursalId == user.SucursalId;
+            return user.SucursalId.HasValue
+                && (paquete.SucursalId == user.SucursalId
+                    || await _context.TramosEnvio.AnyAsync(t =>
+                        t.PaqueteId == paquete.Id
+                        && (t.SucursalOrigenId == user.SucursalId || t.SucursalDestinoId == user.SucursalId)));
         }
 
         private static double DistanciaKm(Ubicacion a, Ubicacion b)
@@ -100,10 +107,10 @@ namespace Back.Controllers
             if (origen is null) return paquetes;
 
             var pendientes = paquetes
-                .Where(p => p.Destinatario.Direccion.Ubicacion is not null)
+                .Where(p => (p.UbicacionDestinoOperativa ?? p.Destinatario.Direccion.Ubicacion) is not null)
                 .ToList();
             var sinCoords = paquetes
-                .Where(p => p.Destinatario.Direccion.Ubicacion is null)
+                .Where(p => (p.UbicacionDestinoOperativa ?? p.Destinatario.Direccion.Ubicacion) is null)
                 .ToList();
 
             var ordenadas = new List<Paquete>();
@@ -111,12 +118,12 @@ namespace Back.Controllers
             while (pendientes.Count > 0)
             {
                 var siguiente = pendientes
-                    .OrderBy(p => DistanciaKm(actual, p.Destinatario.Direccion.Ubicacion!))
+                    .OrderBy(p => DistanciaKm(actual, (p.UbicacionDestinoOperativa ?? p.Destinatario.Direccion.Ubicacion)!))
                     .ThenBy(p => p.CreadoEn)
                     .First();
                 ordenadas.Add(siguiente);
                 pendientes.Remove(siguiente);
-                actual = siguiente.Destinatario.Direccion.Ubicacion!;
+                actual = (siguiente.UbicacionDestinoOperativa ?? siguiente.Destinatario.Direccion.Ubicacion)!;
             }
 
             ordenadas.AddRange(sinCoords);
@@ -282,6 +289,29 @@ namespace Back.Controllers
             return Ok(paquetes);
         }
 
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("tramos-operativos")]
+        public async Task<ActionResult<PagedResponse<Paquete>>> BuscarTramosOperativos(
+            [FromQuery] string? search,
+            [FromQuery(Name = "status")] List<PaqueteStatus>? estados,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to,
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize)
+        {
+            var sucursalId = await CurrentSucursalScopeAsync();
+            if (!sucursalId.HasValue) return Forbid();
+
+            return Ok(await _tramosService.ObtenerTramosOperativosAsync(
+                sucursalId.Value,
+                search,
+                estados,
+                from,
+                to,
+                PaginationDefaults.NormalizePage(page),
+                PaginationDefaults.NormalizePageSize(pageSize)));
+        }
+
         /// <summary>Paquetes pendientes de calendarización (Operador o Supervisor).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor)]
         [HttpGet("paquetes-pendientes")]
@@ -303,6 +333,7 @@ namespace Back.Controllers
 
             var hoy = OperationalClock.TodayUtcDate;
             var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(userId.Value, hoy);
+            await _tramosService.EnriquecerDestinosOperativosAsync(paquetes);
             return Ok(new { fecha = DateTime.SpecifyKind(hoy, DateTimeKind.Utc), paradas = await OrdenarParadasDesdeSucursalAsync(paquetes, geocoding) });
         }
 
@@ -597,6 +628,16 @@ namespace Back.Controllers
 
         // ============== G1L-32: QR ==============
 
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
+        [HttpGet("paquete/{paqueteId:guid}/tramos")]
+        public async Task<ActionResult> GetTramos(Guid paqueteId)
+        {
+            var paquete = await _enviosRepository.GetPaquete(paqueteId);
+            if (paquete is null) return NotFound();
+            if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
+            return Ok(await _tramosService.ObtenerItinerarioAsync(paqueteId, (await CurrentUserAsync())?.SucursalId));
+        }
+
         /// <summary>Devuelve el QR del paquete como PNG.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor)]
         [HttpGet("paquete/{paqueteId:guid}/qr")]
@@ -744,7 +785,10 @@ namespace Back.Controllers
             if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             try
             {
+                if (!await _tramosService.EsUltimaMillaActualAsync(paquete.Id))
+                    return BadRequest("Este tramo finaliza en otra sucursal. El operador receptor debe escanear el QR.");
                 ruta.EntregarPaquete(paqueteId);
+                await _tramosService.SincronizarEntregaAsync(paquete);
                 await _historialService.RegistrarCambioAsync(paqueteId, PaqueteStatus.Entregado, CurrentUserId(), OrigenCambioEstado.Manual);
                 await _context.SaveChangesAsync();
                 return Ok();

@@ -65,6 +65,7 @@ namespace Back.Application.Services
         private readonly TarifaService _tarifas;
         private readonly EmailNotificacionService _emails;
         private readonly OjoPatronService _ojoPatron;
+        private readonly PlanificacionTramosService _tramos;
         private const int DemoAddressesPerProvince = 1200;
         private static readonly Lazy<List<DemoAddress>> DemoAddressesCache = new(() =>
             ExpandirDireccionesDemo(CargarDireccionesDemoBase()));
@@ -80,7 +81,8 @@ namespace Back.Application.Services
             GeocodingService geocoding,
             TarifaService tarifas,
             EmailNotificacionService emails,
-            OjoPatronService ojoPatron)
+            OjoPatronService ojoPatron,
+            PlanificacionTramosService tramos)
         {
             _rutasRepository = rutasRepository;
             _enviosRepository = enviosRepository;
@@ -93,6 +95,7 @@ namespace Back.Application.Services
             _tarifas = tarifas;
             _emails = emails;
             _ojoPatron = ojoPatron;
+            _tramos = tramos;
         }
 
         // G1L-88 / Épica D: cotización con tarifas y zonas de la provincia de destino.
@@ -131,6 +134,8 @@ namespace Back.Application.Services
             if (sucursales.Count == 0) return null;
 
             var responsable = sucursales.FirstOrDefault(s => s.Cubre(provinciaDestino));
+            if (responsable is null)
+                throw new InvalidOperationException($"No hay una sucursal que atienda {provinciaDestino}.");
 
             // Ruteo estricto: si el operador tiene sucursal asignada, el destino debe estar
             // dentro de su cobertura. (Los usuarios sin sucursal —datos previos/admin— no se bloquean.)
@@ -140,7 +145,7 @@ namespace Back.Application.Services
                 if (operador?.SucursalId is Guid opSucId)
                 {
                     var miSucursal = sucursales.FirstOrDefault(s => s.Id == opSucId);
-                    if (miSucursal is not null && !miSucursal.Cubre(provinciaDestino))
+                    if (miSucursal is null)
                     {
                         var quien = responsable is not null ? $"la sucursal '{responsable.Nombre}'" : "otra sucursal";
                         throw new InvalidOperationException(
@@ -259,6 +264,8 @@ namespace Back.Application.Services
                 paquete.AsignarPuntoPickUp(puntoPickUp.Id);
 
             await _enviosRepository.Add(paquete);
+            if (sucursalDestino is not null)
+                await _tramos.PlanificarAsync(paquete, sucursalDestino.Id);
             await _emails.NotificarCodigoEntregaAsync(paquete);
 
             await _historial.RegistrarCambioAsync(
@@ -368,6 +375,11 @@ namespace Back.Application.Services
             if (paquetesAAgregar.Count > 0)
             {
                 await _enviosRepository.AddRange(paquetesAAgregar);
+                foreach (var paquete in paquetesAAgregar)
+                {
+                    if (paquete.SucursalId.HasValue)
+                        await _tramos.PlanificarAsync(paquete, paquete.SucursalId.Value);
+                }
                 await _historial.RegistrarCambiosMasivosDemoAsync(paquetesAAgregar, usuarioId);
             }
 
@@ -491,6 +503,8 @@ namespace Back.Application.Services
             paquete.ProvinciaDestino = request.Destinatario.Provincia?.Trim();
             paquete.EsEnvioADomicilio = puntoPickUp is null && !paquete.PuntoPickUpId.HasValue && esEnvioADomicilio;
             paquete.ActualizarEstimacionEntrega(distancia);
+            if (sucursalDestino is not null)
+                await _tramos.PlanificarAsync(paquete, sucursalDestino.Id);
 
             await AplicarCotizacion(paquete, request.Peso, distancia, ubicacionDestinatario, request.Destinatario.Provincia);
             if (puntoPickUp is not null)
@@ -536,6 +550,7 @@ namespace Back.Application.Services
                     if (esRepartidor)
                         throw new InvalidOperationException("El repartidor solo puede cancelar envíos En Tránsito.");
                     paquete.Cancelar(motivo);
+                    await _tramos.SincronizarCancelacionAsync(paquete);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     break;
 
@@ -556,6 +571,7 @@ namespace Back.Application.Services
                     {
                         // G1L-68: Volver a calendarizar — limpia repartidor y fecha, vuelve a Pendiente
                         paquete.LiberarAsignacion();
+                        await _tramos.SincronizarRecalendarizacionAsync(paquete);
                         await DesvincularDeRutasPendientes(paquete.Id);
                         await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.PendienteDeCalendarizacion, usuarioId, OrigenCambioEstado.Manual, motivo);
                         await _auditoria.RegistrarAsync(
@@ -567,6 +583,7 @@ namespace Back.Application.Services
                     else
                     {
                         paquete.Cancelar(motivo);
+                        await _tramos.SincronizarCancelacionAsync(paquete);
                         await DesvincularDeRutasPendientes(paquete.Id);
                         await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                         await _auditoria.RegistrarAsync(
@@ -586,6 +603,7 @@ namespace Back.Application.Services
                     if (!esRepartidor)
                         throw new InvalidOperationException("Un envío En Tránsito o Demorado solo puede cancelarlo el repartidor (Entrega Fallida).");
                     paquete.Cancelar(motivo);
+                    await _tramos.SincronizarCancelacionAsync(paquete);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
@@ -612,6 +630,7 @@ namespace Back.Application.Services
             if (accion == "Reprogramar")
             {
                 paquete.LiberarAsignacion();
+                await _tramos.SincronizarRecalendarizacionAsync(paquete);
                 await DesvincularDeRutasPendientes(paquete.Id);
                 await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.PendienteDeCalendarizacion, supervisorId, OrigenCambioEstado.Manual, motivo);
                 await _auditoria.RegistrarAsync(
@@ -622,6 +641,7 @@ namespace Back.Application.Services
             else if (accion == "Cancelar")
             {
                 paquete.Cancelar(motivo);
+                await _tramos.SincronizarCancelacionAsync(paquete);
                 await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, supervisorId, OrigenCambioEstado.Manual, motivo);
                 await _auditoria.RegistrarAsync(
                     Domain.Models.TipoAccion.CancelacionEnvio,
@@ -649,7 +669,10 @@ namespace Back.Application.Services
                     break;
 
                 case PaqueteStatus.Entregado:
+                    if (!await _tramos.EsUltimaMillaActualAsync(paquete.Id))
+                        throw new InvalidOperationException("Este tramo finaliza en otra sucursal. El operador receptor debe escanear el QR.");
                     paquete.Entregar();
+                    await _tramos.SincronizarEntregaAsync(paquete);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, usuarioId, OrigenCambioEstado.Manual);
                     await _auditoria.RegistrarAsync(
                         Domain.Models.TipoAccion.Notificacion,
@@ -666,6 +689,7 @@ namespace Back.Application.Services
                     if (paquete.Status != PaqueteStatus.EnTransito && paquete.Status != PaqueteStatus.Demorado)
                         throw new InvalidOperationException("Solo se puede cancelar una entrega en tránsito o demorada.");
                     paquete.Cancelar(motivo);
+                    await _tramos.SincronizarCancelacionAsync(paquete);
                     await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
                     await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
@@ -711,6 +735,25 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento)
                 ?? throw new InvalidOperationException("No se encontró un envío con ese código.");
+
+            if (usuarioId.HasValue
+                && await _tramos.IntentarRecibirEnSucursalAsync(paquete, usuarioId.Value))
+            {
+                await _historial.RegistrarCambioAsync(
+                    paquete.Id,
+                    PaqueteStatus.PendienteDeCalendarizacion,
+                    usuarioId,
+                    OrigenCambioEstado.QR,
+                    "Recepción en sucursal intermedia");
+                return new EscaneoResultado
+                {
+                    Status = paquete.Status,
+                    Accion = "RecibidoEnSucursal",
+                    CodigoSeguimiento = paquete.CodigoSeguimiento,
+                    PaqueteId = paquete.Id,
+                };
+            }
+
             await ValidarAccesoPaqueteAsync(paquete, usuarioId);
 
             switch (paquete.Status)
@@ -776,6 +819,7 @@ namespace Back.Application.Services
             foreach (var p in listos)
             {
                 p.IniciarTransito();
+                await _tramos.SincronizarInicioAsync(p);
                 await _historial.RegistrarCambioAsync(
                     p.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.Manual, "Inicializar Ruta");
             }
