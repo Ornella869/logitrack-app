@@ -75,6 +75,7 @@ import { incidenciaService, type Incidencia } from '../../services/incidenciaSer
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../../services/mensajeIncidenciaService'
 import { dateOnly, dateOnlyForDisplay, formatArgentinaDateInput, formatInstantArgentinaTime } from '../../utils/argentinaDate'
 import { buildMapsUrl } from '../../utils/mapsUrl'
+import AnimatedBrandOverlay from '../../components/AnimatedBrandOverlay'
 import type { Shipment, User } from '../../types'
 
 // G1L-23: Mi ruta del día. Trae paquetes asignados al repartidor logueado para hoy.
@@ -755,6 +756,7 @@ export default function RepartidorDashboard() {
 
   return (
     <Box>
+      <AnimatedBrandOverlay />
       <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
           <Stack spacing={2}>

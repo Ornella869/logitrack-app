@@ -44,8 +44,24 @@ namespace Back.Domain.Models
         public void ActualizarHorariosYCapacidad(string horarios, int capacidadDiaria)
         {
             if (string.IsNullOrWhiteSpace(horarios)) throw new InvalidOperationException("Los horarios son obligatorios.");
+            var h = horarios.Trim();
+            if (h.Length < 5) throw new InvalidOperationException("Los horarios deben ser más descriptivos (ej: \"Lun–Vie 09:00 a 18:00\").");
+            if (h.Length > 150) throw new InvalidOperationException("Los horarios no pueden superar los 150 caracteres.");
+            if (!h.Any(char.IsDigit)) throw new InvalidOperationException("Los horarios deben incluir al menos una hora (ej: \"Lun–Vie 09:00 a 18:00\").");
+            // Validar que cada patrón HH:MM sea una hora real (00:00 – 23:59)
+            var timeMatches = System.Text.RegularExpressions.Regex.Matches(h, @"\b(\d{1,2}):(\d{2})\b");
+            foreach (System.Text.RegularExpressions.Match m in timeMatches)
+            {
+                int hora = int.Parse(m.Groups[1].Value);
+                int min = int.Parse(m.Groups[2].Value);
+                if (hora > 23 || min > 59)
+                    throw new InvalidOperationException($"\"{m.Value}\" no es una hora válida. Usá el formato 00:00 a 23:59.");
+            }
+            if (System.Text.RegularExpressions.Regex.IsMatch(h, @"(\ba\b|de|desde|hasta|:)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                throw new InvalidOperationException("Los horarios parecen incompletos. Especificá el horario de cierre.");
             if (capacidadDiaria <= 0) throw new InvalidOperationException("La capacidad debe ser mayor a 0.");
-            Horarios = horarios.Trim();
+            if (capacidadDiaria > 500) throw new InvalidOperationException("La capacidad diaria no puede superar los 500 envíos.");
+            Horarios = h;
             CapacidadDiaria = capacidadDiaria;
         }
 

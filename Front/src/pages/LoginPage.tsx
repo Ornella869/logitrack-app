@@ -69,11 +69,17 @@ const darkCardTheme = createTheme({
     MuiButton: {
       styleOverrides: {
         containedPrimary: {
-          background: '#ffffff',
-          color: '#0C5EA7',
-          fontWeight: 700,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
-          '&:hover': { background: '#E3F2FD', boxShadow: '0 6px 22px rgba(0,0,0,0.28)' },
+          background: 'linear-gradient(135deg, #0288D1 0%, #7C4DFF 100%)',
+          color: '#fff',
+          fontWeight: 800,
+          letterSpacing: '0.04em',
+          boxShadow: '0 0 18px rgba(0,229,255,0.3), 0 0 36px rgba(124,77,255,0.18)',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #29B6F6 0%, #B388FF 100%)',
+            boxShadow: '0 0 26px rgba(0,229,255,0.5), 0 0 52px rgba(124,77,255,0.3)',
+            transform: 'translateY(-2px)',
+          },
         },
       },
     },

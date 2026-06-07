@@ -119,7 +119,23 @@ export default function PortalClientePublico() {
       <Box sx={{ maxWidth: 680, mx: 'auto', px: 2, pb: 6 }}>
         {/* Hero texto */}
         <Box sx={{ textAlign: 'center', py: { xs: 4, md: 6 } }}>
-          <Typography variant="h4" fontWeight={900} sx={{ color: 'white', mb: 1 }}>
+          <Typography
+            variant="h4"
+            fontWeight={900}
+            sx={{
+              mb: 1,
+              background: 'linear-gradient(90deg, #fff 0%, #fff 20%, #4FC3F7 35%, #fff 50%, #B388FF 65%, #fff 80%, #fff 100%)',
+              backgroundSize: '300% auto',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              animation: 'shimmerSweep 12s linear infinite',
+              '@keyframes shimmerSweep': {
+                '0%':   { backgroundPosition: '300% center' },
+                '100%': { backgroundPosition: '-300% center' },
+              },
+            }}
+          >
             ¿Dónde está tu envío?
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.05rem' }}>

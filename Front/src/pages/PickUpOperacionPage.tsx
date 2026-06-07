@@ -14,10 +14,14 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  FormControl,
   Grid,
   InputAdornment,
+  InputLabel,
   LinearProgress,
+  MenuItem,
   Paper,
+  Select,
   Snackbar,
   Stack,
   Table,
@@ -43,6 +47,55 @@ import { pickupService, type ResumenCalificaciones } from '../services/pickupSer
 import StarIcon from '@mui/icons-material/Star'
 import StarHalfIcon from '@mui/icons-material/StarHalf'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
+
+const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const TIME_OPTIONS: string[] = (() => {
+  const opts: string[] = []
+  for (let h = 0; h < 24; h++) {
+    opts.push(`${String(h).padStart(2, '0')}:00`)
+    opts.push(`${String(h).padStart(2, '0')}:30`)
+  }
+  return opts
+})()
+
+function buildHorariosStr(dias: string[], desde: string, hasta: string): string {
+  const ordered = DIAS_SEMANA.filter(d => dias.includes(d))
+  if (ordered.length === 0) return ''
+  const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
+  let diasStr: string
+  if (ordered.length === 7) {
+    diasStr = 'Todos los días'
+  } else if (weekdays.every(d => ordered.includes(d)) && ordered.length === 5) {
+    diasStr = 'Lun a Vie'
+  } else if (ordered.length === 2 && ordered[0] === 'Sáb' && ordered[1] === 'Dom') {
+    diasStr = 'Sáb y Dom'
+  } else {
+    diasStr = ordered.join(', ')
+  }
+  return `${diasStr} de ${desde} a ${hasta}`
+}
+
+function parseHorariosStr(horarios: string): { dias: string[]; desde: string; hasta: string } {
+  const times = horarios.match(/\b(\d{1,2}:\d{2})\b/g)
+  const desde = times?.[0] ?? '09:00'
+  const hasta = times?.[1] ?? '18:00'
+  let dias: string[] = []
+  if (/todos/i.test(horarios)) {
+    dias = [...DIAS_SEMANA]
+  } else if (/lun.*vie|lunes.*viernes/i.test(horarios)) {
+    dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
+  } else {
+    if (/\blun/i.test(horarios)) dias.push('Lun')
+    if (/\bmar/i.test(horarios)) dias.push('Mar')
+    if (/\bmi[eé]/i.test(horarios)) dias.push('Mié')
+    if (/\bjue/i.test(horarios)) dias.push('Jue')
+    if (/\bvi[eé]/i.test(horarios)) dias.push('Vie')
+    if (/\bs[aá]b/i.test(horarios)) dias.push('Sáb')
+    if (/\bdom/i.test(horarios)) dias.push('Dom')
+  }
+  if (dias.length === 0) dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
+  return { dias, desde, hasta }
+}
 
 function QrScannerDialog({
   open,
@@ -237,7 +290,9 @@ export default function PickUpOperacionPage() {
   const [qrOpen, setQrOpen] = useState(false)
   const [resumenCalificaciones, setResumenCalificaciones] = useState<ResumenCalificaciones | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
-  const [editHorarios, setEditHorarios] = useState('')
+  const [editDias, setEditDias] = useState<string[]>([])
+  const [editDesde, setEditDesde] = useState('09:00')
+  const [editHasta, setEditHasta] = useState('18:00')
   const [editCapacidad, setEditCapacidad] = useState(0)
   const [savingConfig, setSavingConfig] = useState(false)
   const [configError, setConfigError] = useState<string | null>(null)
@@ -264,18 +319,24 @@ export default function PickUpOperacionPage() {
 
   const openConfig = () => {
     if (!data) return
-    setEditHorarios(data.punto.horarios)
+    const parsed = parseHorariosStr(data.punto.horarios)
+    setEditDias(parsed.dias)
+    setEditDesde(parsed.desde)
+    setEditHasta(parsed.hasta)
     setEditCapacidad(data.punto.capacidadDiaria)
     setConfigError(null)
     setConfigOpen(true)
   }
 
   const onSaveConfig = async () => {
-    if (!editHorarios.trim()) { setConfigError('Los horarios son obligatorios.'); return }
+    if (editDias.length === 0) { setConfigError('Seleccioná al menos un día de atención.'); return }
+    if (editDesde >= editHasta) { setConfigError('El horario de cierre debe ser posterior al de apertura.'); return }
     if (editCapacidad <= 0) { setConfigError('La capacidad debe ser mayor a 0.'); return }
+    if (editCapacidad > 500) { setConfigError('La capacidad diaria no puede superar los 500 envíos.'); return }
+    const horarios = buildHorariosStr(editDias, editDesde, editHasta)
     setSavingConfig(true)
     try {
-      await pickupService.actualizarConfiguracion(editHorarios.trim(), editCapacidad)
+      await pickupService.actualizarConfiguracion(horarios, editCapacidad)
       setConfigOpen(false)
       setSnackbar({ open: true, msg: 'Configuración guardada correctamente.', severity: 'success' })
       await load()
@@ -723,27 +784,85 @@ export default function PickUpOperacionPage() {
         </Alert>
       </Snackbar>
 
-      <Dialog open={configOpen} onClose={() => { if (!savingConfig) setConfigOpen(false) }} maxWidth="xs" fullWidth>
-        <DialogTitle>Configurar punto Pick Up</DialogTitle>
+      <Dialog open={configOpen} onClose={() => { if (!savingConfig) setConfigOpen(false) }} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>Configurar horarios y capacidad</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            {configError && <Alert severity="error">{configError}</Alert>}
-            <TextField
-              label="Horarios de atención"
-              value={editHorarios}
-              onChange={(e) => setEditHorarios(e.target.value)}
-              fullWidth
-              placeholder="Ej: Lun–Vie 9–18 / Sáb 9–13"
-              multiline
-              rows={2}
-            />
+          <Stack spacing={3} sx={{ pt: 1 }}>
+            {configError && <Alert severity="error" onClose={() => setConfigError(null)}>{configError}</Alert>}
+
+            {/* Días */}
+            <Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.08em' }}>
+                DÍAS DE ATENCIÓN
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                {DIAS_SEMANA.map((dia) => (
+                  <Chip
+                    key={dia}
+                    label={dia}
+                    clickable
+                    onClick={() => {
+                      setEditDias((prev) =>
+                        prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]
+                      )
+                      setConfigError(null)
+                    }}
+                    color={editDias.includes(dia) ? 'primary' : 'default'}
+                    variant={editDias.includes(dia) ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 700 }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            {/* Horario */}
+            <Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.08em' }}>
+                HORARIO DE ATENCIÓN
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
+                <FormControl size="small" sx={{ minWidth: 130 }}>
+                  <InputLabel>Apertura</InputLabel>
+                  <Select
+                    value={editDesde}
+                    label="Apertura"
+                    onChange={(e) => { setEditDesde(e.target.value); setConfigError(null) }}
+                  >
+                    {TIME_OPTIONS.map((t) => (
+                      <MenuItem key={t} value={t}>{t}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Typography sx={{ color: 'text.secondary', fontWeight: 600 }}>a</Typography>
+                <FormControl size="small" sx={{ minWidth: 130 }}>
+                  <InputLabel>Cierre</InputLabel>
+                  <Select
+                    value={editHasta}
+                    label="Cierre"
+                    onChange={(e) => { setEditHasta(e.target.value); setConfigError(null) }}
+                  >
+                    {TIME_OPTIONS.filter((t) => t > editDesde).map((t) => (
+                      <MenuItem key={t} value={t}>{t}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+              {editDias.length > 0 && (
+                <Typography variant="caption" sx={{ mt: 1.5, display: 'block', color: 'primary.main', fontWeight: 600 }}>
+                  Vista previa: {buildHorariosStr(editDias, editDesde, editHasta)}
+                </Typography>
+              )}
+            </Box>
+
+            {/* Capacidad */}
             <TextField
               label="Capacidad diaria (envíos)"
               type="number"
               value={editCapacidad}
-              onChange={(e) => setEditCapacidad(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={(e) => setEditCapacidad(Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
               fullWidth
-              inputProps={{ min: 1 }}
+              inputProps={{ min: 1, max: 500 }}
+              helperText="Entre 1 y 500 envíos por día"
             />
           </Stack>
         </DialogContent>

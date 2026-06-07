@@ -50,6 +50,7 @@ import DirectionsCarFilledRoundedIcon from '@mui/icons-material/DirectionsCarFil
 import warehouseImage from '../../assets/warehouse.jpg'
 import { empresaService } from '../../services/empresaService'
 import { leadService, type PlanInteres } from '../../services/leadService'
+import { RevealBox } from './landingUtils'
 
 type ReviewCategory = 'entrega' | 'vehiculo' | 'general'
 
@@ -301,6 +302,10 @@ export default function LandingPage() {
   const [plans, setPlans] = useState<LandingPlan[]>(fallbackPlans)
   const [facturacion, setFacturacion] = useState<'mensual' | 'anual'>('mensual')
   const selectedCountry = COUNTRIES[0]
+  const [truckFlying, setTruckFlying] = useState(false)
+  const [reviewsAnimated, setReviewsAnimated] = useState(false)
+  const [animatedRating, setAnimatedRating] = useState(0)
+  const reviewsRevealRef = useRef<HTMLDivElement>(null)
 
   const closeReviewToast = () => {
     setReviewSent(false)
@@ -367,10 +372,27 @@ export default function LandingPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) setReviewsAnimated(true)
+      },
+      { threshold: 0.1 }
+    )
+    if (reviewsRevealRef.current) obs.observe(reviewsRevealRef.current)
+    return () => obs.disconnect()
+  }, [])
+
   const average = useMemo(() => {
     if (!reviews.length) return 0
     return reviews.reduce((acc, current) => acc + current.rating, 0) / reviews.length
   }, [reviews])
+
+  useEffect(() => {
+    if (!reviewsAnimated) return
+    const t = setTimeout(() => setAnimatedRating(average), 250)
+    return () => clearTimeout(t)
+  }, [reviewsAnimated, average])
 
   const grouped = useMemo(
     () => ({
@@ -587,7 +609,7 @@ export default function LandingPage() {
         </Stack>
 
         <Grid container spacing={3}>
-          {plans.map((plan) => {
+          {plans.map((plan, planIdx) => {
             const isPremium = plan.planValue === 'Premium'
             const accentMain = isPremium ? '#26A69A' : '#0288D1'
             const accentSoft = isPremium ? '#4DB6AC' : '#26C6DA'
@@ -599,6 +621,7 @@ export default function LandingPage() {
 
             return (
             <Grid item xs={12} md={6} key={plan.planValue}>
+              <RevealBox delay={planIdx * 160} direction={planIdx === 0 ? 'left' : 'right'}>
               <Card
                 sx={{
                   position: 'relative',
@@ -660,32 +683,34 @@ export default function LandingPage() {
                   {plan.name}
                 </Typography>
 
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
-                  <Typography sx={{ color: accentMain, fontWeight: 900, fontSize: '1.5rem' }}>
-                    {precioDisplay}
-                  </Typography>
-                  {facturacion === 'anual' && (
-                    <Chip
-                      label="20% OFF"
-                      size="small"
-                      sx={{ bgcolor: '#2e7d32', color: '#fff', fontWeight: 800, fontSize: '0.68rem' }}
-                    />
+                <RevealBox delay={planIdx * 160 + 200} direction="up">
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
+                    <Typography sx={{ color: accentMain, fontWeight: 900, fontSize: '1.5rem' }}>
+                      {precioDisplay}
+                    </Typography>
+                    {facturacion === 'anual' && (
+                      <Chip
+                        label="20% OFF"
+                        size="small"
+                        sx={{ bgcolor: '#2e7d32', color: '#fff', fontWeight: 800, fontSize: '0.68rem' }}
+                      />
+                    )}
+                  </Stack>
+                  {equivMensual && (
+                    <Typography variant="caption" sx={{ color: '#557', fontWeight: 600 }}>
+                      {equivMensual}
+                    </Typography>
                   )}
-                </Stack>
-                {equivMensual && (
-                  <Typography variant="caption" sx={{ color: '#557', fontWeight: 600 }}>
-                    {equivMensual}
-                  </Typography>
-                )}
 
-                <Stack spacing={1.15} sx={{ mt: 2.5 }}>
-                  {plan.features.map((feature) => (
-                    <Stack key={feature} direction="row" spacing={1.2} alignItems="center">
-                      <CheckCircleRoundedIcon sx={{ color: accentMain, fontSize: 20 }} />
-                      <Typography sx={{ color: '#244156', fontWeight: 600 }}>{feature}</Typography>
-                    </Stack>
-                  ))}
-                </Stack>
+                  <Stack spacing={1.15} sx={{ mt: 2.5 }}>
+                    {plan.features.map((feature) => (
+                      <Stack key={feature} direction="row" spacing={1.2} alignItems="center">
+                        <CheckCircleRoundedIcon sx={{ color: accentMain, fontSize: 20 }} />
+                        <Typography sx={{ color: '#244156', fontWeight: 600 }}>{feature}</Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </RevealBox>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 3 }}>
                   <Button
@@ -719,6 +744,7 @@ export default function LandingPage() {
                   </Button>
                 </Stack>
               </Card>
+              </RevealBox>
             </Grid>
           )})}
         </Grid>
@@ -744,6 +770,13 @@ export default function LandingPage() {
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 1.5 }}>
             <Stack direction="row" spacing={1.25} alignItems="center" sx={{ cursor: 'pointer' }} onClick={() => scrollTo(heroRef)}>
               <Box
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!truckFlying) {
+                    setTruckFlying(true)
+                    setTimeout(() => setTruckFlying(false), 7200)
+                  }
+                }}
                 sx={{
                   width: 42,
                   height: 42,
@@ -752,6 +785,8 @@ export default function LandingPage() {
                   placeItems: 'center',
                   background: 'linear-gradient(135deg,#0288D1,#29B6F6)',
                   boxShadow: '0 12px 24px rgba(2,136,209,0.22)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  '&:hover': { transform: 'scale(1.12)', boxShadow: '0 16px 28px rgba(2,136,209,0.38)' },
                 }}
               >
                 <LocalShippingRoundedIcon sx={{ color: '#fff' }} />
@@ -904,6 +939,13 @@ export default function LandingPage() {
                   bgcolor: 'rgba(255,255,255,0.14)',
                   color: '#fff',
                   border: '1px solid rgba(255,255,255,0.18)',
+                  opacity: 0,
+                  animation: 'heroFadeUp 0.7s ease forwards',
+                  animationDelay: '0.1s',
+                  '@keyframes heroFadeUp': {
+                    '0%': { opacity: 0, transform: 'translateY(20px)' },
+                    '100%': { opacity: 1, transform: 'translateY(0)' },
+                  },
                 }}
               />
 
@@ -917,6 +959,9 @@ export default function LandingPage() {
                   color: '#fff',
                   maxWidth: 780,
                   textWrap: 'balance',
+                  opacity: 0,
+                  animation: 'heroFadeUp 0.8s ease forwards',
+                  animationDelay: '0.35s',
                   textShadow: '0 10px 28px rgba(1,17,31,0.35)',
                 }}
               >
@@ -933,15 +978,28 @@ export default function LandingPage() {
                   height: 6,
                   borderRadius: '999px',
                   background: 'linear-gradient(90deg,#9DE7FF 0%, rgba(157,231,255,0.1) 100%)',
+                  opacity: 0,
+                  animation: 'heroFadeUp 0.7s ease forwards',
+                  animationDelay: '0.65s',
                 }}
               />
 
-              <Typography sx={{ mt: 3, maxWidth: 640, color: 'rgba(255,255,255,0.82)', fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.8 }}>
+              <Typography sx={{
+                mt: 3, maxWidth: 640, color: 'rgba(255,255,255,0.82)', fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.8,
+                opacity: 0,
+                animation: 'heroFadeUp 0.8s ease forwards',
+                animationDelay: '0.8s',
+              }}>
                 Mostrá profesionalismo desde el primer contacto: centralizá tus operaciones, métricas y administra entregas,
                 rutas y equipos desde un solo lugar.
               </Typography>
 
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }} flexWrap="wrap">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+                mt: 4,
+                opacity: 0,
+                animation: 'heroFadeUp 0.8s ease forwards',
+                animationDelay: '1s',
+              }} flexWrap="wrap">
                 <Button
                   size="large"
                   variant="contained"
@@ -1141,25 +1199,29 @@ export default function LandingPage() {
             <Grid container spacing={2.5}>
               {features.map((feature, index) => (
                 <Grid item xs={12} sm={6} key={feature.title}>
-                  <Card
-                    sx={{
-                      height: '100%',
-                      borderRadius: '24px',
-                      p: 0.5,
-                      background: index % 2 === 0 ? 'linear-gradient(180deg,#FFFFFF 0%,#F4FAFF 100%)' : '#fff',
-                      border: '1px solid rgba(2,136,209,0.1)',
-                      transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-                      '&:hover': { transform: 'translateY(-6px)', boxShadow: '0 18px 40px rgba(2,136,209,0.12)' },
-                    }}
-                  >
-                    <CardContent sx={{ p: 3 }}>
-                      <Box sx={{ width: 52, height: 52, borderRadius: '16px', display: 'grid', placeItems: 'center', bgcolor: '#E1F5FE', color: '#0288D1', mb: 2 }}>
-                        {feature.icon}
-                      </Box>
-                      <Typography sx={{ fontWeight: 800, fontSize: '1.1rem', color: '#0B1F33' }}>{feature.title}</Typography>
-                      <Typography sx={{ mt: 1.2, color: '#5B7488', lineHeight: 1.8 }}>{feature.description}</Typography>
-                    </CardContent>
-                  </Card>
+                  <RevealBox delay={index * 120} direction={index % 2 === 0 ? 'left' : 'right'}>
+                    <Card
+                      sx={{
+                        height: '100%',
+                        borderRadius: '24px',
+                        p: 0.5,
+                        background: index % 2 === 0 ? 'linear-gradient(180deg,#FFFFFF 0%,#F4FAFF 100%)' : '#fff',
+                        border: '1px solid rgba(2,136,209,0.1)',
+                        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                        '&:hover': { transform: 'translateY(-6px)', boxShadow: '0 18px 40px rgba(2,136,209,0.12)' },
+                      }}
+                    >
+                      <CardContent sx={{ p: 3 }}>
+                        <Box sx={{ width: 52, height: 52, borderRadius: '16px', display: 'grid', placeItems: 'center', bgcolor: '#E1F5FE', color: '#0288D1', mb: 2 }}>
+                          {feature.icon}
+                        </Box>
+                        <RevealBox delay={index * 120 + 220} direction="up">
+                          <Typography sx={{ fontWeight: 800, fontSize: '1.1rem', color: '#0B1F33' }}>{feature.title}</Typography>
+                          <Typography sx={{ mt: 1.2, color: '#5B7488', lineHeight: 1.8 }}>{feature.description}</Typography>
+                        </RevealBox>
+                      </CardContent>
+                    </Card>
+                  </RevealBox>
                 </Grid>
               ))}
             </Grid>
@@ -1207,14 +1269,90 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* Sección captura rápida de email */}
-      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#071D31' }}>
-        <Container maxWidth="sm">
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <Typography variant="h5" sx={{ fontWeight: 900, color: '#fff', mb: 1 }}>
+      {/* Sección captura rápida de email — efecto mágico */}
+      <Box
+        sx={{
+          py: { xs: 8, md: 11 },
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'linear-gradient(135deg, #030D1F 0%, #071D31 35%, #0A1A3A 65%, #040D20 100%)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(ellipse at 15% 60%, rgba(0,229,255,0.18) 0%, transparent 55%), ' +
+              'radial-gradient(ellipse at 85% 40%, rgba(124,77,255,0.2) 0%, transparent 55%)',
+            animation: 'auroraA 7s ease-in-out infinite alternate',
+            '@keyframes auroraA': {
+              '0%': { opacity: 0.7, transform: 'translateX(-12px) scale(1)' },
+              '100%': { opacity: 1, transform: 'translateX(12px) scale(1.06)' },
+            },
+          },
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(ellipse at 50% 0%, rgba(2,136,209,0.25) 0%, transparent 65%)',
+            animation: 'auroraB 5s ease-in-out infinite alternate',
+            '@keyframes auroraB': {
+              '0%': { opacity: 0.5, transform: 'scaleX(0.95)' },
+              '100%': { opacity: 1, transform: 'scaleX(1.05)' },
+            },
+          },
+        }}
+      >
+        {/* partículas flotantes decorativas */}
+        {[
+          { size: 6, top: '18%', left: '8%', delay: '0s' },
+          { size: 4, top: '72%', left: '14%', delay: '1.2s' },
+          { size: 8, top: '30%', left: '88%', delay: '0.6s' },
+          { size: 5, top: '62%', left: '80%', delay: '2s' },
+          { size: 3, top: '45%', left: '50%', delay: '0.3s' },
+        ].map((p, i) => (
+          <Box
+            key={i}
+            sx={{
+              position: 'absolute',
+              width: p.size,
+              height: p.size,
+              top: p.top,
+              left: p.left,
+              borderRadius: '50%',
+              background: i % 2 === 0 ? '#00E5FF' : '#EA80FC',
+              boxShadow: i % 2 === 0 ? '0 0 10px #00E5FF' : '0 0 10px #EA80FC',
+              animation: `particleFloat 4s ease-in-out infinite`,
+              animationDelay: p.delay,
+              '@keyframes particleFloat': {
+                '0%, 100%': { transform: 'translateY(0px)', opacity: 0.6 },
+                '50%': { transform: 'translateY(-12px)', opacity: 1 },
+              },
+            }}
+          />
+        ))}
+
+        <Container maxWidth="sm" sx={{ position: 'relative', zIndex: 2 }}>
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 900,
+                mb: 1.5,
+                background: 'linear-gradient(135deg, #FFFFFF 0%, #9DE7FF 30%, #00E5FF 58%, #EA80FC 100%)',
+                backgroundSize: '220% auto',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                animation: 'gradientShimmer 4s linear infinite',
+                '@keyframes gradientShimmer': {
+                  '0%': { backgroundPosition: '0% center' },
+                  '100%': { backgroundPosition: '220% center' },
+                },
+              }}
+            >
               ¿Querés conocer nuestros planes?
             </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.95rem' }}>
+            <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.97rem', lineHeight: 1.75 }}>
               Dejá tu email y te enviamos toda la información para que evalúes la opción que mejor se adapta a tu operación.
             </Typography>
           </Box>
@@ -1258,12 +1396,18 @@ export default function LandingPage() {
                 disabled={quickEmailSending}
                 endIcon={quickEmailSending ? <CircularProgress size={16} color="inherit" /> : <SendRoundedIcon />}
                 sx={{
-                  bgcolor: '#0288D1',
+                  background: 'linear-gradient(135deg, #0288D1 0%, #7C4DFF 100%)',
                   fontWeight: 800,
                   px: 3,
                   whiteSpace: 'nowrap',
                   height: 56,
-                  '&:hover': { bgcolor: '#0277BD' },
+                  boxShadow: '0 0 20px rgba(0,229,255,0.35), 0 0 40px rgba(124,77,255,0.2)',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #29B6F6 0%, #B388FF 100%)',
+                    boxShadow: '0 0 30px rgba(0,229,255,0.55), 0 0 60px rgba(124,77,255,0.35)',
+                    transform: 'translateY(-2px)',
+                  },
                   '&:disabled': { bgcolor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.4)' },
                 }}
               >
@@ -1278,39 +1422,57 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Grid container spacing={4}>
             <Grid item xs={12} md={5}>
-              <Typography sx={{ color: '#0288D1', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
-                Reseñas y calificaciones
-              </Typography>
-              <Typography variant="h3" sx={{ mt: 1.2, fontWeight: 900, color: '#0B1F33', lineHeight: 1.1 }}>
-                Opiniones visibles sobre entregas, vehículos y experiencia general
-              </Typography>
+              <Box ref={reviewsRevealRef}>
+                <Typography sx={{ color: '#0288D1', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+                  Reseñas y calificaciones
+                </Typography>
+                <Typography variant="h3" sx={{ mt: 1.2, fontWeight: 900, color: '#0B1F33', lineHeight: 1.1 }}>
+                  Opiniones visibles sobre entregas, vehículos y experiencia general
+                </Typography>
 
-              <Paper sx={{ mt: 3, p: 3, borderRadius: '24px' }}>
-                <Typography sx={{ fontSize: '3.2rem', fontWeight: 900, color: '#0288D1', lineHeight: 1 }}>{average.toFixed(1)}</Typography>
-                <Rating value={average} precision={0.1} readOnly sx={{ mt: 1, '& .MuiRating-iconFilled': { color: '#FFB300' } }} />
-                <Typography sx={{ mt: 1.5, color: '#5B7488' }}>Basado en {reviews.length} reseñas activas.</Typography>
-                <Divider sx={{ my: 2.5 }} />
-                <Stack spacing={1.3}>
-                  {(['entrega', 'vehiculo', 'general'] as ReviewCategory[]).map((category) => (
-                    <Box key={category}>
-                      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
-                        <Typography sx={{ color: '#234158', fontWeight: 700 }}>{categoryLabel[category]}</Typography>
-                        <Typography sx={{ color: categoryColor[category], fontWeight: 800 }}>{grouped[category]}</Typography>
-                      </Stack>
-                      <LinearProgress
-                        variant="determinate"
-                        value={(grouped[category] / Math.max(reviews.length, 1)) * 100}
-                        sx={{
-                          height: 10,
-                          borderRadius: '999px',
-                          bgcolor: '#E4EEF7',
-                          '& .MuiLinearProgress-bar': { bgcolor: categoryColor[category], borderRadius: '999px' },
-                        }}
-                      />
-                    </Box>
-                  ))}
-                </Stack>
-              </Paper>
+                <Paper sx={{ mt: 3, p: 3, borderRadius: '24px', background: 'linear-gradient(160deg, #fff 0%, #F8FCFF 100%)', border: '1px solid rgba(2,136,209,0.1)' }}>
+                  <Typography sx={{ fontSize: '3.2rem', fontWeight: 900, color: '#0288D1', lineHeight: 1 }}>{average.toFixed(1)}</Typography>
+                  <Rating
+                    value={animatedRating}
+                    precision={0.1}
+                    readOnly
+                    sx={{
+                      mt: 1,
+                      '& .MuiRating-iconFilled': { color: '#FFB300', filter: 'drop-shadow(0 0 4px rgba(255,179,0,0.7))' },
+                      '& .MuiRating-icon': { transition: 'transform 0.4s ease' },
+                      transition: 'all 0.8s ease',
+                    }}
+                  />
+                  <Typography sx={{ mt: 1.5, color: '#5B7488' }}>Basado en {reviews.length} reseñas activas.</Typography>
+                  <Divider sx={{ my: 2.5 }} />
+                  <Stack spacing={1.8}>
+                    {(['entrega', 'vehiculo', 'general'] as ReviewCategory[]).map((category) => (
+                      <Box key={category}>
+                        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
+                          <Typography sx={{ color: '#234158', fontWeight: 700 }}>{categoryLabel[category]}</Typography>
+                          <Typography sx={{ color: categoryColor[category], fontWeight: 800 }}>
+                            {grouped[category]}
+                          </Typography>
+                        </Stack>
+                        <LinearProgress
+                          variant="determinate"
+                          value={reviewsAnimated ? (grouped[category] / Math.max(reviews.length, 1)) * 100 : 0}
+                          sx={{
+                            height: 10,
+                            borderRadius: '999px',
+                            bgcolor: '#E4EEF7',
+                            '& .MuiLinearProgress-bar': {
+                              bgcolor: categoryColor[category],
+                              borderRadius: '999px',
+                              transition: 'transform 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important',
+                            },
+                          }}
+                        />
+                      </Box>
+                    ))}
+                  </Stack>
+                </Paper>
+              </Box>
             </Grid>
 
             <Grid item xs={12} md={7}>
@@ -1667,6 +1829,40 @@ export default function LandingPage() {
         >
           <KeyboardArrowUpRoundedIcon />
         </IconButton>
+      )}
+
+      {/* Camión volador — animación al hacer click en el logo */}
+      {truckFlying && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            pointerEvents: 'none',
+            zIndex: 9999,
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '60px',
+              left: '42px',
+              animation: 'truckJourney 7s ease-in-out forwards',
+              '@keyframes truckJourney': {
+                '0%':   { left: '42px',                  top: '60px', transform: 'scaleX(1)',  opacity: 1 },
+                '45%':  { left: 'calc(100vw - 90px)',   top: '60px', transform: 'scaleX(1)',  opacity: 1 },
+                '50%':  { left: 'calc(100vw - 90px)',   top: '60px', transform: 'scaleX(-1)', opacity: 1 },
+                '95%':  { left: '42px',                  top: '60px', transform: 'scaleX(-1)', opacity: 1 },
+                '100%': { left: '42px',                  top: '60px', transform: 'scaleX(-1)', opacity: 0 },
+              },
+            }}
+          >
+            <LocalShippingRoundedIcon sx={{ color: '#29B6F6', fontSize: 72, filter: 'drop-shadow(0 0 16px rgba(41,182,246,0.8))' }} />
+          </Box>
+        </Box>
       )}
     </Box>
   )

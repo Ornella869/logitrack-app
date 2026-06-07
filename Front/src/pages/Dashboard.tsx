@@ -24,6 +24,7 @@ import { shipmentService } from '../services/shipmentService'
 import { incidenciaService } from '../services/incidenciaService'
 import type { Shipment, User } from '../types'
 import UsersManagement from '../components/UsersManagement'
+import AnimatedBrandOverlay from '../components/AnimatedBrandOverlay'
 import { formatArgentinaDateInput, formatDateOnlyEs } from '../utils/argentinaDate'
 
 function getGreeting(name: string) {
@@ -247,6 +248,7 @@ function Dashboard() {
 
   return (
     <Box>
+      <AnimatedBrandOverlay />
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
