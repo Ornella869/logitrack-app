@@ -125,6 +125,23 @@ namespace Back.Application.Services
                 .Where(p => p.Id == paqueteId)
                 .Select(p => p.SucursalId)
                 .SingleOrDefaultAsync();
+            var paqueteStatus = await _context.Paquetes
+                .Where(p => p.Id == paqueteId)
+                .Select(p => p.Status)
+                .SingleOrDefaultAsync();
+            if (paqueteStatus == PaqueteStatus.PendienteDeCalendarizacion)
+            {
+                var tramoCancelado = tramos
+                    .Where(t => t.Estado != TramoEnvioStatus.RecibidoEnSucursal
+                        && t.Estado != TramoEnvioStatus.Entregado)
+                    .OrderBy(t => t.Orden)
+                    .FirstOrDefault();
+                if (tramoCancelado?.Estado == TramoEnvioStatus.Cancelado)
+                {
+                    tramoCancelado.VolverAPendiente();
+                    await _context.SaveChangesAsync();
+                }
+            }
 
             return tramos.Select(t => (object)new
             {
@@ -181,7 +198,11 @@ namespace Back.Application.Services
             if (estados is { Count: > 0 })
             {
                 var estadosTramo = MapearEstadosTramo(estados);
-                query = query.Where(x => estadosTramo.Contains(x.Tramo.Estado));
+                var incluyePendiente = estados.Contains(PaqueteStatus.PendienteDeCalendarizacion);
+                query = query.Where(x => estadosTramo.Contains(x.Tramo.Estado)
+                    || (incluyePendiente
+                        && x.Paquete.Status == PaqueteStatus.PendienteDeCalendarizacion
+                        && x.Tramo.Estado == TramoEnvioStatus.Cancelado));
             }
 
             if (from.HasValue)
@@ -196,6 +217,19 @@ namespace Back.Application.Services
             }
 
             var tramoRows = await query.ToListAsync();
+            var debeGuardarTramos = false;
+            foreach (var row in tramoRows)
+            {
+                if (row.Paquete.Status != PaqueteStatus.PendienteDeCalendarizacion
+                    || row.Tramo.Estado != TramoEnvioStatus.Cancelado)
+                    continue;
+
+                row.Tramo.VolverAPendiente();
+                debeGuardarTramos = true;
+            }
+            if (debeGuardarTramos)
+                await _context.SaveChangesAsync();
+
             var legacyQuery = _context.Paquetes
                 .Where(p => p.SucursalId == sucursalId
                     && !_context.TramosEnvio.Any(t => t.PaqueteId == p.Id));
@@ -414,7 +448,7 @@ namespace Back.Application.Services
 
         public async Task SincronizarRecalendarizacionAsync(Paquete paquete)
         {
-            var tramo = await TramoActualAsync(paquete.Id);
+            var tramo = await TramoActualAsync(paquete.Id, incluirCancelado: paquete.Status == PaqueteStatus.PendienteDeCalendarizacion);
             tramo?.VolverAPendiente();
         }
 
@@ -446,12 +480,12 @@ namespace Back.Application.Services
             return fechaEstimada;
         }
 
-        private async Task<TramoEnvio?> TramoActualAsync(Guid paqueteId)
+        private async Task<TramoEnvio?> TramoActualAsync(Guid paqueteId, bool incluirCancelado = false)
             => await _context.TramosEnvio
                 .Where(t => t.PaqueteId == paqueteId
                     && t.Estado != TramoEnvioStatus.RecibidoEnSucursal
                     && t.Estado != TramoEnvioStatus.Entregado
-                    && t.Estado != TramoEnvioStatus.Cancelado)
+                    && (incluirCancelado || t.Estado != TramoEnvioStatus.Cancelado))
                 .OrderBy(t => t.Orden)
                 .FirstOrDefaultAsync();
 

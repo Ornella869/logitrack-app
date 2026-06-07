@@ -92,12 +92,19 @@ namespace Back.Application.Services
 
             var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
             var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+            var esPickUp = paquete.PuntoPickUpId.HasValue;
+            var instruccionCodigo = esPickUp
+                ? "Este codigo se lo tenes que informar al punto Pick Up cuando retires el paquete."
+                : "Este codigo se lo tenes que informar al repartidor cuando recibas el paquete.";
+            var avisoSeguridad = esPickUp
+                ? "&#128274; Por tu seguridad, no compartas este c&#243;digo con nadie. Solo el punto Pick Up debe recibirlo."
+                : "&#128274; Por tu seguridad, no compartas este c&#243;digo con nadie. Solo el repartidor designado debe recibirlo.";
 
             var cuerpo = BuildTemplate(
                 "indigo",
                 "Codigo de entrega",
                 $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
-                "Este codigo se lo tenes que informar al repartidor cuando recibas el paquete.",
+                instruccionCodigo,
                 trackingUrl,
                 "Ver seguimiento",
                 $"""
@@ -106,7 +113,7 @@ namespace Back.Application.Services
                   <div style="font-size:34px;letter-spacing:10px;font-weight:900;color:#a78bfa;">{SecurityElement.Escape(paquete.CodigoEntrega)}</div>
                 </div>
                 <div style="background:#1e1033;border:1px solid #7c3aed;border-radius:8px;padding:10px 14px;margin:8px 0;text-align:center;">
-                  <span style="font-size:13px;color:#c4b5fd;">&#128274; Por tu seguridad, no compartas este c&#243;digo con nadie. Solo el repartidor designado debe recibirlo.</span>
+                  <span style="font-size:13px;color:#c4b5fd;">{avisoSeguridad}</span>
                 </div>
                 """);
 
