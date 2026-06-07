@@ -63,20 +63,26 @@ namespace Back.Infrastructure.Database.Repositories
             }
 
             if (sucursalId.HasValue)
-{
-    var sucursal = await _context.Sucursales.FindAsync(sucursalId.Value);
-    var prov = sucursal?.Provincia;
+            {
+                var sucursal = await _context.Sucursales.FindAsync(sucursalId.Value);
+                var prov = sucursal?.Provincia;
 
-    query = query.Where(u =>
-        u.SucursalId == sucursalId.Value
-        || (
-            !string.IsNullOrWhiteSpace(prov)
-            && u is Gerente
-            && _context.GerentesProvincias.Any(gp =>
-                gp.Provincia == prov && gp.GerenteId == u.Id)
-        )
-    );
-}
+                if (!string.IsNullOrWhiteSpace(prov))
+                {
+                    var gerentesIds = await _context.GerentesProvincias
+                        .Where(gp => gp.Provincia == prov)
+                        .Select(gp => gp.GerenteId)
+                        .ToListAsync();
+
+                    query = query.Where(u =>
+                        u.SucursalId == sucursalId.Value
+                        || gerentesIds.Contains(u.Id));
+                }
+                else
+                {
+                    query = query.Where(u => u.SucursalId == sucursalId.Value);
+                }
+            }
 
             var totalItems = await query.CountAsync();
             var items = await query
