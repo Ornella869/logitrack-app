@@ -41,7 +41,7 @@ jobs:
 
       - name: Instalar dependencias de npm
         working-directory: ./Front
-        run: npm install
+        run: npm ci --ignore-scripts
 
       - name: Compilar Frontend
         working-directory: ./Front
