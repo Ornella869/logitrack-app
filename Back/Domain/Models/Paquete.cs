@@ -17,6 +17,10 @@ namespace Back.Domain.Models
         CargadoEnVehiculo = 6,
         Demorado = 7,
         ListoParaRetirar = 8,
+        // G1L-119: el repartidor cierra su jornada nocturna en medio de una ruta multi-día.
+        EnTransitoDescanso = 9,
+        // G1L-132: el repartidor depositó el paquete en el local; el socio aún no lo recibió.
+        EntregadoEnPunto = 10,
     }
 
     public enum TipoEnvio
@@ -160,16 +164,27 @@ namespace Back.Domain.Models
             RazonDemora = null;
         }
 
-        // G1L-82: el repartidor o supervisor registra un imprevisto sobre un envío En Tránsito.
+        // Repartidor deposita el paquete en el local; el socio aún no lo confirmó.
+        public void EntregarEnPunto()
+        {
+            if (!PuntoPickUpId.HasValue)
+                throw new InvalidOperationException("El envio no tiene punto Pick Up asignado.");
+            if (Status is not (PaqueteStatus.EnTransito or PaqueteStatus.Demorado or PaqueteStatus.EnTransitoDescanso))
+                throw new InvalidOperationException("Solo se puede depositar en el punto un envío que esté en tránsito o demorado.");
+
+            Status = PaqueteStatus.EntregadoEnPunto;
+            RazonDemora = null;
+        }
+
+        // Socio del local confirma la recepción física → cliente puede venir a buscar.
         public void MarcarListoParaRetirar()
         {
             if (!PuntoPickUpId.HasValue)
                 throw new InvalidOperationException("El envio no tiene punto Pick Up asignado.");
-            if (Status != PaqueteStatus.EnTransito && Status != PaqueteStatus.Demorado)
-                throw new InvalidOperationException("Solo se pueden recibir envios que estan en transito o demorados.");
+            if (Status != PaqueteStatus.EntregadoEnPunto)
+                throw new InvalidOperationException("Solo se puede confirmar la recepción de un envío que el repartidor ya depositó en el punto.");
 
             Status = PaqueteStatus.ListoParaRetirar;
-            RazonDemora = null;
         }
 
         public void MarcarDemorado(string motivo)
@@ -192,6 +207,22 @@ namespace Back.Domain.Models
 
             Status = PaqueteStatus.EnTransito;
             RazonDemora = null;
+        }
+
+        // G1L-119: el repartidor pausa su jornada al final del día en una ruta multi-día.
+        public void PausarJornada()
+        {
+            if (Status != PaqueteStatus.EnTransito && Status != PaqueteStatus.Demorado)
+                throw new InvalidOperationException("Solo se pueden pausar envíos en tránsito o demorados.");
+            Status = PaqueteStatus.EnTransitoDescanso;
+        }
+
+        // G1L-119: el repartidor reanuda la ruta al día siguiente.
+        public void ReanudarRuta()
+        {
+            if (Status != PaqueteStatus.EnTransitoDescanso)
+                throw new InvalidOperationException("Solo se pueden reanudar envíos en descanso nocturno.");
+            Status = PaqueteStatus.EnTransito;
         }
 
         public void ReEnviar()

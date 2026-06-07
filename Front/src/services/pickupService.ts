@@ -59,4 +59,50 @@ export const pickupService = {
   async asignarEnvio(pickupId: string, paqueteId: string): Promise<void> {
     await api.post(`/pickups/${pickupId}/asignar-envio/${paqueteId}`)
   },
+
+  async calificarExperiencia(payload: {
+    trackingCode: string
+    estrellas: number
+    comentario?: string
+    autorNombre?: string
+  }): Promise<void> {
+    await api.post('/pickups/calificaciones', {
+      trackingCode: payload.trackingCode,
+      estrellas: payload.estrellas,
+      comentario: payload.comentario ?? null,
+      autorNombre: payload.autorNombre ?? null,
+    })
+  },
+
+  async checkCalificacion(trackingCode: string): Promise<{
+    calificado: boolean
+    estrellas?: number
+    comentario?: string | null
+    autorNombre?: string | null
+    creadoEn?: string
+  }> {
+    const r = await api.get('/pickups/calificaciones/check', { params: { trackingCode } })
+    return r.data
+  },
+
+  async getMisCalificaciones(): Promise<ResumenCalificaciones> {
+    const r = await api.get('/pickup-operacion/calificaciones')
+    return r.data
+  },
+}
+
+export interface ResumenCalificaciones {
+  promedio: number
+  total: number
+  porEstrella: number[]
+  ultimas: CalificacionPickUpItem[]
+}
+
+export interface CalificacionPickUpItem {
+  id: string
+  estrellas: number
+  comentario?: string | null
+  autorNombre?: string | null
+  creadoEn: string
+  trackingCode: string
 }

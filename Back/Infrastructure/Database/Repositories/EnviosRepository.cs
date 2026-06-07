@@ -175,6 +175,7 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.CargadoEnVehiculo,
                 PaqueteStatus.ListoParaSalir,
                 PaqueteStatus.EnTransito,
+                PaqueteStatus.EnTransitoDescanso,
                 PaqueteStatus.Demorado,
                 PaqueteStatus.Entregado,
                 PaqueteStatus.Cancelado,
@@ -185,7 +186,7 @@ namespace Back.Infrastructure.Database.Repositories
                 .Where(p => p.RepartidorAsignadoId == repartidorId
                             && p.FechaCalendarizada != null
                             && ((p.FechaCalendarizada >= dia && p.FechaCalendarizada < diaSiguiente)
-                                || (p.FechaCalendarizada < dia && (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado)))
+                                || (p.FechaCalendarizada < dia && (p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.EnTransitoDescanso || p.Status == PaqueteStatus.Demorado)))
                             && estadosVisibles.Contains(p.Status))
                 .OrderBy(p => p.Destinatario.Direccion.CP)
                 .ThenBy(p => p.CreadoEn)

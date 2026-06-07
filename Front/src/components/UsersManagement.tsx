@@ -1147,17 +1147,25 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               </FormControl>
             )}
             {formData.role === 'socio_pickup' && (
-              <FormControl fullWidth>
+              <FormControl fullWidth error={pickups.length === 0}>
                 <InputLabel>Punto Pick Up *</InputLabel>
                 <Select
                   label="Punto Pick Up *"
                   value={formData.puntoPickUpId}
                   onChange={(e) => setFormData((p) => ({ ...p, puntoPickUpId: e.target.value }))}
+                  disabled={pickups.length === 0}
                 >
-                  {pickups.map((p) => (
+                  {pickups.length === 0 ? (
+                    <MenuItem disabled value="">Sin puntos Pick Up — creá uno desde la sección PickUps primero</MenuItem>
+                  ) : pickups.map((p) => (
                     <MenuItem key={p.id} value={p.id}>{p.nombre} ({p.localidad}, {p.provincia})</MenuItem>
                   ))}
                 </Select>
+                {pickups.length === 0 && (
+                  <Box component="p" sx={{ fontSize: '0.75rem', color: 'error.main', mt: 0.5, mx: '14px', mb: 0 }}>
+                    No hay puntos Pick Up registrados. El Gerente debe crear uno antes de asignar un Socio.
+                  </Box>
+                )}
               </FormControl>
             )}
             {formData.role === 'repartidor' && (

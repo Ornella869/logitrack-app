@@ -126,35 +126,31 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("No podés operar envíos de otra sucursal.");
         }
 
-        // Épica D: resuelve la sucursal responsable de un envío por la provincia de destino
-        // y aplica el ruteo estricto (un operador no puede crear envíos fuera de su sucursal).
+        // Épica D: resuelve la sucursal responsable de un envío por la provincia de destino.
+        // Si el operador pertenece a una sucursal, esa sucursal es siempre la responsable
+        // (los tramos se encargan del ruteo hacia el destino final).
         private async Task<Sucursal?> ResolverSucursalDestinoAsync(string? provinciaDestino, Guid? usuarioId, List<Sucursal>? sucursalesPreCargadas = null)
         {
             var sucursales = sucursalesPreCargadas ?? await _enviosRepository.GetSucursales();
             if (sucursales.Count == 0) return null;
 
-            var responsable = sucursales.FirstOrDefault(s => s.Cubre(provinciaDestino));
-            if (responsable is null)
-                throw new InvalidOperationException($"No hay una sucursal que atienda {provinciaDestino}.");
-
-            // Ruteo estricto: si el operador tiene sucursal asignada, el destino debe estar
-            // dentro de su cobertura. (Los usuarios sin sucursal —datos previos/admin— no se bloquean.)
+            // Si el operador tiene sucursal asignada, es la responsable del envío sin importar
+            // si la sucursal cubre la provincia destino — el sistema de tramos rutea desde ahí.
             if (usuarioId.HasValue)
             {
                 var operador = await _userRepository.GetUsuarioById(usuarioId.Value);
                 if (operador?.SucursalId is Guid opSucId)
                 {
                     var miSucursal = sucursales.FirstOrDefault(s => s.Id == opSucId);
-                    if (miSucursal is null)
-                    {
-                        var quien = responsable is not null ? $"la sucursal '{responsable.Nombre}'" : "otra sucursal";
-                        throw new InvalidOperationException(
-                            $"El destino ({provinciaDestino}) lo gestiona {quien}. No podés registrar envíos con destino en otra provincia. Solo se permiten envíos dentro de la provincia de tu sucursal o de las que cubra tu sucursal.");
-                    }
-                    // Dentro de cobertura: la sucursal responsable es la del operador.
-                    return miSucursal;
+                    if (miSucursal is not null)
+                        return miSucursal;
                 }
             }
+
+            // Para usuarios sin sucursal (admin/gerente), encontrar la sucursal que cubra el destino.
+            var responsable = sucursales.FirstOrDefault(s => s.Cubre(provinciaDestino));
+            if (responsable is null)
+                throw new InvalidOperationException($"No hay una sucursal que atienda {provinciaDestino}.");
 
             return responsable;
         }
@@ -671,9 +667,20 @@ namespace Back.Application.Services
                 case PaqueteStatus.Entregado:
                     if (!await _tramos.EsUltimaMillaActualAsync(paquete.Id))
                         throw new InvalidOperationException("Este tramo finaliza en otra sucursal. El operador receptor debe escanear el QR.");
-                    paquete.Entregar();
-                    await _tramos.SincronizarEntregaAsync(paquete);
-                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, usuarioId, OrigenCambioEstado.Manual);
+
+                    if (paquete.PuntoPickUpId.HasValue)
+                    {
+                        // El repartidor deposita el paquete en el local; el socio lo recibe luego.
+                        paquete.EntregarEnPunto();
+                        await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.EntregadoEnPunto, usuarioId, OrigenCambioEstado.Manual);
+                    }
+                    else
+                    {
+                        paquete.Entregar();
+                        await _tramos.SincronizarEntregaAsync(paquete);
+                        await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Entregado, usuarioId, OrigenCambioEstado.Manual);
+                    }
+
                     await _auditoria.RegistrarAsync(
                         Domain.Models.TipoAccion.Notificacion,
                         $"Notificacion al repartidor: parada entregada {paquete.CodigoSeguimiento}",
@@ -834,6 +841,62 @@ namespace Back.Application.Services
                 contexto: $"Repartidor {repartidorId} fecha {fecha:yyyy-MM-dd}");
 
             return listos.Count;
+        }
+
+        // G1L-119: el repartidor pausa su jornada al final del día (ruta multi-día).
+        // Los paquetes pasan de EnTransito → EnTransitoDescanso; el repartidor queda EnRuta.
+        public async Task<int> PausarJornadaAsync(Guid repartidorId)
+        {
+            var hoy = OperationalClock.TodayUtcDate;
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, hoy);
+            var activos = paquetes.Where(p => p.Status == PaqueteStatus.EnTransito || p.Status == PaqueteStatus.Demorado).ToList();
+            if (activos.Count == 0)
+                throw new InvalidOperationException("No hay envíos activos para pausar. Si ya entregaste todo, usá 'Llegué a sucursal' para cerrar tu jornada.");
+
+            foreach (var p in activos)
+            {
+                p.PausarJornada();
+                await _historial.RegistrarCambioAsync(
+                    p.Id, PaqueteStatus.EnTransitoDescanso, repartidorId, OrigenCambioEstado.Manual,
+                    "Repartidor pausó su jornada (descanso nocturno — ruta multi-día)");
+            }
+
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CambioEstadoEnvio,
+                $"Repartidor pausó su jornada: {activos.Count} envío(s) en descanso nocturno",
+                contexto: $"Repartidor {repartidorId} fecha {hoy:yyyy-MM-dd}");
+
+            return activos.Count;
+        }
+
+        // G1L-119: el repartidor reanuda la ruta al día siguiente.
+        // Los paquetes vuelven de EnTransitoDescanso → EnTransito.
+        public async Task<int> ReanudarJornadaAsync(Guid repartidorId)
+        {
+            var hoy = OperationalClock.TodayUtcDate;
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId, hoy);
+            var pausados = paquetes.Where(p => p.Status == PaqueteStatus.EnTransitoDescanso).ToList();
+            if (pausados.Count == 0)
+                throw new InvalidOperationException("No hay envíos en pausa de descanso para reanudar.");
+
+            foreach (var p in pausados)
+            {
+                p.ReanudarRuta();
+                await _historial.RegistrarCambioAsync(
+                    p.Id, PaqueteStatus.EnTransito, repartidorId, OrigenCambioEstado.Manual,
+                    "Repartidor reanudó la ruta (día siguiente de ruta multi-día)");
+            }
+
+            if (await _userRepository.GetUsuarioById(repartidorId) is Repartidor rep
+                && rep.EstadoJornada != Repartidor.EstadoJornadaRepartidor.EnRuta)
+                rep.IniciarJornada();
+
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.CambioEstadoEnvio,
+                $"Repartidor reanudó su ruta: {pausados.Count} envío(s) volvieron a En Tránsito",
+                contexto: $"Repartidor {repartidorId} fecha {hoy:yyyy-MM-dd}");
+
+            return pausados.Count;
         }
 
         // Fase A: el repartidor confirma que volvió a la sucursal → queda disponible

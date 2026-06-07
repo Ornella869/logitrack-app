@@ -34,6 +34,8 @@ const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; 
   'Listo para retirar': { label: 'Listo para retirar', color: '#00695C', bg: '#E0F2F1' },
   'En tránsito': { label: 'En camino', color: '#0D47A1', bg: '#E3F2FD' },
   'Demorado': { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2' },
+  'En tránsito - Descanso': { label: 'En ruta (pausa nocturna)', color: '#37474F', bg: '#ECEFF1' },
+  'Entregado en punto': { label: 'Llegó al punto Pick Up', color: '#1565C0', bg: '#E3F2FD' },
   'Entregado': { label: 'Entregado ✓', color: '#1B5E20', bg: '#E8F5E9' },
   'Cancelado': { label: 'Cancelado', color: '#7F0000', bg: '#FFEBEE' },
 }

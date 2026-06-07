@@ -117,7 +117,7 @@ export interface Shipment {
     email?: string
   }
   receiverUbicacion?: { latitud: number; longitud: number } | null
-  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado' | 'Listo para retirar'
+  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado' | 'Listo para retirar' | 'En tránsito - Descanso' | 'Entregado en punto'
   fechaCalendarizada?: string | null
   fechaEstimadaEntrega?: string | null
   sucursalId?: string | null
@@ -141,6 +141,11 @@ export interface Shipment {
   costoRecargoSeguridad?: number
   esZonaPeligrosa?: boolean
   puntoPickUpId?: string | null
+  puntoPickUpNombre?: string | null
+  puntoPickUpDireccion?: string | null
+  puntoPickUpLocalidad?: string | null
+  puntoPickUpHorarios?: string | null
+  puntoPickUpTelefono?: string | null
   horasEstimadasRuta?: number
   tramoOperativoId?: string | null
   ordenTramoOperativo?: number | null

@@ -30,8 +30,10 @@ namespace Back.Infrastructure.Database
         public DbSet<OverrideOjoPatron> OverridesOjoPatron { get; set; }
 
         public DbSet<PuntoPickUp> PuntosPickUp { get; set; }
+        public DbSet<CalificacionPickUp> CalificacionesPickUp { get; set; }
         public DbSet<SatisfaccionEncuesta> SatisfaccionEncuestas { get; set; }
         public DbSet<TramoEnvio> TramosEnvio { get; set; }
+        public DbSet<PlantillaEmail> PlantillasEmail { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {

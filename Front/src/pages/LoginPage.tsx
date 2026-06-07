@@ -14,12 +14,12 @@ import {
   Stack,
   Chip,
 } from '@mui/material'
+import { createTheme, ThemeProvider } from '@mui/material/styles'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
-import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-// import ReCAPTCHA from 'react-google-recaptcha'
-import { authService } from '../services/authService'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
+import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
+import { authService } from '../services/authService'
 import type { User, LoginCredentials } from '../types'
 import ForgotPasswordDialog from '../components/ForgotPasswordDialog'
 import { isRepartidorRole } from '../utils/roleUtils'
@@ -34,14 +34,7 @@ interface LoginLocationState {
 }
 
 const DEMO_PASSWORD = 'kjkszpj1234'
-// Captcha temporalmente deshabilitado para testing
-// const DEFAULT_RECAPTCHA_SITE_KEY = '6LdRraUsAAAAABDom6H8iyjAqSoigIn5qPgQXqfR'
-// const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY
-// const RecaptchaWidget = ReCAPTCHA as unknown as ComponentType<{
-//   sitekey: string
-//   onChange: (token: string | null) => void
-//   onExpired: () => void
-// }>
+
 const demoUsers = [
   { label: 'Gerente · Buenos Aires', email: 'gerente.bsas@logitrack.com', color: 'warning' as const },
   { label: 'Supervisor · Carlos', email: 'carlos.rodriguez@logitrack.com', color: 'error' as const },
@@ -52,17 +45,109 @@ const demoUsers = [
   { label: 'Repartidor · Sofia', email: 'sofia.fernandez@logitrack.com', color: 'success' as const },
 ]
 
+const darkCardTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#4FC3F7' },
+    background: { paper: 'transparent' },
+  },
+  components: {
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          '& fieldset': { borderColor: 'rgba(255,255,255,0.18)' },
+          '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.4)' },
+        },
+        input: { color: 'rgba(255,255,255,0.9)' },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: { color: 'rgba(255,255,255,0.5)' },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        containedPrimary: {
+          background: '#ffffff',
+          color: '#0C5EA7',
+          fontWeight: 700,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
+          '&:hover': { background: '#E3F2FD', boxShadow: '0 6px 22px rgba(0,0,0,0.28)' },
+        },
+      },
+    },
+  },
+})
+
+function AnimatedBrand() {
+  return (
+    <Box sx={{ textAlign: 'center', mb: 3.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 0.5 }}>
+        {/* Camion animado */}
+        <Box
+          sx={{
+            animation: 'truckSlideIn 1s cubic-bezier(0.34,1.56,0.64,1) forwards',
+            '@keyframes truckSlideIn': {
+              '0%': { transform: 'translateX(-70px)', opacity: 0 },
+              '65%': { transform: 'translateX(5px)', opacity: 1 },
+              '100%': { transform: 'translateX(0)', opacity: 1 },
+            },
+          }}
+        >
+          <LocalShippingRoundedIcon sx={{ fontSize: 48, color: '#fff' }} />
+        </Box>
+        {/* Letras que aparecen una por una */}
+        <Box sx={{ display: 'flex', overflow: 'visible' }}>
+          {'LogiTrack'.split('').map((letra, i) => (
+            <Typography
+              key={i}
+              component="span"
+              sx={{
+                fontSize: { xs: '1.9rem', sm: '2.1rem' },
+                fontWeight: 800,
+                color: '#fff',
+                letterSpacing: '-0.5px',
+                lineHeight: 1,
+                opacity: 0,
+                display: 'inline-block',
+                animation: 'letraAparecer 0.35s ease forwards',
+                animationDelay: `${0.75 + i * 0.065}s`,
+                '@keyframes letraAparecer': {
+                  '0%': { opacity: 0, transform: 'translateY(10px)' },
+                  '100%': { opacity: 1, transform: 'translateY(0)' },
+                },
+              }}
+            >
+              {letra}
+            </Typography>
+          ))}
+        </Box>
+      </Box>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'rgba(255,255,255,0)',
+          animation: 'subtituloFade 0.6s ease forwards',
+          animationDelay: '1.6s',
+          '@keyframes subtituloFade': {
+            to: { color: 'rgba(255,255,255,0.55)' },
+          },
+        }}
+      >
+        Sistema de Gestión de Envíos
+      </Typography>
+    </Box>
+  )
+}
+
 function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
   const showDemoUsers = import.meta.env.VITE_SHOW_DEMO_USERS === 'true'
   const showAdminDemo = import.meta.env.VITE_ADMIN_DEMO === 'true' || import.meta.env.VITE_ADMIN_DEMO === '1'
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = location.state as LoginLocationState | null
-  const [credentials, setCredentials] = useState<Omit<LoginCredentials, 'recaptchaToken'>>({
-    email: '',
-    password: '',
-  })
-  const [captchaToken] = useState('')
+  const [credentials, setCredentials] = useState<Omit<LoginCredentials, 'recaptchaToken'>>({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
@@ -90,20 +175,8 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
       return
     }
 
-    // Captcha temporalmente deshabilitado para testing
-    // if (!captchaToken) {
-    //   setError('Completá el captcha para continuar')
-    //   setLoading(false)
-    //   return
-    // }
-
     try {
-      const user = await authService.login({
-        email: credentials.email,
-        password: credentials.password,
-        recaptchaToken: captchaToken,
-      })
-
+      const user = await authService.login({ email: credentials.email, password: credentials.password, recaptchaToken: '' })
       if (user) {
         onLogin(user)
         navigate(isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app')
@@ -117,27 +190,13 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
     }
   }
 
-  // Captcha temporalmente deshabilitado para testing
-  // const handleCaptchaChange = (token: string | null) => {
-  //   setCaptchaToken(token ?? '')
-  //   setError('')
-  // }
-
   const fillDemo = (email: string) => {
     setCredentials({ email, password: DEMO_PASSWORD })
     setError('')
   }
 
-  const enterAsAdminDemo = () => {
-    fillDemo('admin@logitrack.com')
-  }
-
   const handleGoBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-
+    if (window.history.length > 1) { navigate(-1); return }
     navigate('/')
   }
 
@@ -148,261 +207,130 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(160deg, #0D47A1 0%, #1565C0 40%, #1976d2 70%, #0277BD 100%)',
+        background: 'linear-gradient(160deg, #021828 0%, #042B50 30%, #073D7A 65%, #0D5299 100%)',
         position: 'relative',
         overflow: 'hidden',
         px: 2,
         py: 4,
       }}
     >
-      {/* ── Red de sucursales animada (estilo landing) ── */}
-      <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-
-        {/* Blobs flotantes */}
-        {[
-          { s: 480, top: '-15%', left: '-10%', d: 20, dl: 0 },
-          { s: 320, top: '55%', right: '-6%', d: 16, dl: 4 },
-          { s: 220, top: '20%', right: '18%', d: 12, dl: 7 },
-        ].map((b, i) => (
-          <Box key={i} sx={{
-            position: 'absolute',
-            borderRadius: '50%',
-            width: b.s, height: b.s,
-            top: b.top,
-            left: (b as any).left,
-            right: (b as any).right,
-            background: 'rgba(255,255,255,0.05)',
-            animation: `loginBlob${i} ${b.d}s ease-in-out ${b.dl}s infinite`,
-            [`@keyframes loginBlob${i}`]: {
-              '0%,100%': { transform: 'scale(1) translate(0,0)' },
-              '33%': { transform: 'scale(1.07) translate(12px,-18px)' },
-              '66%': { transform: 'scale(0.96) translate(-8px,12px)' },
-            },
-          }} />
-        ))}
-
-
-      </Box>
+      {/* Blobs decorativos azul profundo */}
+      {[
+        { s: 500, top: '-18%', left: '-12%', color: 'rgba(2,60,130,0.3)', d: 22, dl: 0 },
+        { s: 360, top: '55%', right: '-8%', color: 'rgba(13,82,153,0.2)', d: 17, dl: 3 },
+        { s: 260, top: '12%', right: '10%', color: 'rgba(7,61,122,0.22)', d: 14, dl: 6 },
+        { s: 180, top: '40%', left: '6%', color: 'rgba(14,100,180,0.14)', d: 19, dl: 9 },
+      ].map((b, i) => (
+        <Box key={i} sx={{
+          position: 'absolute',
+          borderRadius: '50%',
+          width: b.s, height: b.s,
+          top: b.top,
+          left: (b as any).left,
+          right: (b as any).right,
+          background: b.color,
+          filter: 'blur(60px)',
+          animation: `loginBlob${i} ${b.d}s ease-in-out ${b.dl}s infinite`,
+          [`@keyframes loginBlob${i}`]: {
+            '0%,100%': { transform: 'scale(1) translate(0,0)' },
+            '33%': { transform: 'scale(1.08) translate(14px,-20px)' },
+            '66%': { transform: 'scale(0.94) translate(-10px,14px)' },
+          },
+        }} />
+      ))}
 
       <Box sx={{ width: '100%', maxWidth: 480, position: 'relative', zIndex: 1 }}>
-        {/* Brand header above card */}
-        <Box sx={{ textAlign: 'center', mb: 3, color: 'white' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
-            <LocalShippingIcon sx={{ fontSize: 36 }} />
-            <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.5px' }}>
-              LogiTrack
-            </Typography>
-          </Box>
-          <Typography variant="body2" sx={{ opacity: 0.8 }}>
-            Sistema de Gestión de Envíos
-          </Typography>
-        </Box>
+        <AnimatedBrand />
 
-        <Card
-          sx={{
-            p: { xs: 3, sm: 4 },
-            borderRadius: 3,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-          }}
-        >
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', mb: 3 }}>
-            <Box sx={{ justifySelf: 'start' }}>
-              <IconButton
-                aria-label="Volver"
-                onClick={handleGoBack}
-                size="small"
-                sx={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 2,
-                  bgcolor: 'transparent',
-                  color: 'primary.main',
-                  '&:hover': {
-                    bgcolor: 'rgba(25, 118, 210, 0.16)',
-                  },
-                }}
-              >
-                <ArrowBackIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Box>
-
-            {/* Card title */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: 'center' }}>
-              <Box
-                sx={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 2,
-                  bgcolor: 'primary.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <LockOutlinedIcon sx={{ color: 'white', fontSize: 18 }} />
-              </Box>
-              <Typography variant="h6" fontWeight={700}>
-                Iniciar sesión
-              </Typography>
-            </Box>
-
-            <Box />
-          </Box>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError('')}>
-              {error}
-            </Alert>
-          )}
-
-          {!error && sessionExpired && (
-            <Alert severity="warning" sx={{ mb: 2.5 }}>
-              Tu sesión expiró por inactividad. Iniciá sesión nuevamente para continuar.
-            </Alert>
-          )}
-
-          {!error && locationState?.registrationDisabled && (
-            <Alert severity="info" sx={{ mb: 2.5 }}>
-              El alta de cuentas se gestiona por el equipo comercial. 
-              Si necesitás acceso, comunicate con nosotros desde la web.
-            </Alert>
-          )}
-
-          <form onSubmit={handleSubmit} noValidate>
-            <Stack spacing={2.5}>
-              <TextField
-                label="Email"
-                name="email"
-                type="email"
-                value={credentials.email}
-                onChange={handleChange}
-                placeholder="usuario@ejemplo.com"
-                disabled={loading}
-                fullWidth
-                autoFocus
-              />
-              <TextField
-                label="Contraseña"
-                name="password"
-                type="password"
-                value={credentials.password}
-                onChange={handleChange}
-                disabled={loading}
-                fullWidth
-              />
-
-              {/* Captcha temporalmente deshabilitado para testing */}
-              {/*
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <Box
-                  sx={{
-                    transform: { xs: 'scale(0.85)', sm: 'scale(1)' },
-                    transformOrigin: 'center',
-                    height: { xs: 66, sm: 78 },
-                  }}
+        <ThemeProvider theme={darkCardTheme}>
+          <Card
+            sx={{
+              p: { xs: 3, sm: 4 },
+              borderRadius: 3,
+              background: 'rgba(255,255,255,0.06)',
+              backdropFilter: 'blur(28px)',
+              WebkitBackdropFilter: 'blur(28px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 30px 70px rgba(0,0,0,0.55)',
+            }}
+          >
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', mb: 3 }}>
+              <Box sx={{ justifySelf: 'start' }}>
+                <IconButton
+                  aria-label="Volver"
+                  onClick={handleGoBack}
+                  size="small"
+                  sx={{ width: 36, height: 36, borderRadius: 2, color: 'rgba(255,255,255,0.6)', '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' } }}
                 >
-                  <RecaptchaWidget
-                    sitekey={RECAPTCHA_SITE_KEY}
-                    onChange={handleCaptchaChange}
-                    onExpired={() => setCaptchaToken('')}
-                  />
-                </Box>
+                  <ArrowBackIcon sx={{ fontSize: 18 }} />
+                </IconButton>
               </Box>
-              */}
-
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                disabled={loading}
-                fullWidth
-                sx={{ mt: 0.5, minHeight: 48 }}
-              >
-                {loading ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={20} color="inherit" />
-                    Ingresando...
-                  </Box>
-                ) : (
-                  'Ingresar'
-                )}
-              </Button>
-            </Stack>
-          </form>
-
-          <Box sx={{ mt: 2.5, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              <Link
-                component="button"
-                variant="body2"
-                onClick={() => setShowForgotPassword(true)}
-                sx={{ fontWeight: 600, color: 'primary.main' }}
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </Typography>
-          </Box>
-
-          {showAdminDemo && (
-            <Box sx={{ mt: 2 }}>
-              <Divider sx={{ my: 2 }}>
-                <Typography variant="caption" color="text.disabled" fontWeight={600}>
-                  DEV
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: 'center' }}>
+                <Box sx={{ width: 36, height: 36, borderRadius: 2, background: 'linear-gradient(135deg,#0288D1,#29B6F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(2,136,209,0.4)' }}>
+                  <LockOutlinedIcon sx={{ color: 'white', fontSize: 18 }} />
+                </Box>
+                <Typography variant="h6" fontWeight={700} sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                  Iniciar sesión
                 </Typography>
-              </Divider>
-              <Button
-                fullWidth
-                variant="outlined"
-                color="secondary"
-                startIcon={<AdminPanelSettingsIcon />}
-                onClick={enterAsAdminDemo}
-                sx={{ fontWeight: 700, borderStyle: 'dashed' }}
-              >
-                Entrar como Administrador (demo)
-              </Button>
+              </Box>
+              <Box />
             </Box>
-          )}
 
-          {/* Demo credentials */}
-          {showDemoUsers && (
-            <Box>
-              <Divider sx={{ my: 3 }}>
-                <Typography variant="caption" color="text.disabled" fontWeight={600}>
-                  DEMO
-                </Typography>
-              </Divider>
+            {error && <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError('')}>{error}</Alert>}
+            {!error && sessionExpired && <Alert severity="warning" sx={{ mb: 2.5 }}>Tu sesión expiró por inactividad. Iniciá sesión nuevamente para continuar.</Alert>}
+            {!error && locationState?.registrationDisabled && <Alert severity="info" sx={{ mb: 2.5 }}>El alta de cuentas se gestiona por el equipo comercial. Si necesitás acceso, comunicate con nosotros desde la web.</Alert>}
 
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5, textAlign: 'center' }}>
-                Clic en un usuario para autocompletar · contraseña: <strong>{DEMO_PASSWORD}</strong>
-              </Typography>
-
-              <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
-                {demoUsers.map((demoUser) => (
-                  <Chip
-                    key={demoUser.email}
-                    label={demoUser.label}
-                    color={demoUser.color}
-                    variant="outlined"
-                    size="small"
-                    onClick={() => fillDemo(demoUser.email)}
-                    sx={{ cursor: 'pointer', fontWeight: 600 }}
-                  />
-                ))}
+            <form onSubmit={handleSubmit} noValidate>
+              <Stack spacing={2.5}>
+                <TextField label="Email" name="email" type="email" value={credentials.email} onChange={handleChange} placeholder="usuario@ejemplo.com" disabled={loading} fullWidth autoFocus />
+                <TextField label="Contraseña" name="password" type="password" value={credentials.password} onChange={handleChange} disabled={loading} fullWidth />
+                <Button type="submit" variant="contained" color="primary" size="large" disabled={loading} fullWidth sx={{ mt: 0.5, minHeight: 48 }}>
+                  {loading ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><CircularProgress size={20} color="inherit" />Ingresando...</Box> : 'Ingresar'}
+                </Button>
               </Stack>
+            </form>
 
+            <Box sx={{ mt: 2.5, textAlign: 'center' }}>
+              <Typography variant="body2">
+                <Link component="button" variant="body2" onClick={() => setShowForgotPassword(true)} sx={{ fontWeight: 600, color: '#4FC3F7' }}>
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </Typography>
             </Box>
-          )}
-        </Card>
 
-        <ForgotPasswordDialog
-          open={showForgotPassword}
-          onClose={() => setShowForgotPassword(false)}
-        />
+            {showAdminDemo && (
+              <Box sx={{ mt: 2 }}>
+                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>DEV</Typography>
+                </Divider>
+                <Button fullWidth variant="outlined" color="secondary" startIcon={<AdminPanelSettingsIcon />} onClick={() => fillDemo('admin@logitrack.com')} sx={{ fontWeight: 700, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)' }}>
+                  Entrar como Administrador (demo)
+                </Button>
+              </Box>
+            )}
+
+            {showDemoUsers && (
+              <Box>
+                <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>DEMO</Typography>
+                </Divider>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 1.5, textAlign: 'center' }}>
+                  Clic en un usuario para autocompletar · contraseña: <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{DEMO_PASSWORD}</strong>
+                </Typography>
+                <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
+                  {demoUsers.map((demoUser) => (
+                    <Chip key={demoUser.email} label={demoUser.label} color={demoUser.color} variant="outlined" size="small" onClick={() => fillDemo(demoUser.email)} sx={{ cursor: 'pointer', fontWeight: 600 }} />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+          </Card>
+        </ThemeProvider>
+
+        <ForgotPasswordDialog open={showForgotPassword} onClose={() => setShowForgotPassword(false)} />
       </Box>
     </Box>
-   ) 
-  
-
+  )
 }
 
 export default LoginPage

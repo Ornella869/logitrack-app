@@ -27,6 +27,8 @@ import TrackingPublicPage from './pages/TrackingPublicPage'
 import PortalClientePublico from './pages/PortalClientePublico'
 import SatisfaccionPage from './pages/SatisfaccionPage'
 import SatisfaccionMetricasPage from './pages/SatisfaccionMetricasPage'
+import PlantillasEmailPage from './pages/PlantillasEmailPage'
+import PlantillaEmailEditPage from './pages/PlantillaEmailEditPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import RepartidorHistorialPage from './pages/repartidor/RepartidorHistorialPage'
@@ -455,6 +457,16 @@ function App() {
                 <Navigate to="/access-denied" replace />
               )
             }
+          />
+
+          {/* G1L-114: plantillas de email provinciales (Gerente) */}
+          <Route
+            path="/plantillas-email"
+            element={user && user.role === 'gerente' ? <PlantillasEmailPage /> : <Navigate to="/access-denied" replace />}
+          />
+          <Route
+            path="/plantillas-email/:evento"
+            element={user && user.role === 'gerente' ? <PlantillaEmailEditPage /> : <Navigate to="/access-denied" replace />}
           />
 
           {/* Supervisor / Admin: perfil de rendimiento de un repartidor */}

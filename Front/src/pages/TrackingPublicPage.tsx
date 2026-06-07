@@ -18,8 +18,16 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined'
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined'
+import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined'
+import PhoneOutlinedIcon from '@mui/icons-material/PhoneOutlined'
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined'
+import StarBorderIcon from '@mui/icons-material/StarBorder'
+import StarIcon from '@mui/icons-material/Star'
 import { shipmentService } from '../services/shipmentService'
+import { pickupService } from '../services/pickupService'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
+import CalificacionPickUpDialog from '../components/CalificacionPickUpDialog'
 import type { Shipment } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 
@@ -88,6 +96,14 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
         badgeColor: '#0D47A1',
         badgeBg: '#E3F2FD',
       }
+    case 'En tránsito - Descanso':
+      return {
+        badge: 'En ruta — pausa nocturna',
+        title: 'Tu paquete está en ruta (pausa nocturna)',
+        description: 'El repartidor está descansando y retomará la entrega al día siguiente. No hay demoras en tu plazo de entrega.',
+        badgeColor: '#37474F',
+        badgeBg: '#ECEFF1',
+      }
     case 'Demorado':
       return {
         badge: 'Demorado',
@@ -95,6 +111,14 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
         description: 'Se presento un imprevisto durante el recorrido. El repartidor retomara la ruta en cuanto se resuelva.',
         badgeColor: '#BF360C',
         badgeBg: '#FFE0B2',
+      }
+    case 'Entregado en punto':
+      return {
+        badge: 'En el local',
+        title: 'Tu paquete llegó al Punto Pick Up',
+        description: 'El repartidor depositó tu paquete en el local. Podés pasar a retirarlo cuando quieras dentro del horario de atención.',
+        badgeColor: '#1565C0',
+        badgeBg: '#E3F2FD',
       }
     case 'Entregado':
       return {
@@ -123,8 +147,11 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
     'Listo para salir': 1,
     'En tránsito': 2,
     'Listo para retirar': 2,
-    // G1L-82: en el flujo público, "Demorado" sigue en la etapa de tránsito (no es estado final).
     Demorado: 2,
+    // G1L-119: descanso nocturno sigue siendo etapa de tránsito.
+    'En tránsito - Descanso': 2,
+    // G1L-132: depositado en el local, equivale a "en camino" visualmente.
+    'Entregado en punto': 2,
     Entregado: 3,
     Cancelado: 2,
   }
@@ -168,6 +195,10 @@ export default function TrackingPublicPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [calificacionOpen, setCalificacionOpen] = useState(false)
+  const [calificacionExistente, setCalificacionExistente] = useState<{
+    estrellas: number; comentario?: string | null; autorNombre?: string | null
+  } | null>(null)
 
   useEffect(() => {
     const loadShipment = async () => {
@@ -183,6 +214,12 @@ export default function TrackingPublicPage() {
         setError('No encontramos un envío asociado a ese código de seguimiento.')
       } else {
         setShipment(data)
+        if (data.status === 'Entregado' && data.puntoPickUpId) {
+          const check = await pickupService.checkCalificacion(trackingId).catch(() => null)
+          if (check?.calificado) {
+            setCalificacionExistente({ estrellas: check.estrellas!, comentario: check.comentario, autorNombre: check.autorNombre })
+          }
+        }
       }
 
       setLoading(false)
@@ -346,8 +383,70 @@ export default function TrackingPublicPage() {
                       </Box>
                     )}
 
+                    {/* G1L-107: datos del punto Pick Up cuando el envío es modalidad retiro */}
+                    {shipment.puntoPickUpId && (
+                      <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: 'rgba(20,184,166,0.08)', border: '1px solid rgba(20,184,166,0.3)' }}>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                          <StorefrontOutlinedIcon sx={{ color: '#2dd4bf', fontSize: 20 }} />
+                          <Typography variant="subtitle2" sx={{ color: '#2dd4bf', fontWeight: 700 }}>
+                            Punto de retiro
+                          </Typography>
+                        </Stack>
+                        {shipment.puntoPickUpNombre && (
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: '#e2e8f0', mb: 1.5 }}>
+                            {shipment.puntoPickUpNombre}
+                          </Typography>
+                        )}
+                        <Stack spacing={1}>
+                          {shipment.puntoPickUpDireccion && (
+                            <Stack direction="row" spacing={1} alignItems="flex-start">
+                              <LocationOnOutlinedIcon sx={{ color: '#94a3b8', fontSize: 18, mt: 0.1, flexShrink: 0 }} />
+                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
+                                {shipment.puntoPickUpDireccion}{shipment.puntoPickUpLocalidad ? `, ${shipment.puntoPickUpLocalidad}` : ''}
+                              </Typography>
+                            </Stack>
+                          )}
+                          {shipment.puntoPickUpHorarios && (
+                            <Stack direction="row" spacing={1} alignItems="flex-start">
+                              <AccessTimeOutlinedIcon sx={{ color: '#94a3b8', fontSize: 18, mt: 0.1, flexShrink: 0 }} />
+                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
+                                {shipment.puntoPickUpHorarios}
+                              </Typography>
+                            </Stack>
+                          )}
+                          {shipment.puntoPickUpTelefono && (
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <PhoneOutlinedIcon sx={{ color: '#94a3b8', fontSize: 18, flexShrink: 0 }} />
+                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
+                                {shipment.puntoPickUpTelefono}
+                              </Typography>
+                            </Stack>
+                          )}
+                        </Stack>
+                      </Box>
+                    )}
+
                     {shipment.cancellationReason && (
                       <Alert severity="error">Motivo de cancelación: {shipment.cancellationReason}</Alert>
+                    )}
+
+                    {shipment.status === 'Entregado' && shipment.puntoPickUpId && (
+                      <Box sx={{ pt: 1 }}>
+                        <Button
+                          variant="outlined"
+                          startIcon={calificacionExistente ? <StarIcon sx={{ color: '#f59e0b' }} /> : <StarBorderIcon />}
+                          onClick={() => setCalificacionOpen(true)}
+                          sx={{
+                            color: '#fbbf24',
+                            borderColor: '#f59e0b',
+                            fontWeight: 600,
+                            borderRadius: 2,
+                            '&:hover': { bgcolor: 'rgba(245,158,11,0.08)', borderColor: '#d97706' },
+                          }}
+                        >
+                          {calificacionExistente ? `Tu calificación: ${'★'.repeat(calificacionExistente.estrellas)}` : 'Calificar Punto Pick Up'}
+                        </Button>
+                      </Box>
                     )}
 
                     {canReportIncidencia && (
@@ -442,6 +541,15 @@ export default function TrackingPublicPage() {
                 onClose={() => setReportDialogOpen(false)}
                 shipment={shipment}
               />
+              {shipment.puntoPickUpId && (
+                <CalificacionPickUpDialog
+                  open={calificacionOpen}
+                  onClose={() => setCalificacionOpen(false)}
+                  trackingCode={shipment.trackingId}
+                  puntoNombre={shipment.puntoPickUpNombre ?? 'Punto Pick Up'}
+                  calificacionExistente={calificacionExistente}
+                />
+              )}
             </>
           )}
         </Stack>

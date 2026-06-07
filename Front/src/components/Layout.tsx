@@ -6,7 +6,6 @@ import {
   BottomNavigation,
   BottomNavigationAction,
   Chip,
-  Container,
   Divider,
   IconButton,
   List,
@@ -26,6 +25,8 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
+import EmailIcon from '@mui/icons-material/Email'
+import MenuIcon from '@mui/icons-material/Menu'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
 import DashboardIcon from '@mui/icons-material/Dashboard'
@@ -80,6 +81,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [isDarkPremium, setIsDarkPremium] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => localStorage.getItem('miPlanTipo') === 'Premium')
   const [repartidorNavAnchor, setRepartidorNavAnchor] = useState<null | HTMLElement>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
@@ -144,27 +146,89 @@ function Layout({ user, onLogout }: LayoutProps) {
   const darkPremiumTheme = useMemo(() => createTheme({
     palette: {
       mode: 'dark',
-      primary: { main: '#42A5F5' },
+      primary: { main: '#4FC3F7' },
       secondary: { main: '#7E57C2' },
-      background: { default: '#0A1628', paper: '#162032' },
+      background: { default: 'transparent', paper: 'rgba(255,255,255,0.06)' },
+      text: { primary: 'rgba(255,255,255,0.92)', secondary: 'rgba(255,255,255,0.55)' },
     },
     shape: { borderRadius: 10 },
     components: {
-      MuiCard: { styleOverrides: { root: { borderRadius: 12, transition: 'background-color 0.4s ease, box-shadow 0.3s ease, transform 0.2s ease', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 6px 24px rgba(66,165,245,0.25)' } } } },
-      MuiPaper: { styleOverrides: { root: { transition: 'background-color 0.4s ease' } } },
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            transition: 'box-shadow 0.3s ease, transform 0.2s ease',
+            '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 6px 24px rgba(79,195,247,0.18)' },
+          },
+        },
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            transition: 'box-shadow 0.3s ease',
+          },
+          outlined: {
+            background: 'rgba(255,255,255,0.04)',
+          },
+        },
+      },
       MuiButton: { styleOverrides: { root: { borderRadius: 8 } } },
       MuiChip: { styleOverrides: { root: { borderRadius: 6 } } },
-      MuiDialog: { styleOverrides: { paper: { borderRadius: 14 } } },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            background: 'rgba(13,11,30,0.88)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 14,
+          },
+        },
+      },
       MuiTab: { styleOverrides: { root: { transition: 'transform 0.15s ease', '&:hover': { transform: 'translateY(-2px)' } } } },
+      MuiTableContainer: {
+        styleOverrides: {
+          root: {
+            backdropFilter: 'none',
+            background: 'transparent',
+            border: 'none',
+          },
+        },
+      },
       MuiTableCell: {
         styleOverrides: {
           head: {
-            backgroundColor: '#1B2D42',
+            backgroundColor: 'rgba(79,195,247,0.08)',
             color: 'rgba(255,255,255,0.87)',
-            borderColor: 'rgba(255,255,255,0.12)',
+            borderColor: 'rgba(255,255,255,0.1)',
           },
           root: {
-            borderColor: 'rgba(255,255,255,0.1)',
+            borderColor: 'rgba(255,255,255,0.08)',
+          },
+        },
+      },
+      MuiTextField: {
+        styleOverrides: {
+          root: {
+            '& .MuiOutlinedInput-root': {
+              '& fieldset': { borderColor: 'rgba(255,255,255,0.18)' },
+              '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.4)' },
+            },
+          },
+        },
+      },
+      MuiAvatar: {
+        styleOverrides: {
+          root: {
+            color: '#ffffff',
           },
         },
       },
@@ -304,6 +368,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/alertas')) return '/alertas'
     if (pathname.startsWith('/satisfaccion')) return '/satisfaccion'
     if (pathname.startsWith('/reportes')) return '/reportes'
+    if (pathname.startsWith('/plantillas-email')) return '/plantillas-email'
     if (pathname.startsWith('/auditoria-notificaciones')) return '/auditoria-notificaciones'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
@@ -316,6 +381,43 @@ function Layout({ user, onLogout }: LayoutProps) {
   })()
 
   const isAccessDeniedPage = location.pathname === '/access-denied'
+  const hasSidebar = user.role === 'gerente' || user.role === 'supervisor' || user.role === 'administrador'
+  const sidebarNavItems: Array<{ path: string; label: string; icon: React.ReactNode; badge?: number }> =
+    user.role === 'gerente' ? [
+      { path: '/sucursales',       label: 'Sucursales',          icon: <StoreIcon fontSize="small" /> },
+      { path: '/pickups',          label: 'PickUps',             icon: <PlaceIcon fontSize="small" /> },
+      { path: '/tarifas',          label: 'Tarifas',             icon: <PriceChangeIcon fontSize="small" /> },
+      { path: '/ojo-patron',       label: 'Ojo del Patrón',      icon: <GraphicEqIcon fontSize="small" /> },
+      { path: '/reportes',         label: 'Reportes',            icon: <BarChartIcon fontSize="small" /> },
+      { path: '/satisfaccion',     label: 'Satisfacción',        icon: <StarBorderIcon fontSize="small" /> },
+      { path: '/plantillas-email', label: 'Plantillas de Email', icon: <EmailIcon fontSize="small" /> },
+    ] :
+    user.role === 'supervisor' ? [
+      { path: '/app',              label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
+      { path: '/envios',           label: 'Envíos',               icon: <Inventory2Icon fontSize="small" /> },
+      { path: '/calendarizar',     label: 'Calendarizar',         icon: <BoltIcon fontSize="small" /> },
+      { path: '/repartidores',     label: 'Repartidores',         icon: <GroupIcon fontSize="small" /> },
+      { path: '/calendario',       label: 'Calendario Operativo', icon: <CalendarMonthIcon fontSize="small" /> },
+      { path: '/rutas-activas',    label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
+      { path: '/alertas',          label: 'Alertas',              icon: <WarningAmberIcon fontSize="small" />, badge: alertasCount },
+      { path: '/incidencias',      label: 'Incidencias',          icon: <ReportProblemIcon fontSize="small" />, badge: incidenciasCount },
+      { path: '/reportes',         label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
+      { path: '/satisfaccion',     label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
+      { path: '/auditoria',        label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
+      { path: '/ojo-patron',       label: 'Ojo del Patrón',       icon: <GraphicEqIcon fontSize="small" /> },
+    ] :
+    user.role === 'administrador' ? [
+      { path: '/app',                      label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
+      { path: '/calendario',               label: 'Calendario Operativo', icon: <CalendarMonthIcon fontSize="small" /> },
+      { path: '/rutas-activas',            label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
+      { path: '/reportes',                 label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
+      { path: '/satisfaccion',             label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
+      { path: '/auditoria',                label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
+      { path: '/auditoria-notificaciones', label: 'Notif. Auditoría',     icon: <NotificationsActiveIcon fontSize="small" /> },
+      { path: '/mi-plan',                  label: 'Mi Plan',              icon: <WorkspacePremiumIcon fontSize="small" /> },
+      { path: '/ojo-patron',               label: 'Ojo del Patrón',       icon: <GraphicEqIcon fontSize="small" /> },
+      { path: '/pickups',                  label: 'PickUps',              icon: <PlaceIcon fontSize="small" /> },
+    ] : []
   const isRepartidorArea = user.role === 'repartidor' && location.pathname.startsWith('/repartidor')
   const repartidorNavValue = (() => {
     if (location.pathname.startsWith('/repartidor/historial')) return '/repartidor/historial'
@@ -324,26 +426,71 @@ function Layout({ user, onLogout }: LayoutProps) {
   })()
 
   return (
-    <Box data-dark={isDarkPremium ? 'true' : undefined} sx={{ minHeight: '100vh', bgcolor: isDarkPremium ? '#0A1628' : 'background.default', color: isDarkPremium ? 'rgba(255,255,255,0.87)' : undefined, transition: 'background-color 0.5s ease' }}>
+    <Box
+      data-dark={isDarkPremium ? 'true' : undefined}
+      sx={{
+        minHeight: '100vh',
+        background: isDarkPremium
+          ? 'linear-gradient(145deg, #06040f 0%, #0d0b1e 25%, #0a1533 55%, #07101f 100%)'
+          : undefined,
+        backgroundAttachment: isDarkPremium ? 'fixed' : undefined,
+        bgcolor: isDarkPremium ? undefined : 'background.default',
+        color: isDarkPremium ? 'rgba(255,255,255,0.92)' : undefined,
+        transition: 'background 0.5s ease',
+      }}
+    >
       {isDarkPremium && (
         <style>{`
-          [data-dark] .MuiTableHead-root .MuiTableRow-root { background-color: #1B2D42 !important; }
-          [data-dark] .MuiTableHead-root .MuiTableCell-root { background-color: #1B2D42 !important; color: rgba(255,255,255,0.87) !important; border-color: rgba(255,255,255,0.12) !important; }
-          [data-dark] .MuiTableCell-root { border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.87) !important; }
-          [data-dark] .MuiTableBody-root .MuiTableRow-root:hover { background-color: rgba(255,255,255,0.06) !important; }
-          [data-dark] .MuiTableBody-root .MuiTableRow-root { background-color: #162032; }
+          [data-dark] .MuiTableHead-root .MuiTableRow-root { background-color: rgba(79,195,247,0.06) !important; }
+          [data-dark] .MuiTableHead-root .MuiTableCell-root { background-color: rgba(79,195,247,0.06) !important; color: rgba(255,255,255,0.87) !important; border-color: rgba(255,255,255,0.1) !important; }
+          [data-dark] .MuiTableCell-root { border-color: rgba(255,255,255,0.08) !important; color: rgba(255,255,255,0.87) !important; }
+          [data-dark] .MuiTableBody-root .MuiTableRow-root:hover { background-color: rgba(79,195,247,0.05) !important; }
+          [data-dark] .MuiTableBody-root .MuiTableRow-root { background-color: transparent; }
           [data-dark] input:-webkit-autofill,
           [data-dark] input:-webkit-autofill:hover,
           [data-dark] input:-webkit-autofill:focus,
           [data-dark] input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 1000px #1a2d42 inset !important;
-            -webkit-text-fill-color: rgba(255,255,255,0.87) !important;
-            caret-color: rgba(255,255,255,0.87) !important;
+            -webkit-box-shadow: 0 0 0 1000px rgba(13,11,30,0.95) inset !important;
+            -webkit-text-fill-color: rgba(255,255,255,0.9) !important;
+            caret-color: rgba(255,255,255,0.9) !important;
           }
+          ::-webkit-scrollbar { width: 6px; height: 6px; }
+          ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
+          ::-webkit-scrollbar-thumb { background: rgba(79,195,247,0.22); border-radius: 4px; }
+          ::-webkit-scrollbar-thumb:hover { background: rgba(79,195,247,0.45); }
         `}</style>
       )}
-      <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.15)', ...(isDarkPremium && { background: 'linear-gradient(135deg, #0A1628 0%, #1B2D42 100%)' }) }}>
+      {!isDarkPremium && (
+        <style>{`
+          ::-webkit-scrollbar { width: 6px; height: 6px; }
+          ::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); border-radius: 4px; }
+          ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
+          ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.32); }
+        `}</style>
+      )}
+      <AppBar
+        position="sticky"
+        elevation={0}
+        sx={{
+          borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.15)',
+          ...(isDarkPremium && {
+            background: 'rgba(6,4,15,0.82)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+          }),
+        }}
+      >
         <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
+          {hasSidebar && !isAccessDeniedPage && (
+            <IconButton
+              size="small"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              sx={{ mr: 1, color: 'white' }}
+              aria-label="Toggle navegación"
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
           {/* Logo */}
           <Box
             sx={{
@@ -551,8 +698,84 @@ function Layout({ user, onLogout }: LayoutProps) {
         </Toolbar>
       </AppBar>
 
-      {/* Tabs nav */}
-      {!isAccessDeniedPage && (user.role === 'supervisor' || user.role === 'administrador' || user.role === 'operador' || user.role === 'gerente' || user.role === 'socio_pickup') && (
+      {/* Sidebar lateral — Gerente, Supervisor, Administrador */}
+      {hasSidebar && !isAccessDeniedPage && (
+        <Box sx={{
+          position: 'fixed',
+          left: 0,
+          top: 64,
+          bottom: 0,
+          width: sidebarOpen ? 240 : 0,
+          overflowX: 'hidden',
+          transition: 'width 0.25s ease',
+          bgcolor: isDarkPremium ? 'transparent' : '#FAFAFA',
+          backdropFilter: isDarkPremium ? 'blur(20px)' : undefined,
+          background: isDarkPremium ? 'rgba(6,4,15,0.6)' : '#FAFAFA',
+          borderRight: isDarkPremium ? '1px solid rgba(255,255,255,0.08)' : '1px solid #E8E8E8',
+          zIndex: 89,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {user.role === 'gerente' && (
+            <>
+              <Box sx={{ px: 2.5, pt: 2.5, pb: 1.5, whiteSpace: 'nowrap' }}>
+                <Typography variant="caption" fontWeight={700} sx={{ letterSpacing: '0.08em', color: isDarkPremium ? 'rgba(255,255,255,0.4)' : 'text.disabled' }}>PROVINCIA</Typography>
+                <Typography variant="body2" fontWeight={700} sx={{ mt: 0.3, color: isDarkPremium ? 'rgba(255,255,255,0.85)' : 'text.primary' }}>
+                  {(user as any).provincia ?? 'Sin asignar'}
+                </Typography>
+              </Box>
+              <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
+            </>
+          )}
+          {(user.role === 'supervisor' || user.role === 'administrador') && (
+            <>
+              <Box sx={{ px: 2.5, pt: 2.5, pb: 1.5, whiteSpace: 'nowrap' }}>
+                <Typography variant="caption" fontWeight={700} sx={{ letterSpacing: '0.08em', color: isDarkPremium ? 'rgba(255,255,255,0.4)' : 'text.disabled' }}>
+                  {user.role === 'supervisor' ? 'SUPERVISOR' : 'ADMINISTRADOR'}
+                </Typography>
+              </Box>
+              <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
+            </>
+          )}
+          <List dense sx={{ pt: 1, px: 1, overflowY: 'auto', flex: 1 }}>
+            {sidebarNavItems.map((item) => {
+              const active = selectedTab === item.path
+              return (
+                <ListItemButton
+                  key={item.path}
+                  selected={active}
+                  onClick={() => navigate(item.path)}
+                  sx={{
+                    borderRadius: '8px',
+                    mb: 0.5,
+                    whiteSpace: 'nowrap',
+                    color: isDarkPremium ? (active ? '#42A5F5' : 'rgba(255,255,255,0.75)') : undefined,
+                    ...(active ? {
+                      bgcolor: isDarkPremium ? 'rgba(66,165,245,0.15) !important' : 'rgba(25,118,210,0.08) !important',
+                      color: isDarkPremium ? '#42A5F5' : 'primary.main',
+                    } : {}),
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 34, color: 'inherit' }}>
+                    {(item.badge ?? 0) > 0 ? (
+                      <Badge badgeContent={item.badge} color="error" max={9}>
+                        {item.icon}
+                      </Badge>
+                    ) : item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: active ? 700 : 400, color: 'inherit' }}
+                  />
+                </ListItemButton>
+              )
+            })}
+          </List>
+        </Box>
+      )}
+
+      {/* Tabs nav — solo Operador y Socio PickUp (Gerente/Supervisor/Administrador usan sidebar) */}
+      {!isAccessDeniedPage && (user.role === 'operador' || user.role === 'socio_pickup') && (
         <Box sx={{
           bgcolor: isDarkPremium ? '#1B2D42' : 'white',
           borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
@@ -573,80 +796,11 @@ function Layout({ user, onLogout }: LayoutProps) {
               '& .MuiTabs-indicator': { backgroundColor: '#42A5F5' },
             } : {}}
           >
-            {(user.role === 'supervisor' || user.role === 'administrador') && (
-              <Tab icon={<DashboardIcon fontSize="small" />} iconPosition="start" label="Dashboard" value="/app" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {(user.role === 'supervisor' || user.role === 'operador') && (
+            {user.role === 'operador' && (
               <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/envios" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
             {user.role === 'socio_pickup' && (
               <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Mi PickUp" value="/pickup-operacion" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'supervisor' && (
-              <Tab icon={<BoltIcon fontSize="small" />} iconPosition="start" label="Calendarizar" value="/calendarizar" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'supervisor' && (
-              <Tab icon={<GroupIcon fontSize="small" />} iconPosition="start" label="Repartidores" value="/repartidores" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'supervisor' && (
-              <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start" label="Calendario Operativo" value="/calendario" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'supervisor' && (
-              <Tab icon={<RouteIcon fontSize="small" />} iconPosition="start" label="Rutas Activas" value="/rutas-activas" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'supervisor' && (
-              <Tab
-                icon={
-                  <Badge badgeContent={alertasCount > 0 ? alertasCount : undefined} color="error" max={9}>
-                    <WarningAmberIcon fontSize="small" />
-                  </Badge>
-                }
-                iconPosition="start"
-                label="Alertas"
-                value="/alertas"
-                sx={{ minHeight: 48, textTransform: 'none' }}
-              />
-            )}
-            {user.role === 'supervisor' && (
-              <Tab
-                icon={
-                  <Badge badgeContent={incidenciasCount > 0 ? incidenciasCount : undefined} color="error" max={9}>
-                    <ReportProblemIcon fontSize="small" />
-                  </Badge>
-                }
-                iconPosition="start"
-                label="Incidencias"
-                value="/incidencias"
-                sx={{ minHeight: 48, textTransform: 'none' }}
-              />
-            )}
-            {(user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') && (
-              <Tab icon={<BarChartIcon fontSize="small" />} iconPosition="start" label="Reportes" value="/reportes" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {(user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') && (
-              <Tab icon={<StarBorderIcon fontSize="small" />} iconPosition="start" label="Satisfacción" value="/satisfaccion" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {(user.role === 'administrador' || user.role === 'supervisor') && (
-              <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Auditoría" value="/auditoria" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {/* Épica D: sucursales, tarifas y ojo del patrón los gestiona el Gerente */}
-            {user.role === 'gerente' && (
-              <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Sucursales" value="/sucursales" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'gerente' && (
-              <Tab icon={<PlaceIcon fontSize="small" />} iconPosition="start" label="PickUps" value="/pickups" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'gerente' && (
-              <Tab icon={<PriceChangeIcon fontSize="small" />} iconPosition="start" label="Tarifas" value="/tarifas" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {(user.role === 'gerente' || user.role === 'supervisor') && (
-              <Tab icon={<GraphicEqIcon fontSize="small" />} iconPosition="start" label="Ojo del Patrón" value="/ojo-patron" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'administrador' && (
-              <Tab icon={<NotificationsActiveIcon fontSize="small" />} iconPosition="start" label="Notif. Auditoría" value="/auditoria-notificaciones" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {user.role === 'administrador' && (
-              <Tab icon={<WorkspacePremiumIcon fontSize="small" />} iconPosition="start" label="Mi Plan" value="/mi-plan" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
           </Tabs>
         </Box>
@@ -737,17 +891,23 @@ function Layout({ user, onLogout }: LayoutProps) {
         {isAccessDeniedPage ? (
           <Outlet context={user} />
         ) : (
-          <Container
-            maxWidth="lg"
-            sx={{
-              py: { xs: 2, sm: 3 },
-              px: { xs: 2, sm: 3 },
-              pb: isMobile && isRepartidorArea ? 11 : undefined,
-              color: isDarkPremium ? 'rgba(255,255,255,0.87)' : undefined,
-            }}
-          >
-            <Outlet context={user} />
-          </Container>
+          <Box sx={{ display: 'flex' }}>
+            {hasSidebar && !isAccessDeniedPage && <Box sx={{ width: sidebarOpen ? 240 : 0, flexShrink: 0, transition: 'width 0.25s ease' }} />}
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                py: { xs: 2, sm: 3 },
+                px: { xs: 2, sm: 3 },
+                pb: isMobile && isRepartidorArea ? 11 : undefined,
+                color: isDarkPremium ? 'rgba(255,255,255,0.92)' : undefined,
+              }}
+            >
+              <Box sx={{ maxWidth: 1400, mx: 'auto', width: '100%' }}>
+                <Outlet context={user} />
+              </Box>
+            </Box>
+          </Box>
         )}
       </ThemeProvider>
     </Box>

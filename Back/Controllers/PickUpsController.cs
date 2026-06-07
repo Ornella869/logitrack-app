@@ -201,6 +201,66 @@ namespace Back.Controllers
                 p.Status != PaqueteStatus.Entregado &&
                 p.Status != PaqueteStatus.Cancelado);
         }
+
+        // AC1+AC2+AC4: Calificar experiencia post-retiro (sin autenticación requerida)
+        [HttpPost("calificaciones")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CalificarExperiencia([FromBody] CalificacionPublicaRequest req)
+        {
+            if (req.Estrellas < 1 || req.Estrellas > 5)
+                return BadRequest("Las estrellas deben estar entre 1 y 5.");
+
+            var codigo = req.TrackingCode?.Trim();
+            if (string.IsNullOrWhiteSpace(codigo))
+                return BadRequest("El código de seguimiento es obligatorio.");
+
+            var paquete = await _context.Paquetes.FirstOrDefaultAsync(p => p.CodigoSeguimiento == codigo);
+            if (paquete is null)
+                return NotFound("No se encontró ningún envío con ese código.");
+
+            if (paquete.Status != PaqueteStatus.Entregado)
+                return BadRequest("Solo podés calificar envíos ya entregados.");
+
+            if (!paquete.PuntoPickUpId.HasValue)
+                return BadRequest("Este envío no fue retirado en un Punto Pick Up.");
+
+            var yaCalificado = await _context.CalificacionesPickUp.AnyAsync(c => c.PaqueteId == paquete.Id);
+            if (yaCalificado)
+                return Conflict("Este envío ya fue calificado.");
+
+            var calificacion = new CalificacionPickUp(
+                paquete.PuntoPickUpId.Value,
+                paquete.Id,
+                req.Estrellas,
+                req.Comentario,
+                req.AutorNombre);
+
+            _context.CalificacionesPickUp.Add(calificacion);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { calificacion.Id, calificacion.Estrellas });
+        }
+
+        // AC2: Verificar si un envío ya tiene calificación (para mostrar vista de solo lectura)
+        [HttpGet("calificaciones/check")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckCalificacion([FromQuery] string trackingCode)
+        {
+            var paquete = await _context.Paquetes.FirstOrDefaultAsync(p => p.CodigoSeguimiento == trackingCode.Trim());
+            if (paquete is null) return NotFound();
+
+            var existente = await _context.CalificacionesPickUp.FirstOrDefaultAsync(c => c.PaqueteId == paquete.Id);
+            if (existente is null) return Ok(new { calificado = false });
+
+            return Ok(new
+            {
+                calificado = true,
+                estrellas = existente.Estrellas,
+                comentario = existente.Comentario,
+                autorNombre = existente.AutorNombre,
+                creadoEn = existente.CreadoEn,
+            });
+        }
     }
 
     public class PuntoPickUpRequest
@@ -218,5 +278,13 @@ namespace Back.Controllers
     public class CambiarEstadoPickUpRequest
     {
         public bool Activo { get; set; }
+    }
+
+    public class CalificacionPublicaRequest
+    {
+        public required string TrackingCode { get; set; }
+        public int Estrellas { get; set; }
+        public string? Comentario { get; set; }
+        public string? AutorNombre { get; set; }
     }
 }

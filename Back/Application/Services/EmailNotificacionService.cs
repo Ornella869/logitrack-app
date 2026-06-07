@@ -114,6 +114,44 @@ namespace Back.Application.Services
                 $"Codigo de entrega para tu envio {paquete.CodigoSeguimiento}", cuerpo);
         }
 
+        public async Task NotificarListoParaRetirarAsync(Paquete paquete, PuntoPickUp? punto)
+        {
+            if (paquete.Destinatario.Email is null) return;
+
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var nombrePunto = punto?.Nombre ?? "el punto Pick Up";
+            var direccionPunto = punto is not null ? $"{punto.Direccion}, {punto.Localidad}" : string.Empty;
+            var horariosHtml = string.IsNullOrWhiteSpace(punto?.Horarios) ? string.Empty
+                : $"""<div style="font-size:12px;color:#6ee7b7;margin-top:4px;">🕐 {SecurityElement.Escape(punto.Horarios)}</div>""";
+
+            var detalleHtml = $"""
+                <div style="background:#052e16;border:1px solid #16a34a;border-radius:10px;padding:14px 16px;margin:14px 0;">
+                  <div style="font-size:13px;color:#86efac;margin-bottom:4px;">Punto Pick Up</div>
+                  <div style="font-size:15px;font-weight:700;color:#4ade80;">{SecurityElement.Escape(nombrePunto)}</div>
+                  <div style="font-size:13px;color:#86efac;margin-top:4px;">{SecurityElement.Escape(direccionPunto)}</div>
+                  {horariosHtml}
+                </div>
+                <div style="background:#0f172a;border:1px solid #16a34a;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
+                  <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Codigo: {SecurityElement.Escape(paquete.CodigoSeguimiento)}</div>
+                  <div style="font-size:34px;letter-spacing:10px;font-weight:900;color:#4ade80;">{SecurityElement.Escape(paquete.CodigoEntrega)}</div>
+                </div>
+                <div style="background:#14532d;border:1px solid #16a34a;border-radius:8px;padding:10px 14px;margin:8px 0;text-align:center;">
+                  <span style="font-size:13px;color:#86efac;">&#128274; Mostrale este codigo al local cuando vayas a retirar tu paquete.</span>
+                </div>
+                """;
+
+            var cuerpo = BuildTemplate("green",
+                "Tu paquete llego al punto Pick Up",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                $"Tu paquete esta disponible en <strong>{SecurityElement.Escape(nombrePunto)}</strong>. Podes acercarte a retirarlo cuando quieras.",
+                trackingUrl, "Ver seguimiento", detalleHtml);
+
+            await CrearYEnviarAsync(paquete, EventoEmailNotificacion.ListoParaRetirar,
+                $"Tu paquete {paquete.CodigoSeguimiento} esta listo para retirar", cuerpo);
+        }
+
         public async Task CrearEmailLeadAsync(SolicitudComercial lead)
         {
             var email = new EmailNotificacion(
@@ -153,6 +191,20 @@ namespace Back.Application.Services
                 e.PaqueteId == paquete.Id && e.Evento == evento);
             if (yaExiste) return;
 
+            // Aplica plantilla personalizada de la provincia si existe
+            var plantilla = paquete.ProvinciaDestino is not null
+                ? await _context.PlantillasEmail.FirstOrDefaultAsync(p =>
+                    p.Provincia == paquete.ProvinciaDestino && p.Evento == evento)
+                : null;
+
+            if (plantilla is not null)
+            {
+                asunto = AplicarVariables(plantilla.Asunto, paquete);
+                // El cuerpo personalizado reemplaza solo el texto del cuerpo principal
+                cuerpo = cuerpo.Replace("{{cuerpoPersonalizado}}", plantilla.Cuerpo)
+                               .Replace(plantilla.Asunto, asunto);
+            }
+
             var email = new EmailNotificacion(
                 paquete.Id,
                 paquete.SucursalId,
@@ -164,6 +216,27 @@ namespace Back.Application.Services
 
             _context.EmailNotificaciones.Add(email);
             await EnviarAsync(email);
+        }
+
+        private static string AplicarVariables(string template, Paquete paquete, PaqueteStatus? estado = null)
+        {
+            var estadoLabel = estado switch
+            {
+                PaqueteStatus.EnTransito => "En tránsito",
+                PaqueteStatus.Entregado => "Entregado",
+                PaqueteStatus.CargadoEnVehiculo => "Cargado en vehículo",
+                PaqueteStatus.Demorado => "Demorado",
+                PaqueteStatus.Cancelado => "Cancelado",
+                _ => ""
+            };
+            return template
+                .Replace("{{tracking}}", System.Security.SecurityElement.Escape(paquete.CodigoSeguimiento))
+                .Replace("{{destinatario}}", System.Security.SecurityElement.Escape($"{paquete.Destinatario.Nombre} {paquete.Destinatario.Apellido}".Trim()))
+                .Replace("{{nombre}}", System.Security.SecurityElement.Escape(paquete.Destinatario.Nombre ?? ""))
+                .Replace("{{estado}}", estadoLabel)
+                .Replace("{{codigoEntrega}}", System.Security.SecurityElement.Escape(paquete.CodigoEntrega))
+                .Replace("{{fecha}}", paquete.FechaEstimadaEntrega?.ToLocalTime().ToString("dd/MM/yyyy") ?? "")
+                .Replace("{{provincia}}", System.Security.SecurityElement.Escape(paquete.ProvinciaDestino ?? ""));
         }
 
         private async Task EnviarAsync(EmailNotificacion email)

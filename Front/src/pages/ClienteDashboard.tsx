@@ -20,9 +20,13 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import HistoryIcon from '@mui/icons-material/History'
+import StarBorderIcon from '@mui/icons-material/StarBorder'
+import StarIcon from '@mui/icons-material/Star'
 import { shipmentService } from '../services/shipmentService'
 import { incidenciaService, type Incidencia } from '../services/incidenciaService'
+import { pickupService } from '../services/pickupService'
 import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClienteDialog'
+import CalificacionPickUpDialog from '../components/CalificacionPickUpDialog'
 import type { Shipment, User } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 
@@ -34,6 +38,8 @@ const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; 
   'Listo para retirar': { label: 'Listo para retirar', color: '#00695C', bg: '#E0F2F1', icon: <LocalShippingOutlinedIcon /> },
   'En tránsito': { label: 'En camino', color: '#0D47A1', bg: '#E3F2FD', icon: <LocalShippingOutlinedIcon /> },
   'Demorado': { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2', icon: <LocalShippingOutlinedIcon /> },
+  'En tránsito - Descanso': { label: 'En ruta (pausa nocturna)', color: '#37474F', bg: '#ECEFF1', icon: <LocalShippingOutlinedIcon /> },
+  'Entregado en punto': { label: 'Llegó al punto Pick Up', color: '#1565C0', bg: '#E3F2FD', icon: <LocalShippingOutlinedIcon /> },
   'Entregado': { label: 'Entregado', color: '#1B5E20', bg: '#E8F5E9', icon: <CheckCircleOutlineIcon /> },
   'Cancelado': { label: 'Cancelado', color: '#7F0000', bg: '#FFEBEE', icon: <CancelOutlinedIcon /> },
 }
@@ -79,6 +85,10 @@ export default function ClienteDashboard() {
   const [searching, setSearching] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [calificacionOpen, setCalificacionOpen] = useState(false)
+  const [calificacionExistente, setCalificacionExistente] = useState<{
+    estrellas: number; comentario?: string | null; autorNombre?: string | null
+  } | null>(null)
 
   const [misIncidencias, setMisIncidencias] = useState<Incidencia[]>([])
 
@@ -98,9 +108,16 @@ export default function ClienteDashboard() {
     setSearching(true)
     setNotFound(false)
     setShipment(null)
+    setCalificacionExistente(null)
     const found = await shipmentService.getShipmentByTrackingCode(trackingId)
     if (found) {
       setShipment(found)
+      if (found.status === 'Entregado' && found.puntoPickUpId) {
+        const check = await pickupService.checkCalificacion(trackingId).catch(() => null)
+        if (check?.calificado) {
+          setCalificacionExistente({ estrellas: check.estrellas!, comentario: check.comentario, autorNombre: check.autorNombre })
+        }
+      }
     } else {
       setNotFound(true)
     }
@@ -200,6 +217,25 @@ export default function ClienteDashboard() {
                 </Box>
               </Stack>
 
+              {shipment?.status === 'Entregado' && shipment.puntoPickUpId && (
+                <Box sx={{ pt: 1 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={calificacionExistente ? <StarIcon sx={{ color: '#f59e0b' }} /> : <StarBorderIcon />}
+                    onClick={() => setCalificacionOpen(true)}
+                    sx={{
+                      color: '#92400e',
+                      borderColor: '#f59e0b',
+                      fontWeight: 600,
+                      borderRadius: 2,
+                      '&:hover': { bgcolor: 'rgba(245,158,11,0.06)', borderColor: '#d97706' },
+                    }}
+                  >
+                    {calificacionExistente ? `Tu calificación: ${'★'.repeat(calificacionExistente.estrellas)}` : 'Calificar Punto Pick Up'}
+                  </Button>
+                </Box>
+              )}
+
               {canReport && (
                 <Box sx={{ pt: 1 }}>
                   <Button
@@ -273,6 +309,15 @@ export default function ClienteDashboard() {
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           shipment={shipment}
+        />
+      )}
+      {shipment?.puntoPickUpId && (
+        <CalificacionPickUpDialog
+          open={calificacionOpen}
+          onClose={() => setCalificacionOpen(false)}
+          trackingCode={shipment.trackingId}
+          puntoNombre={shipment.puntoPickUpNombre ?? 'Punto Pick Up'}
+          calificacionExistente={calificacionExistente}
         />
       )}
     </Container>

@@ -44,6 +44,8 @@ const mapStatus = (status: string): Shipment['status'] => {
     case 'CargadoEnVehiculo': return 'Cargado en vehículo'
     case 'Demorado': return 'Demorado'
     case 'ListoParaRetirar': return 'Listo para retirar'
+    case 'EnTransitoDescanso': return 'En tránsito - Descanso'
+    case 'EntregadoEnPunto': return 'Entregado en punto'
     default: return 'Pendiente de calendarización'
   }
 }
@@ -63,6 +65,8 @@ const mapStatusToBackend = (status: string): string => {
     case 'Cargado en vehículo': return 'CargadoEnVehiculo'
     case 'Demorado': return 'Demorado'
     case 'Listo para retirar': return 'ListoParaRetirar'
+    case 'En tránsito - Descanso': return 'EnTransitoDescanso'
+    case 'Entregado en punto': return 'EntregadoEnPunto'
     default:
       return 'PendienteDeCalendarizacion'
   }
@@ -143,6 +147,11 @@ const mapToShipment = (paquete: any): Shipment => ({
   costoRecargoSeguridad: paquete.costoRecargoSeguridad ?? undefined,
   esZonaPeligrosa: paquete.esZonaPeligrosa ?? undefined,
   puntoPickUpId: paquete.puntoPickUpId ?? null,
+  puntoPickUpNombre: paquete.puntoPickUpNombre ?? null,
+  puntoPickUpDireccion: paquete.puntoPickUpDireccion ?? null,
+  puntoPickUpLocalidad: paquete.puntoPickUpLocalidad ?? null,
+  puntoPickUpHorarios: paquete.puntoPickUpHorarios ?? null,
+  puntoPickUpTelefono: paquete.puntoPickUpTelefono ?? null,
   horasEstimadasRuta: paquete.horasEstimadasRuta ?? undefined,
   tramoOperativoId: paquete.tramoOperativoId ?? null,
   ordenTramoOperativo: paquete.ordenTramoOperativo ?? null,
@@ -640,6 +649,26 @@ export const shipmentService = {
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.response?.data?.message ?? 'No se pudo cerrar la jornada' }
+    }
+  },
+
+  // G1L-119: el repartidor pausa su jornada al final del día en una ruta multi-día.
+  pausarJornada: async (): Promise<{ success: boolean; paquetesPausados?: number; error?: string }> => {
+    try {
+      const res = await api.post('/envios/pausar-jornada')
+      return { success: true, paquetesPausados: res.data?.paquetesPausados }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.message ?? 'No se pudo pausar la jornada' }
+    }
+  },
+
+  // G1L-119: el repartidor reanuda la ruta al día siguiente.
+  reanudarJornada: async (): Promise<{ success: boolean; paquetesReanudados?: number; error?: string }> => {
+    try {
+      const res = await api.post('/envios/reanudar-jornada')
+      return { success: true, paquetesReanudados: res.data?.paquetesReanudados }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.message ?? 'No se pudo reanudar la jornada' }
     }
   },
 

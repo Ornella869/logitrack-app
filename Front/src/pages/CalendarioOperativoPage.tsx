@@ -39,6 +39,9 @@ type CalendarioPaquete = {
   peso: number
   esPrioritario: boolean
   status: string
+  // G1L-119: para mostrar "Día N de M" en rutas multi-día.
+  fechaCalendarizada?: string | null
+  diasEstimados?: number
 }
 
 type CalendarioCelda = {
@@ -270,27 +273,44 @@ export default function CalendarioOperativoPage() {
                                 </Typography>
                               )}
                               <Stack spacing={0.4} sx={{ mt: 0.5 }}>
-                                {celda.paquetes.slice(0, 3).map((p) => (
-                                  <Tooltip key={p.paqueteId} title={`${p.codigoSeguimiento} · ${p.peso} kg · ${p.status}`}>
+                                {celda.paquetes.slice(0, 3).map((p) => {
+                                  const diasEstimados = p.diasEstimados ?? 1
+                                  const isMultiDia = diasEstimados > 1
+                                  const diaNum = isMultiDia && p.fechaCalendarizada
+                                    ? Math.max(1, Math.round((new Date(celda.fecha).getTime() - new Date(p.fechaCalendarizada).getTime()) / 86400000) + 1)
+                                    : 1
+                                  const isDescanso = p.status === 'EnTransitoDescanso'
+                                  return (
+                                  <Tooltip key={p.paqueteId} title={`${p.codigoSeguimiento} · ${p.peso} kg · ${p.status}${isMultiDia ? ` · Día ${diaNum}/${diasEstimados}` : ''}`}>
                                     <Box
                                       sx={{
-                                        bgcolor: p.esPrioritario
-                                          ? (isDark ? 'rgba(198,40,40,0.3)' : '#fdecea')
-                                          : (isDark ? 'rgba(2,136,209,0.3)' : '#e1f5fe'),
-                                        color: p.esPrioritario
-                                          ? (isDark ? '#ef9a9a' : 'inherit')
-                                          : (isDark ? '#81d4fa' : 'inherit'),
-                                        borderLeft: `3px solid ${p.esPrioritario ? '#c62828' : '#0288d1'}`,
+                                        bgcolor: isDescanso
+                                          ? (isDark ? 'rgba(55,71,79,0.5)' : '#ECEFF1')
+                                          : p.esPrioritario
+                                            ? (isDark ? 'rgba(198,40,40,0.3)' : '#fdecea')
+                                            : isMultiDia
+                                              ? (isDark ? 'rgba(103,58,183,0.35)' : '#ede7f6')
+                                              : (isDark ? 'rgba(2,136,209,0.3)' : '#e1f5fe'),
+                                        color: isDescanso
+                                          ? (isDark ? '#b0bec5' : '#546e7a')
+                                          : p.esPrioritario
+                                            ? (isDark ? '#ef9a9a' : 'inherit')
+                                            : isMultiDia
+                                              ? (isDark ? '#ce93d8' : 'inherit')
+                                              : (isDark ? '#81d4fa' : 'inherit'),
+                                        borderLeft: `3px solid ${isDescanso ? '#607d8b' : p.esPrioritario ? '#c62828' : isMultiDia ? '#7b1fa2' : '#0288d1'}`,
                                         borderRadius: 0.5, px: 0.5, py: 0.3,
                                         fontSize: 10, fontFamily: 'monospace',
                                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                       }}
                                     >
-                                      {p.esPrioritario && '⚡ '}
+                                      {isDescanso ? '🌙 ' : p.esPrioritario ? '⚡ ' : isMultiDia ? '🔁 ' : ''}
                                       {p.codigoSeguimiento}
+                                      {isMultiDia && <span style={{ opacity: 0.7, marginLeft: 4 }}>{diaNum}/{diasEstimados}</span>}
                                     </Box>
                                   </Tooltip>
-                                ))}
+                                  )
+                                })}
                                 {celda.paquetes.length > 3 && (
                                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, fontStyle: 'italic' }}>
                                     +{celda.paquetes.length - 3} más

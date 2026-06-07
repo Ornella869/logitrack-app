@@ -16,15 +16,18 @@ namespace Back.Controllers
         private readonly LogiTrackDbContext _context;
         private readonly HistorialEstadoEnvioService _historial;
         private readonly PlanificacionTramosService _tramos;
+        private readonly EmailNotificacionService _emails;
 
         public PickUpOperacionController(
             LogiTrackDbContext context,
             HistorialEstadoEnvioService historial,
-            PlanificacionTramosService tramos)
+            PlanificacionTramosService tramos,
+            EmailNotificacionService emails)
         {
             _context = context;
             _historial = historial;
             _tramos = tramos;
+            _emails = emails;
         }
 
         private Guid? CurrentUserId()
@@ -55,13 +58,30 @@ namespace Back.Controllers
                 .Take(250)
                 .ToListAsync();
 
-            var activos = paquetes.Count(p => p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado);
+            // Solo los físicamente almacenados cuentan para la capacidad
+            var fisicamenteAlmacenados = paquetes.Count(p => p.Status == PaqueteStatus.ListoParaRetirar);
             var paqueteIds = paquetes.Select(p => p.Id).ToList();
             var hoyUtc = DateTime.UtcNow.Date;
             var entregadosHoy = await _context.HistorialEstadosEnvio.CountAsync(h =>
                 paqueteIds.Contains(h.PaqueteId) &&
                 h.EstadoNuevo == PaqueteStatus.Entregado &&
                 h.FechaHora >= hoyUtc);
+
+            // Fecha en que cada paquete entró en ListoParaRetirar (para calcular días almacenado)
+            var listosIds = paquetes
+                .Where(p => p.Status == PaqueteStatus.ListoParaRetirar)
+                .Select(p => p.Id)
+                .ToList();
+            Dictionary<Guid, DateTime> fechasListoParaRetirar = new();
+            if (listosIds.Count > 0)
+            {
+                fechasListoParaRetirar = await _context.HistorialEstadosEnvio
+                    .Where(h => listosIds.Contains(h.PaqueteId) && h.EstadoNuevo == PaqueteStatus.ListoParaRetirar)
+                    .GroupBy(h => h.PaqueteId)
+                    .Select(g => new { PaqueteId = g.Key, Fecha = g.Max(h => h.FechaHora) })
+                    .ToDictionaryAsync(x => x.PaqueteId, x => x.Fecha);
+            }
+
             return Ok(new PickUpInventarioResponse
             {
                 Punto = new PickUpPuntoResponse
@@ -75,13 +95,39 @@ namespace Back.Controllers
                     CapacidadDiaria = punto.CapacidadDiaria,
                     Activo = punto.Activo,
                 },
-                CapacidadUsada = activos,
-                CapacidadLibre = Math.Max(0, punto.CapacidadDiaria - activos),
-                EnCamino = paquetes.Count(p => p.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado),
-                ListosParaRetirar = paquetes.Count(p => p.Status == PaqueteStatus.ListoParaRetirar),
+                CapacidadUsada = fisicamenteAlmacenados,
+                CapacidadLibre = Math.Max(0, punto.CapacidadDiaria - fisicamenteAlmacenados),
+                PendienteRecepcion = paquetes.Count(p => p.Status == PaqueteStatus.EntregadoEnPunto),
+                EnCamino = paquetes.Count(p => p.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado or PaqueteStatus.EnTransitoDescanso),
+                ListosParaRetirar = fisicamenteAlmacenados,
                 EntregadosHoy = entregadosHoy,
-                Paquetes = paquetes.Select(MapPaquete).ToList(),
+                Paquetes = paquetes.Select(p =>
+                    MapPaquete(p, fechasListoParaRetirar.TryGetValue(p.Id, out var f) ? f : null)).ToList(),
             });
+        }
+
+        [HttpPost("devolver")]
+        public async Task<ActionResult<PickUpPaqueteResponse>> Devolver([FromBody] PickUpCodigoRequest request)
+        {
+            var socio = await CurrentSocioAsync();
+            if (socio is null) return Forbid();
+
+            var paquete = await BuscarPaqueteSocioAsync(socio.PuntoPickUpId, request.CodigoSeguimiento);
+            if (paquete is null) return NotFound("Envio no encontrado para este punto Pick Up.");
+            if (paquete.Status != PaqueteStatus.ListoParaRetirar)
+                return BadRequest("Solo se puede gestionar devolución de envíos en estado Listo para retirar.");
+
+            try
+            {
+                paquete.Cancelar("Devolucion por abandono en punto Pick Up");
+                await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, socio.Id, OrigenCambioEstado.Manual, "Devolucion por abandono en punto Pick Up");
+                await _context.SaveChangesAsync();
+                return Ok(MapPaquete(paquete));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [HttpPost("recibir")]
@@ -98,6 +144,8 @@ namespace Back.Controllers
                 paquete.MarcarListoParaRetirar();
                 await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.ListoParaRetirar, socio.Id, OrigenCambioEstado.QR, "Recepcion en punto Pick Up");
                 await _context.SaveChangesAsync();
+                var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == socio.PuntoPickUpId);
+                await _emails.NotificarListoParaRetirarAsync(paquete, punto);
                 return Ok(MapPaquete(paquete));
             }
             catch (InvalidOperationException ex)
@@ -142,7 +190,7 @@ namespace Back.Controllers
                 p.CodigoSeguimiento == codigo);
         }
 
-        private static PickUpPaqueteResponse MapPaquete(Paquete p) => new()
+        private static PickUpPaqueteResponse MapPaquete(Paquete p, DateTime? fechaListoParaRetirar = null) => new()
         {
             Id = p.Id,
             CodigoSeguimiento = p.CodigoSeguimiento,
@@ -158,7 +206,53 @@ namespace Back.Controllers
             Peso = p.Peso,
             CreadoEn = p.CreadoEn,
             FechaEstimadaEntrega = p.FechaEstimadaEntrega,
+            FechaListoParaRetirar = fechaListoParaRetirar,
+            DiasAlmacenado = fechaListoParaRetirar.HasValue
+                ? (int)(DateTime.UtcNow - fechaListoParaRetirar.Value).TotalDays
+                : null,
         };
+
+        // AC3: Panel del socio — resumen de calificaciones del punto
+        [HttpGet("calificaciones")]
+        public async Task<ActionResult<ResumenCalificacionesResponse>> MisCalificaciones()
+        {
+            var socio = await CurrentSocioAsync();
+            if (socio is null) return Forbid();
+
+            var calificaciones = await _context.CalificacionesPickUp
+                .Where(c => c.PuntoPickUpId == socio.PuntoPickUpId)
+                .OrderByDescending(c => c.CreadoEn)
+                .ToListAsync();
+
+            if (calificaciones.Count == 0)
+                return Ok(new ResumenCalificacionesResponse());
+
+            var paqueteIds = calificaciones.Select(c => c.PaqueteId).ToList();
+            var trackings = await _context.Paquetes
+                .Where(p => paqueteIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.CodigoSeguimiento })
+                .ToDictionaryAsync(p => p.Id, p => p.CodigoSeguimiento);
+
+            var porEstrella = new int[5];
+            foreach (var c in calificaciones)
+                porEstrella[c.Estrellas - 1]++;
+
+            return Ok(new ResumenCalificacionesResponse
+            {
+                Total = calificaciones.Count,
+                Promedio = Math.Round(calificaciones.Average(c => c.Estrellas), 1),
+                PorEstrella = porEstrella,
+                Ultimas = calificaciones.Take(50).Select(c => new CalificacionPickUpResponse
+                {
+                    Id = c.Id,
+                    Estrellas = c.Estrellas,
+                    Comentario = c.Comentario,
+                    AutorNombre = c.AutorNombre,
+                    CreadoEn = c.CreadoEn,
+                    TrackingCode = trackings.TryGetValue(c.PaqueteId, out var tc) ? tc : string.Empty,
+                }).ToList(),
+            });
+        }
     }
 
     public class PickUpCodigoRequest
@@ -176,6 +270,7 @@ namespace Back.Controllers
         public PickUpPuntoResponse Punto { get; set; } = new();
         public int CapacidadUsada { get; set; }
         public int CapacidadLibre { get; set; }
+        public int PendienteRecepcion { get; set; }
         public int EnCamino { get; set; }
         public int ListosParaRetirar { get; set; }
         public int EntregadosHoy { get; set; }
@@ -210,5 +305,25 @@ namespace Back.Controllers
         public double Peso { get; set; }
         public DateTime CreadoEn { get; set; }
         public DateTime? FechaEstimadaEntrega { get; set; }
+        public DateTime? FechaListoParaRetirar { get; set; }
+        public int? DiasAlmacenado { get; set; }
+    }
+
+    public class CalificacionPickUpResponse
+    {
+        public Guid Id { get; set; }
+        public int Estrellas { get; set; }
+        public string? Comentario { get; set; }
+        public string? AutorNombre { get; set; }
+        public DateTime CreadoEn { get; set; }
+        public string TrackingCode { get; set; } = string.Empty;
+    }
+
+    public class ResumenCalificacionesResponse
+    {
+        public double Promedio { get; set; }
+        public int Total { get; set; }
+        public int[] PorEstrella { get; set; } = new int[5];
+        public List<CalificacionPickUpResponse> Ultimas { get; set; } = [];
     }
 }

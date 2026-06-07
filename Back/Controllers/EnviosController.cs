@@ -214,6 +214,10 @@ namespace Back.Controllers
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento);
             if (paquete is null) return NotFound();
 
+            PuntoPickUp? punto = null;
+            if (paquete.PuntoPickUpId.HasValue)
+                punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == paquete.PuntoPickUpId.Value);
+
             return Ok(new SeguimientoPublicoResponse
             {
                 Id = paquete.Id,
@@ -239,7 +243,13 @@ namespace Back.Controllers
                 {
                     Ciudad = paquete.Destinatario.Direccion.Ciudad,
                     CP = paquete.Destinatario.Direccion.CP,
-                }
+                },
+                PuntoPickUpId = paquete.PuntoPickUpId,
+                PuntoPickUpNombre = punto?.Nombre,
+                PuntoPickUpDireccion = punto?.Direccion,
+                PuntoPickUpLocalidad = punto?.Localidad,
+                PuntoPickUpHorarios = punto?.Horarios,
+                PuntoPickUpTelefono = punto?.Telefono,
             });
         }
 
@@ -712,6 +722,44 @@ namespace Back.Controllers
             return Ok(new { estadoJornada = rep?.EstadoJornadaLabel ?? "Disponible" });
         }
 
+        /// <summary>G1L-119: el repartidor pausa su jornada al finalizar el día en una ruta multi-día.</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("pausar-jornada")]
+        public async Task<ActionResult> PausarJornada()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            try
+            {
+                var count = await _enviosService.PausarJornadaAsync(userId.Value);
+                await _context.SaveChangesAsync();
+                return Ok(new { paquetesPausados = count });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>G1L-119: el repartidor reanuda la ruta al día siguiente.</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [HttpPost("reanudar-jornada")]
+        public async Task<ActionResult> ReanudarJornada()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+            try
+            {
+                var count = await _enviosService.ReanudarJornadaAsync(userId.Value);
+                await _context.SaveChangesAsync();
+                return Ok(new { paquetesReanudados = count });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         /// <summary>Fase A: el repartidor confirma que volvió a la sucursal (cierra su jornada).</summary>
         [Authorize(Roles = Roles.Repartidor)]
         [HttpPost("cerrar-jornada")]
@@ -787,9 +835,21 @@ namespace Back.Controllers
             {
                 if (!await _tramosService.EsUltimaMillaActualAsync(paquete.Id))
                     return BadRequest("Este tramo finaliza en otra sucursal. El operador receptor debe escanear el QR.");
+
                 ruta.EntregarPaquete(paqueteId);
-                await _tramosService.SincronizarEntregaAsync(paquete);
-                await _historialService.RegistrarCambioAsync(paqueteId, PaqueteStatus.Entregado, CurrentUserId(), OrigenCambioEstado.Manual);
+
+                if (paquete.PuntoPickUpId.HasValue)
+                {
+                    paquete.EntregarEnPunto();
+                    await _historialService.RegistrarCambioAsync(paqueteId, PaqueteStatus.EntregadoEnPunto, CurrentUserId(), OrigenCambioEstado.Manual);
+                }
+                else
+                {
+                    paquete.Entregar();
+                    await _tramosService.SincronizarEntregaAsync(paquete);
+                    await _historialService.RegistrarCambioAsync(paqueteId, PaqueteStatus.Entregado, CurrentUserId(), OrigenCambioEstado.Manual);
+                }
+
                 await _context.SaveChangesAsync();
                 return Ok();
             }
@@ -1195,6 +1255,13 @@ namespace Back.Controllers
         public DateTime? UbicacionActualActualizadaEn { get; set; }
         public SeguimientoPublicoCliente Remitente { get; set; } = new();
         public SeguimientoPublicoCliente Destinatario { get; set; } = new();
+        // G1L-107: datos del punto Pick Up cuando el envío es modalidad retiro.
+        public Guid? PuntoPickUpId { get; set; }
+        public string? PuntoPickUpNombre { get; set; }
+        public string? PuntoPickUpDireccion { get; set; }
+        public string? PuntoPickUpLocalidad { get; set; }
+        public string? PuntoPickUpHorarios { get; set; }
+        public string? PuntoPickUpTelefono { get; set; }
     }
 
     public class SeguimientoPublicoCliente

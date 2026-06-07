@@ -17,6 +17,7 @@ namespace Back.Domain.Models
         CargadoEnVehiculo = 5,
         Demorado = 6,
         Cancelado = 7,
+        ListoParaRetirar = 8,
     }
 
     public class EmailNotificacion

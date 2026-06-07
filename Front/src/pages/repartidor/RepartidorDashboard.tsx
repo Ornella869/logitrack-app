@@ -158,6 +158,9 @@ export default function RepartidorDashboard() {
   const [estadoJornada, setEstadoJornada] = useState('Disponible')
   useGpsTracking(estadoJornada === 'EnRuta')
   const [cerrandoJornada, setCerrandoJornada] = useState(false)
+  // G1L-119: pausa/reanuda jornada para rutas multi-día.
+  const [pausandoJornada, setPausandoJornada] = useState(false)
+  const [reanudandoJornada, setReanudandoJornada] = useState(false)
 
   // QR scanner (cámara + entrada manual del código).
   const [openQr, setOpenQr] = useState(false)
@@ -210,6 +213,15 @@ export default function RepartidorDashboard() {
     () => estadoJornada === 'EnRuta' && paradas.some((p) => p.status === 'En tránsito' || p.status === 'Demorado'),
     [estadoJornada, paradas],
   )
+
+  // G1L-119: hay envíos en pausa de descanso nocturno (ruta multi-día).
+  const hayDescansoNocturno = useMemo(
+    () => paradas.some((p) => p.status === 'En tránsito - Descanso'),
+    [paradas],
+  )
+
+  // G1L-119: el repartidor puede pausar mientras esté EnRuta (el backend valida que haya paquetes activos).
+  const puedePausarJornada = hayRutaActiva
 
   const detenerUbicacionReal = () => {
     if (locationWatchRef.current != null && navigator.geolocation) {
@@ -623,6 +635,42 @@ export default function RepartidorDashboard() {
     }
     autoCierreRef.current = false
     setUbicacionMsg({ severity: 'error', message: res.error ?? 'No se pudo cerrar la jornada.' })
+  }
+
+  // G1L-119: el repartidor pausa su jornada al final del día (ruta multi-día).
+  const handlePausarJornada = async () => {
+    if (pausandoJornada) return
+    setPausandoJornada(true)
+    const res = await shipmentService.pausarJornada()
+    setPausandoJornada(false)
+    if (res.success) {
+      detenerUbicacionReal()
+      detenerSimulacion()
+      setUbicacionMsg({
+        severity: 'info',
+        message: `Jornada pausada. ${res.paquetesPausados ?? 0} envío(s) quedan en descanso nocturno. Reanudá la ruta mañana para continuar.`,
+      })
+      void load(fechaRuta ?? undefined)
+    } else {
+      setUbicacionMsg({ severity: 'error', message: res.error ?? 'No se pudo pausar la jornada.' })
+    }
+  }
+
+  // G1L-119: el repartidor reanuda la ruta al día siguiente.
+  const handleReanudarJornada = async () => {
+    if (reanudandoJornada) return
+    setReanudandoJornada(true)
+    const res = await shipmentService.reanudarJornada()
+    setReanudandoJornada(false)
+    if (res.success) {
+      setUbicacionMsg({
+        severity: 'success',
+        message: `Ruta reanudada. ${res.paquetesReanudados ?? 0} envío(s) volvieron a En Tránsito. ¡Buen viaje!`,
+      })
+      void load(fechaRuta ?? undefined)
+    } else {
+      setUbicacionMsg({ severity: 'error', message: res.error ?? 'No se pudo reanudar la jornada.' })
+    }
   }
 
   const buildReturnUrl = (): string | null => {
@@ -1072,6 +1120,60 @@ export default function RepartidorDashboard() {
         )
       ) : (
         <>
+          {/* G1L-119: Reanudar ruta (al día siguiente de una pausa nocturna) */}
+          {hayDescansoNocturno && (
+            <Card variant="outlined" sx={{ mb: 2, borderRadius: 3, borderColor: '#7b1fa2', bgcolor: isDark ? 'rgba(74,20,140,0.15)' : '#f3e5f5' }}>
+              <CardContent sx={{ py: 1.5 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#7b1fa2' }}>
+                      🌅 Tenés envíos en pausa de descanso nocturno
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Reanudá la ruta para volver a activar los paquetes y continuar con las entregas.
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    sx={{ bgcolor: '#7b1fa2', '&:hover': { bgcolor: '#6a1b9a' }, whiteSpace: 'nowrap' }}
+                    startIcon={reanudandoJornada ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+                    onClick={() => { void handleReanudarJornada() }}
+                    disabled={reanudandoJornada}
+                  >
+                    Reanudar ruta
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* G1L-119: Pausar jornada nocturna (ruta multi-día en curso) */}
+          {puedePausarJornada && (
+            <Card variant="outlined" sx={{ mb: 2, borderRadius: 3, borderColor: '#37474f', bgcolor: isDark ? 'rgba(55,71,79,0.2)' : '#eceff1' }}>
+              <CardContent sx={{ py: 1.5 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: isDark ? '#b0bec5' : '#37474f' }}>
+                      🌙 Ruta multi-día — ¿Finalizás el día hoy?
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Si no llegás al destino hoy, pausá tu jornada. Los paquetes quedan en "Descanso Nocturno" y los continuás mañana.
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="outlined"
+                    sx={{ borderColor: '#607d8b', color: isDark ? '#b0bec5' : '#37474f', whiteSpace: 'nowrap' }}
+                    startIcon={pausandoJornada ? <CircularProgress size={16} /> : <AccessTimeIcon />}
+                    onClick={() => { void handlePausarJornada() }}
+                    disabled={pausandoJornada}
+                  >
+                    Pausar jornada
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
           {/* KPIs */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <KpiCard label="Entregadas" value={metrics.entregadas} color="#2e7d32" icon={<CheckCircleIcon />} />

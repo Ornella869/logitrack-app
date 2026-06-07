@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Alert,
@@ -8,9 +8,15 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   Grid,
   InputAdornment,
+  LinearProgress,
   Paper,
   Stack,
   Table,
@@ -20,6 +26,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
@@ -28,36 +35,135 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import SearchIcon from '@mui/icons-material/Search'
 import StorefrontIcon from '@mui/icons-material/Storefront'
-import { pickupOperacionService, type PickUpInventario, type PickUpPaquete, type PickUpPaqueteStatus } from '../services/pickupOperacionService'
-import { formatInstantArgentina } from '../utils/argentinaDate'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import { pickupOperacionService, type PickUpInventario, type PickUpPaquete } from '../services/pickupOperacionService'
+import { pickupService, type ResumenCalificaciones } from '../services/pickupService'
+import StarIcon from '@mui/icons-material/Star'
+import StarHalfIcon from '@mui/icons-material/StarHalf'
+import StarBorderIcon from '@mui/icons-material/StarBorder'
 
-const STATUS_LABEL: Record<PickUpPaqueteStatus, string> = {
-  PendienteDeCalendarizacion: 'Pendiente',
-  AsignadoAVehiculo: 'Asignado',
-  CargadoEnVehiculo: 'Cargado',
-  ListoParaSalir: 'Listo para salir',
-  EnTransito: 'En camino',
-  Demorado: 'Demorado',
-  ListoParaRetirar: 'Listo para retirar',
-  Entregado: 'Entregado',
-  Cancelado: 'Cancelado',
-}
+function QrScannerDialog({
+  open,
+  onClose,
+  onDetected,
+}: {
+  open: boolean
+  onClose: () => void
+  onDetected: (code: string) => void
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const stoppedRef = useRef(false)
+  const detectedRef = useRef(false)
+  const onDetectedRef = useRef(onDetected)
+  useEffect(() => { onDetectedRef.current = onDetected }, [onDetected])
 
-const STATUS_STYLE: Record<PickUpPaqueteStatus, { color: string; bg: string }> = {
-  PendienteDeCalendarizacion: { color: '#7B5E00', bg: '#FFF3CD' },
-  AsignadoAVehiculo: { color: '#4527A0', bg: '#EDE7F6' },
-  CargadoEnVehiculo: { color: '#311B92', bg: '#D1C4E9' },
-  ListoParaSalir: { color: '#E65100', bg: '#FFF3E0' },
-  EnTransito: { color: '#0D47A1', bg: '#E3F2FD' },
-  Demorado: { color: '#BF360C', bg: '#FFE0B2' },
-  ListoParaRetirar: { color: '#00695C', bg: '#E0F2F1' },
-  Entregado: { color: '#1B5E20', bg: '#E8F5E9' },
-  Cancelado: { color: '#7F0000', bg: '#FFEBEE' },
-}
+  useEffect(() => {
+    if (!open) return
+    stoppedRef.current = false
+    detectedRef.current = false
+    setScanError(null)
+    setReady(false)
 
-function StatusChip({ status }: { status: PickUpPaqueteStatus }) {
-  const cfg = STATUS_STYLE[status]
-  return <Chip label={STATUS_LABEL[status] ?? status} size="small" sx={{ bgcolor: cfg.bg, color: cfg.color, fontWeight: 700 }} />
+    let stream: MediaStream | null = null
+    let raf = 0
+
+    const run = async () => {
+      if (!('BarcodeDetector' in window)) {
+        setScanError('Tu navegador no soporta el escaneo nativo. Ingresá el código manualmente.')
+        return
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
+        if (stoppedRef.current) { stream.getTracks().forEach((t) => t.stop()); return }
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+        setReady(true)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
+        const scan = async () => {
+          if (stoppedRef.current || detectedRef.current || !videoRef.current) return
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const codes: any[] = await detector.detect(videoRef.current)
+            if (codes.length > 0) {
+              detectedRef.current = true
+              onDetectedRef.current(String(codes[0].rawValue))
+              return
+            }
+          } catch { /* ignore frame decode errors */ }
+          raf = requestAnimationFrame(() => { void scan() })
+        }
+        void scan()
+      } catch {
+        setScanError('No se pudo acceder a la cámara. Verificá los permisos del navegador.')
+      }
+    }
+
+    void run()
+
+    return () => {
+      stoppedRef.current = true
+      cancelAnimationFrame(raf)
+      stream?.getTracks().forEach((t) => t.stop())
+      if (videoRef.current) videoRef.current.srcObject = null
+      setReady(false)
+    }
+  }, [open])
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <QrCodeScannerIcon />
+        Escanear código QR
+      </DialogTitle>
+      <DialogContent sx={{ pb: 1 }}>
+        {scanError ? (
+          <Alert severity="warning" sx={{ mt: 1 }}>{scanError}</Alert>
+        ) : (
+          <Box sx={{ position: 'relative', textAlign: 'center', bgcolor: '#000', borderRadius: 2, overflow: 'hidden' }}>
+            <video
+              ref={videoRef}
+              style={{ width: '100%', maxHeight: 380, display: 'block' }}
+              playsInline
+              muted
+            />
+            {!ready && (
+              <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#000' }}>
+                <CircularProgress sx={{ color: '#fff' }} size={36} />
+              </Box>
+            )}
+            {ready && (
+              <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <Box sx={{
+                  width: 200, height: 200,
+                  border: '3px solid rgba(33,150,243,0.9)',
+                  borderRadius: 2,
+                  boxShadow: '0 0 0 2000px rgba(0,0,0,0.45)',
+                  animation: 'qrPulse 1.5s ease-in-out infinite',
+                  '@keyframes qrPulse': {
+                    '0%,100%': { borderColor: 'rgba(33,150,243,0.9)' },
+                    '50%': { borderColor: 'rgba(33,150,243,0.4)' },
+                  },
+                }} />
+              </Box>
+            )}
+          </Box>
+        )}
+        {ready && (
+          <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1.5 }}>
+            Apuntá la cámara al código QR del paquete. Se detecta automáticamente.
+          </Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} variant="outlined">Cancelar</Button>
+      </DialogActions>
+    </Dialog>
+  )
 }
 
 function Kpi({ title, value, icon, color }: { title: string; value: number | string; icon: ReactNode; color: string }) {
@@ -76,6 +182,46 @@ function Kpi({ title, value, icon, color }: { title: string; value: number | str
   )
 }
 
+function CapacidadCard({ usada, capacidad }: { usada: number; capacidad: number }) {
+  const pct = capacidad > 0 ? Math.min(100, Math.round((usada / capacidad) * 100)) : 0
+  const color = pct >= 90 ? '#D32F2F' : pct >= 70 ? '#ED6C02' : '#1976D2'
+  return (
+    <Card variant="outlined" sx={{ height: '100%', borderLeft: `5px solid ${color}` }}>
+      <CardContent>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={700}>CAPACIDAD ALMACENADA</Typography>
+            <Typography variant="h4" fontWeight={800}>{usada}/{capacidad}</Typography>
+          </Box>
+          <Box sx={{ color }}><Inventory2Icon /></Box>
+        </Stack>
+        <LinearProgress
+          variant="determinate"
+          value={pct}
+          sx={{ height: 8, borderRadius: 4, bgcolor: '#E0E0E0', '& .MuiLinearProgress-bar': { bgcolor: color } }}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>{pct}% utilizado</Typography>
+      </CardContent>
+    </Card>
+  )
+}
+
+function StarRating({ value }: { value: number }) {
+  return (
+    <Stack direction="row" spacing={0.25} alignItems="center">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const filled = value >= n
+        const half = !filled && value >= n - 0.5
+        return half
+          ? <StarHalfIcon key={n} sx={{ fontSize: 18, color: '#f59e0b' }} />
+          : filled
+            ? <StarIcon key={n} sx={{ fontSize: 18, color: '#f59e0b' }} />
+            : <StarBorderIcon key={n} sx={{ fontSize: 18, color: '#cbd5e1' }} />
+      })}
+    </Stack>
+  )
+}
+
 export default function PickUpOperacionPage() {
   const [data, setData] = useState<PickUpInventario | null>(null)
   const [loading, setLoading] = useState(true)
@@ -85,13 +231,22 @@ export default function PickUpOperacionPage() {
   const [codigoEntrega, setCodigoEntrega] = useState('')
   const [codigoSegEntrega, setCodigoSegEntrega] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [devolverCodigo, setDevolverCodigo] = useState<string | null>(null)
+  const [qrOpen, setQrOpen] = useState(false)
+  const [resumenCalificaciones, setResumenCalificaciones] = useState<ResumenCalificaciones | null>(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      setData(await pickupOperacionService.inventario())
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error?.response?.data || 'No se pudo cargar el inventario Pick Up.' })
+      const [inventario, calificaciones] = await Promise.all([
+        pickupOperacionService.inventario(),
+        pickupService.getMisCalificaciones().catch(() => null),
+      ])
+      setData(inventario)
+      setResumenCalificaciones(calificaciones)
+    } catch (error: unknown) {
+      const msg = (error as { response?: { data?: string } })?.response?.data
+      setMessage({ type: 'error', text: typeof msg === 'string' ? msg : 'No se pudo cargar el inventario Pick Up.' })
     } finally {
       setLoading(false)
     }
@@ -99,15 +254,31 @@ export default function PickUpOperacionPage() {
 
   useEffect(() => { void load() }, [])
 
+  // Paquetes depositados por el repartidor, esperando confirmación del socio
+  const pendientesRecepcion = useMemo(
+    () => data?.paquetes.filter((p) => p.status === 'EntregadoEnPunto') ?? [],
+    [data],
+  )
+
+  // Inventario físico: confirmados y listos para que el cliente retire
+  const inventarioFisico = useMemo(
+    () => data?.paquetes.filter((p) => p.status === 'ListoParaRetirar') ?? [],
+    [data],
+  )
+
+  const abandonados = useMemo(
+    () => inventarioFisico.filter((p) => (p.diasAlmacenado ?? 0) >= 7),
+    [inventarioFisico],
+  )
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!data) return []
-    if (!term) return data.paquetes
-    return data.paquetes.filter((p) =>
+    if (!term) return inventarioFisico
+    return inventarioFisico.filter((p) =>
       p.codigoSeguimiento.toLowerCase().includes(term) ||
       p.destinatario.toLowerCase().includes(term) ||
       p.localidad.toLowerCase().includes(term))
-  }, [data, search])
+  }, [inventarioFisico, search])
 
   const onRecibir = async () => {
     if (!codigoRecepcion.trim()) {
@@ -151,6 +322,21 @@ export default function PickUpOperacionPage() {
     setCodigoEntrega('')
   }
 
+  const onDevolver = async () => {
+    if (!devolverCodigo) return
+    setBusy(true)
+    try {
+      await pickupOperacionService.devolver(devolverCodigo)
+      setDevolverCodigo(null)
+      setMessage({ type: 'success', text: `Envío ${devolverCodigo} marcado para devolución al remitente.` })
+      await load()
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.response?.data || 'No se pudo gestionar la devolución.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading && !data) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
@@ -188,8 +374,9 @@ export default function PickUpOperacionPage() {
 
         {data && (
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}><Kpi title="CAPACIDAD USADA" value={`${data.capacidadUsada}/${data.punto.capacidadDiaria}`} icon={<Inventory2Icon />} color="#1976D2" /></Grid>
+            <Grid item xs={12} sm={6} md={3}><CapacidadCard usada={data.capacidadUsada} capacidad={data.punto.capacidadDiaria} /></Grid>
             <Grid item xs={12} sm={6} md={3}><Kpi title="EN CAMINO AL PUNTO" value={data.enCamino} icon={<LocalShippingIcon />} color="#ED6C02" /></Grid>
+            <Grid item xs={12} sm={6} md={3}><Kpi title="PENDIENTES RECEPCIÓN" value={data.pendienteRecepcion} icon={<Inventory2Icon />} color="#7B1FA2" /></Grid>
             <Grid item xs={12} sm={6} md={3}><Kpi title="LISTOS PARA RETIRAR" value={data.listosParaRetirar} icon={<QrCodeScannerIcon />} color="#00897B" /></Grid>
             <Grid item xs={12} sm={6} md={3}><Kpi title="ENTREGADOS HOY" value={data.entregadosHoy} icon={<CheckCircleIcon />} color="#2E7D32" /></Grid>
           </Grid>
@@ -209,9 +396,20 @@ export default function PickUpOperacionPage() {
                     fullWidth
                     InputProps={{ startAdornment: <InputAdornment position="start"><QrCodeScannerIcon /></InputAdornment> }}
                   />
-                  <Button variant="contained" onClick={onRecibir} disabled={busy} startIcon={<Inventory2Icon />}>
-                    Marcar como recibido
-                  </Button>
+                  <Stack direction="row" spacing={1.5}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<QrCodeScannerIcon />}
+                      onClick={() => setQrOpen(true)}
+                      disabled={busy}
+                      sx={{ flexShrink: 0 }}
+                    >
+                      Escanear QR
+                    </Button>
+                    <Button variant="contained" onClick={onRecibir} disabled={busy} startIcon={<Inventory2Icon />} fullWidth>
+                      Marcar como recibido
+                    </Button>
+                  </Stack>
                 </Stack>
               </CardContent>
             </Card>
@@ -232,11 +430,60 @@ export default function PickUpOperacionPage() {
           </Grid>
         </Grid>
 
+        {abandonados.length > 0 && (
+          <Alert severity="warning" icon={<WarningAmberIcon />}>
+            <strong>{abandonados.length} envío{abandonados.length > 1 ? 's' : ''} lleva{abandonados.length === 1 ? '' : 'n'} más de 7 días almacenado{abandonados.length > 1 ? 's' : ''}.</strong>
+            {' '}Considerá gestionar la devolución al remitente.
+          </Alert>
+        )}
+
+        {/* Paquetes que llegaron al local pero el socio aún no confirmó recepción */}
+        {pendientesRecepcion.length > 0 && (
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, borderColor: '#7B1FA2', bgcolor: '#F9F4FC' }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <Inventory2Icon sx={{ color: '#7B1FA2' }} />
+              <Box>
+                <Typography variant="h6" fontWeight={800} sx={{ color: '#4A148C' }}>
+                  Paquetes que llegaron al local
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  El repartidor los depositó. Confirmá la recepción física escaneando el código.
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack spacing={1}>
+              {pendientesRecepcion.map((p) => (
+                <Stack
+                  key={p.id}
+                  direction={{ xs: 'column', sm: 'row' }}
+                  justifyContent="space-between"
+                  alignItems={{ sm: 'center' }}
+                  spacing={1}
+                  sx={{ p: 1.5, bgcolor: 'white', borderRadius: 2, border: '1px solid #CE93D8' }}
+                >
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>{p.codigoSeguimiento}</Typography>
+                    <Typography variant="caption" color="text.secondary">{p.destinatario} · {p.localidad}</Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    sx={{ bgcolor: '#7B1FA2', '&:hover': { bgcolor: '#6A1B9A' }, fontWeight: 700, flexShrink: 0 }}
+                    onClick={() => { setCodigoRecepcion(p.codigoSeguimiento) }}
+                  >
+                    Recibir
+                  </Button>
+                </Stack>
+              ))}
+            </Stack>
+          </Paper>
+        )}
+
         <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={2} sx={{ mb: 2 }}>
             <Box>
-              <Typography variant="h6" fontWeight={800}>Inventario del punto</Typography>
-              <Typography variant="body2" color="text.secondary">Solo envíos asociados a este Pick Up.</Typography>
+              <Typography variant="h6" fontWeight={800}>Inventario físico</Typography>
+              <Typography variant="body2" color="text.secondary">Paquetes presentes en el punto — estado Listo para retirar.</Typography>
             </Box>
             <TextField
               size="small"
@@ -256,34 +503,68 @@ export default function PickUpOperacionPage() {
                   <TableCell>Cliente</TableCell>
                   <TableCell>Destino</TableCell>
                   <TableCell>Peso</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Estimado</TableCell>
-                  <TableCell align="right">Acción</TableCell>
+                  <TableCell align="center">Días almacenado</TableCell>
+                  <TableCell align="right">Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.map((p) => (
-                  <TableRow key={p.id} hover>
-                    <TableCell><Typography fontWeight={700}>{p.codigoSeguimiento}</Typography></TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{p.destinatario}</Typography>
-                      <Typography variant="caption" color="text.secondary">{p.email || p.telefono || '-'}</Typography>
-                    </TableCell>
-                    <TableCell>{p.localidad} · CP {p.codigoPostal}</TableCell>
-                    <TableCell>{p.peso} kg</TableCell>
-                    <TableCell><StatusChip status={p.status} /></TableCell>
-                    <TableCell>{p.fechaEstimadaEntrega ? formatInstantArgentina(p.fechaEstimadaEntrega) : '-'}</TableCell>
-                    <TableCell align="right">
-                      {p.status === 'ListoParaRetirar' && (
-                        <Button size="small" variant="outlined" onClick={() => fillDelivery(p)}>Entregar</Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filtered.map((p) => {
+                  const vencido = (p.diasAlmacenado ?? 0) >= 7
+                  return (
+                    <TableRow
+                      key={p.id}
+                      hover
+                      sx={vencido ? { bgcolor: '#FFF8E1' } : undefined}
+                    >
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          {vencido && (
+                            <Tooltip title={`${p.diasAlmacenado} días almacenado — supera el límite de 7 días`}>
+                              <WarningAmberIcon sx={{ fontSize: 16, color: '#E65100' }} />
+                            </Tooltip>
+                          )}
+                          <Typography fontWeight={700}>{p.codigoSeguimiento}</Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{p.destinatario}</Typography>
+                        <Typography variant="caption" color="text.secondary">{p.email || p.telefono || '-'}</Typography>
+                      </TableCell>
+                      <TableCell>{p.localidad} · CP {p.codigoPostal}</TableCell>
+                      <TableCell>{p.peso} kg</TableCell>
+                      <TableCell align="center">
+                        {p.diasAlmacenado != null ? (
+                          <Typography
+                            variant="body2"
+                            fontWeight={vencido ? 700 : 400}
+                            color={vencido ? '#E65100' : 'text.primary'}
+                          >
+                            {p.diasAlmacenado} día{p.diasAlmacenado !== 1 ? 's' : ''}
+                          </Typography>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button size="small" variant="outlined" onClick={() => fillDelivery(p)}>Entregar</Button>
+                          {vencido && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              onClick={() => setDevolverCodigo(p.codigoSeguimiento)}
+                            >
+                              Devolver
+                            </Button>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7}>
-                      <Box sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No hay envíos para mostrar.</Box>
+                    <TableCell colSpan={6}>
+                      <Box sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No hay envíos físicamente presentes.</Box>
                     </TableCell>
                   </TableRow>
                 )}
@@ -291,7 +572,114 @@ export default function PickUpOperacionPage() {
             </Table>
           </TableContainer>
         </Paper>
+
+        {/* AC3: Panel de calificaciones del punto */}
+        {resumenCalificaciones && (
+          <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+            <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>
+              Calificaciones de clientes
+            </Typography>
+            {resumenCalificaciones.total === 0 ? (
+              <Typography color="text.secondary" variant="body2">
+                Aún no recibiste calificaciones. Aparecerán aquí cuando los clientes califiquen su experiencia de retiro.
+              </Typography>
+            ) : (
+              <Stack spacing={2.5}>
+                {/* Resumen numérico */}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems={{ sm: 'center' }}>
+                  <Box sx={{ textAlign: 'center', minWidth: 100 }}>
+                    <Typography variant="h2" fontWeight={900} sx={{ color: '#f59e0b', lineHeight: 1 }}>
+                      {resumenCalificaciones.promedio.toFixed(1)}
+                    </Typography>
+                    <StarRating value={resumenCalificaciones.promedio} />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      {resumenCalificaciones.total} {resumenCalificaciones.total === 1 ? 'reseña' : 'reseñas'}
+                    </Typography>
+                  </Box>
+                  <Divider orientation="vertical" flexItem />
+                  <Stack spacing={0.5} flexGrow={1}>
+                    {[5, 4, 3, 2, 1].map((n) => {
+                      const count = resumenCalificaciones.porEstrella[n - 1]
+                      const pct = resumenCalificaciones.total > 0 ? (count / resumenCalificaciones.total) * 100 : 0
+                      return (
+                        <Stack key={n} direction="row" spacing={1} alignItems="center">
+                          <Typography variant="caption" sx={{ minWidth: 12, textAlign: 'right' }}>{n}</Typography>
+                          <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
+                          <LinearProgress
+                            variant="determinate"
+                            value={pct}
+                            sx={{ flexGrow: 1, height: 8, borderRadius: 4, bgcolor: '#E0E0E0', '& .MuiLinearProgress-bar': { bgcolor: '#f59e0b' } }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 20 }}>{count}</Typography>
+                        </Stack>
+                      )
+                    })}
+                  </Stack>
+                </Stack>
+
+                {/* Lista de reseñas */}
+                {resumenCalificaciones.ultimas.length > 0 && (
+                  <>
+                    <Divider />
+                    <Stack spacing={1.5}>
+                      {resumenCalificaciones.ultimas.map((c) => (
+                        <Box key={c.id} sx={{ p: 2, borderRadius: 2, border: '1px solid #E2E8F0', bgcolor: '#FAFAFA' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1}>
+                            <Box>
+                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.25 }}>
+                                <StarRating value={c.estrellas} />
+                                <Typography variant="caption" color="text.secondary">
+                                  {c.autorNombre ? `— ${c.autorNombre}` : '— Anónimo'}
+                                </Typography>
+                              </Stack>
+                              {c.comentario && (
+                                <Typography variant="body2">{c.comentario}</Typography>
+                              )}
+                            </Box>
+                            <Box sx={{ textAlign: 'right' }}>
+                              <Typography variant="caption" color="text.secondary">
+                                {c.trackingCode}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                {new Date(c.creadoEn).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </>
+                )}
+              </Stack>
+            )}
+          </Paper>
+        )}
       </Stack>
+
+      <QrScannerDialog
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        onDetected={(code) => {
+          setQrOpen(false)
+          setCodigoRecepcion(code.toUpperCase())
+        }}
+      />
+
+      <Dialog open={!!devolverCodigo} onClose={() => setDevolverCodigo(null)}>
+        <DialogTitle>Confirmar devolución</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Confirmás la devolución del envío <strong>{devolverCodigo}</strong> al remitente?
+            El paquete quedará cancelado y no podrá ser retirado por el cliente.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDevolverCodigo(null)} disabled={busy}>Cancelar</Button>
+          <Button onClick={onDevolver} color="warning" variant="contained" disabled={busy}>
+            Confirmar devolución
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

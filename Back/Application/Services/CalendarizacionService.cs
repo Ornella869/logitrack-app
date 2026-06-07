@@ -45,6 +45,9 @@ namespace Back.Application.Services
         public required double Peso { get; init; }
         public required bool EsPrioritario { get; init; }
         public required string Status { get; init; }
+        // G1L-119: para mostrar "Día N de M" en el calendario operativo.
+        public DateTime? FechaCalendarizada { get; init; }
+        public int DiasEstimados { get; init; } = 1;
     }
 
     public class CalendarioOperativo
@@ -172,6 +175,8 @@ namespace Back.Application.Services
                             Peso = p.Peso,
                             EsPrioritario = p.TipoEnvio == TipoEnvio.Prioritario,
                             Status = p.Status.ToString(),
+                            FechaCalendarizada = p.FechaCalendarizada,
+                            DiasEstimados = p.DiasEstimadosEntrega,
                         }).ToList(),
                     };
                 }).ToList();

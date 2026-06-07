@@ -160,6 +160,21 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<LogiTrackDbContext>();
         await context.Database.MigrateAsync();
 
+        // G1L-132: tabla de calificaciones post-retiro en Punto Pick Up
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""CalificacionesPickUp"" (
+                ""Id"" uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                ""PuntoPickUpId"" uuid NOT NULL REFERENCES ""PuntosPickUp""(""Id""),
+                ""PaqueteId"" uuid NOT NULL REFERENCES ""Paquetes""(""Id""),
+                ""Estrellas"" integer NOT NULL CHECK (""Estrellas"" BETWEEN 1 AND 5),
+                ""Comentario"" text,
+                ""AutorNombre"" text,
+                ""CreadoEn"" timestamp with time zone NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CalificacionesPickUp_PaqueteId""
+                ON ""CalificacionesPickUp""(""PaqueteId"");
+        ");
+
         // Garantizar Empresa singleton (G1L-52..64)
         var empresaService = services.GetRequiredService<EmpresaService>();
         await empresaService.GetOrCreateSingletonAsync();

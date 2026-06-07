@@ -1,0 +1,201 @@
+====================================================================
+  LOGITRACK — RESUMEN COMPLETO DE HISTORIAS DE USUARIO
+  Fecha: 07/06/2026
+====================================================================
+
+
+--------------------------------------------------------------------
+  ✅ HISTORIAS IMPLEMENTADAS EN SESIONES ANTERIORES AL EQUIPO
+--------------------------------------------------------------------
+
+[Commits del repositorio — trabajo previo del grupo]
+
+feat: Entregas a larga distancia por tramos entre sucursales
+  - Sistema de tramos (PlanificacionTramosService) para rutear paquetes
+    entre sucursales intermedias
+  - Cada tramo tiene origen, destino, distancia y estado
+  - El paquete avanza de sucursal en sucursal hasta llegar al destino
+
+feat: Jornada de repartidores
+  - Control de horas de trabajo por jornada
+  - Estados de repartidor: EnRuta, Descansando, Retornando
+  - Historial de jornadas por fecha
+
+feat: Funcionalidades del Punto Pick Up (base)
+  - Modelo PuntoPickUp con capacidad, horarios y provincia
+  - SocioPickUp como rol de usuario vinculado a un punto
+  - Operaciones: recibir paquete, inventario, entregar al cliente
+
+feat: Encuesta post-entrega con token anónimo + plantillas email
+  - Email con link único por envío para completar la encuesta
+  - Plantillas de email personalizables por tipo de evento
+
+feat: GPS tracking para repartidor
+  - El repartidor comparte ubicación en tiempo real
+  - Vista del supervisor con mapa en vivo
+
+feat: Gestión de jurisdicción y bloqueo de cuenta
+  - Gerente de provincia con dominio sobre sus sucursales
+  - Bloqueo automático tras intentos fallidos de login
+
+feat: Simulación de ruta y demoras
+  - El supervisor puede simular el recorrido de una ruta
+  - Registro de demoras con motivo y notificación
+
+feat: Mapa con sucursales y validación de gerente por provincia
+  - Vista de mapa con ubicación de sucursales
+  - Gerente no puede gestionar sucursales fuera de su provincia
+
+
+--------------------------------------------------------------------
+  ✅ HISTORIAS IMPLEMENTADAS EN LAS ÚLTIMAS SESIONES (Claude)
+--------------------------------------------------------------------
+
+G1L-107 — Info de Punto Pick Up en el portal de seguimiento público
+  - El portal de tracking muestra la card "Punto de retiro" con nombre,
+    dirección, horarios y teléfono cuando el envío tiene PickUp asignado
+  - Nuevos campos en el DTO de seguimiento público (PuntoPickUpNombre, etc.)
+
+G1L-119 — Calendarización y entrega multi-día (larga distancia)
+  - AC1: ETA calculado desde distanciaRealKm / kmPorJornada (ya existía)
+  - AC2: El scheduler no asigna días consecutivos al mismo repartidor (ya existía)
+  - AC3: Nuevo estado EnTransitoDescanso (valor 9) para pausa nocturna
+         - Endpoint POST /envios/pausar-jornada (repartidor)
+         - Endpoint POST /envios/reanudar-jornada (repartidor)
+         - Botones "Pausar jornada" y "Reanudar ruta" en el dashboard del repartidor
+  - AC4: Calendario operativo muestra badge "Día N/M" y ícono de luna 🌙
+         para paquetes en pausa nocturna
+
+G1L-128 — Alta de usuario socio_pickup
+  - Formulario de creación de usuario con rol socio_pickup
+  - Vinculación al punto Pick Up correspondiente
+
+G1L-132 — Calificación y reseña post-retiro en Punto Pick Up
+  - AC1: Botón "Calificar Punto Pick Up" visible al buscar un envío
+         entregado que pasó por un punto Pick Up
+  - AC2: Dialog con estrellas 1-5 y comentario opcional
+         Una sola calificación por envío (índice único en BD)
+         Si ya calificó, abre en modo lectura con su reseña
+  - AC3: Panel del socio con promedio, barras por estrella y lista
+         de las últimas 50 reseñas (en PickUpOperacionPage)
+  - AC4: Funciona desde el Portal Público sin login requerido
+  - Tabla CalificacionesPickUp creada automáticamente en startup
+
+Fix — Flujo correcto de entrega en Punto Pick Up (crítico)
+  - Problema: el repartidor marcaba "entregado" y el paquete iba directo
+    al estado Entregado; el socio nunca podía recibirlo
+  - Solución: nuevo estado EntregadoEnPunto (valor 10)
+    · Repartidor deposita → EntregadoEnPunto
+    · Socio confirma recepción física → ListoParaRetirar
+    · Cliente retira con código → Entregado
+  - Panel del socio: sección morada "Paquetes que llegaron al local"
+    con botón "Recibir" por cada uno + KPI "Pendientes Recepción"
+  - Portal de tracking: muestra mensaje especial en EntregadoEnPunto
+
+Fix — Error "No hay sucursal que atienda [provincia]"
+  - Un operador con sucursal asignada puede crear envíos a cualquier
+    provincia; el sistema de tramos maneja el ruteo
+  - El bloqueo solo aplica a admin/gerente sin sucursal propia
+
+Fix — Íconos negros en el sidebar en modo oscuro
+  - Los íconos del menú lateral quedan fuera del ThemeProvider
+  - Solución: color explícito en ListItemButton, inherit en ListItemIcon
+
+Fix — Iniciales invisibles en Avatar (modo oscuro)
+  - MUI Avatar usaba background.default como color de texto, que era
+    'transparent' en el tema oscuro premium
+  - Solución: override de MuiAvatar con color: '#ffffff'
+
+Fix — Scrollbar personalizado
+  - Scroll nativo reemplazado por uno fino (6px) translúcido
+  - Modo oscuro: tono cian que armoniza con el tema premium
+  - Modo claro: gris sutil
+
+Fix — Inicio de sesión visual
+  - Degradé azul profundo coherente con el resto del sistema
+  - Botón "Ingresar" en blanco con texto azul (contraste claro sobre
+    fondo azul)
+
+
+--------------------------------------------------------------------
+  📋 LO QUE QUEDA POR HACER
+--------------------------------------------------------------------
+
+TESTING END-TO-END — Flujo pickup completo
+  Pasos a verificar:
+  1. Crear envío con Punto Pick Up asignado
+  2. Calendarizar → asignar vehículo → repartidor inicia ruta
+  3. Repartidor marca entrega → paquete queda en EntregadoEnPunto
+  4. Socio Pick Up escanea QR → pasa a ListoParaRetirar
+  5. Sistema notifica al cliente (email)
+  6. Cliente retira con código de seguridad → pasa a Entregado
+  7. Cliente califica la experiencia → aparece en panel del socio
+
+TESTING END-TO-END — Flujo multi-día (G1L-119)
+  1. Crear envío larga distancia (ej. Córdoba → Buenos Aires, ~700 km)
+  2. Verificar que ETA calcula 2 días
+  3. Calendarizar y verificar badges "Día 1/2" en el calendario
+  4. Repartidor inicia ruta → pausar jornada → verificar EnTransitoDescanso
+  5. Reanudar al día siguiente → completar entrega
+
+PENDIENTE — Notificación cuando paquete llega al punto
+  - Hoy se notifica al cliente al pasar a ListoParaRetirar
+  - Debería también notificar al pasar a EntregadoEnPunto
+  - Modificar EmailNotificacionService
+
+PENDIENTE — Promedio de estrellas visible en portal de tracking
+  - La card "Punto de retiro" en TrackingPublicPage muestra dirección
+    y horarios; agregar promedio de calificaciones con estrellas
+
+PENDIENTE — Revisar backlog del sprint
+  - Verificar en el tablero qué HUs del sprint no arrancaron aún
+  - Posibles candidatas: reportes de gerencia, métricas avanzadas
+
+
+--------------------------------------------------------------------
+  🔧 NOTAS TÉCNICAS PARA EL EQUIPO
+--------------------------------------------------------------------
+
+Nuevos estados PaqueteStatus (enum en Paquete.cs):
+  EnTransitoDescanso = 9  (pausa nocturna multi-día)
+  EntregadoEnPunto   = 10 (depositado en el local, esperando recepción)
+  → Agregar a cualquier switch/filtro que maneje todos los estados
+
+Tabla nueva en la base de datos:
+  CalificacionesPickUp — se crea automáticamente al reiniciar el backend
+  No requiere migration manual
+
+Archivos backend modificados en sesiones Claude:
+  Back/Domain/Models/Paquete.cs
+  Back/Domain/Models/CalificacionPickUp.cs          (nuevo)
+  Back/Application/Services/EnviosService.cs
+  Back/Controllers/EnviosController.cs
+  Back/Controllers/PickUpsController.cs
+  Back/Controllers/PickUpOperacionController.cs
+  Back/Infrastructure/Database/LogiTrackDbContext.cs
+  Back/Program.cs
+
+Archivos frontend modificados en sesiones Claude:
+  Front/src/types/index.ts
+  Front/src/services/shipmentService.ts
+  Front/src/services/pickupService.ts
+  Front/src/services/pickupOperacionService.ts
+  Front/src/components/CalificacionPickUpDialog.tsx  (nuevo)
+  Front/src/components/Layout.tsx
+  Front/src/pages/ClienteDashboard.tsx
+  Front/src/pages/TrackingPublicPage.tsx
+  Front/src/pages/PortalClientePublico.tsx
+  Front/src/pages/PickUpOperacionPage.tsx
+  Front/src/pages/CalendarioOperativoPage.tsx
+  Front/src/pages/repartidor/RepartidorDashboard.tsx
+  Front/src/pages/LoginPage.tsx
+
+
+--------------------------------------------------------------------
+  🏷️  TÍTULO DE COMMIT SUGERIDO
+--------------------------------------------------------------------
+
+feat: G1L-107/119/132 tracking pickup, entrega multi-día, calificaciones y fixes de flujo
+
+
+====================================================================

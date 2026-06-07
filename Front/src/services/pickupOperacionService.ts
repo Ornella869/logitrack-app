@@ -6,7 +6,9 @@ export type PickUpPaqueteStatus =
   | 'CargadoEnVehiculo'
   | 'ListoParaSalir'
   | 'EnTransito'
+  | 'EnTransitoDescanso'
   | 'Demorado'
+  | 'EntregadoEnPunto'
   | 'ListoParaRetirar'
   | 'Entregado'
   | 'Cancelado'
@@ -26,6 +28,8 @@ export interface PickUpPaquete {
   peso: number
   creadoEn: string
   fechaEstimadaEntrega?: string | null
+  fechaListoParaRetirar?: string | null
+  diasAlmacenado?: number | null
 }
 
 export interface PickUpInventario {
@@ -41,6 +45,7 @@ export interface PickUpInventario {
   }
   capacidadUsada: number
   capacidadLibre: number
+  pendienteRecepcion: number
   enCamino: number
   listosParaRetirar: number
   entregadosHoy: number
@@ -60,6 +65,11 @@ export const pickupOperacionService = {
 
   async entregar(codigoSeguimiento: string, codigoEntrega: string): Promise<PickUpPaquete> {
     const r = await api.post('/pickup-operacion/entregar', { codigoSeguimiento, codigoEntrega })
+    return r.data
+  },
+
+  async devolver(codigoSeguimiento: string): Promise<PickUpPaquete> {
+    const r = await api.post('/pickup-operacion/devolver', { codigoSeguimiento })
     return r.data
   },
 }
