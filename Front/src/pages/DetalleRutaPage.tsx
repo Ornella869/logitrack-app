@@ -10,7 +10,11 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Typography,
   useTheme,
@@ -19,6 +23,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import RouteIcon from '@mui/icons-material/Route'
 import MapIcon from '@mui/icons-material/Map'
 import NavigationIcon from '@mui/icons-material/Navigation'
+import EditLocationAltIcon from '@mui/icons-material/EditLocationAlt'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import RouteMap from '../components/RouteMap'
@@ -81,6 +86,11 @@ export default function DetalleRutaPage() {
   const [ubicacionActual, setUbicacionActual] = useState<{ latitud: number; longitud: number; actualizadaEn?: string; codigoSeguimiento?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mapClickMode, setMapClickMode] = useState(false)
+  const [pendingPos, setPendingPos] = useState<{ lat: number; lng: number } | null>(null)
+  const [pendingPaqueteId, setPendingPaqueteId] = useState('')
+  const [savingUbicacion, setSavingUbicacion] = useState(false)
+  const [ubicacionMsg, setUbicacionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const loadUbicacion = async () => {
     if (!repartidorId) return
@@ -130,6 +140,29 @@ export default function DetalleRutaPage() {
       setError('No se pudo cargar el detalle de la ruta')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleMapClick = (lat: number, lng: number) => {
+    setPendingPos({ lat, lng })
+    if (!pendingPaqueteId) {
+      const primera = detalle?.paradas.find((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+      if (primera) setPendingPaqueteId(primera.paqueteId)
+    }
+  }
+
+  const confirmUbicacion = async () => {
+    if (!pendingPos || !pendingPaqueteId) return
+    setSavingUbicacion(true)
+    const result = await shipmentService.actualizarUbicacion(pendingPaqueteId, pendingPos.lat, pendingPos.lng)
+    setSavingUbicacion(false)
+    if (result.success) {
+      setUbicacionMsg({ type: 'success', text: 'Ubicación actualizada y difundida por SignalR.' })
+      setPendingPos(null)
+      setMapClickMode(false)
+      setPendingPaqueteId('')
+    } else {
+      setUbicacionMsg({ type: 'error', text: result.error || 'No se pudo actualizar la ubicación.' })
     }
   }
 
@@ -229,6 +262,19 @@ export default function DetalleRutaPage() {
                 </Button>
                 <Button
                   size="small"
+                  variant={mapClickMode ? 'contained' : 'outlined'}
+                  color={mapClickMode ? 'warning' : 'secondary'}
+                  startIcon={<EditLocationAltIcon />}
+                  onClick={() => {
+                    setMapClickMode((prev) => !prev)
+                    setPendingPos(null)
+                    setUbicacionMsg(null)
+                  }}
+                >
+                  {mapClickMode ? 'Cancelar marcador' : 'Colocar marcador'}
+                </Button>
+                <Button
+                  size="small"
                   variant="contained"
                   startIcon={<NavigationIcon />}
                   disabled={!proxima}
@@ -238,6 +284,55 @@ export default function DetalleRutaPage() {
                 </Button>
               </Stack>
             </Box>
+            {ubicacionMsg && (
+              <Alert severity={ubicacionMsg.type} onClose={() => setUbicacionMsg(null)} sx={{ borderRadius: 0 }}>
+                {ubicacionMsg.text}
+              </Alert>
+            )}
+            {mapClickMode && !pendingPos && (
+              <Alert severity="info" icon={<EditLocationAltIcon />} sx={{ borderRadius: 0, bgcolor: '#FFF3E0', color: '#E65100', '& .MuiAlert-icon': { color: '#E65100' } }}>
+                Hacé clic en el mapa para colocar la nueva ubicación del paquete.
+              </Alert>
+            )}
+            {mapClickMode && pendingPos && (
+              <Box sx={{ p: 2, bgcolor: '#FFF3E0', borderBottom: '1px solid #FFB74D' }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                  <Typography variant="body2" sx={{ color: '#E65100', fontWeight: 600, flexShrink: 0 }}>
+                    📍 {pendingPos.lat.toFixed(5)}, {pendingPos.lng.toFixed(5)}
+                  </Typography>
+                  <FormControl size="small" sx={{ minWidth: 220 }}>
+                    <InputLabel>Paquete a actualizar</InputLabel>
+                    <Select
+                      value={pendingPaqueteId}
+                      label="Paquete a actualizar"
+                      onChange={(e) => setPendingPaqueteId(e.target.value)}
+                    >
+                      {detalle.paradas
+                        .filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+                        .map((p) => (
+                          <MenuItem key={p.paqueteId} value={p.paqueteId}>
+                            {p.codigoSeguimiento} · Parada {p.orden}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="warning"
+                      disabled={!pendingPaqueteId || savingUbicacion}
+                      onClick={confirmUbicacion}
+                    >
+                      {savingUbicacion ? <CircularProgress size={16} /> : 'Confirmar'}
+                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => setPendingPos(null)}>
+                      Limpiar
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Box>
+            )}
             <RouteMap
               paradas={paradasNormalizadas}
               proximaIdx={proximaIdx}
@@ -254,6 +349,8 @@ export default function DetalleRutaPage() {
               }
               ubicacionActual={ubicacionActual}
               height={380}
+              onMapClick={mapClickMode ? handleMapClick : undefined}
+              pendingMarker={pendingPos ? { latitud: pendingPos.lat, longitud: pendingPos.lng } : null}
             />
             {proxima && (
               <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#f8fdf8', borderTop: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e8f5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>

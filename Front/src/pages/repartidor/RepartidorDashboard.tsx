@@ -50,8 +50,7 @@ import DirectionsIcon from '@mui/icons-material/Directions'
 import GavelIcon from '@mui/icons-material/Gavel'
 import ChatIcon from '@mui/icons-material/Chat'
 import SendIcon from '@mui/icons-material/Send'
-import MyLocationIcon from '@mui/icons-material/MyLocation'
-import LocationDisabledIcon from '@mui/icons-material/LocationDisabled'
+
 import GpsFixedIcon from '@mui/icons-material/GpsFixed'
 import HistoryIcon from '@mui/icons-material/History'
 import ApartmentIcon from '@mui/icons-material/Apartment'
@@ -149,14 +148,13 @@ export default function RepartidorDashboard() {
   const [tab, setTab] = useState(0)
   const [filtroEstado, setFiltroEstado] = useState<string | null>(null)
   const [accionesAnchorEl, setAccionesAnchorEl] = useState<null | HTMLElement>(null)
-  const [ubicacionActiva, setUbicacionActiva] = useState(false)
   const [modoSimulacion, setModoSimulacion] = useState(false)
   const [ubicacionReal, setUbicacionReal] = useState<{ latitud: number; longitud: number } | null>(null)
   const [ubicacionMsg, setUbicacionMsg] = useState<{ severity: 'success' | 'info' | 'warning' | 'error'; message: string } | null>(null)
 
   // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
   const [estadoJornada, setEstadoJornada] = useState('Disponible')
-  useGpsTracking(estadoJornada === 'EnRuta')
+  const { permissionStatus: gpsPermission } = useGpsTracking(estadoJornada === 'EnRuta')
   const [cerrandoJornada, setCerrandoJornada] = useState(false)
   // G1L-119: pausa/reanuda jornada para rutas multi-día.
   const [pausandoJornada, setPausandoJornada] = useState(false)
@@ -171,7 +169,6 @@ export default function RepartidorDashboard() {
   // Para no dispararse contra el backend si el scanner devuelve la misma lectura
   // muchas veces seguidas (cosa que el detector hace normalmente).
   const lastScannedRef = useRef<{ code: string; at: number } | null>(null)
-  const locationWatchRef = useRef<number | null>(null)
   const simulationTimerRef = useRef<number | null>(null)
   const simulationStepRef = useRef(0)
   const simulationRouteRef = useRef<[number, number][] | null>(null)
@@ -222,14 +219,6 @@ export default function RepartidorDashboard() {
 
   // G1L-119: el repartidor puede pausar mientras esté EnRuta (el backend valida que haya paquetes activos).
   const puedePausarJornada = hayRutaActiva
-
-  const detenerUbicacionReal = () => {
-    if (locationWatchRef.current != null && navigator.geolocation) {
-      navigator.geolocation.clearWatch(locationWatchRef.current)
-    }
-    locationWatchRef.current = null
-    setUbicacionActiva(false)
-  }
 
   const detenerSimulacion = () => {
     if (simulationTimerRef.current != null) {
@@ -310,39 +299,6 @@ export default function RepartidorDashboard() {
     }
   }
 
-  const activarUbicacionReal = () => {
-    if (!navigator.geolocation) {
-      setUbicacionMsg({ severity: 'error', message: 'Tu navegador no permite compartir ubicacion.' })
-      return
-    }
-    if (!puedeCompartirUbicacion) {
-      setUbicacionMsg({ severity: 'warning', message: 'La ubicacion solo se comparte durante la ruta o el retorno a sucursal.' })
-      return
-    }
-    if (ubicacionActiva) {
-      detenerUbicacionReal()
-      setUbicacionMsg({ severity: 'info', message: 'Dejaste de compartir tu ubicacion real.' })
-      return
-    }
-    detenerSimulacion()
-
-    const sendPosition = (pos: GeolocationPosition) => {
-      setUbicacionReal({ latitud: pos.coords.latitude, longitud: pos.coords.longitude })
-      void shipmentService.actualizarMiUbicacion(pos.coords.latitude, pos.coords.longitude)
-    }
-
-    locationWatchRef.current = navigator.geolocation.watchPosition(
-      sendPosition,
-      () => {
-        detenerUbicacionReal()
-        setUbicacionMsg({ severity: 'error', message: 'No se pudo obtener tu ubicacion. Revisa los permisos del navegador.' })
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-    )
-    setUbicacionActiva(true)
-    setUbicacionMsg({ severity: 'success', message: 'Ubicacion real compartida con el supervisor.' })
-  }
-
   const activarSimulacion = () => {
     if (modoSimulacion) {
       detenerSimulacion()
@@ -350,7 +306,7 @@ export default function RepartidorDashboard() {
       setUbicacionMsg({ severity: 'info', message: 'Simulacion detenida.' })
       return
     }
-    if (!puedeCompartirUbicacion) {
+    if (!hayRutaActiva && !showRetorno) {
       setUbicacionMsg({ severity: 'warning', message: 'La simulacion se activa solo durante la ruta o el retorno a sucursal.' })
       return
     }
@@ -367,7 +323,6 @@ export default function RepartidorDashboard() {
         void handleCerrarJornada('radio')
       }
     }
-    detenerUbicacionReal()
     simulationStepRef.current = 0
     simulationRouteRef.current = null
     simulationLegKeyRef.current = ''
@@ -379,7 +334,6 @@ export default function RepartidorDashboard() {
   }
 
   useEffect(() => () => {
-    detenerUbicacionReal()
     detenerSimulacion()
   }, [])
 
@@ -588,7 +542,6 @@ export default function RepartidorDashboard() {
   // Si ya volvió a "Disponible", aunque todas las entregas estén finalizadas,
   // no mostramos más la ruta de regreso ni sus acciones.
   const showRetorno = estadoJornada === 'Retornando'
-  const puedeCompartirUbicacion = hayRutaActiva || showRetorno
   const jornadaFinalizada = estadoJornada === 'Disponible' && todasEntregadas
 
   // Resetear animación de retorno si se recarga la ruta y ya no está en retorno.
@@ -598,7 +551,6 @@ export default function RepartidorDashboard() {
 
   useEffect(() => {
     if (!hayRutaActiva && !showRetorno) {
-      if (ubicacionActiva) detenerUbicacionReal()
       if (modoSimulacion) detenerSimulacion()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -618,7 +570,6 @@ export default function RepartidorDashboard() {
     const res = await shipmentService.cerrarJornada()
     setCerrandoJornada(false)
     if (res.success) {
-      detenerUbicacionReal()
       detenerSimulacion()
       setRetornoAnimando(false)
       setEstadoJornada('Disponible')
@@ -644,7 +595,6 @@ export default function RepartidorDashboard() {
     const res = await shipmentService.pausarJornada()
     setPausandoJornada(false)
     if (res.success) {
-      detenerUbicacionReal()
       detenerSimulacion()
       setUbicacionMsg({
         severity: 'info',
@@ -848,17 +798,26 @@ export default function RepartidorDashboard() {
               <Chip size="small" label={`${paradas.length - metrics.entregadas} pendientes`} variant="outlined" />
               {metrics.cpZona && <Chip size="small" label={`Zona CP ${metrics.cpZona}`} variant="outlined" />}
               <Chip size="small" label={!ojoPatronActivo ? 'Ojo desactivado' : consentimientoAceptado === false ? 'Consentimiento pendiente' : 'Consentimiento OK'} color={!ojoPatronActivo ? 'success' : consentimientoAceptado === false ? 'warning' : 'default'} variant={!ojoPatronActivo || consentimientoAceptado === false ? 'filled' : 'outlined'} />
-              <Chip size="small" label={ubicacionActiva ? 'Ubicación activa' : 'Ubicación pausada'} color={ubicacionActiva ? 'success' : 'default'} variant={ubicacionActiva ? 'filled' : 'outlined'} />
+              {estadoJornada === 'EnRuta' && gpsPermission === 'denied' && (
+                <Chip size="small" label="GPS denegado" color="error" variant="filled" />
+              )}
+              {estadoJornada === 'EnRuta' && gpsPermission !== 'denied' && (
+                <Chip size="small" label={gpsPermission === 'granted' ? 'GPS automático activo' : 'GPS: solicitando permiso…'} color={gpsPermission === 'granted' ? 'success' : 'warning'} variant={gpsPermission === 'granted' ? 'filled' : 'outlined'} />
+              )}
+              {estadoJornada !== 'EnRuta' && <Chip size="small" label="GPS inactivo" color="default" variant="outlined" />}
               {modoSimulacion && <Chip size="small" label="Simulación activa" color="secondary" />}
               {proxima && <Chip size="small" label={`Sigue: parada ${metrics.proximaIdx + 1}`} color="primary" variant="outlined" />}
             </Stack>
 
+            {estadoJornada === 'EnRuta' && gpsPermission === 'denied' && (
+              <Alert severity="error" sx={{ py: 0.5 }}>
+                El GPS está bloqueado. Habilitá los permisos de ubicación en tu dispositivo para que el supervisor pueda seguir tu ruta.
+              </Alert>
+            )}
+
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
               <Button variant="contained" color="primary" startIcon={<QrCodeScannerIcon />} onClick={abrirQr} fullWidth={isMobile}>
                 Escanear QR
-              </Button>
-              <Button variant={ubicacionActiva ? 'contained' : 'outlined'} color={ubicacionActiva ? 'success' : 'primary'} startIcon={ubicacionActiva ? <LocationDisabledIcon /> : <MyLocationIcon />} onClick={activarUbicacionReal} fullWidth={isMobile}>
-                {ubicacionActiva ? 'Detener ubicación' : 'Compartir ubicación'}
               </Button>
               <Button variant="text" color="inherit" startIcon={<MoreVertIcon />} onClick={(event) => setAccionesAnchorEl(event.currentTarget)} fullWidth={isMobile}>
                 Más acciones

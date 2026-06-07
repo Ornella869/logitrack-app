@@ -565,8 +565,10 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                     }}
                   >
                     {pickups.map((p) => (
-                      <MenuItem key={p.id} value={p.id}>
+                      <MenuItem key={p.id} value={p.id} disabled={!!p.estaLleno}>
                         {p.nombre} - {p.localidad}, {p.provincia} (CP {p.codigoPostal})
+                        {p.totalCalificaciones && p.totalCalificaciones > 0 ? ` · ★ ${p.promedioCalificaciones?.toFixed(1)} (${p.totalCalificaciones})` : ''}
+                        {p.estaLleno ? ' — Temporalmente sin espacio' : ''}
                       </MenuItem>
                     ))}
                   </Select>

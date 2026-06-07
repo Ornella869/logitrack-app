@@ -2,9 +2,12 @@ using Back.Application.Common;
 using Back.Application.Services;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
+using Back.Hubs;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Back.Controllers
 {
@@ -251,25 +254,25 @@ namespace Back.Controllers
             return Ok();
         }
 
-        /// <summary>
-        /// Actualiza la ubicación GPS del repartidor en su ruta activa.
-        /// </summary>
+        /// <summary>G1L-121: Captura de ubicación GPS automática cada 10 segundos desde el repartidor.</summary>
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [Authorize(Roles = Roles.Repartidor)]
         [HttpPut("mi-ubicacion")]
-        public async Task<ActionResult> ActualizarUbicacion([FromBody] UbicacionRequest request)
+        public async Task<ActionResult> ActualizarUbicacion([FromBody] UbicacionRequest request, [FromServices] IHubContext<UbicacionHub> hub)
         {
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (userId == null) return Unauthorized();
 
-            var ruta = await _rutasRepository.GetRutaActivaByRepartidorId(Guid.Parse(userId));
+            var repartidorId = Guid.Parse(userId);
+            var ruta = await _rutasRepository.GetRutaActivaByRepartidorId(repartidorId);
             if (ruta is null) return NotFound("No hay ruta activa.");
 
             try
             {
                 ruta.ActualizarUbicacion(request.Lat, request.Lng);
+                await _emitirUbicacionSignalRAsync(repartidorId, request.Lat, request.Lng, hub);
                 await _context.SaveChangesAsync();
                 return NoContent();
             }
@@ -279,22 +282,21 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>
-        /// Recibe un lote de posiciones GPS acumuladas offline y persiste la más reciente.
-        /// </summary>
+        /// <summary>G1L-121: Envío de lote de posiciones GPS acumuladas offline.</summary>
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [Authorize(Roles = Roles.Repartidor)]
         [HttpPost("mi-ubicacion/lote")]
-        public async Task<ActionResult> ActualizarUbicacionLote([FromBody] List<UbicacionConTimestampRequest> posiciones)
+        public async Task<ActionResult> ActualizarUbicacionLote([FromBody] List<UbicacionConTimestampRequest> posiciones, [FromServices] IHubContext<UbicacionHub> hub)
         {
             if (posiciones == null || posiciones.Count == 0) return BadRequest("Lista vacía.");
 
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (userId == null) return Unauthorized();
 
-            var ruta = await _rutasRepository.GetRutaActivaByRepartidorId(Guid.Parse(userId));
+            var repartidorId = Guid.Parse(userId);
+            var ruta = await _rutasRepository.GetRutaActivaByRepartidorId(repartidorId);
             if (ruta is null) return NotFound("No hay ruta activa.");
 
             var ultima = posiciones.OrderBy(p => p.Timestamp).Last();
@@ -302,12 +304,43 @@ namespace Back.Controllers
             try
             {
                 ruta.ActualizarUbicacion(ultima.Lat, ultima.Lng);
+                await _emitirUbicacionSignalRAsync(repartidorId, ultima.Lat, ultima.Lng, hub);
                 await _context.SaveChangesAsync();
                 return NoContent();
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ex.Message);
+            }
+        }
+
+        private async Task _emitirUbicacionSignalRAsync(Guid repartidorId, double lat, double lng, IHubContext<UbicacionHub> hub)
+        {
+            var ahora = DateTime.UtcNow;
+            var paquetes = await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidorId
+                            && (p.Status == PaqueteStatus.EnTransito
+                                || p.Status == PaqueteStatus.Demorado
+                                || p.Status == PaqueteStatus.EnTransitoDescanso))
+                .ToListAsync();
+
+            foreach (var paquete in paquetes)
+            {
+                paquete.UbicacionActual = new Ubicacion(lat, lng);
+                paquete.UbicacionActualActualizadaEn = ahora;
+            }
+
+            foreach (var paquete in paquetes)
+            {
+                await hub.Clients.All.SendAsync("ubicacionActualizada", new
+                {
+                    repartidorId,
+                    paqueteId = paquete.Id,
+                    codigoSeguimiento = paquete.CodigoSeguimiento,
+                    latitud = lat,
+                    longitud = lng,
+                    actualizadaEn = ahora,
+                });
             }
         }
 

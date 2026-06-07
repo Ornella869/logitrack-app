@@ -12,6 +12,10 @@ export interface PuntoPickUp {
   telefono?: string | null
   activo: boolean
   creadoEn: string
+  ocupados?: number
+  estaLleno?: boolean
+  promedioCalificaciones?: number | null
+  totalCalificaciones?: number
 }
 
 export interface PuntoPickUpPayload {
@@ -60,6 +64,10 @@ export const pickupService = {
     await api.post(`/pickups/${pickupId}/asignar-envio/${paqueteId}`)
   },
 
+  async actualizarConfiguracion(horarios: string, capacidadDiaria: number): Promise<void> {
+    await api.patch('/pickup-operacion/configuracion', { horarios, capacidadDiaria })
+  },
+
   async calificarExperiencia(payload: {
     trackingCode: string
     estrellas: number
@@ -80,6 +88,7 @@ export const pickupService = {
     comentario?: string | null
     autorNombre?: string | null
     creadoEn?: string
+    ventanaVencida?: boolean
   }> {
     const r = await api.get('/pickups/calificaciones/check', { params: { trackingCode } })
     return r.data

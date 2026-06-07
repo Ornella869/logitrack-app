@@ -18,6 +18,7 @@ import {
   InputAdornment,
   LinearProgress,
   Paper,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -36,6 +37,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import SearchIcon from '@mui/icons-material/Search'
 import StorefrontIcon from '@mui/icons-material/Storefront'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import EditIcon from '@mui/icons-material/Edit'
 import { pickupOperacionService, type PickUpInventario, type PickUpPaquete } from '../services/pickupOperacionService'
 import { pickupService, type ResumenCalificaciones } from '../services/pickupService'
 import StarIcon from '@mui/icons-material/Star'
@@ -234,6 +236,12 @@ export default function PickUpOperacionPage() {
   const [devolverCodigo, setDevolverCodigo] = useState<string | null>(null)
   const [qrOpen, setQrOpen] = useState(false)
   const [resumenCalificaciones, setResumenCalificaciones] = useState<ResumenCalificaciones | null>(null)
+  const [configOpen, setConfigOpen] = useState(false)
+  const [editHorarios, setEditHorarios] = useState('')
+  const [editCapacidad, setEditCapacidad] = useState(0)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' })
 
   const load = async () => {
     setLoading(true)
@@ -253,6 +261,33 @@ export default function PickUpOperacionPage() {
   }
 
   useEffect(() => { void load() }, [])
+
+  const openConfig = () => {
+    if (!data) return
+    setEditHorarios(data.punto.horarios)
+    setEditCapacidad(data.punto.capacidadDiaria)
+    setConfigError(null)
+    setConfigOpen(true)
+  }
+
+  const onSaveConfig = async () => {
+    if (!editHorarios.trim()) { setConfigError('Los horarios son obligatorios.'); return }
+    if (editCapacidad <= 0) { setConfigError('La capacidad debe ser mayor a 0.'); return }
+    setSavingConfig(true)
+    try {
+      await pickupService.actualizarConfiguracion(editHorarios.trim(), editCapacidad)
+      setConfigOpen(false)
+      setSnackbar({ open: true, msg: 'Configuración guardada correctamente.', severity: 'success' })
+      await load()
+    } catch (error: unknown) {
+      const raw = (error as { response?: { data?: unknown } })?.response?.data
+      const errorText = (typeof raw === 'string' && raw.trim()) ? raw.trim() : 'No se pudo guardar la configuración. Verificá que el servidor esté corriendo.'
+      setConfigError(errorText)
+      setSnackbar({ open: true, msg: errorText, severity: 'error' })
+    } finally {
+      setSavingConfig(false)
+    }
+  }
 
   // Paquetes depositados por el repartidor, esperando confirmación del socio
   const pendientesRecepcion = useMemo(
@@ -367,7 +402,14 @@ export default function PickUpOperacionPage() {
                   </Typography>
                 </Box>
               </Stack>
-              <Chip label={data.punto.horarios} color="primary" variant="outlined" />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Chip label={data.punto.horarios} color="primary" variant="outlined" />
+                <Tooltip title="Editar horarios y capacidad">
+                  <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={openConfig}>
+                    Configurar
+                  </Button>
+                </Tooltip>
+              </Stack>
             </Stack>
           </Paper>
         )}
@@ -664,6 +706,54 @@ export default function PickUpOperacionPage() {
           setCodigoRecepcion(code.toUpperCase())
         }}
       />
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          sx={{ minWidth: 300 }}
+        >
+          {snackbar.msg}
+        </Alert>
+      </Snackbar>
+
+      <Dialog open={configOpen} onClose={() => { if (!savingConfig) setConfigOpen(false) }} maxWidth="xs" fullWidth>
+        <DialogTitle>Configurar punto Pick Up</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {configError && <Alert severity="error">{configError}</Alert>}
+            <TextField
+              label="Horarios de atención"
+              value={editHorarios}
+              onChange={(e) => setEditHorarios(e.target.value)}
+              fullWidth
+              placeholder="Ej: Lun–Vie 9–18 / Sáb 9–13"
+              multiline
+              rows={2}
+            />
+            <TextField
+              label="Capacidad diaria (envíos)"
+              type="number"
+              value={editCapacidad}
+              onChange={(e) => setEditCapacidad(Math.max(1, parseInt(e.target.value) || 1))}
+              fullWidth
+              inputProps={{ min: 1 }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfigOpen(false)} disabled={savingConfig}>Cancelar</Button>
+          <Button onClick={onSaveConfig} variant="contained" disabled={savingConfig}>
+            {savingConfig ? <CircularProgress size={18} /> : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!devolverCodigo} onClose={() => setDevolverCodigo(null)}>
         <DialogTitle>Confirmar devolución</DialogTitle>

@@ -253,6 +253,33 @@ namespace Back.Controllers
                 }).ToList(),
             });
         }
+
+    [HttpPatch("configuracion")]
+    public async Task<ActionResult> ActualizarConfiguracion([FromBody] ConfiguracionPickUpRequest request)
+    {
+        var socio = await CurrentSocioAsync();
+        if (socio is null) return Forbid();
+
+        var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == socio.PuntoPickUpId);
+        if (punto is null) return NotFound("Punto Pick Up no encontrado.");
+
+        try
+        {
+            punto.ActualizarHorariosYCapacidad(request.Horarios, request.CapacidadDiaria);
+            await _context.SaveChangesAsync();
+            return Ok(new { punto.Horarios, punto.CapacidadDiaria });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+    }
+
+    public class ConfiguracionPickUpRequest
+    {
+        public string Horarios { get; set; } = string.Empty;
+        public int CapacidadDiaria { get; set; }
     }
 
     public class PickUpCodigoRequest

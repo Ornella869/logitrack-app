@@ -41,6 +41,14 @@ namespace Back.Domain.Models
             Telefono = string.IsNullOrWhiteSpace(telefono) ? null : telefono.Trim();
         }
 
+        public void ActualizarHorariosYCapacidad(string horarios, int capacidadDiaria)
+        {
+            if (string.IsNullOrWhiteSpace(horarios)) throw new InvalidOperationException("Los horarios son obligatorios.");
+            if (capacidadDiaria <= 0) throw new InvalidOperationException("La capacidad debe ser mayor a 0.");
+            Horarios = horarios.Trim();
+            CapacidadDiaria = capacidadDiaria;
+        }
+
         public void Desactivar() => Activo = false;
         public void Activar() => Activo = true;
     }

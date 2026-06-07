@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Box, Typography } from '@mui/material'
@@ -35,6 +35,18 @@ const TRUCK_ICON = L.divIcon({
   iconSize: [36, 36],
   iconAnchor: [18, 18],
   popupAnchor: [0, -20],
+})
+
+const PENDING_ICON = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:32px;height:32px;border-radius:50%;
+    background:#E65100;border:3px solid white;box-shadow:0 0 0 5px rgba(230,81,0,0.3);
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+  ">📍</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -34],
 })
 
 const BRANCH_ICON = L.divIcon({
@@ -77,6 +89,8 @@ interface RouteMapProps {
   height?: number | string
   showReturnRoute?: boolean
   animateReturnRoute?: boolean
+  onMapClick?: (lat: number, lng: number) => void
+  pendingMarker?: { latitud: number; longitud: number } | null
 }
 
 function isValidPosition(position?: { latitud: number; longitud: number } | null) {
@@ -87,6 +101,11 @@ function isValidPosition(position?: { latitud: number; longitud: number } | null
     && position.latitud <= -21
     && position.longitud >= -75
     && position.longitud <= -52
+}
+
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click: (e) => onMapClick(e.latlng.lat, e.latlng.lng) })
+  return null
 }
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -259,7 +278,7 @@ function spreadOverlappingMarkers<T extends { latitud: number; longitud: number 
   return out
 }
 
-export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual, height = 340, showReturnRoute = false, animateReturnRoute = false }: RouteMapProps) {
+export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual, height = 340, showReturnRoute = false, animateReturnRoute = false, onMapClick, pendingMarker }: RouteMapProps) {
   const ubicacionReal = isValidPosition(ubicacionActual) ? ubicacionActual : null
   const paradasConCoords = paradas.filter(
     (p): p is Parada & { latitud: number; longitud: number } =>
@@ -391,13 +410,14 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
   if (ubicacionReal) fitPositions.push([ubicacionReal.latitud, ubicacionReal.longitud])
 
   return (
-    <Box sx={{ height, width: '100%', borderRadius: 1, overflow: 'hidden', border: '1px solid #ddd' }}>
-      <MapContainer center={DEFAULT_CENTER} zoom={12} style={{ height: '100%', width: '100%' }}>
+    <Box sx={{ height, width: '100%', borderRadius: 1, overflow: 'hidden', border: `1px solid ${onMapClick ? '#E65100' : '#ddd'}`, cursor: onMapClick ? 'crosshair' : 'auto' }}>
+      <MapContainer center={DEFAULT_CENTER} zoom={12} style={{ height: '100%', width: '100%', cursor: 'inherit' }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · routing &copy; <a href="http://project-osrm.org/">OSRM</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitBounds positions={fitPositions} />
+        {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
 
         {/* Trazo real por calles (OSRM). Si OSRM no responde, queda la línea recta. */}
         {trazo.length > 1 && (
@@ -457,6 +477,13 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
               <br />
               {truckLabel}
             </Popup>
+          </Marker>
+        )}
+
+        {/* Marcador pendiente de confirmacion (colocado por el supervisor) */}
+        {pendingMarker && (
+          <Marker position={[pendingMarker.latitud, pendingMarker.longitud]} icon={PENDING_ICON} zIndexOffset={2000}>
+            <Popup>📍 Nueva ubicación — confirmá arriba</Popup>
           </Marker>
         )}
       </MapContainer>

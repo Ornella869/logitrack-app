@@ -35,7 +35,7 @@ namespace Back.Controllers
 
         [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
         [HttpGet]
-        public async Task<ActionResult<List<PuntoPickUp>>> Listar([FromQuery] bool soloActivos = true)
+        public async Task<ActionResult> Listar([FromQuery] bool soloActivos = true)
         {
             var user = await CurrentUserAsync();
             var query = _context.PuntosPickUp.AsQueryable();
@@ -48,11 +48,45 @@ namespace Back.Controllers
             else if (user is not Administrador && user?.SucursalId is Guid sucursalId)
             {
                 var sucursal = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == sucursalId);
-                if (sucursal is null) return Ok(new List<PuntoPickUp>());
+                if (sucursal is null) return Ok(new List<object>());
                 query = query.Where(p => p.Provincia == sucursal.Provincia || sucursal.ProvinciasCubiertas.Contains(p.Provincia));
             }
 
-            return Ok(await query.OrderBy(p => p.Provincia).ThenBy(p => p.Nombre).ToListAsync());
+            var puntos = await query.OrderBy(p => p.Provincia).ThenBy(p => p.Nombre).ToListAsync();
+            var puntoIds = puntos.Select(p => p.Id).ToList();
+
+            // G1L-130: contar paquetes físicamente almacenados para mostrar capacidad en la UI
+            var ocupados = await _context.Paquetes
+                .Where(p => p.PuntoPickUpId.HasValue
+                            && puntoIds.Contains(p.PuntoPickUpId.Value)
+                            && (p.Status == PaqueteStatus.ListoParaRetirar || p.Status == PaqueteStatus.EntregadoEnPunto))
+                .GroupBy(p => p.PuntoPickUpId!.Value)
+                .Select(g => new { PuntoId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.PuntoId, x => x.Count);
+
+            // G1L-132 AC3: promedio de calificaciones por punto
+            var calificaciones = await _context.CalificacionesPickUp
+                .Where(c => puntoIds.Contains(c.PuntoPickUpId))
+                .GroupBy(c => c.PuntoPickUpId)
+                .Select(g => new { PuntoId = g.Key, Promedio = g.Average(c => (double)c.Estrellas), Total = g.Count() })
+                .ToDictionaryAsync(x => x.PuntoId, x => new { x.Promedio, x.Total });
+
+            var result = puntos.Select(p =>
+            {
+                var ocup = ocupados.TryGetValue(p.Id, out var c) ? c : 0;
+                var calif = calificaciones.TryGetValue(p.Id, out var r) ? r : null;
+                return new
+                {
+                    p.Id, p.Nombre, p.Direccion, p.Localidad, p.CodigoPostal, p.Provincia,
+                    p.Horarios, p.CapacidadDiaria, p.Telefono, p.Activo, p.CreadoEn,
+                    Ocupados = ocup,
+                    EstaLleno = ocup >= p.CapacidadDiaria,
+                    PromedioCalificaciones = calif != null ? Math.Round(calif.Promedio, 1) : (double?)null,
+                    TotalCalificaciones = calif?.Total ?? 0,
+                };
+            });
+
+            return Ok(result);
         }
 
         [Authorize(Roles = Roles.GerenteOAdministrador)]
@@ -228,6 +262,13 @@ namespace Back.Controllers
             if (yaCalificado)
                 return Conflict("Este envío ya fue calificado.");
 
+            // AC5: ventana de 7 días desde la entrega
+            var fechaEntrega = await _context.HistorialEstadosEnvio
+                .Where(h => h.PaqueteId == paquete.Id && h.EstadoNuevo == PaqueteStatus.Entregado)
+                .MaxAsync(h => (DateTime?)h.FechaHora);
+            if (fechaEntrega.HasValue && (DateTime.UtcNow - fechaEntrega.Value).TotalDays > 7)
+                return BadRequest("El plazo para calificar venció. Podés calificar hasta 7 días después del retiro.");
+
             var calificacion = new CalificacionPickUp(
                 paquete.PuntoPickUpId.Value,
                 paquete.Id,
@@ -250,7 +291,15 @@ namespace Back.Controllers
             if (paquete is null) return NotFound();
 
             var existente = await _context.CalificacionesPickUp.FirstOrDefaultAsync(c => c.PaqueteId == paquete.Id);
-            if (existente is null) return Ok(new { calificado = false });
+            if (existente is null)
+            {
+                // AC5: informar si la ventana de 7 días ya venció
+                var fechaEntrega = await _context.HistorialEstadosEnvio
+                    .Where(h => h.PaqueteId == paquete.Id && h.EstadoNuevo == PaqueteStatus.Entregado)
+                    .MaxAsync(h => (DateTime?)h.FechaHora);
+                var ventanaVencida = fechaEntrega.HasValue && (DateTime.UtcNow - fechaEntrega.Value).TotalDays > 7;
+                return Ok(new { calificado = false, ventanaVencida });
+            }
 
             return Ok(new
             {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
@@ -30,6 +30,72 @@ import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClien
 import CalificacionPickUpDialog from '../components/CalificacionPickUpDialog'
 import type { Shipment } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
+import { subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+})
+
+const DRIVER_ICON = L.divIcon({
+  className: '',
+  html: `<div style="width:38px;height:38px;border-radius:50%;background:#1976d2;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:20px;">🚚</div>`,
+  iconSize: [38, 38],
+  iconAnchor: [19, 19],
+  popupAnchor: [0, -22],
+})
+
+function PanTo({ pos }: { pos: [number, number] }) {
+  const map = useMap()
+  const prev = useRef<[number, number] | null>(null)
+  useEffect(() => {
+    if (!prev.current || Math.abs(prev.current[0] - pos[0]) > 0.0001 || Math.abs(prev.current[1] - pos[1]) > 0.0001) {
+      map.panTo(pos, { animate: true })
+      prev.current = pos
+    }
+  }, [map, pos])
+  return null
+}
+
+function DriverLiveMap({ trackingId, initialPos }: { trackingId: string; initialPos: { latitud: number; longitud: number } }) {
+  const [pos, setPos] = useState<[number, number]>([initialPos.latitud, initialPos.longitud])
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+
+  useEffect(() => {
+    return subscribeUbicacionActualizada((event) => {
+      if (event.codigoSeguimiento !== trackingId) return
+      setPos([event.latitud, event.longitud])
+      setUpdatedAt(event.actualizadaEn ?? null)
+    })
+  }, [trackingId])
+
+  return (
+    <Box>
+      <Box sx={{ height: 260, borderRadius: 2, overflow: 'hidden', border: '1px solid #334155' }}>
+        <MapContainer center={pos} zoom={14} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <PanTo pos={pos} />
+          <Marker position={pos} icon={DRIVER_ICON}>
+            <Popup>🚚 Repartidor en camino</Popup>
+          </Marker>
+        </MapContainer>
+      </Box>
+      <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
+        {updatedAt
+          ? `Actualizado: ${new Date(updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+          : 'Esperando actualización de ubicación…'}
+      </Typography>
+    </Box>
+  )
+}
 
 type TimelineStep = {
   key: string
@@ -199,6 +265,7 @@ export default function TrackingPublicPage() {
   const [calificacionExistente, setCalificacionExistente] = useState<{
     estrellas: number; comentario?: string | null; autorNombre?: string | null
   } | null>(null)
+  const [ventanaCalificacionVencida, setVentanaCalificacionVencida] = useState(false)
 
   useEffect(() => {
     const loadShipment = async () => {
@@ -218,6 +285,8 @@ export default function TrackingPublicPage() {
           const check = await pickupService.checkCalificacion(trackingId).catch(() => null)
           if (check?.calificado) {
             setCalificacionExistente({ estrellas: check.estrellas!, comentario: check.comentario, autorNombre: check.autorNombre })
+          } else if (check?.ventanaVencida) {
+            setVentanaCalificacionVencida(true)
           }
         }
       }
@@ -313,6 +382,19 @@ export default function TrackingPublicPage() {
                         {publicStatus.description}
                       </Typography>
                     </Box>
+
+                    {/* G1L-124: mapa en tiempo real cuando el repartidor está en camino */}
+                    {(shipment.status === 'En tránsito' || shipment.status === 'Demorado') && shipment.ubicacionActual && (
+                      <Box>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                          <LocalShippingOutlinedIcon sx={{ color: '#60a5fa', fontSize: 20 }} />
+                          <Typography variant="subtitle2" sx={{ color: '#93c5fd', fontWeight: 700 }}>
+                            Ubicación del repartidor en tiempo real
+                          </Typography>
+                        </Stack>
+                        <DriverLiveMap trackingId={shipment.trackingId} initialPos={shipment.ubicacionActual} />
+                      </Box>
+                    )}
 
                     {/* Mapa: tu paquete está en la sucursal */}
                     {enSucursal && (
@@ -430,7 +512,7 @@ export default function TrackingPublicPage() {
                       <Alert severity="error">Motivo de cancelación: {shipment.cancellationReason}</Alert>
                     )}
 
-                    {shipment.status === 'Entregado' && shipment.puntoPickUpId && (
+                    {shipment.status === 'Entregado' && shipment.puntoPickUpId && !ventanaCalificacionVencida && (
                       <Box sx={{ pt: 1 }}>
                         <Button
                           variant="outlined"
@@ -446,6 +528,13 @@ export default function TrackingPublicPage() {
                         >
                           {calificacionExistente ? `Tu calificación: ${'★'.repeat(calificacionExistente.estrellas)}` : 'Calificar Punto Pick Up'}
                         </Button>
+                      </Box>
+                    )}
+                    {shipment.status === 'Entregado' && shipment.puntoPickUpId && ventanaCalificacionVencida && (
+                      <Box sx={{ pt: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontStyle: 'italic' }}>
+                          El plazo para calificar este retiro venció (7 días desde la entrega).
+                        </Typography>
                       </Box>
                     )}
 
