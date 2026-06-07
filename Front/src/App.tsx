@@ -40,6 +40,7 @@ import type { User } from './types'
 import { isRepartidorRole, normalizeUserRole } from './utils/roleUtils'
 
 const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
+const LOGOUT_EVENT_NAME = 'logitrack:logout'
 const DEFAULT_SESSION_TIMEOUT_MS = 15 * 60 * 1000
 const parsedSessionTimeout = Number(import.meta.env.VITE_SESSION_TIMEOUT_MS)
 const SESSION_TIMEOUT_MS = Number.isFinite(parsedSessionTimeout) && parsedSessionTimeout > 0
@@ -121,6 +122,16 @@ function App() {
     }
     window.addEventListener('logitrack:userUpdate', handler)
     return () => window.removeEventListener('logitrack:userUpdate', handler)
+  }, [])
+
+  useEffect(() => {
+    const handleExternalLogout = () => {
+      setUser(null)
+      setSessionExpired(false)
+    }
+
+    window.addEventListener(LOGOUT_EVENT_NAME, handleExternalLogout)
+    return () => window.removeEventListener(LOGOUT_EVENT_NAME, handleExternalLogout)
   }, [])
 
   useEffect(() => {
@@ -283,7 +294,7 @@ function App() {
             }
           />
 
-          {/* Supervisor / Admin: calendario operativo y rutas activas */}
+          {/* Supervisor: calendario operativo y rutas activas */}
           <Route
             path="/repartidores"
             element={
@@ -298,7 +309,7 @@ function App() {
           <Route
             path="/calendario"
             element={
-              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+              user && user.role === 'supervisor' ? (
                 <CalendarioOperativoPage />
               ) : (
                 <Navigate to="/access-denied" replace />
@@ -308,7 +319,7 @@ function App() {
           <Route
             path="/rutas-activas"
             element={
-              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+              user && user.role === 'supervisor' ? (
                 <RutasActivasPage />
               ) : (
                 <Navigate to="/access-denied" replace />
@@ -318,7 +329,7 @@ function App() {
           <Route
             path="/rutas-activas/:repartidorId"
             element={
-              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
+              user && user.role === 'supervisor' ? (
                 <DetalleRutaPage />
               ) : (
                 <Navigate to="/access-denied" replace />
@@ -372,7 +383,7 @@ function App() {
           <Route
             path="/pickups"
             element={
-              user && (user.role === 'gerente' || user.role === 'supervisor' || user.role === 'administrador') ? (
+              user && user.role === 'gerente' ? (
                 <PuntosPickUpPage />
               ) : (
                 <Navigate to="/access-denied" replace />
@@ -403,7 +414,7 @@ function App() {
           <Route
             path="/ojo-patron"
             element={
-              user && (user.role === 'gerente' || user.role === 'supervisor' || user.role === 'administrador') ? (
+              user && (user.role === 'gerente' || user.role === 'supervisor') ? (
                 <OjoPatronConfigPage />
               ) : (
                 <Navigate to="/access-denied" replace />
@@ -439,7 +450,7 @@ function App() {
           <Route
             path="/reportes"
             element={
-              user && (user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') ? (
+              user && (user.role === 'supervisor' || user.role === 'gerente') ? (
                 <ReportesPage />
               ) : (
                 <Navigate to="/access-denied" replace />

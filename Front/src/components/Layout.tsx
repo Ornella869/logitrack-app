@@ -408,15 +408,10 @@ function Layout({ user, onLogout }: LayoutProps) {
     ] :
     user.role === 'administrador' ? [
       { path: '/app',                      label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
-      { path: '/calendario',               label: 'Calendario Operativo', icon: <CalendarMonthIcon fontSize="small" /> },
-      { path: '/rutas-activas',            label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
-      { path: '/reportes',                 label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
       { path: '/satisfaccion',             label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
       { path: '/auditoria',                label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
       { path: '/auditoria-notificaciones', label: 'Notif. Auditoría',     icon: <NotificationsActiveIcon fontSize="small" /> },
       { path: '/mi-plan',                  label: 'Mi Plan',              icon: <WorkspacePremiumIcon fontSize="small" /> },
-      { path: '/ojo-patron',               label: 'Ojo del Patrón',       icon: <GraphicEqIcon fontSize="small" /> },
-      { path: '/pickups',                  label: 'PickUps',              icon: <PlaceIcon fontSize="small" /> },
     ] : []
   const isRepartidorArea = user.role === 'repartidor' && location.pathname.startsWith('/repartidor')
   const repartidorNavValue = (() => {

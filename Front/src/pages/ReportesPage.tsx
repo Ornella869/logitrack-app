@@ -38,7 +38,7 @@ export default function ReportesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const canAccess = user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador'
+  const canAccess = user.role === 'supervisor' || user.role === 'gerente'
 
   useEffect(() => {
     if (canAccess) void load()
@@ -147,7 +147,7 @@ export default function ReportesPage() {
             <Stack spacing={2}>
               <VolumeChart data={data} />
               <HomeDeliveryReport data={data} />
-              {(user.role === 'gerente' || user.role === 'administrador') && (
+              {user.role === 'gerente' && (
                 <RankingIncidenciasGerente data={rankingZonas} />
               )}
             </Stack>

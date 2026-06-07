@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -19,6 +20,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import LockIcon from '@mui/icons-material/Lock'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { authService } from '../services/authService'
+import ConfirmPasswordChangeDialog from './ConfirmPasswordChangeDialog'
 
 interface Props {
   open: boolean
@@ -26,11 +28,13 @@ interface Props {
 }
 
 export default function ChangePasswordDialog({ open, onClose }: Props) {
+  const navigate = useNavigate()
   const [form, setForm] = useState({ actual: '', nueva: '', confirmar: '' })
   const [showPass, setShowPass] = useState({ actual: false, nueva: false, confirmar: false })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const handleClose = () => {
     setForm({ actual: '', nueva: '', confirmar: '' })
@@ -38,6 +42,7 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
     setError('')
     setSubmitting(false)
     setSuccess(false)
+    setConfirmOpen(false)
     onClose()
   }
 
@@ -59,11 +64,18 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
 
   const handleSubmit = async () => {
     if (!validate()) return
+    setConfirmOpen(true)
+  }
+
+  const handleConfirmSubmit = async () => {
     setSubmitting(true)
     const result = await authService.cambiarPassword(form.actual, form.nueva, form.confirmar)
     setSubmitting(false)
     if (result.success) {
-      setSuccess(true)
+      authService.logout()
+      setConfirmOpen(false)
+      handleClose()
+      navigate('/login')
     } else {
       setError(result.error ?? 'Error al cambiar la contraseña.')
     }
@@ -190,6 +202,13 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
           </>
         )}
       </DialogActions>
+
+      <ConfirmPasswordChangeDialog
+        open={confirmOpen}
+        submitting={submitting}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmSubmit}
+      />
     </Dialog>
   )
 }

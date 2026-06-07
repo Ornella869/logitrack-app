@@ -63,4 +63,29 @@ describe('App route guards', () => {
     expect(localStorage.getItem('authToken')).toBeNull()
     expect(localStorage.getItem('user')).toBeNull()
   })
+
+  it('redirige a login cuando recibe un logout interno de la app', async () => {
+    localStorage.setItem('authToken', 'jwt-token')
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        id: 'u-1',
+        name: 'Florencia',
+        lastname: 'Paez',
+        email: 'florencia@gmail.com',
+        dni: '12345678',
+        role: 'operador',
+      }),
+    )
+
+    render(<App />)
+
+    expect(await screen.findByText('LAYOUT_WRAPPER')).toBeInTheDocument()
+
+    act(() => {
+      window.dispatchEvent(new Event('logitrack:logout'))
+    })
+
+    expect(screen.getByText('LOGIN_PAGE')).toBeInTheDocument()
+  })
 })

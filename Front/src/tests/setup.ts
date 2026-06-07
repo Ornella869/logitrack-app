@@ -3,6 +3,8 @@ import { cleanup } from '@testing-library/react'
 import { vi } from 'vitest'
 import { afterEach } from 'vitest'
 
+const storage: Record<string, string> = {}
+
 afterEach(() => {
   cleanup()
 })
@@ -20,5 +22,25 @@ if (!window.matchMedia) {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     })),
+  })
+}
+
+if (typeof window.localStorage === 'undefined' || typeof window.localStorage.clear !== 'function') {
+  Object.defineProperty(window, 'localStorage', {
+    value: {
+      getItem: (key: string) => storage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        storage[key] = String(value)
+      },
+      removeItem: (key: string) => {
+        delete storage[key]
+      },
+      clear: () => {
+        for (const key of Object.keys(storage)) {
+          delete storage[key]
+        }
+      },
+    },
+    configurable: true,
   })
 }

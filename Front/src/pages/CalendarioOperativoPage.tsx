@@ -120,8 +120,8 @@ export default function CalendarioOperativoPage() {
     }
   }, [data, pageOffset, searchRepartidor])
 
-  if (user.role !== 'supervisor' && user.role !== 'administrador') {
-    return <Alert severity="warning">Solo Supervisor o Administrador pueden ver el calendario operativo.</Alert>
+  if (user.role !== 'supervisor') {
+    return <Alert severity="warning">Solo Supervisor puede ver el calendario operativo.</Alert>
   }
 
   const canCreateCalendarizacion = user.role === 'supervisor'

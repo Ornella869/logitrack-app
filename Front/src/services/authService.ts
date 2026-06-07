@@ -12,10 +12,15 @@ import type {
 import api from './api'
 import { normalizeUserRole } from '../utils/roleUtils'
 
+const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
+const LOGOUT_EVENT_NAME = 'logitrack:logout'
+
 interface CreateRepartidorResult {
   user: User
   temporaryPassword: string
 }
+
+const readDni = (data: any): string => data?.dni ?? data?.Dni ?? data?.DNI ?? ''
 
 export interface RepartidorListItem extends User {
   assignedRoutesCount: number
@@ -28,7 +33,7 @@ const mapRepartidor = (t: any): User => ({
   name: t.nombre,
   lastname: t.apellido,
   email: t.email,
-  dni: t.dni,
+  dni: readDni(t),
   role: 'repartidor',
   activo: t.activo ?? true,
   licencia: t.licencia,
@@ -69,7 +74,7 @@ const mapUsuario = (usuario: any): User => ({
   name: usuario.nombre,
   lastname: usuario.apellido,
   email: usuario.email,
-  dni: usuario.dni,
+  dni: readDni(usuario),
   role: normalizeUserRole(usuario.role ?? usuario.Role ?? ''),
   activo: usuario.activo ?? true,
   licencia: usuario.licencia,
@@ -112,7 +117,7 @@ export const authService = {
         name: userInfo?.nombre ?? userInfo?.Nombre ?? '',
         lastname: userInfo?.apellido ?? userInfo?.Apellido ?? '',
         email: userInfo?.email ?? userInfo?.Email ?? '',
-        dni: '',
+        dni: readDni(userInfo),
         role: userRole,
         activo: userInfo?.activo ?? true,
         sucursalId: userInfo?.sucursalId ?? userInfo?.SucursalId ?? null,
@@ -188,7 +193,13 @@ export const authService = {
 
   // Logout
   logout: () => {
+    localStorage.removeItem('user')
     localStorage.removeItem('authToken')
+    localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY)
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(LOGOUT_EVENT_NAME))
+    }
   },
 
   // Verificar si está autenticado
@@ -412,7 +423,7 @@ export const authService = {
           name: u.nombre,
           lastname: u.apellido,
           email: u.email,
-          dni: u.dni,
+          dni: readDni(u),
           role: normalizeUserRole(u.role ?? u.Role ?? ''),
           activo: u.activo ?? true,
           licencia: u.licencia,
@@ -466,7 +477,7 @@ export const authService = {
         name: u.nombre,
         lastname: u.apellido,
         email: u.email,
-        dni: u.dni,
+        dni: readDni(u),
         role: normalizeUserRole(u.role ?? u.Role ?? ''),
         activo: u.activo ?? true,
         estado: u.estado,
@@ -489,11 +500,16 @@ export const authService = {
       name: u.nombre,
       lastname: u.apellido,
       email: u.email,
-      dni: u.dni,
+      dni: readDni(u),
       role: normalizeUserRole(u.role ?? u.Role ?? ''),
       activo: u.activo ?? true,
       estado: u.estado,
     }
+  },
+
+  getMiPerfil: async (): Promise<User> => {
+    const response = await api.get('/auth/mi-perfil')
+    return mapUsuario(response.data)
   },
 
   assignProvincias: async (userId: string, provincias: string[]): Promise<void> => {

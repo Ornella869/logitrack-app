@@ -28,6 +28,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import type { User } from '../types'
 import { authService } from '../services/authService'
 import { branchService } from '../services/branchService'
+import ConfirmPasswordChangeDialog from '../components/ConfirmPasswordChangeDialog'
 
 const ROLE_LABELS: Record<string, string> = {
   administrador: 'Administrador',
@@ -78,6 +79,29 @@ export default function ProfilePage() {
     })
   }, [user.sucursalId])
 
+  useEffect(() => {
+    if (user.dni) return
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const profile = await authService.getMiPerfil()
+        if (cancelled || !profile.dni) return
+
+        const updatedUser: User = { ...user, ...profile }
+        localStorage.setItem('user', JSON.stringify(updatedUser))
+        window.dispatchEvent(new Event('logitrack:userUpdate'))
+      } catch {
+        // No bloquea la pantalla si el refresh del perfil falla.
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
   const onlyLetters = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]*$/
   const onlyPhone = /^[0-9+\-\s()]*$/
 
@@ -115,6 +139,7 @@ export default function ProfilePage() {
   const [pwSaving, setPwSaving] = useState(false)
   const [pwError, setPwError] = useState('')
   const [showPw, setShowPw] = useState(false)
+  const [pwConfirmOpen, setPwConfirmOpen] = useState(false)
 
   const initials = `${user.name.charAt(0)}${user.lastname.charAt(0)}`.toUpperCase()
   const roleColor = ROLE_COLORS[user.role] ?? '#7E57C2'
@@ -185,10 +210,15 @@ export default function ProfilePage() {
       setPwError('Las contraseñas nuevas no coinciden')
       return
     }
+    setPwConfirmOpen(true)
+  }
+
+  const handleConfirmChangePassword = async () => {
     setPwSaving(true)
     try {
       const result = await authService.cambiarPassword(pwActual, pwNueva, pwConfirm)
       if (result.success) {
+        setPwConfirmOpen(false)
         authService.logout()
         navigate('/login')
       } else {
@@ -493,6 +523,13 @@ export default function ProfilePage() {
 
         </Grid>
       </Grid>
+
+      <ConfirmPasswordChangeDialog
+        open={pwConfirmOpen}
+        submitting={pwSaving}
+        onCancel={() => setPwConfirmOpen(false)}
+        onConfirm={handleConfirmChangePassword}
+      />
     </Container>
   )
 }

@@ -59,7 +59,7 @@ function MapAutoCenter({ coords }: { coords: [number, number] | null }) {
 
 export default function PuntosPickUpPage() {
   const user = useOutletContext<User>()
-  const puedeEditar = user.role === 'gerente' || user.role === 'administrador'
+  const puedeEditar = user.role === 'gerente'
   const [items, setItems] = useState<PuntoPickUp[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -322,7 +322,7 @@ export default function PuntosPickUpPage() {
     }
   }
 
-  if (user.role !== 'gerente' && user.role !== 'supervisor' && user.role !== 'administrador') {
+  if (user.role !== 'gerente') {
     return <Alert severity="warning">No tenés permisos para ver puntos PickUp.</Alert>
   }
 

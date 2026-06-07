@@ -415,6 +415,16 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>Obtiene el perfil completo del usuario autenticado.</summary>
+        [Authorize]
+        [HttpGet("mi-perfil")]
+        public async Task<ActionResult<UserInfoResponse>> ObtenerMiPerfil()
+        {
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
+            return Ok(MapUsuario(user));
+        }
+
         /// <summary>Actualiza el nombre y apellido del usuario autenticado.</summary>
         [Authorize]
         [HttpPut("mi-perfil")]
@@ -777,9 +787,12 @@ namespace Back.Controllers
         public string Nombre { get; set; }
         public string Apellido { get; set; }
         public string Email { get; set; }
+        public string DNI { get; set; }
         public string Role { get; set; }
         public string? SucursalId { get; set; }
         public string? Provincia { get; set; }
+        public List<string>? Provincias { get; set; }
+        public string? PuntoPickUpId { get; set; }
     }
 
     public class RegisterRequest

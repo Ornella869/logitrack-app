@@ -119,8 +119,10 @@ namespace Back.Application.Services
                     nombre = user.Nombre,
                     apellido = user.Apellido,
                     email = user.Email,
+                    dni = user.DNI,
                     role = user.GetType().Name,
                     sucursalId = user.SucursalId?.ToString(),
+                    provincia = user is Gerente gerente ? gerente.Provincia : null,
                     puntoPickUpId = user is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
                     provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null
                 }

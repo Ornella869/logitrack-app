@@ -195,8 +195,8 @@ export default function RutasActivasPage() {
     }
   }
 
-  if (user.role !== 'supervisor' && user.role !== 'administrador') {
-    return <Alert severity="warning">Solo Supervisor o Administrador pueden ver rutas activas.</Alert>
+  if (user.role !== 'supervisor') {
+    return <Alert severity="warning">Solo Supervisor puede ver rutas activas.</Alert>
   }
 
   return (

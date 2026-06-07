@@ -149,4 +149,19 @@ describe('authService', () => {
     expect(authService.isValidPassword('1234567')).toBe(false)
     expect(authService.isValidPassword('12345678')).toBe(true)
   })
+
+  it('limpia la sesion completa y emite evento de logout', () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+
+    localStorage.setItem('authToken', 'jwt-token')
+    localStorage.setItem('user', JSON.stringify({ id: 'u-1' }))
+    localStorage.setItem('sessionLastActivityAt', '123456')
+
+    authService.logout()
+
+    expect(localStorage.getItem('authToken')).toBeNull()
+    expect(localStorage.getItem('user')).toBeNull()
+    expect(localStorage.getItem('sessionLastActivityAt')).toBeNull()
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'logitrack:logout' }))
+  })
 })

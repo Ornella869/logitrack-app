@@ -3,6 +3,7 @@ using System;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Back.Infrastructure.Database
 {
     [DbContext(typeof(LogiTrackDbContext))]
-    partial class LogiTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606153135_AddMissingHorasColumns")]
+    partial class AddMissingHorasColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,35 +24,6 @@ namespace Back.Infrastructure.Database
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("Back.Domain.Models.CalificacionPickUp", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AutorNombre")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Comentario")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Estrellas")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PaqueteId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PuntoPickUpId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("CalificacionesPickUp");
-                });
 
             modelBuilder.Entity("Back.Domain.Models.ConfiguracionOjoPatron", b =>
                 {
@@ -592,9 +566,6 @@ namespace Back.Infrastructure.Database
                     b.Property<Guid?>("RepartidorAsignadoId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("RequiereRepartidorFullTime")
-                        .HasColumnType("boolean");
-
                     b.Property<Guid?>("RutaId")
                         .HasColumnType("uuid");
 
@@ -618,38 +589,6 @@ namespace Back.Infrastructure.Database
                     b.HasIndex("RutaId");
 
                     b.ToTable("Paquetes");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.PlantillaEmail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Asunto")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Cuerpo")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Evento")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("ModificadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ModificadoPorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Provincia")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PlantillasEmail");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.PruebaOjoPatron", b =>
@@ -921,57 +860,6 @@ namespace Back.Infrastructure.Database
                     b.HasKey("Id");
 
                     b.ToTable("Sucursales");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.TramoEnvio", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("DistanciaKm")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool>("EsUltimaMilla")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("Estado")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("FinalizadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("HorasEstimadas")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime?>("IniciadoEn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Orden")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PaqueteId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("RepartidorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("SucursalDestinoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SucursalOrigenId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PaqueteId", "Orden")
-                        .IsUnique();
-
-                    b.HasIndex("SucursalDestinoId", "Estado");
-
-                    b.HasIndex("SucursalOrigenId", "Estado");
-
-                    b.ToTable("TramosEnvio");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Usuario", b =>
@@ -1403,26 +1291,6 @@ namespace Back.Infrastructure.Database
                         .IsRequired();
 
                     b.Navigation("Paquete");
-                });
-
-            modelBuilder.Entity("Back.Domain.Models.TramoEnvio", b =>
-                {
-                    b.HasOne("Back.Domain.Models.Paquete", null)
-                        .WithMany()
-                        .HasForeignKey("PaqueteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Back.Domain.Models.Sucursal", null)
-                        .WithMany()
-                        .HasForeignKey("SucursalDestinoId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Back.Domain.Models.Sucursal", null)
-                        .WithMany()
-                        .HasForeignKey("SucursalOrigenId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Back.Domain.Models.Ruta", b =>
