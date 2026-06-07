@@ -996,6 +996,9 @@ namespace Back.Infrastructure.Database
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("FotoPerfil")
+                        .HasColumnType("text");
+
                     b.Property<string>("Discriminator")
                         .IsRequired()
                         .HasMaxLength(13)

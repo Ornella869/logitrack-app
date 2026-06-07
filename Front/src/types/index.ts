@@ -27,6 +27,7 @@ export interface User {
   puntoPickUpId?: string | null
   horasTrabajo?: number
   tipoJornada?: 'Part Time' | 'Full Time'
+  fotoPerfil?: string | null
 }
 
 export interface CreateRepartidorData {

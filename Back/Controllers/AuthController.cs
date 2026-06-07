@@ -444,6 +444,29 @@ namespace Back.Controllers
             return Ok(MapUsuario(user));
         }
 
+        /// <summary>Actualiza la foto de perfil del usuario autenticado (base64).</summary>
+        [Authorize]
+        [HttpPut("me/foto-perfil")]
+        public async Task<ActionResult<UserInfoResponse>> ActualizarFotoPerfil([FromBody] ActualizarFotoPerfilRequest request)
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(request.FotoPerfil))
+                return BadRequest("La foto no puede estar vacía.");
+
+            // Limite: ~500 KB en base64 (aprox. 375 KB en binario).
+            if (request.FotoPerfil.Length > 700_000)
+                return BadRequest("La imagen es demasiado grande. Máximo permitido: 500 KB.");
+
+            var user = await _userRepository.GetUsuarioById(Guid.Parse(userId));
+            if (user == null) return NotFound();
+
+            user.ActualizarFotoPerfil(request.FotoPerfil);
+            await _context.SaveChangesAsync();
+            return Ok(MapUsuario(user));
+        }
+
         /// <summary>Actualizar datos de usuario (nombre, apellido, email, DNI y, opcionalmente, provincia para Gerentes).</summary>
         [Authorize(Roles = Roles.Administrador)]
         [HttpPut("usuarios/{userId:guid}")]
@@ -607,6 +630,7 @@ namespace Back.Controllers
             Provincia = u is Gerente ger ? ger.Provincia : null,
             Provincias = u is Gerente ger2 ? ger2.ProvinciasAsignadas.ToList() : null,
             PuntoPickUpId = u is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
+            FotoPerfil = u.FotoPerfil,
             Role = u switch
             {
                 Administrador => Roles.Administrador,
@@ -634,6 +658,7 @@ namespace Back.Controllers
             SucursalId = r.SucursalId?.ToString(),
             HorasTrabajo = r.HorasTrabajo,
             TipoJornada = r.TipoJornada,
+            FotoPerfil = r.FotoPerfil,
         };
     }
 
@@ -656,6 +681,7 @@ namespace Back.Controllers
         public string? PuntoPickUpId { get; set; }
         public int? HorasTrabajo { get; set; }
         public string? TipoJornada { get; set; }
+        public string? FotoPerfil { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse
@@ -678,6 +704,11 @@ namespace Back.Controllers
         [Required] public string Licencia { get; set; } = string.Empty;
         // Épica D: sucursal a la que pertenece el repartidor.
         public Guid? SucursalId { get; set; }
+    }
+
+    public class ActualizarFotoPerfilRequest
+    {
+        [Required] public string FotoPerfil { get; set; } = string.Empty;
     }
 
     public class ActualizarLicenciaRepartidorRequest

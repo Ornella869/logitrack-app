@@ -20,6 +20,7 @@ namespace Back.Application.Services
         public required Guid RepartidorId { get; init; }
         public required string Nombre { get; init; }
         public required string Email { get; init; }
+        public string? FotoPerfil { get; init; }
         public required DateTime From { get; init; }
         public required DateTime To { get; init; }
         public required int TotalEntregas { get; init; }
@@ -152,6 +153,7 @@ namespace Back.Application.Services
                 TieneActividad = totalAsignados > 0,
                 HorasTrabajo = rep.HorasTrabajo,
                 TipoJornada = rep.TipoJornada,
+                FotoPerfil = rep.FotoPerfil,
             };
         }
     }
