@@ -1137,6 +1137,7 @@ function ShipmentDetail() {
         <PrecalendarizarDialog
           open={openPrecalendarizar}
           shipment={shipment}
+          tramo={tramoDeMiSucursal ?? tramoActual ?? null}
           onClose={() => setOpenPrecalendarizar(false)}
           onSuccess={async (mensaje) => {
             setOpenPrecalendarizar(false)

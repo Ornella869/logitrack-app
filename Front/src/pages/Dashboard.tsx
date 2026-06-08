@@ -20,6 +20,7 @@ import GroupIcon from '@mui/icons-material/Group'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import { authService } from '../services/authService'
 import { shipmentService } from '../services/shipmentService'
 import { incidenciaService } from '../services/incidenciaService'
 import type { Shipment, User } from '../types'
@@ -41,6 +42,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(user.role === 'supervisor')
   const [error, setError] = useState('')
   const [incidenciasAbiertas, setIncidenciasAbiertas] = useState(0)
+  const [repartidoresEnViaje, setRepartidoresEnViaje] = useState(0)
 
   const isOperador = user.role === 'operador'
   const isSupervisor = user.role === 'supervisor'
@@ -64,8 +66,16 @@ function Dashboard() {
       setLoading(true)
       setError('')
       try {
-        const data = await shipmentService.getAllShipments()
+        const [data, repartidoresEnViajePage] = await Promise.all([
+          shipmentService.getAllShipments(),
+          authService.getRepartidoresPage({
+            page: 1,
+            pageSize: 1,
+            routeStatus: 'en-viaje',
+          }),
+        ])
         setShipments(data)
+        setRepartidoresEnViaje(repartidoresEnViajePage.totalItems)
       } catch {
         setError('Error al cargar los indicadores del dashboard')
       } finally {
@@ -81,14 +91,13 @@ function Dashboard() {
     const asignados = shipments.filter(
       (shipment) => shipment.status === 'Asignado a vehículo' || shipment.status === 'Cargado en vehículo' || shipment.status === 'Listo para salir',
     )
-    const enTransito = shipments.filter((shipment) => shipment.status === 'En tránsito')
     const hoyStr = formatArgentinaDateInput()
     const entregadosHoy = shipments.filter((shipment) => shipment.status === 'Entregado' && shipment.lastUpdate === hoyStr)
     const oldestPending = pendientes.length
       ? pendientes.reduce((a, b) => (a.createdDate < b.createdDate ? a : b))
       : null
 
-    return { pendientes, asignados, enTransito, entregadosHoy, oldestPending }
+    return { pendientes, asignados, entregadosHoy, oldestPending }
   }, [shipments])
 
   const renderSupervisor = () => (
@@ -120,7 +129,7 @@ function Dashboard() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <KpiCard label="Pendientes de Calendarización" value={supervisorMetrics.pendientes.length} sub="Esperando proceso" color="#ed6c02" icon={<HourglassTopIcon />} />
         <KpiCard label="Asignados" value={supervisorMetrics.asignados.length} sub="Calendarizados" color="#1976d2" icon={<Inventory2Icon />} />
-        <KpiCard label="En Tránsito" value={supervisorMetrics.enTransito.length} sub="Rutas activas" color="#2e7d32" icon={<LocalShippingIcon />} />
+        <KpiCard label="Repartidores en viaje" value={repartidoresEnViaje} sub="Con ruta iniciada" color="#2e7d32" icon={<LocalShippingIcon />} />
         <KpiCard label="Entregados (hoy)" value={supervisorMetrics.entregadosHoy.length} sub="Finalizados" color="#1565c0" icon={<CheckCircleIcon />} />
       </Grid>
 

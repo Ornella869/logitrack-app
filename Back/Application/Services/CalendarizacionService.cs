@@ -264,11 +264,17 @@ namespace Back.Application.Services
 
             var fechaUtc = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
 
+            var tramoActual = await _tramos.ObtenerTramoActualAsync(paqueteId);
+            var horasTramo = tramoActual?.HorasEstimadas ?? paquete.HorasEstimadasRuta;
+            var requiereFullTime = tramoActual is not null
+                ? (!tramoActual.EsUltimaMilla || tramoActual.HorasEstimadas > 6d)
+                : (paquete.RequiereRepartidorFullTime || paquete.HorasEstimadasRuta > 6f);
+
             // Validar compatibilidad de jornada: un repartidor Part Time no puede recibir
-            // envíos que superen sus horas de trabajo diario (umbral: > 6 h de ruta).
-            if (rep.EsPartTime && (paquete.RequiereRepartidorFullTime || paquete.HorasEstimadasRuta > 6f))
+            // el tramo actual si supera sus horas de trabajo diario o si no es última milla.
+            if (rep.EsPartTime && requiereFullTime)
                 throw new InvalidOperationException(
-                    $"Este envío requiere aproximadamente {paquete.HorasEstimadasRuta:0.#} horas de ruta " +
+                    $"Este envío requiere aproximadamente {horasTramo:0.#} horas de ruta " +
                     $"y no puede asignarse a repartidores de jornada Part Time ({rep.HorasTrabajo} h/día). " +
                     "Elegí un repartidor Full Time.");
 

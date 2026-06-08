@@ -23,6 +23,7 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike'
 import {
   calendarizacionService,
+  type TramoEnvio,
   type CalendarioOperativo,
 } from '../services/shipmentService'
 import type { Shipment } from '../types'
@@ -31,6 +32,7 @@ import { dateOnly, formatDateOnlyEs } from '../utils/argentinaDate'
 interface Props {
   open: boolean
   shipment: Shipment
+  tramo?: TramoEnvio | null
   onClose: () => void
   onSuccess: (mensaje: string) => void
 }
@@ -45,7 +47,7 @@ const displayDate = (value: string) =>
   })
 
 // G1L-83: asignación manual de un envío pendiente a un repartidor y día.
-export default function PrecalendarizarDialog({ open, shipment, onClose, onSuccess }: Props) {
+export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, onSuccess }: Props) {
   const [calendario, setCalendario] = useState<CalendarioOperativo | null>(null)
   const [loading, setLoading] = useState(false)
   const [fecha, setFecha] = useState('')
@@ -74,6 +76,8 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
   )
 
   const hoy = dateOnly(new Date().toISOString())
+  const horasEstimadasAsignacion = tramo?.horasEstimadas ?? shipment.horasEstimadasRuta
+  const requiereFullTime = tramo ? (!tramo.esUltimaMilla || tramo.horasEstimadas > 6) : (shipment.horasEstimadasRuta ?? 0) > 6
 
   // Carga de cada repartidor para el día elegido.
   const cargaPorRepartidor = useMemo(() => {
@@ -121,11 +125,11 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
         ) : (
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Envío <strong>{shipment.trackingId}</strong> · {(shipment.weight ?? 0).toFixed(1)} kg · destino CP {shipment.receiver.postalCode}
-              {shipment.horasEstimadasRuta !== undefined && (
-                <> · <strong>~{shipment.horasEstimadasRuta.toFixed(1)} h de ruta</strong>
-                  {shipment.horasEstimadasRuta > 6 && (
+              <Typography variant="body2" color="text.secondary">
+                Envío <strong>{shipment.trackingId}</strong> · {(shipment.weight ?? 0).toFixed(1)} kg · destino CP {shipment.receiver.postalCode}
+              {horasEstimadasAsignacion !== undefined && (
+                <> · <strong>~{horasEstimadasAsignacion.toFixed(1)} h de ruta</strong>
+                  {requiereFullTime && (
                     <Chip
                       label="Solo Full Time"
                       size="small"
@@ -171,7 +175,7 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                   const enTransitoHoy = fecha === hoy && rep.estadoJornada === 'EnRuta'
                   const retornando = rep.estadoJornada === 'Retornando'
                   const esPartTime = (rep.horasTrabajo ?? 8) <= 6
-                  const incompatibleJornada = esPartTime && (shipment.horasEstimadasRuta ?? 0) > 6
+                  const incompatibleJornada = esPartTime && requiereFullTime
                   const bloqueado = enTransitoHoy || retornando || quedaExcedido || incompatibleJornada
                   const tooltipTitle = enTransitoHoy
                     ? 'Está en tránsito. Elegí otro día para asignarle un envío.'
@@ -180,7 +184,7 @@ export default function PrecalendarizarDialog({ open, shipment, onClose, onSucce
                     : quedaExcedido
                     ? 'No hay capacidad para este envío en este día. Elegí otro día.'
                     : incompatibleJornada
-                    ? `Este envío requiere ~${(shipment.horasEstimadasRuta ?? 0).toFixed(1)} h de ruta. Los repartidores Part Time solo pueden recibir envíos de hasta 6 h.`
+                    ? `Este envío requiere ~${(horasEstimadasAsignacion ?? 0).toFixed(1)} h de ruta. Los repartidores Part Time solo pueden recibir envíos de hasta 6 h o tramos de última milla.`
                     : ''
                   return (
                     <Tooltip key={rep.repartidorId} title={tooltipTitle} placement="top">

@@ -287,6 +287,7 @@ namespace Back.Domain.Models
             Status = PaqueteStatus.PendienteDeCalendarizacion;
             RazonDemora = null;
             RazonCancelacion = null;
+            HorasEstimadasRuta = (float)(Math.Max(0, distanciaKm) / 70d);
             RequiereRepartidorFullTime = requiereFullTime;
         }
 

@@ -101,7 +101,11 @@ namespace Back.Infrastructure.Database.Repositories
         {
             return await _context.Paquetes
                 .Where(p => p.Status == PaqueteStatus.PendienteDeCalendarizacion
-                            && (!sucursalId.HasValue || p.SucursalId == sucursalId.Value))
+                            && (!sucursalId.HasValue || p.SucursalId == sucursalId.Value)
+                            && _context.TramosEnvio.Any(t => t.PaqueteId == p.Id
+                                && t.Estado == TramoEnvioStatus.PendienteDeCalendarizacion
+                                && p.SucursalId.HasValue
+                                && t.SucursalOrigenId == p.SucursalId.Value))
                 .ToListAsync();
         }
 

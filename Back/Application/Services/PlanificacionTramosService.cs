@@ -167,6 +167,10 @@ namespace Back.Application.Services
                 .Where(t => t.SucursalOrigenId == sucursalId)
                 .Join(_context.Paquetes, t => t.PaqueteId, p => p.Id, (t, p) => new { Tramo = t, Paquete = p });
 
+            // Un pendiente solo es visible en la sucursal donde sigue vigente el tramo actual.
+            query = query.Where(x => x.Tramo.Estado != TramoEnvioStatus.PendienteDeCalendarizacion
+                || x.Paquete.SucursalId == sucursalId);
+
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var value = search.Trim();
@@ -198,6 +202,7 @@ namespace Back.Application.Services
             var tramoRows = await query.ToListAsync();
             var legacyQuery = _context.Paquetes
                 .Where(p => p.SucursalId == sucursalId
+                    && p.Status != PaqueteStatus.PendienteDeCalendarizacion
                     && !_context.TramosEnvio.Any(t => t.PaqueteId == p.Id));
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -405,6 +410,9 @@ namespace Back.Application.Services
             var tramo = await TramoActualAsync(paqueteId);
             return tramo is null || tramo.EsUltimaMilla;
         }
+
+        public async Task<TramoEnvio?> ObtenerTramoActualAsync(Guid paqueteId)
+            => await TramoActualAsync(paqueteId);
 
         public async Task SincronizarCancelacionAsync(Paquete paquete)
         {
