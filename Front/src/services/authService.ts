@@ -125,6 +125,7 @@ export const authService = {
         provincia: userInfo?.provincia ?? userInfo?.Provincia ?? null,
         provincias: userInfo?.provincias ?? userInfo?.Provincias ?? null,
         puntoPickUpId: userInfo?.puntoPickUpId ?? userInfo?.PuntoPickUpId ?? null,
+        fotoPerfil: userInfo?.fotoPerfil ?? null,
       }
 
       console.log('✓ Login exitoso:', user)
