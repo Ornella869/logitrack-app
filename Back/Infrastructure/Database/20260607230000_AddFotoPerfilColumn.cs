@@ -10,19 +10,19 @@ namespace Back.Infrastructure.Database
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "FotoPerfil",
-                table: "Usuarios",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "Usuarios"
+                ADD COLUMN IF NOT EXISTS "FotoPerfil" text NULL;
+            """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "FotoPerfil",
-                table: "Usuarios");
+            migrationBuilder.Sql("""
+                ALTER TABLE "Usuarios"
+                DROP COLUMN IF EXISTS "FotoPerfil";
+            """);
         }
     }
 }

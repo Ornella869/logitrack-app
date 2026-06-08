@@ -10,30 +10,34 @@ namespace Back.Infrastructure.Database
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "HorasTrabajo",
-                table: "Usuarios",
-                type: "integer",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "Usuarios"
+                ADD COLUMN IF NOT EXISTS "HorasTrabajo" integer NULL;
+            """);
 
-            migrationBuilder.AddColumn<float>(
-                name: "HorasEstimadasRuta",
-                table: "Paquetes",
-                type: "real",
-                nullable: false,
-                defaultValue: 8f);
+            migrationBuilder.Sql("""
+                ALTER TABLE "Paquetes"
+                ADD COLUMN IF NOT EXISTS "HorasEstimadasRuta" real NOT NULL DEFAULT 8;
+            """);
+
+            migrationBuilder.Sql("""
+                ALTER TABLE "Paquetes"
+                ALTER COLUMN "HorasEstimadasRuta" DROP DEFAULT;
+            """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "HorasTrabajo",
-                table: "Usuarios");
+            migrationBuilder.Sql("""
+                ALTER TABLE "Usuarios"
+                DROP COLUMN IF EXISTS "HorasTrabajo";
+            """);
 
-            migrationBuilder.DropColumn(
-                name: "HorasEstimadasRuta",
-                table: "Paquetes");
+            migrationBuilder.Sql("""
+                ALTER TABLE "Paquetes"
+                DROP COLUMN IF EXISTS "HorasEstimadasRuta";
+            """);
         }
     }
 }
