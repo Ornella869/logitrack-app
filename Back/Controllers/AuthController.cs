@@ -825,6 +825,7 @@ namespace Back.Controllers
         public string? Provincia { get; set; }
         public List<string>? Provincias { get; set; }
         public string? PuntoPickUpId { get; set; }
+        public string? FotoPerfil { get; set; }
     }
 
     public class RegisterRequest
