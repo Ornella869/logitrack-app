@@ -218,7 +218,7 @@ namespace Back.Application.Services
                 EventoEmailNotificacion.LeadPlanes);
 
             _context.EmailNotificaciones.Add(email);
-            await EnviarAsync(email);
+            // Se encola en la DB, el BackgroundWorker lo procesará
         }
 
         public async Task<bool> ReintentarAsync(Guid emailId, Guid? sucursalScope)
@@ -271,7 +271,7 @@ namespace Back.Application.Services
                 evento);
 
             _context.EmailNotificaciones.Add(email);
-            await EnviarAsync(email);
+            // Se encola en la DB, el BackgroundWorker lo procesará
         }
 
         private static string AplicarVariables(string template, Paquete paquete, PaqueteStatus? estado = null)
@@ -295,7 +295,7 @@ namespace Back.Application.Services
                 .Replace("{{provincia}}", System.Security.SecurityElement.Escape(paquete.ProvinciaDestino ?? ""));
         }
 
-        private async Task EnviarAsync(EmailNotificacion email)
+        public async Task EnviarAsync(EmailNotificacion email)
         {
             if (!EmailService.IsEmailValid(email.DestinatarioEmail))
             {
