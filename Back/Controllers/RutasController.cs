@@ -340,6 +340,7 @@ namespace Back.Controllers
                     latitud = lat,
                     longitud = lng,
                     actualizadaEn = ahora,
+                    origen = "gps",
                 });
             }
         }

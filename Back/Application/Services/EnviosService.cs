@@ -839,7 +839,33 @@ namespace Back.Application.Services
                     "No tenés paquetes en estado 'Listo para Salir' para iniciar la ruta. " +
                     "Asegurate de haber escaneado todos los paquetes del día.");
 
-            foreach (var p in listos)
+            var rutasDelRepartidor = await _rutasRepository.GetHistorialRutas(repartidorId);
+            var rutasPendientesDelDia = rutasDelRepartidor
+                .Where(r => r.Estado == RutaStatus.Pendiente)
+                .Where(r => r.Paquetes.Any(p => p.FechaCalendarizada?.Date == fecha.Date))
+                .ToList();
+
+            var paquetesIniciadosPorRuta = new HashSet<Guid>();
+            foreach (var ruta in rutasPendientesDelDia)
+            {
+                var paquetesRutaDelDia = ruta.Paquetes
+                    .Where(p => p.FechaCalendarizada?.Date == fecha.Date)
+                    .ToList();
+
+                if (paquetesRutaDelDia.Count == 0) continue;
+                if (paquetesRutaDelDia.Any(p => p.Status != PaqueteStatus.ListoParaSalir)) continue;
+
+                ruta.Iniciar();
+                foreach (var paqueteRuta in paquetesRutaDelDia)
+                {
+                    paquetesIniciadosPorRuta.Add(paqueteRuta.Id);
+                    await _tramos.SincronizarInicioAsync(paqueteRuta);
+                    await _historial.RegistrarCambioAsync(
+                        paqueteRuta.Id, PaqueteStatus.EnTransito, usuarioId, OrigenCambioEstado.Manual, "Inicializar Ruta");
+                }
+            }
+
+            foreach (var p in listos.Where(p => !paquetesIniciadosPorRuta.Contains(p.Id)))
             {
                 p.IniciarTransito();
                 await _tramos.SincronizarInicioAsync(p);

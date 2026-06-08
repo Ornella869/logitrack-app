@@ -64,6 +64,7 @@ import { shipmentService } from '../../services/shipmentService'
 import { notificationService } from '../../services/notificationService'
 import { branchService, type BranchOrigin } from '../../services/branchService'
 import { ojoPatronService } from '../../services/ojoPatronService'
+import { mergeUbicacionPreferida, subscribeUbicacionActualizada, type UbicacionVisual } from '../../services/ubicacionLiveService'
 import StatusBadge from '../../components/StatusBadge'
 import RouteMap, { fetchOsrmRoute, positionAlongRoute } from '../../components/RouteMap'
 import QrCameraScanner from '../../components/QrCameraScanner'
@@ -151,6 +152,7 @@ export default function RepartidorDashboard() {
   const [accionesAnchorEl, setAccionesAnchorEl] = useState<null | HTMLElement>(null)
   const [modoSimulacion, setModoSimulacion] = useState(false)
   const [ubicacionReal, setUbicacionReal] = useState<{ latitud: number; longitud: number } | null>(null)
+  const [ubicacionLive, setUbicacionLive] = useState<UbicacionVisual | null>(null)
   const [ubicacionMsg, setUbicacionMsg] = useState<{ severity: 'success' | 'info' | 'warning' | 'error'; message: string } | null>(null)
 
   // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
@@ -175,6 +177,7 @@ export default function RepartidorDashboard() {
   const simulationRouteRef = useRef<[number, number][] | null>(null)
   const simulationLegKeyRef = useRef('')
   const autoCierreRef = useRef(false)
+  const ubicacionActualRepartidor = ubicacionLive ?? ubicacionReal
 
   const load = async (fecha?: string) => {
     setLoading(true)
@@ -202,6 +205,20 @@ export default function RepartidorDashboard() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (user.role !== 'repartidor') return
+    return subscribeUbicacionActualizada((event) => {
+      if (event.repartidorId !== user.id) return
+      setUbicacionLive((prev) => mergeUbicacionPreferida(prev, {
+        latitud: event.latitud,
+        longitud: event.longitud,
+        actualizadaEn: event.actualizadaEn,
+        codigoSeguimiento: event.codigoSeguimiento,
+        origen: event.origen,
+      }))
+    })
+  }, [user.id, user.role])
 
   useEffect(() => {
     setTab(location.pathname.startsWith('/repartidor/paradas') ? 1 : 0)
@@ -249,8 +266,8 @@ export default function RepartidorDashboard() {
         .reverse()
         .find((p) => p.status === 'Entregado' && p.receiverUbicacion?.latitud != null && p.receiverUbicacion?.longitud != null)
 
-      const origenLat = ubicacionReal?.latitud ?? ultimaEntregada?.receiverUbicacion?.latitud
-      const origenLng = ubicacionReal?.longitud ?? ultimaEntregada?.receiverUbicacion?.longitud
+      const origenLat = ubicacionActualRepartidor?.latitud ?? ultimaEntregada?.receiverUbicacion?.latitud
+      const origenLng = ubicacionActualRepartidor?.longitud ?? ultimaEntregada?.receiverUbicacion?.longitud
       if (origenLat == null || origenLng == null) return null
 
       return {
@@ -653,12 +670,12 @@ export default function RepartidorDashboard() {
   }
 
   useEffect(() => {
-    if (estadoJornada !== 'Retornando' || !ubicacionReal || origen?.latitud == null || origen.longitud == null || autoCierreRef.current) return
-    const distance = distanceInMeters(ubicacionReal, { latitud: origen.latitud, longitud: origen.longitud })
+    if (estadoJornada !== 'Retornando' || !ubicacionActualRepartidor || origen?.latitud == null || origen.longitud == null || autoCierreRef.current) return
+    const distance = distanceInMeters(ubicacionActualRepartidor, { latitud: origen.latitud, longitud: origen.longitud })
     if (distance <= ARRIVAL_RADIUS_METERS) {
       void handleCerrarJornada('radio')
     }
-  }, [estadoJornada, ubicacionReal, origen])
+  }, [estadoJornada, ubicacionActualRepartidor, origen])
 
   // G1L-43: Escaneo de QR — el repartidor confirma carga / inicia tránsito / abre ficha.
   // Aceptamos un código optional para usar directamente lo decodificado por la cámara
@@ -1266,7 +1283,7 @@ export default function RepartidorDashboard() {
                       }
                     : null
                 }
-                ubicacionActual={ubicacionReal}
+                ubicacionActual={ubicacionActualRepartidor}
                 showReturnRoute={showRetorno}
                 animateReturnRoute={retornoAnimando}
                 height={380}

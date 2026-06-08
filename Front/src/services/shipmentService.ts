@@ -163,7 +163,11 @@ const mapToShipment = (paquete: any): Shipment => ({
   fechaEstimadaEntrega: paquete.fechaEstimadaEntrega ?? null,
   sucursalId: paquete.sucursalId ?? paquete.SucursalId ?? null,
   ubicacionActual: paquete.ubicacionActual
-    ? { latitud: paquete.ubicacionActual.latitud, longitud: paquete.ubicacionActual.longitud }
+    ? {
+        latitud: paquete.ubicacionActual.latitud,
+        longitud: paquete.ubicacionActual.longitud,
+        origen: paquete.ubicacionActualOrigen ?? undefined,
+      }
     : null,
   receiverUbicacion: paquete.ubicacionDestinoOperativa ?? paquete.destinatario?.direccion?.ubicacion
     ? {
@@ -616,7 +620,7 @@ export const shipmentService = {
     }
   },
 
-  getRepartidoresUbicacion: async (): Promise<Array<{ repartidorId: string; repartidorNombre: string; paqueteId: string; codigoSeguimiento: string; latitud: number; longitud: number; actualizadaEn?: string }>> => {
+  getRepartidoresUbicacion: async (): Promise<Array<{ repartidorId: string; repartidorNombre: string; paqueteId: string; codigoSeguimiento: string; latitud: number; longitud: number; actualizadaEn?: string; origen?: 'gps' | 'manual' }>> => {
     const response = await api.get('/envios/repartidores-ubicacion')
     return response.data ?? []
   },

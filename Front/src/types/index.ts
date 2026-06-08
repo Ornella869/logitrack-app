@@ -122,7 +122,7 @@ export interface Shipment {
   fechaCalendarizada?: string | null
   fechaEstimadaEntrega?: string | null
   sucursalId?: string | null
-  ubicacionActual?: { latitud: number; longitud: number } | null
+  ubicacionActual?: { latitud: number; longitud: number; origen?: 'gps' | 'manual' } | null
   tipoEnvio?: TipoEnvio
   tipoPaquete?: TipoPaquete
   isEditable?: boolean

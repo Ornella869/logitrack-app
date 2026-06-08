@@ -30,7 +30,7 @@ import ReportarIncidenteClienteDialog from '../components/ReportarIncidenteClien
 import CalificacionPickUpDialog from '../components/CalificacionPickUpDialog'
 import type { Shipment } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
-import { subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
+import { mergeUbicacionPreferida, subscribeUbicacionActualizada, type UbicacionVisual } from '../services/ubicacionLiveService'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -62,17 +62,23 @@ function PanTo({ pos }: { pos: [number, number] }) {
   return null
 }
 
-function DriverLiveMap({ trackingId, initialPos }: { trackingId: string; initialPos: { latitud: number; longitud: number } }) {
-  const [pos, setPos] = useState<[number, number]>([initialPos.latitud, initialPos.longitud])
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+function DriverLiveMap({ trackingId, initialPos }: { trackingId: string; initialPos: UbicacionVisual }) {
+  const [ubicacion, setUbicacion] = useState<UbicacionVisual>(initialPos)
 
   useEffect(() => {
     return subscribeUbicacionActualizada((event) => {
       if (event.codigoSeguimiento !== trackingId) return
-      setPos([event.latitud, event.longitud])
-      setUpdatedAt(event.actualizadaEn ?? null)
+      setUbicacion((prev) => mergeUbicacionPreferida(prev, {
+        latitud: event.latitud,
+        longitud: event.longitud,
+        actualizadaEn: event.actualizadaEn,
+        codigoSeguimiento: event.codigoSeguimiento,
+        origen: event.origen,
+      }))
     })
   }, [trackingId])
+
+  const pos: [number, number] = [ubicacion.latitud, ubicacion.longitud]
 
   return (
     <Box>
@@ -89,8 +95,8 @@ function DriverLiveMap({ trackingId, initialPos }: { trackingId: string; initial
         </MapContainer>
       </Box>
       <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
-        {updatedAt
-          ? `Actualizado: ${new Date(updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+        {ubicacion.actualizadaEn
+          ? `Actualizado: ${new Date(ubicacion.actualizadaEn).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
           : 'Esperando actualización de ubicación…'}
       </Typography>
     </Box>

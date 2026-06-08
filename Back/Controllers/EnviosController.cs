@@ -95,6 +95,20 @@ namespace Back.Controllers
             return 2 * radioTierraKm * Math.Asin(Math.Sqrt(h));
         }
 
+        private async Task<(Ubicacion? Ubicacion, DateTime? ActualizadaEn, string Origen)> ResolverUbicacionPreferidaAsync(Paquete paquete)
+        {
+            if (paquete.RepartidorAsignadoId.HasValue)
+            {
+                var rutaActiva = await _rutasRepository.GetRutaActivaByRepartidorId(paquete.RepartidorAsignadoId.Value);
+                if (rutaActiva?.UbicacionActualLat is double lat && rutaActiva.UbicacionActualLng is double lng)
+                {
+                    return (new Ubicacion(lat, lng), rutaActiva.UbicacionActualizadaEn, "gps");
+                }
+            }
+
+            return (paquete.UbicacionActual, paquete.UbicacionActualActualizadaEn, "manual");
+        }
+
         private async Task<List<Paquete>> OrdenarParadasDesdeSucursalAsync(List<Paquete> paquetes, GeocodingService geocoding)
         {
             var user = await CurrentUserAsync();
@@ -213,6 +227,9 @@ namespace Back.Controllers
         {
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento);
             if (paquete is null) return NotFound();
+            var ubicacion = paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado
+                ? await ResolverUbicacionPreferidaAsync(paquete)
+                : (null, null, "manual");
 
             PuntoPickUp? punto = null;
             if (paquete.PuntoPickUpId.HasValue)
@@ -232,8 +249,9 @@ namespace Back.Controllers
                 Peso = paquete.Peso,
                 Descripcion = paquete.Descripcion,
                 RazonCancelacion = paquete.RazonCancelacion,
-                UbicacionActual = paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado ? paquete.UbicacionActual : null,
-                UbicacionActualActualizadaEn = paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado ? paquete.UbicacionActualActualizadaEn : null,
+                UbicacionActual = ubicacion.Item1,
+                UbicacionActualActualizadaEn = ubicacion.Item2,
+                UbicacionActualOrigen = ubicacion.Item1 is null ? null : ubicacion.Item3,
                 Remitente = new SeguimientoPublicoCliente
                 {
                     Ciudad = paquete.Remitente.Direccion.Ciudad,
@@ -375,11 +393,13 @@ namespace Back.Controllers
             await _context.SaveChangesAsync();
             await hub.Clients.All.SendAsync("ubicacionActualizada", new
             {
+                repartidorId = paquete.RepartidorAsignadoId,
                 paqueteId = paquete.Id,
                 codigoSeguimiento = paquete.CodigoSeguimiento,
                 latitud = request.Latitud,
                 longitud = request.Longitud,
                 actualizadaEn = paquete.UbicacionActualActualizadaEn,
+                origen = "manual",
             });
             return Ok();
         }
@@ -416,6 +436,7 @@ namespace Back.Controllers
                     latitud = request.Latitud,
                     longitud = request.Longitud,
                     actualizadaEn = paqueteActual.UbicacionActualActualizadaEn,
+                    origen = "gps",
                 });
             }
             return Ok(new { actualizados = paquetes.Count });
@@ -437,18 +458,43 @@ namespace Back.Controllers
             var repartidores = await _context.Usuarios
                 .Where(u => repartidorIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => $"{u.Nombre} {u.Apellido}");
+            var rutasActivas = await _context.Rutas
+                .Where(r => repartidorIds.Contains(r.Repartidor.Id)
+                            && r.Estado == RutaStatus.EnCurso
+                            && r.UbicacionActualLat.HasValue
+                            && r.UbicacionActualLng.HasValue)
+                .ToDictionaryAsync(r => r.Repartidor.Id);
 
             var result = paquetes
                 .GroupBy(p => p.RepartidorAsignadoId!.Value)
-                .Select(g => g.OrderByDescending(p => p.UbicacionActualActualizadaEn).First())
-                .Select(p => new RepartidorUbicacionDto(
-                    p.RepartidorAsignadoId!.Value,
-                    repartidores.TryGetValue(p.RepartidorAsignadoId!.Value, out var nombre) ? nombre : "Repartidor",
-                    p.Id,
-                    p.CodigoSeguimiento,
-                    p.UbicacionActual!.Latitud,
-                    p.UbicacionActual.Longitud,
-                    p.UbicacionActualActualizadaEn))
+                .Select(g =>
+                {
+                    var paquete = g.OrderByDescending(p => p.UbicacionActualActualizadaEn).First();
+                    var repartidorId = paquete.RepartidorAsignadoId!.Value;
+                    var repartidorNombre = repartidores.TryGetValue(repartidorId, out var nombreRepartidor) ? nombreRepartidor : "Repartidor";
+                    if (rutasActivas.TryGetValue(repartidorId, out var rutaActiva))
+                    {
+                        return new RepartidorUbicacionDto(
+                            repartidorId,
+                            repartidorNombre,
+                            paquete.Id,
+                            paquete.CodigoSeguimiento,
+                            rutaActiva.UbicacionActualLat!.Value,
+                            rutaActiva.UbicacionActualLng!.Value,
+                            rutaActiva.UbicacionActualizadaEn,
+                            "gps");
+                    }
+
+                    return new RepartidorUbicacionDto(
+                        repartidorId,
+                        repartidorNombre,
+                        paquete.Id,
+                        paquete.CodigoSeguimiento,
+                        paquete.UbicacionActual!.Latitud,
+                        paquete.UbicacionActual.Longitud,
+                        paquete.UbicacionActualActualizadaEn,
+                        "manual");
+                })
                 .ToList();
 
             return Ok(result);
@@ -1154,7 +1200,8 @@ namespace Back.Controllers
         string CodigoSeguimiento,
         double Latitud,
         double Longitud,
-        DateTime? ActualizadaEn);
+        DateTime? ActualizadaEn,
+        string Origen);
 
     public class RegistrarPaqueteRequest
     {
@@ -1254,6 +1301,7 @@ namespace Back.Controllers
         public string? RazonCancelacion { get; set; }
         public Ubicacion? UbicacionActual { get; set; }
         public DateTime? UbicacionActualActualizadaEn { get; set; }
+        public string? UbicacionActualOrigen { get; set; }
         public SeguimientoPublicoCliente Remitente { get; set; } = new();
         public SeguimientoPublicoCliente Destinatario { get; set; } = new();
         // G1L-107: datos del punto Pick Up cuando el envío es modalidad retiro.

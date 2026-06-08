@@ -29,7 +29,7 @@ import StatusBadge from '../components/StatusBadge'
 import RouteMap from '../components/RouteMap'
 import { branchService, type BranchOrigin } from '../services/branchService'
 import { shipmentService } from '../services/shipmentService'
-import { subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
+import { mergeUbicacionPreferida, subscribeUbicacionActualizada, type UbicacionVisual } from '../services/ubicacionLiveService'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 import { buildMapsUrl } from '../utils/mapsUrl'
 import type { User } from '../types'
@@ -83,7 +83,7 @@ export default function DetalleRutaPage() {
   const fecha = searchParams.get('fecha') ?? undefined
   const [detalle, setDetalle] = useState<DetalleRuta | null>(null)
   const [origen, setOrigen] = useState<BranchOrigin | null>(null)
-  const [ubicacionActual, setUbicacionActual] = useState<{ latitud: number; longitud: number; actualizadaEn?: string; codigoSeguimiento?: string } | null>(null)
+  const [ubicacionActual, setUbicacionActual] = useState<UbicacionVisual | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mapClickMode, setMapClickMode] = useState(false)
@@ -102,6 +102,7 @@ export default function DetalleRutaPage() {
           longitud: actual.longitud,
           actualizadaEn: actual.actualizadaEn,
           codigoSeguimiento: actual.codigoSeguimiento,
+          origen: actual.origen,
         }
       : null)
   }
@@ -113,12 +114,13 @@ export default function DetalleRutaPage() {
     void loadUbicacion()
     return subscribeUbicacionActualizada((event) => {
       if (event.repartidorId !== repartidorId) return
-      setUbicacionActual({
+      setUbicacionActual((prev) => mergeUbicacionPreferida(prev, {
         latitud: event.latitud,
         longitud: event.longitud,
         actualizadaEn: event.actualizadaEn,
         codigoSeguimiento: event.codigoSeguimiento,
-      })
+        origen: event.origen,
+      }))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repartidorId, user.role, fecha])

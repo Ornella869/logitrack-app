@@ -7,6 +7,21 @@ export type UbicacionActualizadaEvent = {
   latitud: number
   longitud: number
   actualizadaEn?: string
+  origen?: 'gps' | 'manual'
+}
+
+export type UbicacionVisual = {
+  latitud: number
+  longitud: number
+  actualizadaEn?: string
+  codigoSeguimiento?: string
+  origen?: 'gps' | 'manual'
+}
+
+export function mergeUbicacionPreferida(actual: UbicacionVisual | null, incoming: UbicacionVisual): UbicacionVisual {
+  if (incoming.origen === 'gps') return incoming
+  if (actual?.origen === 'gps') return actual
+  return incoming
 }
 
 const RECORD_SEPARATOR = String.fromCharCode(30)

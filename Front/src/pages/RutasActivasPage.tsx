@@ -37,7 +37,7 @@ import PlaceIcon from '@mui/icons-material/Place'
 import api from '../services/api'
 import { shipmentService } from '../services/shipmentService'
 import { pickupService, type PuntoPickUp } from '../services/pickupService'
-import { subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
+import { mergeUbicacionPreferida, subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
 import type { PagedResult, User } from '../types'
 import { dateOnly, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
@@ -81,6 +81,7 @@ type UbicacionRepartidor = {
   latitud: number
   longitud: number
   actualizadaEn?: string
+  origen?: 'gps' | 'manual'
 }
 
 export default function RutasActivasPage() {
@@ -121,13 +122,18 @@ export default function RutasActivasPage() {
       if (!event.repartidorId) return
       setUbicaciones((prev) => {
         const actual = prev.find((u) => u.repartidorId === event.repartidorId)
-        const next: UbicacionRepartidor = {
+        const base: UbicacionRepartidor = {
           repartidorId: event.repartidorId!,
           repartidorNombre: actual?.repartidorNombre,
           codigoSeguimiento: event.codigoSeguimiento ?? actual?.codigoSeguimiento ?? '',
           latitud: event.latitud,
           longitud: event.longitud,
           actualizadaEn: event.actualizadaEn,
+          origen: event.origen,
+        }
+        const next = {
+          ...base,
+          ...mergeUbicacionPreferida(actual ?? null, base),
         }
         return actual
           ? prev.map((u) => u.repartidorId === event.repartidorId ? next : u)
