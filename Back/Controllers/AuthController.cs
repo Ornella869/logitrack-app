@@ -219,6 +219,7 @@ namespace Back.Controllers
                     RouteStatusLabel = routeStatusLabel,
                     HorasTrabajo = t.HorasTrabajo,
                     TipoJornada = t.TipoJornada,
+                    FotoPerfil = t.FotoPerfil,
                 };
             });
 

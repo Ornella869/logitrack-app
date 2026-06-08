@@ -187,11 +187,12 @@ export default function ProfilePage() {
     try {
       const b64 = await compressImage(file)
       const updated = await authService.updateFotoPerfil(b64)
-      const updatedUser: User = { ...user, fotoPerfil: updated.fotoPerfil }
+      const updatedUser: User = { ...user, fotoPerfil: updated.fotoPerfil ?? b64 }
       localStorage.setItem('user', JSON.stringify(updatedUser))
       localStorage.setItem(`logitrack_avatar_${user.id}`, b64)
       setAvatarSrc(b64)
       window.dispatchEvent(new Event('logitrack:avatarChange'))
+      window.dispatchEvent(new Event('logitrack:userUpdate'))
     } catch {
       setAvatarError('No se pudo guardar la foto. Intentá de nuevo.')
     } finally {
