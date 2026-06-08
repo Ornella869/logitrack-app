@@ -869,6 +869,9 @@ namespace Back.Application.Services
             if (activos.Count == 0)
                 throw new InvalidOperationException("No hay envíos activos para pausar. Si ya entregaste todo, usá 'Llegué a sucursal' para cerrar tu jornada.");
 
+            if (!activos.Any(RequierePausaNocturna))
+                throw new InvalidOperationException("La jornada solo se puede pausar en rutas multi-día o de larga distancia.");
+
             foreach (var p in activos)
             {
                 p.PausarJornada();
@@ -883,6 +886,14 @@ namespace Back.Application.Services
                 contexto: $"Repartidor {repartidorId} fecha {hoy:yyyy-MM-dd}");
 
             return activos.Count;
+        }
+
+        private static bool RequierePausaNocturna(Paquete paquete)
+        {
+            if (paquete.DiasEstimadosEntrega > 1) return true;
+            return paquete.FechaCalendarizada.HasValue
+                && paquete.FechaEstimadaEntrega.HasValue
+                && paquete.FechaEstimadaEntrega.Value.Date > paquete.FechaCalendarizada.Value.Date;
         }
 
         // G1L-119: el repartidor reanuda la ruta al día siguiente.

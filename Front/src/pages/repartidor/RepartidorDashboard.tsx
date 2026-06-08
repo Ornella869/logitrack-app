@@ -218,8 +218,18 @@ export default function RepartidorDashboard() {
     [paradas],
   )
 
-  // G1L-119: el repartidor puede pausar mientras esté EnRuta (el backend valida que haya paquetes activos).
-  const puedePausarJornada = hayRutaActiva
+  const esRutaMultiDia = useMemo(
+    () => paradas.some((p) => {
+      if (!p.fechaCalendarizada || !p.fechaEstimadaEntrega) return false
+
+      const fechaInicio = new Date(p.fechaCalendarizada)
+      const fechaFin = new Date(p.fechaEstimadaEntrega)
+      return fechaFin.getTime() > fechaInicio.getTime()
+    }),
+    [paradas],
+  )
+
+  const puedePausarJornada = hayRutaActiva && esRutaMultiDia
 
   const detenerSimulacion = () => {
     if (simulationTimerRef.current != null) {
