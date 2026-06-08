@@ -1151,7 +1151,7 @@ export default function RepartidorDashboard() {
 
           {tab === 0 && (
             <Card variant="outlined" sx={{ mb: 3, overflow: 'hidden', borderRadius: 3 }}>
-              <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderBottom: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ p: 2, bgcolor: isDark ? '#1B2D42' : '#fafafa', borderBottom: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap', gap: isMobile ? 1.25 : 1 }}>
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
                     {showRetorno
@@ -1166,13 +1166,27 @@ export default function RepartidorDashboard() {
                         : `Orden automático por cercanía · ${paradas.length} paradas`}
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button size="small" variant="outlined" startIcon={<MapIcon />} disabled={paradas.length === 0} onClick={abrirRutaEnMaps}>
+                <Stack
+                  direction={isMobile ? 'column' : 'row'}
+                  spacing={1}
+                  useFlexGap
+                  flexWrap="wrap"
+                  sx={{
+                    width: isMobile ? '100%' : 'auto',
+                    '& .MuiButton-root': {
+                      minHeight: isMobile ? 42 : undefined,
+                      justifyContent: 'center',
+                      whiteSpace: 'nowrap',
+                    },
+                  }}
+                >
+                  <Button size="small" fullWidth={isMobile} variant="outlined" startIcon={<MapIcon />} disabled={paradas.length === 0} onClick={abrirRutaEnMaps}>
                     Abrir ruta en Maps
                   </Button>
                   {metrics.listosParaSalir > 0 && (
                     <Button
                       size="small"
+                      fullWidth={isMobile}
                       variant="contained"
                       color="success"
                       startIcon={<PlayArrowIcon />}
@@ -1183,6 +1197,7 @@ export default function RepartidorDashboard() {
                   )}
                   <Button
                     size="small"
+                    fullWidth={isMobile}
                     variant="contained"
                     startIcon={<NavigationIcon />}
                     disabled={!proxima}
@@ -1194,6 +1209,7 @@ export default function RepartidorDashboard() {
                     <>
                       <Button
                         size="small"
+                        fullWidth={isMobile}
                         variant="outlined"
                         color="success"
                         startIcon={cerrandoJornada ? <CircularProgress size={16} /> : <CheckCircleIcon />}
@@ -1204,6 +1220,7 @@ export default function RepartidorDashboard() {
                       </Button>
                       <Button
                         size="small"
+                        fullWidth={isMobile}
                         variant="contained"
                         startIcon={modoSimulacion ? <GpsFixedIcon /> : <DirectionsIcon />}
                         onClick={activarSimulacion}
@@ -1447,7 +1464,7 @@ export default function RepartidorDashboard() {
         </>
       )}
 
-      {isMobile && paradas.length > 0 && (tab === 0 || tab === 1) && (
+      {false && (
         <Paper elevation={10} sx={{ position: 'fixed', left: 12, right: 12, bottom: 78, zIndex: 115, borderRadius: 3, p: 1, border: '1px solid', borderColor: 'divider' }}>
           <Button fullWidth size="large" variant="contained" color={ctaOperativa.color} startIcon={ctaOperativa.icon} onClick={ctaOperativa.onClick} disabled={ctaOperativa.disabled}>
             {ctaOperativa.label}

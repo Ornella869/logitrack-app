@@ -83,6 +83,7 @@ const mapUsuario = (usuario: any): User => ({
   provincia: usuario.provincia ?? usuario.Provincia ?? null,
   provincias: usuario.provincias ?? usuario.Provincias ?? null,
   puntoPickUpId: usuario.puntoPickUpId ?? usuario.PuntoPickUpId ?? null,
+  fotoPerfil: usuario.fotoPerfil ?? null,
 })
 
 const mapPagedUsuarios = (data: any): PagedResult<User> => ({
@@ -124,6 +125,7 @@ export const authService = {
         provincia: userInfo?.provincia ?? userInfo?.Provincia ?? null,
         provincias: userInfo?.provincias ?? userInfo?.Provincias ?? null,
         puntoPickUpId: userInfo?.puntoPickUpId ?? userInfo?.PuntoPickUpId ?? null,
+        fotoPerfil: userInfo?.fotoPerfil ?? null,
       }
 
       console.log('✓ Login exitoso:', user)
@@ -490,6 +492,11 @@ export const authService = {
         'Error al actualizar el usuario'
       throw new Error(msg)
     }
+  },
+
+  updateFotoPerfil: async (fotoBase64: string): Promise<User> => {
+    const response = await api.put('/auth/me/foto-perfil', { FotoPerfil: fotoBase64 })
+    return mapUsuario(response.data)
   },
 
   updateMiPerfil: async (nombre: string, apellido: string): Promise<User> => {

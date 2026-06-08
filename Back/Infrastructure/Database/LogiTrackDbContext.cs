@@ -171,7 +171,7 @@ namespace Back.Infrastructure.Database
                 e.HasKey(x => x.Id);
                 e.Property(x => x.DestinatarioEmail).HasMaxLength(160).IsRequired();
                 e.Property(x => x.Asunto).HasMaxLength(250).IsRequired();
-                e.Property(x => x.Cuerpo).HasMaxLength(4000).IsRequired();
+                e.Property(x => x.Cuerpo).IsRequired();
                 e.Property(x => x.CodigoSeguimiento).HasMaxLength(80);
                 e.Property(x => x.Error).HasMaxLength(1000);
                 e.HasIndex(x => x.PaqueteId);

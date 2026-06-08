@@ -55,9 +55,10 @@ export default function ProfilePage() {
   // Avatar
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [avatarSrc, setAvatarSrc] = useState<string | null>(
-    () => localStorage.getItem(`logitrack_avatar_${user.id}`)
+    () => user.fotoPerfil ?? localStorage.getItem(`logitrack_avatar_${user.id}`)
   )
   const [avatarError, setAvatarError] = useState('')
+  const [avatarSaving, setAvatarSaving] = useState(false)
 
   // Basic info
   const [name, setName] = useState(user.name)
@@ -146,30 +147,57 @@ export default function ProfilePage() {
 
   const handleAvatarClick = () => fileInputRef.current?.click()
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const img = new Image()
+        img.onload = () => {
+          const MAX = 400
+          const scale = Math.min(MAX / img.width, MAX / img.height, 1)
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.round(img.width * scale)
+          canvas.height = Math.round(img.height * scale)
+          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL('image/jpeg', 0.82))
+        }
+        img.onerror = reject
+        img.src = ev.target!.result as string
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setAvatarError('')
+    e.target.value = ''
 
     if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
       setAvatarError('Solo se permiten archivos JPG o PNG')
       return
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setAvatarError('El archivo no puede superar 2 MB')
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('El archivo no puede superar 5 MB')
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      const b64 = reader.result as string
+    setAvatarSaving(true)
+    try {
+      const b64 = await compressImage(file)
+      const updated = await authService.updateFotoPerfil(b64)
+      const updatedUser: User = { ...user, fotoPerfil: updated.fotoPerfil ?? b64 }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
       localStorage.setItem(`logitrack_avatar_${user.id}`, b64)
       setAvatarSrc(b64)
       window.dispatchEvent(new Event('logitrack:avatarChange'))
+      window.dispatchEvent(new Event('logitrack:userUpdate'))
+    } catch {
+      setAvatarError('No se pudo guardar la foto. Intentá de nuevo.')
+    } finally {
+      setAvatarSaving(false)
     }
-    reader.readAsDataURL(file)
-    // Reset input so the same file can be re-selected
-    e.target.value = ''
   }
 
   const handleSaveInfo = async () => {
@@ -253,10 +281,11 @@ export default function ProfilePage() {
               >
                 {!avatarSrc && initials}
               </Avatar>
-              <Tooltip title="Cambiar foto de perfil">
+              <Tooltip title={avatarSaving ? 'Guardando...' : 'Cambiar foto de perfil'}>
                 <IconButton
                   onClick={handleAvatarClick}
                   size="small"
+                  disabled={avatarSaving}
                   sx={{
                     position: 'absolute', bottom: 2, right: 2,
                     bgcolor: 'primary.main', color: 'white',
@@ -265,7 +294,9 @@ export default function ProfilePage() {
                     boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
                   }}
                 >
-                  <PhotoCameraIcon sx={{ fontSize: 15 }} />
+                  {avatarSaving
+                    ? <CircularProgress size={12} color="inherit" />
+                    : <PhotoCameraIcon sx={{ fontSize: 15 }} />}
                 </IconButton>
               </Tooltip>
               <input
@@ -273,7 +304,7 @@ export default function ProfilePage() {
                 type="file"
                 accept="image/jpeg,image/png"
                 hidden
-                onChange={handleAvatarChange}
+                onChange={(e) => void handleAvatarChange(e)}
               />
             </Box>
 

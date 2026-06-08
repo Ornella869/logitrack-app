@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
@@ -231,6 +232,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
             {repartidores.map((repartidor) => {
               const routeStatus = getRouteStatus(repartidor)
               const accountStatus = getAccountStatus(repartidor)
+              const initials = `${repartidor.name.charAt(0)}${repartidor.lastname.charAt(0)}`.toUpperCase()
 
               return (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={repartidor.id}>
@@ -244,18 +246,26 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                     }}
                   >
                     <CardContent>
-                      <Typography
-                        variant="h6"
-                        gutterBottom
-                        sx={{
-                          textDecoration: 'underline',
-                          textDecorationColor: 'transparent',
-                          transition: 'text-decoration-color .15s',
-                          '.MuiCard-root:hover &': { textDecorationColor: 'currentColor' },
-                        }}
-                      >
-                        {repartidor.name} {repartidor.lastname}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                        <Avatar
+                          src={repartidor.fotoPerfil ?? undefined}
+                          sx={{ width: 44, height: 44, bgcolor: '#2e7d32', fontWeight: 700, fontSize: '1rem' }}
+                        >
+                          {!repartidor.fotoPerfil && initials}
+                        </Avatar>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            textDecoration: 'underline',
+                            textDecorationColor: 'transparent',
+                            transition: 'text-decoration-color .15s',
+                            '.MuiCard-root:hover &': { textDecorationColor: 'currentColor' },
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {repartidor.name} {repartidor.lastname}
+                        </Typography>
+                      </Box>
                       <Stack spacing={1}>
                         <Box>
                           <Typography variant="body2" color="textSecondary">

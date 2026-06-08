@@ -124,9 +124,11 @@ namespace Back.Application.Services
                     sucursalId = user.SucursalId?.ToString(),
                     provincia = user is Gerente gerente ? gerente.Provincia : null,
                     puntoPickUpId = user is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
-                    provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null
+                    provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null,
+                    fotoPerfil = user.FotoPerfil
                 }
             };
+
         }
 
         public async Task Registrarse(RegisterRequest request)

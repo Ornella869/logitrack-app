@@ -25,13 +25,25 @@ namespace Back.Controllers
             return Guid.TryParse(str, out var id) ? id : null;
         }
 
-        private async Task<Guid?> CurrentSucursalScopeAsync()
+        private async Task<IQueryable<SatisfaccionEncuesta>> ApplyScopeAsync(IQueryable<SatisfaccionEncuesta> query)
         {
+            if (User.IsInRole(Roles.Administrador)) return query;
+
             var uid = CurrentUserId();
-            if (uid is null) return null;
-            if (User.IsInRole(Roles.Administrador)) return null;
+            if (uid is null) return query.Where(e => false);
+
+            if (User.IsInRole(Roles.Gerente))
+            {
+                var provincias = await _context.GerentesProvincias
+                    .Where(gp => gp.GerenteId == uid.Value)
+                    .Select(gp => gp.Provincia)
+                    .ToListAsync();
+                return query.Where(e => e.Paquete.ProvinciaDestino != null && provincias.Contains(e.Paquete.ProvinciaDestino));
+            }
+
             var user = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == uid.Value);
-            return user?.SucursalId ?? Guid.Empty;
+            var sucursalId = user?.SucursalId ?? Guid.Empty;
+            return query.Where(e => e.Paquete.SucursalId == sucursalId);
         }
 
         [HttpGet("{token:guid}")]
@@ -76,14 +88,11 @@ namespace Back.Controllers
         [HttpGet("respuestas")]
         public async Task<IActionResult> GetRespuestas([FromQuery] DateTime? desde, [FromQuery] DateTime? hasta, [FromQuery] Guid? repartidorId)
         {
-            var scope = await CurrentSucursalScopeAsync();
-
             var query = _context.SatisfaccionEncuestas
                 .Include(e => e.Paquete)
                 .Where(e => e.RespuestaEn.HasValue);
 
-            if (scope.HasValue)
-                query = query.Where(e => e.Paquete.SucursalId == scope.Value);
+            query = await ApplyScopeAsync(query);
             if (desde.HasValue)
                 query = query.Where(e => e.RespuestaEn >= desde.Value.Date.ToUniversalTime());
             if (hasta.HasValue)
@@ -127,14 +136,11 @@ namespace Back.Controllers
         [HttpGet("metricas")]
         public async Task<IActionResult> GetMetricas([FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {
-            var scope = await CurrentSucursalScopeAsync();
-
             var query = _context.SatisfaccionEncuestas
                 .Include(e => e.Paquete)
                 .Where(e => e.RespuestaEn.HasValue && e.Calificacion.HasValue);
 
-            if (scope.HasValue)
-                query = query.Where(e => e.Paquete.SucursalId == scope.Value);
+            query = await ApplyScopeAsync(query);
             if (desde.HasValue)
                 query = query.Where(e => e.RespuestaEn >= desde.Value.Date.ToUniversalTime());
             if (hasta.HasValue)

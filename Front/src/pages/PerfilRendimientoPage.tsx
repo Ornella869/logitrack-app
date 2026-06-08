@@ -43,6 +43,7 @@ type Rendimiento = {
   tieneActividad: boolean
   horasTrabajo: number
   tipoJornada: string
+  fotoPerfil?: string | null
 }
 
 const today = () => formatArgentinaDateInput()
@@ -162,8 +163,18 @@ export default function PerfilRendimientoPage() {
       {data && (
         <Stack spacing={2} sx={{ mb: 3 }}>
           <Stack direction="row" spacing={2} alignItems="center">
-            <Box sx={{ width: 48, height: 48, borderRadius: '50%', bgcolor: '#1976d2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <PersonIcon sx={{ color: 'white' }} />
+            <Box sx={{ position: 'relative' }}>
+              {data.fotoPerfil ? (
+                <Box
+                  component="img"
+                  src={data.fotoPerfil}
+                  sx={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}
+                />
+              ) : (
+                <Box sx={{ width: 56, height: 56, borderRadius: '50%', bgcolor: '#1976d2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <PersonIcon sx={{ color: 'white', fontSize: 28 }} />
+                </Box>
+              )}
             </Box>
             <Box>
               <Typography variant="h4" fontWeight={700}>{data.nombre}</Typography>

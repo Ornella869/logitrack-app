@@ -21,12 +21,15 @@ namespace Back.Domain.Models
         // Épica D: sucursal a la que pertenece el usuario (Supervisor/Operador/Repartidor).
         // El Gerente no usa SucursalId (su ámbito es la provincia); el Administrador es global.
         public Guid? SucursalId { get; private set; }
+        public string? FotoPerfil { get; private set; }
 
         public Usuario()
         {
         }
 
         public void AsignarSucursal(Guid? sucursalId) => SucursalId = sucursalId;
+
+        public void ActualizarFotoPerfil(string? fotoBase64) => FotoPerfil = fotoBase64;
 
         public Usuario(string nombre, string apellido, string email, string password, string dni)
         {

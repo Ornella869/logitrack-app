@@ -75,7 +75,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [openChangePassword, setOpenChangePassword] = useState(false)
   const [avatarSrc, setAvatarSrc] = useState<string | null>(
-    () => localStorage.getItem(`logitrack_avatar_${user.id}`)
+    () => user.fotoPerfil ?? localStorage.getItem(`logitrack_avatar_${user.id}`)
   )
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [isDarkPremium, setIsDarkPremium] = useState(() => localStorage.getItem('miPlanDarkMode') === 'true')
@@ -264,7 +264,15 @@ function Layout({ user, onLogout }: LayoutProps) {
   }, [])
 
   useEffect(() => {
-    const handler = () => setAvatarSrc(localStorage.getItem(`logitrack_avatar_${user.id}`))
+    const handler = () => {
+      try {
+        const stored = localStorage.getItem('user')
+        const u = stored ? JSON.parse(stored) : null
+        setAvatarSrc(u?.fotoPerfil ?? localStorage.getItem(`logitrack_avatar_${user.id}`))
+      } catch {
+        setAvatarSrc(localStorage.getItem(`logitrack_avatar_${user.id}`))
+      }
+    }
     window.addEventListener('logitrack:avatarChange', handler)
     return () => window.removeEventListener('logitrack:avatarChange', handler)
   }, [user.id])
