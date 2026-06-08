@@ -125,8 +125,10 @@ namespace Back.Application.Services
         {
             using var reader = new StreamReader(stream, Encoding.UTF8, true);
             var lines = reader.ReadToEnd().Split('\n').Select(l => l.Trim('\r')).Where(l => l.Length > 0).ToList();
-            if (lines.Count <= 1) return new List<ImportarEnvioRow>();
+            if (lines.Count == 0) return new List<ImportarEnvioRow>();
             var headers = SplitCsv(lines[0]);
+            ValidateHeaders(headers);
+            if (lines.Count == 1) return new List<ImportarEnvioRow>();
             return lines.Skip(1)
                 .Select((line, i) => ToRow(i + 2, headers, SplitCsv(line)))
                 .Where(r => r is not null)
@@ -143,13 +145,44 @@ namespace Back.Application.Services
             var doc = XDocument.Load(sheetStream);
             XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var rows = doc.Descendants(ns + "row").ToList();
-            if (rows.Count <= 1) return new List<ImportarEnvioRow>();
+            if (rows.Count == 0) return new List<ImportarEnvioRow>();
             var headers = ReadRow(rows[0], ns, shared);
+            ValidateHeaders(headers);
+            if (rows.Count == 1) return new List<ImportarEnvioRow>();
             return rows.Skip(1)
                 .Select(r => ToRow(int.TryParse(r.Attribute("r")?.Value, out var rowNum) ? rowNum : 0, headers, ReadRow(r, ns, shared)))
                 .Where(r => r is not null)
                 .Cast<ImportarEnvioRow>()
                 .ToList();
+        }
+
+        private static void ValidateHeaders(List<string> headers)
+        {
+            var normalizedHeaders = headers.Select(NormalizeHeader).ToList();
+            var expectedHeaders = Headers.Select(NormalizeHeader).ToList();
+
+            if (normalizedHeaders.Count != expectedHeaders.Count)
+                throw new InvalidOperationException($"El archivo importado no coincide con el template oficial. Se esperaban {expectedHeaders.Count} columnas y se recibieron {normalizedHeaders.Count}.");
+
+            var invalidHeaders = expectedHeaders
+                .Select((expected, index) => new
+                {
+                    Index = index,
+                    Expected = expected,
+                    Actual = normalizedHeaders[index]
+                })
+                .Where(x => !string.Equals(x.Expected, x.Actual, StringComparison.Ordinal))
+                .ToList();
+
+            if (invalidHeaders.Count == 0) return;
+
+            var details = string.Join(", ", invalidHeaders.Select(x => $"columna {x.Index + 1}: '{x.Expected}'"));
+            throw new InvalidOperationException($"El archivo importado no coincide con el template oficial. Revisá los encabezados obligatorios: {details}.");
+        }
+
+        private static string NormalizeHeader(string value)
+        {
+            return (value ?? string.Empty).Trim().TrimStart('\uFEFF');
         }
 
         private static List<string> ReadRow(XElement row, XNamespace ns, List<string> shared)
