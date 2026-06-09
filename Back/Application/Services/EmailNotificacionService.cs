@@ -5,6 +5,7 @@ using Back.Application.Util;
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
+using Resend;
 
 namespace Back.Application.Services
 {
@@ -303,8 +304,8 @@ namespace Back.Application.Services
                 return;
             }
 
-            var host = _configuration["Email:Smtp:Host"];
-            if (string.IsNullOrWhiteSpace(host))
+            var apiKey = _configuration["Resend:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey))
             {
                 email.MarcarEnviado();
                 return;
@@ -312,22 +313,18 @@ namespace Back.Application.Services
 
             try
             {
-                using var client = new SmtpClient(host, int.TryParse(_configuration["Email:Smtp:Port"], out var port) ? port : 587)
+                IResend resend = ResendClient.Create(apiKey);
+                var from = "onboarding@resend.dev"; // Default to onboarding since custom domains require verification
+
+                var message = new EmailMessage()
                 {
-                    EnableSsl = bool.TryParse(_configuration["Email:Smtp:EnableSsl"], out var ssl) ? ssl : true,
+                    From = from,
+                    To = email.DestinatarioEmail,
+                    Subject = email.Asunto,
+                    HtmlBody = email.Cuerpo
                 };
 
-                var user = _configuration["Email:Smtp:User"];
-                var pass = _configuration["Email:Smtp:Password"];
-                if (!string.IsNullOrWhiteSpace(user))
-                    client.Credentials = new NetworkCredential(user, pass);
-
-                var from = _configuration["Email:From"] ?? "noreply@logitrack.local";
-                using var message = new MailMessage(from, email.DestinatarioEmail, email.Asunto, email.Cuerpo)
-                {
-                    IsBodyHtml = true,
-                };
-                await client.SendMailAsync(message);
+                await resend.EmailSendAsync(message);
                 email.MarcarEnviado();
             }
             catch (Exception ex)

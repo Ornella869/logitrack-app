@@ -20,6 +20,7 @@
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="Resend" Version="0.5.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
   </ItemGroup>
 
@@ -29,7 +30,7 @@
 
   <PropertyGroup>
   <GenerateDocumentationFile>true</GenerateDocumentationFile>
-  <!-- Esto evita que te salgan advertencias amarillas en todo el código -->
+  <!-- Esto evita que te salgan advertencias amarillas en todo el cï¿½digo -->
   <NoWarn>$(NoWarn);1591</NoWarn> 
 </PropertyGroup>
 <ItemGroup>
