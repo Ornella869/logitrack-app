@@ -159,21 +159,21 @@ export default function SatisfaccionMetricasPage() {
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={0.5}>
                       <ThumbUpIcon sx={{ fontSize: 14, color: 'success.main' }} />
-                      <Typography variant="caption" color="text.secondary">Promotores (5★)</Typography>
+                      <Typography variant="caption" color="text.secondary">Promotores (5 puntos)</Typography>
                     </Stack>
                     <Typography variant="body2" fontWeight={700} color="success.main">{resumen.promotores}</Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={0.5}>
                       <RemoveIcon sx={{ fontSize: 14, color: 'warning.main' }} />
-                      <Typography variant="caption" color="text.secondary">Pasivos (4★)</Typography>
+                      <Typography variant="caption" color="text.secondary">Pasivos (4 puntos)</Typography>
                     </Stack>
                     <Typography variant="body2" fontWeight={700} color="warning.main">{resumen.pasivos}</Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={0.5}>
                       <ThumbDownIcon sx={{ fontSize: 14, color: 'error.main' }} />
-                      <Typography variant="caption" color="text.secondary">Detractores (1-3★)</Typography>
+                      <Typography variant="caption" color="text.secondary">Detractores (1-3 puntos)</Typography>
                     </Stack>
                     <Typography variant="body2" fontWeight={700} color="error.main">{resumen.detractores}</Typography>
                   </Stack>

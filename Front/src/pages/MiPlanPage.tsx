@@ -667,7 +667,10 @@ export default function MiPlanPage() {
             py: 2,
           }}
         >
-          🎉 ¡Felicitaciones!
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+            <WorkspacePremiumIcon />
+            <span>Felicitaciones</span>
+          </Stack>
         </DialogTitle>
         <DialogContent
           sx={{
@@ -691,7 +694,7 @@ export default function MiPlanPage() {
             }
           `}</style>
           <Typography variant="h5" fontWeight={700} color="white" textAlign="center" sx={{ zIndex: 1 }}>
-            ⭐ Cambiaste al Plan Premium ⭐
+            Cambiaste al Plan Premium
           </Typography>
           <Stack direction="row" justifyContent="center" spacing={2} sx={{ zIndex: 1 }}>
             <LocalShippingIcon sx={{ fontSize: 52, color: '#42A5F5', animation: 'truckBounce 0.55s ease infinite alternate' }} />

@@ -31,6 +31,7 @@ import BoltIcon from '@mui/icons-material/Bolt'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
 import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
@@ -486,11 +487,22 @@ export default function CalendarizarPage() {
       {/* MODAL: proceso de calendarización */}
       <Dialog open={modalOpen} onClose={exec ? cerrarModal : undefined} maxWidth="md" fullWidth>
         <DialogTitle>
-          {!exec
-            ? 'Calendarizando envíos...'
-            : exec.ok
-              ? '✅ Calendarización Completada'
-              : '❌ Error en la calendarización'}
+          <Stack direction="row" spacing={1} alignItems="center">
+            {!exec ? (
+              <CircularProgress size={18} />
+            ) : exec.ok ? (
+              <CheckCircleIcon color="success" />
+            ) : (
+              <ErrorOutlineIcon color="error" />
+            )}
+            <span>
+              {!exec
+                ? 'Calendarizando envíos...'
+                : exec.ok
+                  ? 'Calendarización completada'
+                  : 'Error en la calendarización'}
+            </span>
+          </Stack>
         </DialogTitle>
         <DialogContent dividers>
           {!exec ? (

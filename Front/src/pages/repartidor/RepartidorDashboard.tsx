@@ -1129,7 +1129,7 @@ export default function RepartidorDashboard() {
                 <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#7b1fa2' }}>
-                      🌅 Tenés envíos en pausa de descanso nocturno
+                      Tenés envíos en pausa de descanso nocturno
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Reanudá la ruta para volver a activar los paquetes y continuar con las entregas.
@@ -1156,7 +1156,7 @@ export default function RepartidorDashboard() {
                 <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="subtitle2" fontWeight={700} sx={{ color: isDark ? '#b0bec5' : '#37474f' }}>
-                      🌙 Ruta multi-día — ¿Finalizás el día hoy?
+                      Ruta multi-día - ¿Finalizás el día hoy?
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Si no llegás al destino hoy, pausá tu jornada. Los paquetes quedan en "Descanso Nocturno" y los continuás mañana.
@@ -1196,7 +1196,7 @@ export default function RepartidorDashboard() {
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
                     {showRetorno
-                      ? '🏁 Ruta de retorno a la sucursal'
+                      ? 'Ruta de retorno a la sucursal'
                       : `Ruta optimizada${metrics.cpZona ? ` · CP ${metrics.cpZona}` : ''}`}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">

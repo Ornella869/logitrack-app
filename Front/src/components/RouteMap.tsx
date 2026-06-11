@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Box, Typography } from '@mui/material'
+import LocationOffIcon from '@mui/icons-material/LocationOff'
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -25,40 +26,45 @@ function makeNumberedIcon(num: number, color: string) {
   })
 }
 
-const TRUCK_ICON = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:36px;height:36px;border-radius:50%;
-    background:#1976d2;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);
-    display:flex;align-items:center;justify-content:center;font-size:18px;
-  ">🚚</div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
-  popupAnchor: [0, -20],
+function makeSvgIcon({
+  size,
+  background,
+  borderRadius,
+  svg,
+}: {
+  size: number
+  background: string
+  borderRadius: string
+  svg: string
+}) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};background:${background};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;">${svg}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -Math.round(size * 0.55)],
+  })
+}
+
+const TRUCK_ICON = makeSvgIcon({
+  size: 36,
+  background: '#1976d2',
+  borderRadius: '50%',
+  svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 7.75A1.75 1.75 0 0 1 4.75 6h8.5C14.22 6 15 6.78 15 7.75V9h2.63c.54 0 1.05.25 1.38.68l1.96 2.54c.2.26.31.58.31.91v2.12A1.75 1.75 0 0 1 19.53 17H19a2.5 2.5 0 0 1-5 0H9a2.5 2.5 0 0 1-5 0h-.25A1.75 1.75 0 0 1 2 15.25V14h1V7.75Z" fill="white"/><circle cx="6.5" cy="17.5" r="1.5" fill="#1976d2" stroke="white" stroke-width="1.5"/><circle cx="16.5" cy="17.5" r="1.5" fill="#1976d2" stroke="white" stroke-width="1.5"/></svg>',
 })
 
-const PENDING_ICON = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:32px;height:32px;border-radius:50%;
-    background:#E65100;border:3px solid white;box-shadow:0 0 0 5px rgba(230,81,0,0.3);
-    display:flex;align-items:center;justify-content:center;font-size:16px;
-  ">📍</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -34],
+const PENDING_ICON = makeSvgIcon({
+  size: 32,
+  background: '#E65100',
+  borderRadius: '50%',
+  svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 21s6-5.686 6-11a6 6 0 1 0-12 0c0 5.314 6 11 6 11Z" fill="white"/><circle cx="12" cy="10" r="2.5" fill="#E65100"/></svg>',
 })
 
-const BRANCH_ICON = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:38px;height:38px;border-radius:8px;
-    background:#5e35b1;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);
-    display:flex;align-items:center;justify-content:center;font-size:18px;color:white;
-  ">🏢</div>`,
-  iconSize: [38, 38],
-  iconAnchor: [19, 19],
-  popupAnchor: [0, -20],
+const BRANCH_ICON = makeSvgIcon({
+  size: 38,
+  background: '#5e35b1',
+  borderRadius: '8px',
+  svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 20V9.5L12 4l8 5.5V20h-2v-2H6v2H4Zm4-4h2v-2H8v2Zm0-4h2v-2H8v2Zm6 4h2v-2h-2v2Zm0-4h2v-2h-2v2ZM11 20h2v-4h-2v4Zm0-8h2v-2h-2v2Z" fill="white"/></svg>',
 })
 
 type Parada = {
@@ -305,8 +311,9 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
           gap: 1,
         }}
       >
+        <LocationOffIcon color="disabled" />
         <Typography variant="body2" color="text.secondary">
-          📍 Sin coordenadas disponibles
+          Sin coordenadas disponibles
         </Typography>
         <Typography variant="caption" color="text.secondary">
           Las paradas registradas antes de la integración con el mapa no tienen ubicación guardada.
@@ -433,11 +440,11 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
         {tieneOrigen && (
           <Marker position={[origen!.latitud, origen!.longitud]} icon={BRANCH_ICON}>
             <Popup>
-              <strong>🏢 {origen!.nombre}</strong>
+              <strong>{origen!.nombre}</strong>
               <br />
               {origen!.direccion}, {origen!.ciudad}
               <br />
-              <em>{showReturnRoute ? '🏁 Destino de retorno' : 'Punto de salida'}</em>
+              <em>{showReturnRoute ? 'Destino de retorno' : 'Punto de salida'}</em>
             </Popup>
           </Marker>
         )}
@@ -461,7 +468,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
                 <br />
                 {p.direccion}, {p.localidad}
                 <br />
-                👤 {p.destinatario}
+                Destinatario: {p.destinatario}
                 <br />
                 <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{p.codigoSeguimiento}</span>
               </Popup>
@@ -473,7 +480,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
         {truckPos && (
           <Marker position={truckPos} icon={TRUCK_ICON} zIndexOffset={1000}>
             <Popup>
-              🚚 {ubicacionReal ? 'Ubicacion actual del repartidor' : 'Ubicacion simulada del repartidor'}
+              {ubicacionReal ? 'Ubicacion actual del repartidor' : 'Ubicacion simulada del repartidor'}
               <br />
               {truckLabel}
             </Popup>
@@ -483,7 +490,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
         {/* Marcador pendiente de confirmacion (colocado por el supervisor) */}
         {pendingMarker && (
           <Marker position={[pendingMarker.latitud, pendingMarker.longitud]} icon={PENDING_ICON} zIndexOffset={2000}>
-            <Popup>📍 Nueva ubicación — confirmá arriba</Popup>
+            <Popup>Nueva ubicación - confirmá arriba</Popup>
           </Marker>
         )}
       </MapContainer>

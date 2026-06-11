@@ -326,13 +326,14 @@ export default function RutasActivasPage() {
                           }}
                         />
                         <Typography variant="body2" fontWeight={600} sx={{ color: r.esDemorada ? '#ed6c02' : 'inherit' }}>
-                          {completas}/{r.totalParadas}{r.esDemorada ? ' ⚠️' : ''}
+                          {completas}/{r.totalParadas}
                         </Typography>
+                        {r.esDemorada && <WarningAmberIcon sx={{ fontSize: 16, color: '#ed6c02' }} />}
                       </Stack>
                     </TableCell>
                     <TableCell>
                       {r.esDemorada ? (
-                        <Chip size="small" label="⚠️ Demorada" sx={{ bgcolor: isDark ? 'rgba(237,108,2,0.2)' : '#fff3e0', color: '#ed6c02', border: '1px solid #ed6c02' }} />
+                        <Chip size="small" icon={<WarningAmberIcon sx={{ fontSize: '16px !important' }} />} label="Demorada" sx={{ bgcolor: isDark ? 'rgba(237,108,2,0.2)' : '#fff3e0', color: '#ed6c02', border: '1px solid #ed6c02' }} />
                       ) : r.estado === 'Completada' ? (
                         <Chip size="small" label="Completada" sx={{ bgcolor: isDark ? 'rgba(46,125,50,0.2)' : '#e8f5e9', color: isDark ? '#81c784' : '#2e7d32' }} />
                       ) : r.estado === 'EnTransito' ? (

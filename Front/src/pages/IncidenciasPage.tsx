@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ElementType } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -40,6 +40,14 @@ import SendIcon from '@mui/icons-material/Send'
 import EmailIcon from '@mui/icons-material/Email'
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
+import CarCrashIcon from '@mui/icons-material/CarCrash'
+import BuildIcon from '@mui/icons-material/Build'
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices'
+import Inventory2Icon from '@mui/icons-material/Inventory2'
+import ListAltIcon from '@mui/icons-material/ListAlt'
+import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import BrokenImageIcon from '@mui/icons-material/BrokenImage'
+import MarkUnreadChatAltIcon from '@mui/icons-material/MarkUnreadChatAlt'
 import {
   incidenciaService,
   type EstadoIncidencia,
@@ -52,16 +60,16 @@ import type { Shipment, User } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { formatInstantArgentina, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
-const TIPO_INFO: Record<string, { label: string; emoji: string; color: string }> = {
-  accident: { label: 'Accidente de tráfico', emoji: '🚗', color: '#c62828' },
-  mechanical: { label: 'Problema mecánico', emoji: '🔧', color: '#e65100' },
-  danger: { label: 'Zona de riesgo', emoji: '⚠️', color: '#f57f17' },
-  health: { label: 'Problema de salud', emoji: '😷', color: '#6a1b9a' },
-  delivery: { label: 'Problema de entrega', emoji: '📦', color: '#1565c0' },
-  otro: { label: 'Otro', emoji: '📋', color: '#37474f' },
-  no_llego: { label: 'No llegó', emoji: '❌', color: '#b71c1c' },
-  llego_danado: { label: 'Llegó dañado', emoji: '💥', color: '#e65100' },
-  llego_tarde: { label: 'Llegó tarde', emoji: '⏰', color: '#f57f17' },
+const TIPO_INFO: Record<string, { label: string; Icon: ElementType; color: string }> = {
+  accident: { label: 'Accidente de tráfico', Icon: CarCrashIcon, color: '#c62828' },
+  mechanical: { label: 'Problema mecánico', Icon: BuildIcon, color: '#e65100' },
+  danger: { label: 'Zona de riesgo', Icon: ReportProblemIcon, color: '#f57f17' },
+  health: { label: 'Problema de salud', Icon: MedicalServicesIcon, color: '#6a1b9a' },
+  delivery: { label: 'Problema de entrega', Icon: Inventory2Icon, color: '#1565c0' },
+  otro: { label: 'Otro', Icon: ListAltIcon, color: '#37474f' },
+  no_llego: { label: 'No llegó', Icon: HighlightOffIcon, color: '#b71c1c' },
+  llego_danado: { label: 'Llegó dañado', Icon: BrokenImageIcon, color: '#e65100' },
+  llego_tarde: { label: 'Llegó tarde', Icon: AccessTimeIcon, color: '#f57f17' },
 }
 
 const ESTADO_INFO: Record<EstadoIncidencia, { color: string; bg: string; label: string }> = {
@@ -243,7 +251,9 @@ export function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated 
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Stack direction="row" alignItems="center" spacing={1.5}>
-          <Box sx={{ fontSize: 24 }}>{tipoInfo.emoji}</Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 2, bgcolor: `${tipoInfo.color}18`, color: tipoInfo.color }}>
+            <tipoInfo.Icon fontSize="small" />
+          </Box>
           <Box>
             <Typography variant="subtitle1" fontWeight={700}>
               {tipoInfo.label}
@@ -348,9 +358,9 @@ export function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated 
                   label="Nuevo estado"
                   onChange={(e) => setNuevoEstado(e.target.value as EstadoIncidencia)}
                 >
-                  <MenuItem value="Abierta">🔴 Abierta</MenuItem>
-                  <MenuItem value="En Revisión">🟠 En Revisión</MenuItem>
-                  <MenuItem value="Resuelta">🟢 Resuelta</MenuItem>
+                  <MenuItem value="Abierta">Abierta</MenuItem>
+                  <MenuItem value="En Revisión">En Revisión</MenuItem>
+                  <MenuItem value="Resuelta">Resuelta</MenuItem>
                 </Select>
               </FormControl>
               <Button
@@ -1038,7 +1048,9 @@ export default function IncidenciasPage() {
               >
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                   <Stack direction="row" alignItems="flex-start" spacing={1.5}>
-                    <Box sx={{ fontSize: 26, lineHeight: 1, pt: 0.2 }}>{tipoInfo.emoji}</Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, height: 42, borderRadius: 2, bgcolor: `${tipoInfo.color}18`, color: tipoInfo.color, flexShrink: 0 }}>
+                      <tipoInfo.Icon />
+                    </Box>
                     <Box sx={{ flex: 1 }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={0.5}>
                         <Typography variant="subtitle2" fontWeight={700}>
@@ -1142,7 +1154,9 @@ export default function IncidenciasPage() {
                     gap: 1,
                   }}
                 >
-                  <Box sx={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{tipoInfo.emoji}</Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.16)', color: 'white', flexShrink: 0 }}>
+                    <tipoInfo.Icon sx={{ fontSize: 18 }} />
+                  </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography noWrap sx={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.2 }}>
                       {incidencia.repartidorNombre}
@@ -1190,14 +1204,12 @@ export default function IncidenciasPage() {
                       </Typography>
                     </>
                   ) : (
-                    <Typography noWrap sx={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: isDark ? '#4caf50' : '#1565C0',
-                      flex: 1,
-                    }}>
-                      💬 Iniciar chat con repartidor
-                    </Typography>
+                      <Stack direction="row" spacing={0.6} alignItems="center" sx={{ flex: 1 }}>
+                        <MarkUnreadChatAltIcon sx={{ fontSize: 14, color: isDark ? '#4caf50' : '#1565C0' }} />
+                        <Typography noWrap sx={{ fontSize: 12, fontWeight: 700, color: isDark ? '#4caf50' : '#1565C0', flex: 1 }}>
+                          Iniciar chat con repartidor
+                        </Typography>
+                      </Stack>
                   )}
                 </Box>
               </Box>

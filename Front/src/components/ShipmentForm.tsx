@@ -32,7 +32,10 @@ import {
   FormHelperText,
   Alert,
   InputAdornment,
+  Stack,
 } from '@mui/material'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import PlaceIcon from '@mui/icons-material/Place'
 import type { Shipment, TipoEnvio, TipoPaquete, Branch } from '../types'
 import { formatArgentinaDateInput } from '../utils/argentinaDate'
 import { postalCodeService } from '../services/postalCodeService'
@@ -567,7 +570,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                     {pickups.map((p) => (
                       <MenuItem key={p.id} value={p.id} disabled={!!p.estaLleno}>
                         {p.nombre} - {p.localidad}, {p.provincia} (CP {p.codigoPostal})
-                        {p.totalCalificaciones && p.totalCalificaciones > 0 ? ` · ★ ${p.promedioCalificaciones?.toFixed(1)} (${p.totalCalificaciones})` : ''}
+                        {p.totalCalificaciones && p.totalCalificaciones > 0 ? ` · ${p.promedioCalificaciones?.toFixed(1)}/5 (${p.totalCalificaciones})` : ''}
                         {p.estaLleno ? ' — Temporalmente sin espacio' : ''}
                       </MenuItem>
                     ))}
@@ -798,14 +801,20 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
                 </Box>
                 {/* Diagnóstico de geocodificación: ayuda a entender si (no) se aplicó el recargo. */}
                 {!cotizacion.geocodificado ? (
-                  <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 1 }}>
-                    ⚠️ No se pudo ubicar la dirección en el mapa, por eso no se evaluó la zona peligrosa.
-                  </Typography>
+                  <Stack direction="row" spacing={0.6} alignItems="center" sx={{ mt: 1 }}>
+                    <WarningAmberIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                    <Typography variant="caption" color="warning.main" display="block">
+                      No se pudo ubicar la dirección en el mapa, por eso no se evaluó la zona peligrosa.
+                    </Typography>
+                  </Stack>
                 ) : (
                   cotizacion.latitud != null && (
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                      📍 Ubicación detectada: {cotizacion.latitud.toFixed(4)}, {cotizacion.longitud?.toFixed(4)}
-                    </Typography>
+                    <Stack direction="row" spacing={0.6} alignItems="center" sx={{ mt: 1 }}>
+                      <PlaceIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Ubicación detectada: {cotizacion.latitud.toFixed(4)}, {cotizacion.longitud?.toFixed(4)}
+                      </Typography>
+                    </Stack>
                   )
                 )}
               </Box>

@@ -32,28 +32,28 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const TRUCK_ICON = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:42px;height:42px;border-radius:50%;
-    background:#1565c0;border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.5);
-    display:flex;align-items:center;justify-content:center;font-size:20px;
-  ">🚚</div>`,
-  iconSize: [42, 42],
-  iconAnchor: [21, 21],
-  popupAnchor: [0, -24],
+function makeSvgIcon({ size, background, borderRadius, svg }: { size: number; background: string; borderRadius: string; svg: string }) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};background:${background};border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;">${svg}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -Math.round(size * 0.55)],
+  })
+}
+
+const TRUCK_ICON = makeSvgIcon({
+  size: 42,
+  background: '#1565c0',
+  borderRadius: '50%',
+  svg: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 7.75A1.75 1.75 0 0 1 4.75 6h8.5C14.22 6 15 6.78 15 7.75V9h2.63c.54 0 1.05.25 1.38.68l1.96 2.54c.2.26.31.58.31.91v2.12A1.75 1.75 0 0 1 19.53 17H19a2.5 2.5 0 0 1-5 0H9a2.5 2.5 0 0 1-5 0h-.25A1.75 1.75 0 0 1 2 15.25V14h1V7.75Z" fill="white"/><circle cx="6.5" cy="17.5" r="1.5" fill="#1565c0" stroke="white" stroke-width="1.5"/><circle cx="16.5" cy="17.5" r="1.5" fill="#1565c0" stroke="white" stroke-width="1.5"/></svg>',
 })
 
-const BRANCH_ICON = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:46px;height:46px;border-radius:10px;
-    background:#1565c0;border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.5);
-    display:flex;align-items:center;justify-content:center;font-size:22px;
-  ">🏢</div>`,
-  iconSize: [46, 46],
-  iconAnchor: [23, 23],
-  popupAnchor: [0, -24],
+const BRANCH_ICON = makeSvgIcon({
+  size: 46,
+  background: '#1565c0',
+  borderRadius: '10px',
+  svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 20V9.5L12 4l8 5.5V20h-2v-2H6v2H4Zm4-4h2v-2H8v2Zm0-4h2v-2H8v2Zm6 4h2v-2h-2v2Zm0-4h2v-2h-2v2ZM11 20h2v-4h-2v4Zm0-8h2v-2h-2v2Z" fill="white"/></svg>',
 })
 
 interface OsrmResult {
@@ -272,7 +272,7 @@ export default function RetornoSucursalView({
             {from && (
               <Marker position={from} icon={TRUCK_ICON} zIndexOffset={1000}>
                 <Popup>
-                  <strong>🚚 Tu ubicación actual</strong>
+                  <strong>Tu ubicación actual</strong>
                   <br />
                   {ultimaEntregada?.direccion ?? 'Última entrega'}
                 </Popup>
@@ -282,11 +282,11 @@ export default function RetornoSucursalView({
             {/* Marcador de sucursal destino */}
             <Marker position={to} icon={BRANCH_ICON} zIndexOffset={900}>
               <Popup>
-                <strong>🏢 {origen.nombre}</strong>
+                <strong>{origen.nombre}</strong>
                 <br />
                 {origen.direccion}, {origen.ciudad}
                 <br />
-                <em>🏁 Destino de retorno</em>
+                <em>Destino de retorno</em>
               </Popup>
             </Marker>
           </MapContainer>

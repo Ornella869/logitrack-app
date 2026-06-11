@@ -23,9 +23,11 @@ import {
 } from '@mui/material'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import BoltIcon from '@mui/icons-material/Bolt'
+import BedtimeIcon from '@mui/icons-material/Bedtime'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SearchIcon from '@mui/icons-material/Search'
+import RepeatIcon from '@mui/icons-material/Repeat'
 import api from '../services/api'
 import type { User } from '../types'
 import { dateOnlyForDisplay, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
@@ -304,7 +306,7 @@ export default function CalendarioOperativoPage() {
                                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                       }}
                                     >
-                                      {isDescanso ? '🌙 ' : p.esPrioritario ? '⚡ ' : isMultiDia ? '🔁 ' : ''}
+                                      {isDescanso ? <BedtimeIcon sx={{ fontSize: 12, verticalAlign: 'text-bottom', mr: 0.4, color: '#607d8b' }} /> : p.esPrioritario ? <BoltIcon sx={{ fontSize: 12, verticalAlign: 'text-bottom', mr: 0.4, color: '#c62828' }} /> : isMultiDia ? <RepeatIcon sx={{ fontSize: 12, verticalAlign: 'text-bottom', mr: 0.4, color: '#7b1fa2' }} /> : null}
                                       {p.codigoSeguimiento}
                                       {isMultiDia && <span style={{ opacity: 0.7, marginLeft: 4 }}>{diaNum}/{diasEstimados}</span>}
                                     </Box>
@@ -369,7 +371,8 @@ export default function CalendarioOperativoPage() {
                           {p.esPrioritario && (
                             <Chip
                               size="small"
-                              label="⚡"
+                              icon={<BoltIcon sx={{ fontSize: '14px !important' }} />}
+                              label="Prioritario"
                               sx={{ bgcolor: '#fdecea', color: '#c62828', mr: 1, height: 18 }}
                             />
                           )}

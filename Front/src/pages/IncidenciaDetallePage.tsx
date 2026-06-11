@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ElementType } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import {
   Alert,
@@ -35,11 +35,19 @@ import CommentIcon from '@mui/icons-material/Comment'
 import EmailIcon from '@mui/icons-material/Email'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import HistoryIcon from '@mui/icons-material/History'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import PersonIcon from '@mui/icons-material/Person'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import RepeatIcon from '@mui/icons-material/Repeat'
 import SendIcon from '@mui/icons-material/Send'
+import CarCrashIcon from '@mui/icons-material/CarCrash'
+import BuildIcon from '@mui/icons-material/Build'
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices'
+import Inventory2Icon from '@mui/icons-material/Inventory2'
+import ListAltIcon from '@mui/icons-material/ListAlt'
+import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import BrokenImageIcon from '@mui/icons-material/BrokenImage'
 import {
   incidenciaService,
   type EstadoIncidencia,
@@ -52,16 +60,16 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import type { Shipment, User } from '../types'
 import { formatInstantArgentina, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
-const TIPO_INFO: Record<string, { label: string; emoji: string; color: string }> = {
-  accident: { label: 'Accidente de tráfico', emoji: '🚗', color: '#c62828' },
-  mechanical: { label: 'Problema mecánico', emoji: '🔧', color: '#e65100' },
-  danger: { label: 'Zona de riesgo', emoji: '⚠️', color: '#f57f17' },
-  health: { label: 'Problema de salud', emoji: '😷', color: '#6a1b9a' },
-  delivery: { label: 'Problema de entrega', emoji: '📦', color: '#1565c0' },
-  otro: { label: 'Otro', emoji: '📋', color: '#37474f' },
-  no_llego: { label: 'No llegó', emoji: '❌', color: '#b71c1c' },
-  llego_danado: { label: 'Llegó dañado', emoji: '💥', color: '#e65100' },
-  llego_tarde: { label: 'Llegó tarde', emoji: '⏰', color: '#f57f17' },
+const TIPO_INFO: Record<string, { label: string; Icon: ElementType; color: string }> = {
+  accident: { label: 'Accidente de tráfico', Icon: CarCrashIcon, color: '#c62828' },
+  mechanical: { label: 'Problema mecánico', Icon: BuildIcon, color: '#e65100' },
+  danger: { label: 'Zona de riesgo', Icon: HistoryIcon, color: '#f57f17' },
+  health: { label: 'Problema de salud', Icon: MedicalServicesIcon, color: '#6a1b9a' },
+  delivery: { label: 'Problema de entrega', Icon: Inventory2Icon, color: '#1565c0' },
+  otro: { label: 'Otro', Icon: ListAltIcon, color: '#37474f' },
+  no_llego: { label: 'No llegó', Icon: HighlightOffIcon, color: '#b71c1c' },
+  llego_danado: { label: 'Llegó dañado', Icon: BrokenImageIcon, color: '#e65100' },
+  llego_tarde: { label: 'Llegó tarde', Icon: AccessTimeIcon, color: '#f57f17' },
 }
 
 const ESTADO_INFO: Record<EstadoIncidencia, { color: string; bg: string; label: string }> = {
@@ -281,7 +289,9 @@ export default function IncidenciaDetallePage() {
         <CardContent>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
             <Stack direction="row" spacing={1.5} alignItems="flex-start">
-              <Box sx={{ fontSize: 34, lineHeight: 1 }}>{tipoInfo.emoji}</Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 2, bgcolor: `${tipoInfo.color}18`, color: tipoInfo.color }}>
+                <tipoInfo.Icon />
+              </Box>
               <Box>
                 <Typography variant="h4" fontWeight={800}>{tipoInfo.label}</Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -428,9 +438,9 @@ export default function IncidenciaDetallePage() {
                   <FormControl size="small" fullWidth>
                     <InputLabel>Estado</InputLabel>
                     <Select value={nuevoEstado} label="Estado" onChange={(e) => setNuevoEstado(e.target.value as EstadoIncidencia)}>
-                      <MenuItem value="Abierta">🔴 Abierta</MenuItem>
-                      <MenuItem value="En Revisión">🟠 En Revisión</MenuItem>
-                      <MenuItem value="Resuelta">🟢 Resuelta</MenuItem>
+                      <MenuItem value="Abierta">Abierta</MenuItem>
+                      <MenuItem value="En Revisión">En Revisión</MenuItem>
+                      <MenuItem value="Resuelta">Resuelta</MenuItem>
                     </Select>
                   </FormControl>
                   <Button variant="contained" size="small" onClick={handleGuardarEstado} disabled={guardando || nuevoEstado === inc.estado}>{guardando ? <CircularProgress size={16} color="inherit" /> : 'Guardar estado'}</Button>

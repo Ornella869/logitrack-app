@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ElementType } from 'react'
 import {
   Alert,
   Box,
@@ -21,6 +21,14 @@ import SendIcon from '@mui/icons-material/Send'
 import PhoneIcon from '@mui/icons-material/Phone'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CarCrashIcon from '@mui/icons-material/CarCrash'
+import BuildIcon from '@mui/icons-material/Build'
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices'
+import Inventory2Icon from '@mui/icons-material/Inventory2'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
+import ListAltIcon from '@mui/icons-material/ListAlt'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import { notificationService } from '../services/notificationService'
 import { incidenciaService, type TipoIncidencia } from '../services/incidenciaService'
 import { shipmentService } from '../services/shipmentService'
@@ -44,24 +52,24 @@ interface Props {
 }
 
 const TEMPLATES = [
-  { id: 'accident' as TipoIncidencia, emoji: '🚗', label: 'Accidente de tráfico', text: 'Tuve un accidente de tráfico durante mi ruta y necesito asistencia.' },
-  { id: 'mechanical' as TipoIncidencia, emoji: '🔧', label: 'Problema mecánico', text: 'Mi vehículo tiene un problema mecánico y no puedo continuar la ruta.' },
-  { id: 'danger' as TipoIncidencia, emoji: '⚠️', label: 'Zona de riesgo', text: 'Estoy en una zona de riesgo y me siento inseguro/a.' },
-  { id: 'health' as TipoIncidencia, emoji: '😷', label: 'Problema de salud', text: 'No me siento bien y necesito asistencia médica urgente.' },
-  { id: 'delivery' as TipoIncidencia, emoji: '📦', label: 'No puedo entregar', text: 'No puedo completar una entrega y necesito orientación del supervisor.' },
-  { id: 'demorado' as TipoIncidencia, emoji: '⏰', label: 'Envío demorado', text: 'Un envío de mi ruta se está demorando y no voy a poder entregarlo en el horario previsto.' },
+  { id: 'accident' as TipoIncidencia, Icon: CarCrashIcon, label: 'Accidente de tráfico', text: 'Tuve un accidente de tráfico durante mi ruta y necesito asistencia.' },
+  { id: 'mechanical' as TipoIncidencia, Icon: BuildIcon, label: 'Problema mecánico', text: 'Mi vehículo tiene un problema mecánico y no puedo continuar la ruta.' },
+  { id: 'danger' as TipoIncidencia, Icon: ReportProblemIcon, label: 'Zona de riesgo', text: 'Estoy en una zona de riesgo y me siento inseguro/a.' },
+  { id: 'health' as TipoIncidencia, Icon: MedicalServicesIcon, label: 'Problema de salud', text: 'No me siento bien y necesito asistencia médica urgente.' },
+  { id: 'delivery' as TipoIncidencia, Icon: Inventory2Icon, label: 'No puedo entregar', text: 'No puedo completar una entrega y necesito orientación del supervisor.' },
+  { id: 'demorado' as TipoIncidencia, Icon: AccessTimeIcon, label: 'Envío demorado', text: 'Un envío de mi ruta se está demorando y no voy a poder entregarlo en el horario previsto.' },
 ]
 
 const TRACKY_RESPONSES: Record<string, string> = {
-  accident: '¡Qué situación! Lo más importante sos vos. 🚨\n\n• Asegurate de estar en un lugar seguro\n• Si hay heridos, llamá al 911 de inmediato\n• Activá las balizas del vehículo\n• No muevas el vehículo si hubo colisión\n\n¿Querés que le avise a tu supervisor ahora mismo?',
-  mechanical: '¡Entendido! Los problemas mecánicos pueden pasar. 🔧\n\nTe recomiendo:\n• Estacioná en un lugar seguro y activá las balizas\n• No intentes reparar en la vía pública\n• Tu supervisor puede coordinar asistencia mecánica\n\n¿Notifico al supervisor para que te organicen ayuda?',
-  danger: '¡Tu seguridad es lo primero! ⚠️\n\nSi estás en peligro inmediato:\n• Llamá al 911 ahora\n• Alejate del área si podés hacerlo con seguridad\n• Quedate en un lugar iluminado y concurrido\n\n¿Alertamos a tu supervisor de inmediato?',
-  health: '¡Eso es serio, hay que atenderlo enseguida! 😟\n\nPor favor:\n• Si es urgente, llamá al 107 (SAME) o 911\n• Pará el vehículo en un lugar seguro\n• No sigas conduciendo si no te sentís bien\n\n¿Notifico al supervisor para que te envíen asistencia?',
-  delivery: 'Entendido, vemos qué podemos hacer. 📦\n\nAlgunas opciones según la situación:\n• Destinatario ausente → intentá en horario alternativo\n• Dirección incorrecta → el supervisor puede verificar los datos\n\n¿Notifico al supervisor ahora?',
-  demorado: 'Entendido, los retrasos pueden pasar. ⏰\n\nAlgunos pasos a seguir:\n• Avisale al destinatario que llegás más tarde si podés\n• Anotá la causa del retraso (tráfico, desvío, etc.)\n• El supervisor puede reorganizar las entregas restantes\n\n¿Notifico al supervisor para que tome nota del retraso?',
+  accident: 'Qué situación. Lo más importante sos vos.\n\n• Asegurate de estar en un lugar seguro\n• Si hay heridos, llamá al 911 de inmediato\n• Activá las balizas del vehículo\n• No muevas el vehículo si hubo colisión\n\n¿Querés que le avise a tu supervisor ahora mismo?',
+  mechanical: 'Entendido. Los problemas mecánicos pueden pasar.\n\nTe recomiendo:\n• Estacioná en un lugar seguro y activá las balizas\n• No intentes reparar en la vía pública\n• Tu supervisor puede coordinar asistencia mecánica\n\n¿Notifico al supervisor para que te organicen ayuda?',
+  danger: 'Tu seguridad es lo primero.\n\nSi estás en peligro inmediato:\n• Llamá al 911 ahora\n• Alejate del área si podés hacerlo con seguridad\n• Quedate en un lugar iluminado y concurrido\n\n¿Alertamos a tu supervisor de inmediato?',
+  health: 'Eso es serio y hay que atenderlo enseguida.\n\nPor favor:\n• Si es urgente, llamá al 107 (SAME) o 911\n• Pará el vehículo en un lugar seguro\n• No sigas conduciendo si no te sentís bien\n\n¿Notifico al supervisor para que te envíen asistencia?',
+  delivery: 'Entendido, vemos qué podemos hacer.\n\nAlgunas opciones según la situación:\n• Destinatario ausente → intentá en horario alternativo\n• Dirección incorrecta → el supervisor puede verificar los datos\n\n¿Notifico al supervisor ahora?',
+  demorado: 'Entendido, los retrasos pueden pasar.\n\nAlgunos pasos a seguir:\n• Avisale al destinatario que llegás más tarde si podés\n• Anotá la causa del retraso (tráfico, desvío, etc.)\n• El supervisor puede reorganizar las entregas restantes\n\n¿Notifico al supervisor para que tome nota del retraso?',
 }
 
-const GENERIC_RESPONSE = 'Recibí tu mensaje. 📝\n\nEstoy aquí para ayudarte con cualquier situación durante tu ruta. ¿Qué querés hacer ahora?'
+const GENERIC_RESPONSE = 'Recibí tu mensaje.\n\nEstoy aquí para ayudarte con cualquier situación durante tu ruta. ¿Qué querés hacer ahora?'
 
 const KEYWORDS: { pattern: RegExp; tipoId: string }[] = [
   { pattern: /accidente|choque|colisi[oó]n|colision/i, tipoId: 'accident' },
@@ -85,13 +93,13 @@ function detectKeyword(text: string): string | null {
   return null
 }
 
-const FOLLOW_UP_OPTS = [
-  { id: 'templates', emoji: '📋', label: 'Ver opciones de reporte' },
-  { id: 'supervisor', emoji: '👮', label: 'Notificar supervisor' },
-  { id: 'ok', emoji: '✅', label: 'Estoy bien, gracias' },
+const FOLLOW_UP_OPTS: Array<{ id: string; Icon: ElementType; label: string }> = [
+  { id: 'templates', Icon: ListAltIcon, label: 'Ver opciones de reporte' },
+  { id: 'supervisor', Icon: AdminPanelSettingsIcon, label: 'Notificar supervisor' },
+  { id: 'ok', Icon: CheckCircleIcon, label: 'Estoy bien, gracias' },
 ]
 
-const WELLBEING_RESPONSE = 'Qué bueno saberlo! 😊\n\nRecordá que podés contactarme en cualquier momento si surge algo durante la jornada. ¡Cuídate y buena ruta!'
+const WELLBEING_RESPONSE = 'Qué bueno saberlo.\n\nRecordá que podés contactarme en cualquier momento si surge algo durante la jornada. Cuidate y buena ruta.'
 
 function nowTime(): string {
   return formatInstantArgentinaTime(new Date(), { hour: '2-digit', minute: '2-digit' })
@@ -101,7 +109,7 @@ function welcomeMsg(): ChatMessage {
   return {
     id: 'welcome',
     from: 'tracky',
-    text: '¡Hola! Soy Tracky 🤖\n\nEstoy aquí para ayudarte si tenés algún inconveniente durante tu jornada.\nContame qué pasó o elegí una de las opciones de abajo.',
+    text: 'Hola, soy Tracky.\n\nEstoy aquí para ayudarte si tenés algún inconveniente durante tu jornada.\nContame qué pasó o elegí una de las opciones de abajo.',
     time: nowTime(),
   }
 }
@@ -199,7 +207,8 @@ function ChatBubble({ msg, isDark, onFollowUp }: {
             {FOLLOW_UP_OPTS.map((opt) => (
               <Chip
                 key={opt.id}
-                label={`${opt.emoji} ${opt.label}`}
+                icon={<opt.Icon sx={{ fontSize: '14px !important' }} />}
+                label={opt.label}
                 size="small"
                 onClick={() => onFollowUp(opt.id)}
                 sx={{
@@ -345,13 +354,13 @@ export default function ReportarIncidenteDialog({ open, onClose, user, paradaAfe
     const tipoLabel = TEMPLATES.find((t) => t.id === tipoTemplate)?.label ?? 'Incidente'
 
     if (incidenciaService.checkDuplicateRepartidor(user.id, tipoTemplate)) {
-      addTrackyMessage(`⚠️ Ya reporté un incidente de tipo "${tipoLabel}" recientemente al supervisor. No generé una nueva notificación para evitar duplicados.\n\nSi la situación empeoró o cambió, contame los detalles nuevos.`, true)
+      addTrackyMessage(`Ya reporté un incidente de tipo "${tipoLabel}" recientemente al supervisor. No generé una nueva notificación para evitar duplicados.\n\nSi la situación empeoró o cambió, contame los detalles nuevos.`, true)
       return
     }
 
     notificationService.add({
       type: 'incidencia',
-      title: '🚨 Incidente reportado',
+      title: 'Incidente reportado',
       message: `${user.name} reportó: ${tipoLabel}. Revisá la sección de Incidencias.`,
       recipientId: 'supervisor',
       sucursalId: user.sucursalId ?? undefined,
@@ -359,7 +368,7 @@ export default function ReportarIncidenteDialog({ open, onClose, user, paradaAfe
     })
 
     setSupervisorNotificado(true)
-    addTrackyMessage('✅ ¡Listo! Le avisé a tu supervisor ahora mismo. En breve se van a comunicar con vos.\n\nQuedá tranquilo/a, estás en buenas manos. ¿Hay algo más?', true)
+    addTrackyMessage('Listo. Le avisé a tu supervisor ahora mismo. En breve se van a comunicar con vos.\n\nQuedá tranquilo/a, estás en buenas manos. ¿Hay algo más?', true)
 
     void (async () => {
       let paradasAfectadas: string[] = []
@@ -499,7 +508,8 @@ export default function ReportarIncidenteDialog({ open, onClose, user, paradaAfe
             {TEMPLATES.map((t) => (
               <Chip
                 key={t.id}
-                label={`${t.emoji} ${t.label}`}
+                icon={<t.Icon sx={{ fontSize: '14px !important' }} />}
+                label={t.label}
                 size="small"
                 onClick={() => handleTemplate(t)}
                 disabled={typing}

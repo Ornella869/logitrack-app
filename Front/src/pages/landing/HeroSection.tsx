@@ -2,6 +2,7 @@ import { Box, Container, Grid, Typography, Button, Card, Chip, Avatar } from '@m
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import StarIcon from '@mui/icons-material/Star'
 import { avatarColor } from './landingData'
 
 interface HeroSectionProps {
@@ -191,7 +192,7 @@ export default function HeroSection({ onScrollToLogin, onScrollToHow, onScrollTo
               <Box>
                 <Box sx={{ display: 'flex' }}>
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Box key={s} component="span" sx={{ color: '#FFD54F', fontSize: '0.9rem' }}>★</Box>
+                    <StarIcon key={s} sx={{ color: '#FFD54F', fontSize: '0.9rem' }} />
                   ))}
                 </Box>
                 <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', fontWeight: 600 }}>

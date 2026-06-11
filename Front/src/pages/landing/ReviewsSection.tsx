@@ -19,6 +19,7 @@ import {
 } from '@mui/material'
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote'
 import SendIcon from '@mui/icons-material/Send'
+import StarIcon from '@mui/icons-material/Star'
 import type { SelectChangeEvent } from '@mui/material'
 import type { Review } from './landingData'
 import { MOCK_REVIEWS, avatarColor, categoryLabel, categoryColor } from './landingData'
@@ -108,7 +109,7 @@ export default function ReviewsSection({ reviewsRef }: ReviewsSectionProps) {
                   return (
                     <Box key={star} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography sx={{ fontSize: '0.75rem', color: '#546E7A', width: 12, textAlign: 'right' }}>{star}</Typography>
-                      <Box component="span" sx={{ color: '#FFB300', fontSize: '0.75rem' }}>★</Box>
+                      <StarIcon sx={{ color: '#FFB300', fontSize: '0.75rem' }} />
                       <Box sx={{ width: { xs: 80, sm: 120 }, height: 6, bgcolor: '#E0E7EF', borderRadius: '3px', overflow: 'hidden', cursor: 'default', '&:hover .bar-fill': { filter: 'brightness(1.2)', transform: 'scaleX(1.03)', transformOrigin: 'left' } }}>
                         <Box className="bar-fill" sx={{ width: `${pct}%`, height: '100%', bgcolor: '#FFB300', borderRadius: '3px', transition: 'width 1s ease, filter 0.2s ease, transform 0.2s ease' }} />
                       </Box>

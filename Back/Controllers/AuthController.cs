@@ -175,21 +175,38 @@ namespace Back.Controllers
             var paquetesActivosPorRepartidor = asignados
                 .GroupBy(p => p.RepartidorAsignadoId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
+            var hoy = OperationalClock.TodayUtcDate;
 
             var query = repartidores.Select(t =>
             {
                 paquetesActivosPorRepartidor.TryGetValue(t.Id, out var paquetesActivos);
                 paquetesActivos ??= new List<Paquete>();
 
-                var assignedRoutesCount = paquetesActivos
+                // El card de repartidores debe reflejar la ruta operativa vigente:
+                // hoy o una ruta multi-dia que sigue activa desde un dia anterior.
+                // Las asignaciones futuras se gestionan desde calendarizacion/calendario,
+                // pero no deben hacer que el repartidor aparezca como "Con ruta asignada"
+                // despues de haber cerrado la jornada actual.
+                var paquetesOperativos = paquetesActivos
+                    .Where(p => p.FechaCalendarizada.HasValue
+                        && (p.FechaCalendarizada.Value.Date == hoy
+                            || (p.FechaCalendarizada.Value.Date < hoy
+                                && (p.Status == PaqueteStatus.EnTransito
+                                    || p.Status == PaqueteStatus.EnTransitoDescanso
+                                    || p.Status == PaqueteStatus.Demorado))))
+                    .ToList();
+
+                var assignedRoutesCount = paquetesOperativos
                     .Where(p => p.FechaCalendarizada.HasValue)
                     .Select(p => p.FechaCalendarizada!.Value.Date)
                     .Distinct()
                     .Count();
 
-                var routeStatusKey = paquetesActivos.Any(p => p.Status == PaqueteStatus.EnTransito)
+                var routeStatusKey = paquetesOperativos.Any(p => p.Status == PaqueteStatus.EnTransito
+                        || p.Status == PaqueteStatus.EnTransitoDescanso
+                        || p.Status == PaqueteStatus.Demorado)
                     ? "en-viaje"
-                    : paquetesActivos.Any(p => p.Status == PaqueteStatus.AsignadoAVehiculo
+                    : paquetesOperativos.Any(p => p.Status == PaqueteStatus.AsignadoAVehiculo
                         || p.Status == PaqueteStatus.CargadoEnVehiculo
                         || p.Status == PaqueteStatus.ListoParaSalir)
                         ? "con-ruta-asignada"

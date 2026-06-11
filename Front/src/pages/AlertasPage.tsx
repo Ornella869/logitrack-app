@@ -19,6 +19,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import { alertService, type AlertaPaqueteSinEstadoFinal } from '../services/alertService'
 import { notificationService } from '../services/notificationService'
 import { shipmentService } from '../services/shipmentService'
@@ -131,9 +132,9 @@ export default function AlertasPage() {
                   <TableCell>{a.repartidorNombre}</TableCell>
                   <TableCell>
                     {a.motivoAlerta === 'MasDe24hEnTransito' ? (
-                      <Chip size="small" label="⏱ Más de 24 h en tránsito" sx={{ bgcolor: '#f3e5f5', color: '#6a1b9a', fontWeight: 600 }} />
+                      <Chip size="small" icon={<AccessTimeIcon sx={{ fontSize: '16px !important' }} />} label="Más de 24 h en tránsito" sx={{ bgcolor: '#f3e5f5', color: '#6a1b9a', fontWeight: 600 }} />
                     ) : (
-                      <Chip size="small" label="⚠️ Fecha vencida" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 600 }} />
+                      <Chip size="small" icon={<WarningAmberIcon sx={{ fontSize: '16px !important' }} />} label="Fecha vencida" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 600 }} />
                     )}
                   </TableCell>
                   <TableCell>

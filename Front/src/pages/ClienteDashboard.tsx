@@ -231,7 +231,7 @@ export default function ClienteDashboard() {
                       '&:hover': { bgcolor: 'rgba(245,158,11,0.06)', borderColor: '#d97706' },
                     }}
                   >
-                    {calificacionExistente ? `Tu calificación: ${'★'.repeat(calificacionExistente.estrellas)}` : 'Calificar Punto Pick Up'}
+                    {calificacionExistente ? `Tu calificación: ${calificacionExistente.estrellas}/5` : 'Calificar Punto Pick Up'}
                   </Button>
                 </Box>
               )}

@@ -298,10 +298,13 @@ export default function DetalleRutaPage() {
             )}
             {mapClickMode && pendingPos && (
               <Box sx={{ p: 2, bgcolor: '#FFF3E0', borderBottom: '1px solid #FFB74D' }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
-                  <Typography variant="body2" sx={{ color: '#E65100', fontWeight: 600, flexShrink: 0 }}>
-                    📍 {pendingPos.lat.toFixed(5)}, {pendingPos.lng.toFixed(5)}
-                  </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: '#E65100', flexShrink: 0 }}>
+                        <EditLocationAltIcon sx={{ fontSize: 16 }} />
+                        <Typography variant="body2" sx={{ color: '#E65100', fontWeight: 600 }}>
+                          {pendingPos.lat.toFixed(5)}, {pendingPos.lng.toFixed(5)}
+                        </Typography>
+                      </Stack>
                   <FormControl size="small" sx={{ minWidth: 220 }}>
                     <InputLabel>Paquete a actualizar</InputLabel>
                     <Select
@@ -368,7 +371,7 @@ export default function DetalleRutaPage() {
 
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 1 }}>📋 Paradas de la ruta</Typography>
+              <Typography variant="h6" sx={{ mb: 1 }}>Paradas de la ruta</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
                 Orden automático por código postal y FIFO
               </Typography>
@@ -413,11 +416,11 @@ export default function DetalleRutaPage() {
                             <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
                               <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{p.codigoSeguimiento}</Typography>
                               <Typography variant="caption" color="text.secondary">
-                                👤 {p.destinatario} · {Math.round(p.peso)} kg
+                                {p.destinatario} · {Math.round(p.peso)} kg
                               </Typography>
-                              {p.telefono && <Typography variant="caption" color="text.secondary">📱 {p.telefono}</Typography>}
+                              {p.telefono && <Typography variant="caption" color="text.secondary">{p.telefono}</Typography>}
                               {p.esPrioritario && (
-                                <Chip size="small" label="⚡ Prioritario" sx={{ bgcolor: '#fdecea', color: '#c62828', height: 18, fontSize: 10 }} />
+                                <Chip size="small" label="Prioritario" sx={{ bgcolor: '#fdecea', color: '#c62828', height: 18, fontSize: 10 }} />
                               )}
                             </Stack>
                             {p.observaciones && (
@@ -443,7 +446,7 @@ export default function DetalleRutaPage() {
         <Grid item xs={12} md={4}>
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>📊 Métricas</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>Métricas</Typography>
               <Stack divider={<Divider flexItem />} spacing={1}>
                 <Row label="Total paradas" value={detalle.paradas.length} />
                 <Row label="Entregadas" value={entregadas} color="#2e7d32" />
@@ -456,7 +459,7 @@ export default function DetalleRutaPage() {
           </Card>
           <Card variant="outlined" sx={{ mt: 2 }}>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>👤 Repartidor</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>Repartidor</Typography>
               <Typography variant="body2" fontWeight={600}>{detalle.repartidorNombre}</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                 {detalle.repartidorEmail}

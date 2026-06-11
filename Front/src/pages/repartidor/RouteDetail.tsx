@@ -125,7 +125,7 @@ export default function RouteDetail() {
       if (result.success) {
         await loadData()
         notifyDelivered(shipment)
-        showSnackbar(`✓ ${shipment.trackingId} marcado como Entregado`, 'success')
+        showSnackbar(`${shipment.trackingId} marcado como Entregado`, 'success')
         highlightRow(shipment.id, 'delivered')
       } else {
         showSnackbar(result.error || 'No se pudo marcar el envío como entregado', 'error')
@@ -193,7 +193,7 @@ export default function RouteDetail() {
     const result = await shipmentService.changeShipmentStatus(found.id, 'Entregado')
     if (result.success) {
       await loadData()
-      showSnackbar(`📦 ${trackingId} escaneado y marcado como Entregado`, 'success')
+      showSnackbar(`${trackingId} escaneado y marcado como Entregado`, 'success')
       notifyDelivered(found)
       setScanInput('')
       highlightRow(found.id, 'delivered')

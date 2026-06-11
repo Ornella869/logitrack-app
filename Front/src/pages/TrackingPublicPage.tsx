@@ -42,12 +42,20 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const DRIVER_ICON = L.divIcon({
-  className: '',
-  html: `<div style="width:38px;height:38px;border-radius:50%;background:#1976d2;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:20px;">🚚</div>`,
-  iconSize: [38, 38],
-  iconAnchor: [19, 19],
-  popupAnchor: [0, -22],
+function makeSvgIcon({ size, background, svg }: { size: number; background: string; svg: string }) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${background};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;">${svg}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -22],
+  })
+}
+
+const DRIVER_ICON = makeSvgIcon({
+  size: 38,
+  background: '#1976d2',
+  svg: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 7.75A1.75 1.75 0 0 1 4.75 6h8.5C14.22 6 15 6.78 15 7.75V9h2.63c.54 0 1.05.25 1.38.68l1.96 2.54c.2.26.31.58.31.91v2.12A1.75 1.75 0 0 1 19.53 17H19a2.5 2.5 0 0 1-5 0H9a2.5 2.5 0 0 1-5 0h-.25A1.75 1.75 0 0 1 2 15.25V14h1V7.75Z" fill="white"/><circle cx="6.5" cy="17.5" r="1.5" fill="#1976d2" stroke="white" stroke-width="1.5"/><circle cx="16.5" cy="17.5" r="1.5" fill="#1976d2" stroke="white" stroke-width="1.5"/></svg>',
 })
 
 function PanTo({ pos }: { pos: [number, number] }) {
@@ -90,7 +98,7 @@ function DriverLiveMap({ trackingId, initialPos }: { trackingId: string; initial
           />
           <PanTo pos={pos} />
           <Marker position={pos} icon={DRIVER_ICON}>
-            <Popup>🚚 Repartidor en camino</Popup>
+            <Popup>Repartidor en camino</Popup>
           </Marker>
         </MapContainer>
       </Box>
@@ -532,7 +540,7 @@ export default function TrackingPublicPage() {
                             '&:hover': { bgcolor: 'rgba(245,158,11,0.08)', borderColor: '#d97706' },
                           }}
                         >
-                          {calificacionExistente ? `Tu calificación: ${'★'.repeat(calificacionExistente.estrellas)}` : 'Calificar Punto Pick Up'}
+                          {calificacionExistente ? `Tu calificación: ${calificacionExistente.estrellas}/5` : 'Calificar Punto Pick Up'}
                         </Button>
                       </Box>
                     )}
