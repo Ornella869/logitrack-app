@@ -267,7 +267,7 @@ export default function PerfilRendimientoPage() {
 
             {dateError && <Alert severity="error" sx={{ py: 0 }}>{dateError}</Alert>}
 
-            {prevData && prevData.tieneActividad && (
+            {prevData && (
               <Typography variant="caption" color="text.secondary">
                 Comparando con período anterior: {prevData.from} → {prevData.to}
               </Typography>
@@ -292,7 +292,7 @@ export default function PerfilRendimientoPage() {
               color="#2e7d32"
               icon={<CheckCircleIcon />}
               compareValue={data.totalEntregas}
-              comparePrev={prevData?.tieneActividad ? prevData.totalEntregas : undefined}
+              comparePrev={prevData ? prevData.totalEntregas : undefined}
               higherIsBetter
             />
             <Kpi
@@ -304,7 +304,7 @@ export default function PerfilRendimientoPage() {
               progress={data.efectividadOnTimePct}
               progressColor={data.efectividadOnTimePct >= 80 ? '#2e7d32' : data.efectividadOnTimePct >= 60 ? '#ed6c02' : '#c62828'}
               compareValue={data.efectividadOnTimePct}
-              comparePrev={prevData?.tieneActividad ? prevData.efectividadOnTimePct : undefined}
+              comparePrev={prevData ? prevData.efectividadOnTimePct : undefined}
               higherIsBetter
             />
             <Kpi
@@ -316,7 +316,7 @@ export default function PerfilRendimientoPage() {
               progress={data.tasaIncidenciasPct}
               progressColor={data.tasaIncidenciasPct <= 10 ? '#2e7d32' : data.tasaIncidenciasPct <= 25 ? '#ed6c02' : '#c62828'}
               compareValue={data.tasaIncidenciasPct}
-              comparePrev={prevData?.tieneActividad ? prevData.tasaIncidenciasPct : undefined}
+              comparePrev={prevData ? prevData.tasaIncidenciasPct : undefined}
               higherIsBetter={false}
             />
             <Kpi
@@ -326,12 +326,12 @@ export default function PerfilRendimientoPage() {
               color="#5e35b1"
               icon={<PersonIcon />}
               compareValue={data.totalAsignados}
-              comparePrev={prevData?.tieneActividad ? prevData.totalAsignados : undefined}
+              comparePrev={prevData ? prevData.totalAsignados : undefined}
               higherIsBetter
             />
           </Grid>
 
-          {prevData?.tieneActividad && (
+          {prevData && (
             <ComparisonChart data={data} prevData={prevData} from={from} to={to} />
           )}
         </>
@@ -377,19 +377,23 @@ function ComparisonBar({
   const fmt = (v: number) => (isPercent ? `${v.toFixed(1)}%` : String(v))
 
   return (
-    <Box sx={{ flex: 1, minWidth: 80, textAlign: 'center' }}>
-      <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 1, fontSize: '0.7rem' }}>
+    <Box sx={{ flex: 1, minWidth: 120, textAlign: 'center' }}>
+      <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 1.5, fontSize: '0.7rem', minHeight: 18 }}>
         {label}
       </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', height: BAR_MAX_H }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '8px', minHeight: BAR_MAX_H + 34 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
           <Typography variant="caption" fontWeight={700} sx={{ color, fontSize: '0.65rem' }}>{fmt(current)}</Typography>
-          <Box sx={{ width: 26, height: `${currentH}px`, bgcolor: color, borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
+          <Box sx={{ height: BAR_MAX_H, display: 'flex', alignItems: 'flex-end' }}>
+            <Box sx={{ width: 26, height: `${currentH}px`, bgcolor: color, borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
+          </Box>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Actual</Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>{fmt(prev)}</Typography>
-          <Box sx={{ width: 26, height: `${prevH}px`, bgcolor: isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd', borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease 0.1s both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
+          <Box sx={{ height: BAR_MAX_H, display: 'flex', alignItems: 'flex-end' }}>
+            <Box sx={{ width: 26, height: `${prevH}px`, bgcolor: isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd', borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease 0.1s both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
+          </Box>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Anterior</Typography>
         </Box>
       </Box>
@@ -420,7 +424,7 @@ function ComparisonChart({ data, prevData, from, to }: ComparisonChartProps) {
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
           <Typography variant="subtitle1" fontWeight={700}>
-            Comparativa visual vs período anterior
+            Comparativa con Período anterior
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Anterior: {formatDateOnlyEs(prevFrom, { day: '2-digit', month: 'short' })} — {formatDateOnlyEs(prevTo, { day: '2-digit', month: 'short' })}
