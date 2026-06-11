@@ -117,6 +117,7 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.CargadoEnVehiculo,
                 PaqueteStatus.ListoParaSalir,
                 PaqueteStatus.EnTransito,
+                PaqueteStatus.EnTransitoDescanso,
                 // G1L-82: un envío demorado sigue ocupando carga del repartidor ese día.
                 PaqueteStatus.Demorado,
             };

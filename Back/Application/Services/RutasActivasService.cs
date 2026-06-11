@@ -63,14 +63,20 @@ namespace Back.Application.Services
 
         public async Task<List<RutaActivaItem>> GetRutasDeHoyAsync(Guid? sucursalId = null)
         {
-            // Mostramos rutas activas de hoy y futuras: la calendarización empieza
-            // en mañana hábil (G1L-54) así que filtrar sólo "hoy" dejaba la pantalla
-            // siempre vacía. Cada repartidor puede aparecer una vez por fecha.
+            // Monitoreo operativo: rutas del día actual y rutas multi-día que
+            // siguen activas dentro de su rango. Las rutas futuras no iniciadas
+            // no deben mezclarse con la ruta en curso.
             var hoy = OperationalClock.TodayUtcDate;
             var asignados = await _enviosRepository.GetPaquetesConAsignacionActiva();
             var paquetesActivos = asignados
                 .Where(p => p.FechaCalendarizada.HasValue
-                            && p.FechaCalendarizada.Value.Date >= hoy
+                            && (p.FechaCalendarizada.Value.Date == hoy
+                                || (p.FechaCalendarizada.Value.Date < hoy
+                                    && p.FechaEstimadaEntrega.HasValue
+                                    && p.FechaEstimadaEntrega.Value.Date >= hoy
+                                    && (p.Status == PaqueteStatus.EnTransito
+                                        || p.Status == PaqueteStatus.EnTransitoDescanso
+                                        || p.Status == PaqueteStatus.Demorado)))
                             && (sucursalId == null || p.SucursalId == sucursalId))
                 .ToList();
 

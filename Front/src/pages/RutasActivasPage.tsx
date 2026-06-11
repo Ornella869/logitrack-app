@@ -214,7 +214,7 @@ export default function RutasActivasPage() {
             Rutas Activas
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Rutas calendarizadas para hoy y los próximos días — monitoreo en tiempo real.
+            Rutas activas del día actual, incluyendo multi-día en curso — monitoreo en tiempo real.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
