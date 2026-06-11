@@ -363,19 +363,21 @@ export default function CalendarizarPage() {
           <Grid item xs={12} md={4}>
               <Card variant="outlined">
               <CardContent>
-                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mb: 2, gap: 1.5 }}>
+                <Stack spacing={1.5} sx={{ mb: 2 }}>
                   <Box>
-                    <Typography variant="h6">Repartidores disponibles</Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="h6" sx={{ lineHeight: 1.25 }}>
+                      Repartidores disponibles
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
                       Ordenados por menor carga asignada.
                     </Typography>
                   </Box>
                   <TextField
+                    fullWidth
                     size="small"
                     placeholder="Buscar nombre o email..."
                     value={repartidorSearch}
                     onChange={(e) => handleRepartidorSearchChange(e.target.value)}
-                    sx={{ minWidth: { xs: '100%', sm: 220 } }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">

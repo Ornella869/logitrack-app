@@ -58,6 +58,11 @@ export interface RankingZonaIncidencia {
 const normalizeEstado = (estado: string): EstadoIncidencia =>
   estado === 'En Revision' || estado === 'EnRevision' || estado === 'En RevisiÃ³n' ? 'En Revisión' : estado as EstadoIncidencia
 
+const normalizeSeveridad = (severidad?: string | null): SeveridadIncidencia => {
+  const value = severidad?.trim()
+  return value === 'Baja' || value === 'Media' || value === 'Alta' ? value : 'Media'
+}
+
 const mapIncidencia = (raw: any): Incidencia => ({
   id: raw.id,
   repartidorId: raw.repartidorId,
@@ -80,7 +85,7 @@ const mapIncidencia = (raw: any): Incidencia => ({
   emailContacto: raw.emailContacto,
   chatFinalizado: raw.chatFinalizado,
   sucursalId: raw.sucursalId ?? undefined,
-  severidad: raw.severidad ?? 'Media',
+  severidad: normalizeSeveridad(raw.severidad),
   slaVenceEn: raw.slaVenceEn ?? null,
   slaVencido: raw.slaVencido ?? false,
   resueltaEn: raw.resueltaEn ?? null,
@@ -96,6 +101,11 @@ export const incidenciaService = {
   async getAll(): Promise<Incidencia[]> {
     const response = await api.get('/incidencias')
     return (response.data ?? []).map(mapIncidencia)
+  },
+
+  async getById(id: string): Promise<Incidencia | null> {
+    const incidencias = await this.getAll()
+    return incidencias.find((inc) => inc.id === id) ?? null
   },
 
   async getMisIncidencias(): Promise<Incidencia[]> {

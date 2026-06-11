@@ -16,6 +16,7 @@ import TarifasPage from './pages/TarifasPage'
 import OjoPatronConfigPage from './pages/OjoPatronConfigPage'
 import AlertasPage from './pages/AlertasPage'
 import IncidenciasPage from './pages/IncidenciasPage'
+import IncidenciaDetallePage from './pages/IncidenciaDetallePage'
 import SucursalesPage from './pages/SucursalesPage'
 import PuntosPickUpPage from './pages/PuntosPickUpPage'
 import PickUpOperacionPage from './pages/PickUpOperacionPage'
@@ -428,6 +429,16 @@ function App() {
             element={
               user && user.role === 'supervisor' ? (
                 <IncidenciasPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
+            path="/incidencias/:id"
+            element={
+              user && user.role === 'supervisor' ? (
+                <IncidenciaDetallePage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

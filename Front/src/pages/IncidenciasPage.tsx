@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -88,7 +88,8 @@ function EstadoChip({ estado }: { estado: EstadoIncidencia }) {
 }
 
 function SeveridadChip({ severidad, vencido }: { severidad?: string; vencido?: boolean }) {
-  const value = severidad ?? 'Media'
+  const parsed = severidad?.trim()
+  const value = parsed === 'Baja' || parsed === 'Media' || parsed === 'Alta' ? parsed : 'Media'
   const color = vencido ? '#b71c1c' : value === 'Alta' ? '#c62828' : value === 'Media' ? '#e65100' : '#2e7d32'
   const bg = vencido ? '#ffebee' : value === 'Alta' ? '#fdecea' : value === 'Media' ? '#fff3e0' : '#e8f5e9'
   return (
@@ -122,7 +123,7 @@ interface DetalleDialogProps {
   onUpdated: (inc: Incidencia) => void
 }
 
-function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: DetalleDialogProps) {
+export function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: DetalleDialogProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [nuevoEstado, setNuevoEstado] = useState<EstadoIncidencia>(inc.estado)
@@ -152,7 +153,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   // Chat supervisor → repartidor
   const [mensajes, setMensajes] = useState<MensajeIncidencia[]>([])
   const [chatInput, setChatInput] = useState('')
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
+  const chatContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -166,7 +167,9 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
   }, [inc.id])
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const chat = chatContainerRef.current
+    if (!chat) return
+    chat.scrollTop = chat.scrollHeight
   }, [mensajes])
 
   const handleSendMensaje = async () => {
@@ -597,6 +600,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
             )}
 
             <Box
+              ref={chatContainerRef}
               sx={{
                 border: '1px solid',
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#e0e0e0',
@@ -640,7 +644,6 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
                       </Stack>
                     )
                   })}
-                  <div ref={chatEndRef} />
                 </Stack>
               )}
             </Box>
@@ -748,7 +751,7 @@ function DetalleDialog({ incidencia: inc, supervisor, onClose, onUpdated }: Deta
 }
 
 export default function IncidenciasPage() {
-  const user = useOutletContext<User>()
+  const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -758,7 +761,6 @@ export default function IncidenciasPage() {
   const [filtroSeveridad, setFiltroSeveridad] = useState<SeveridadIncidencia | 'Todas'>('Todas')
   const [soloSlaVencido, setSoloSlaVencido] = useState(false)
   const [busqueda, setBusqueda] = useState('')
-  const [detalle, setDetalle] = useState<Incidencia | null>(null)
   const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
   const [rankingZonas, setRankingZonas] = useState<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number; severidadPredominante: string; tipoPredominante: string }>>([])
 
@@ -1032,7 +1034,7 @@ export default function IncidenciasPage() {
                   '&:hover': { boxShadow: 3 },
                   bgcolor: isDark ? (inc.estado === 'Abierta' ? 'rgba(198,40,40,0.06)' : 'transparent') : (inc.estado === 'Abierta' ? '#fff8f8' : 'white'),
                 }}
-                onClick={() => setDetalle(inc)}
+                onClick={() => navigate(`/incidencias/${inc.id}`)}
               >
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                   <Stack direction="row" alignItems="flex-start" spacing={1.5}>
@@ -1090,19 +1092,6 @@ export default function IncidenciasPage() {
         </Stack>
       )}
 
-      {/* Dialog de detalle */}
-      {detalle && (
-        <DetalleDialog
-          incidencia={detalle}
-          supervisor={user}
-          onClose={() => setDetalle(null)}
-          onUpdated={(updated) => {
-            setDetalle(updated)
-            void cargar()
-          }}
-        />
-      )}
-
       {/* Solapas de chat flotantes — una por incidente con mensajes activos */}
       {activeChats.length > 0 && (
         <Box
@@ -1121,7 +1110,7 @@ export default function IncidenciasPage() {
             return (
               <Box
                 key={incidencia.id}
-                onClick={() => setDetalle(incidencia)}
+                onClick={() => navigate(`/incidencias/${incidencia.id}`)}
                 sx={{
                   cursor: 'pointer',
                   width: 240,
