@@ -143,6 +143,8 @@ function ShipmentDetail() {
   const [qrFeedback, setQrFeedback] = useState<{ severity: 'success' | 'info' | 'error'; message: string } | null>(null)
   const lastScannedRef = useRef<{ code: string; at: number } | null>(null)
 
+  const esEntregaPickUp = Boolean(shipment?.puntoPickUpId)
+
   // G1L-13 / G1L-68: Operador/Supervisor cancelan Pendiente o cualquier estado
   // calendarizado (Asignado/Cargado/Listo para Salir) — en estos últimos podrán
   // elegir entre cancelar definitivo o volver a calendarizar.
@@ -259,21 +261,27 @@ function ShipmentDetail() {
     }
   }, [openCancelDialog, shipment, isCalendarizadoCancelable])
 
-  // Confirma la entrega validando el código que el destinatario tiene que dar.
-  // Por ahora el código está hardcodeado (ENTREGA_CONFIRMATION_CODE). En el próximo
-  // sprint se reemplaza por uno generado por envío y enviado por mail al destinatario
-  // cuando el paquete pasa a En Tránsito.
+  // Domicilio: el repartidor valida el código del destinatario.
+  // PickUp: el repartidor sólo deposita el paquete; el socio PickUp valida el
+  // código cuando entrega al cliente final.
   const handleConfirmarEntrega = async () => {
     if (!id || !shipment) return
-    const codigo = entregaCodigo.trim()
-    if (codigo.length !== 6) {
-      setEntregaError('El código debe tener 6 dígitos.')
+    if (esEntregaPickUp) {
+      setOpenEntregaDialog(false)
+      showActionToast('El punto PickUp debe recibir este paquete escaneando el QR.', 'info')
       return
     }
-    const expectedCode = shipment.codigoEntrega ?? '123456'
-    if (codigo !== expectedCode) {
-      setEntregaError('Código incorrecto. Verificá con el destinatario.')
-      return
+    if (!esEntregaPickUp) {
+      const codigo = entregaCodigo.trim()
+      if (codigo.length !== 6) {
+        setEntregaError('El código debe tener 6 dígitos.')
+        return
+      }
+      const expectedCode = shipment.codigoEntrega ?? '123456'
+      if (codigo !== expectedCode) {
+        setEntregaError('Código incorrecto. Verificá con el destinatario.')
+        return
+      }
     }
     setEntregaError('')
     // Fase B: si al entregar este envío se cruza la mitad del recorrido, primero la prueba de voz.
@@ -300,12 +308,15 @@ function ShipmentDetail() {
       if (updated) setShipment(updated)
       setOpenEntregaDialog(false)
       setEntregaCodigo('')
-      showActionToast('Entrega confirmada. ¡Gracias!', 'success')
+      const fuePickUp = updated?.status === 'Entregado en punto' || shipment.puntoPickUpId
+      showActionToast(fuePickUp ? 'Paquete entregado en el punto PickUp.' : 'Entrega confirmada. ¡Gracias!', 'success')
       // Notificación al Supervisor (rol), acotada a la sucursal del repartidor.
       notificationService.add({
         type: 'otro',
-        title: 'Entrega completada',
-        message: `Envío ${shipment.trackingId} entregado a ${shipment.receiver.name}`,
+        title: fuePickUp ? 'Entrega en PickUp completada' : 'Entrega completada',
+        message: fuePickUp
+          ? `Envío ${shipment.trackingId} depositado en ${shipment.puntoPickUpNombre ?? 'punto PickUp'}`
+          : `Envío ${shipment.trackingId} entregado a ${shipment.receiver.name}`,
         recipientId: 'supervisor',
         sucursalId: updated?.sucursalId ?? shipment.sucursalId ?? user.sucursalId ?? undefined,
         navigateTo: `/shipment/${id}`,
@@ -314,8 +325,10 @@ function ShipmentDetail() {
       if (isRepartidor) {
         notificationService.add({
           type: 'otro',
-          title: 'Parada entregada',
-          message: `Entregaste el envío ${shipment.trackingId} a ${shipment.receiver.name}.`,
+          title: fuePickUp ? 'Parada PickUp completada' : 'Parada entregada',
+          message: fuePickUp
+            ? `Depositaste el envío ${shipment.trackingId} en ${shipment.puntoPickUpNombre ?? 'el punto PickUp'}.`
+            : `Entregaste el envío ${shipment.trackingId} a ${shipment.receiver.name}.`,
           recipientId: user.id,
           navigateTo: '/repartidor',
         })
@@ -585,8 +598,8 @@ function ShipmentDetail() {
                 Pasar de estado (QR)
               </Button>
             )}
-          {/* G1L-9 / G1L-82: confirmación de entrega habilitada para "En Tránsito" y "Demorado". */}
-          {isRepartidor && esUltimaMillaActual && (status === 'En tránsito' || status === 'Demorado') && (
+          {/* G1L-9 / G1L-82: domicilio usa OTP. En PickUp recibe el socio escaneando el QR. */}
+          {isRepartidor && esUltimaMillaActual && (status === 'En tránsito' || status === 'Demorado') && !esEntregaPickUp && (
             <Button
               variant="contained"
               color="success"
@@ -599,6 +612,17 @@ function ShipmentDetail() {
               }}
             >
               Confirmar entrega
+            </Button>
+          )}
+          {isRepartidor && esUltimaMillaActual && (status === 'En tránsito' || status === 'Demorado') && esEntregaPickUp && (
+            <Button
+              variant="outlined"
+              color="info"
+              size="small"
+              startIcon={<QrCodeScannerIcon />}
+              disabled
+            >
+              Lo recibe el PickUp con QR
             </Button>
           )}
           {/* G1L-82: marcar como demorado (Repartidor o Supervisor) desde En Tránsito. */}
@@ -1059,8 +1083,8 @@ function ShipmentDetail() {
        
       </Grid>
 
-      {/* Dialog: confirmar entrega — el repartidor pide el código al destinatario.
-          Hoy el código es hardcodeado; próximamente se enviará por email al destinatario. */}
+      {/* Dialog: confirmar entrega. El OTP sólo aplica en domicilio; en PickUp
+          el código lo valida luego el socio al entregar al cliente final. */}
       <Dialog
         open={openEntregaDialog}
         onClose={() => !confirmandoEntrega && setOpenEntregaDialog(false)}
@@ -1069,36 +1093,46 @@ function ShipmentDetail() {
       >
         <DialogTitle>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <CheckCircleIcon color="success" /> <span>Confirmar entrega</span>
+            <CheckCircleIcon color="success" /> <span>{esEntregaPickUp ? 'Entregar en PickUp' : 'Confirmar entrega'}</span>
           </Stack>
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Pedile al destinatario el código de 6 dígitos que recibió por email.
+            {esEntregaPickUp
+              ? `Confirmá que depositaste el paquete en ${shipment?.puntoPickUpNombre ?? 'el punto PickUp'}. El socio PickUp lo recibirá escaneando el QR y validará el código recién al entregarlo al cliente.`
+              : 'Pedile al destinatario el código de 6 dígitos que recibió por email.'}
           </DialogContentText>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Codigo para demo: <strong>{shipment?.codigoEntrega ?? '123456'}</strong>
-          </Alert>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Código de entrega"
-            value={entregaCodigo}
-            onChange={(e) => {
-              const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 6)
-              setEntregaCodigo(onlyDigits)
-              setEntregaError('')
-            }}
-            disabled={confirmandoEntrega}
-            inputProps={{
-              maxLength: 6,
-              inputMode: 'numeric',
-              style: { fontFamily: 'monospace', letterSpacing: 6, textAlign: 'center', fontSize: 22 },
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && entregaCodigo.length === 6) void handleConfirmarEntrega()
-            }}
-          />
+          {esEntregaPickUp ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              No le pidas el código de entrega al cliente. Ese código corresponde al retiro posterior en el punto PickUp.
+            </Alert>
+          ) : (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Codigo para demo: <strong>{shipment?.codigoEntrega ?? '123456'}</strong>
+              </Alert>
+              <TextField
+                autoFocus
+                fullWidth
+                label="Código de entrega"
+                value={entregaCodigo}
+                onChange={(e) => {
+                  const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 6)
+                  setEntregaCodigo(onlyDigits)
+                  setEntregaError('')
+                }}
+                disabled={confirmandoEntrega}
+                inputProps={{
+                  maxLength: 6,
+                  inputMode: 'numeric',
+                  style: { fontFamily: 'monospace', letterSpacing: 6, textAlign: 'center', fontSize: 22 },
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && entregaCodigo.length === 6) void handleConfirmarEntrega()
+                }}
+              />
+            </>
+          )}
           {entregaError && (
             <Alert severity="error" sx={{ mt: 2 }}>{entregaError}</Alert>
           )}
@@ -1112,9 +1146,9 @@ function ShipmentDetail() {
             color="success"
             startIcon={confirmandoEntrega ? <CircularProgress size={16} color="inherit" /> : <CheckCircleIcon />}
             onClick={handleConfirmarEntrega}
-            disabled={confirmandoEntrega || entregaCodigo.length !== 6}
+            disabled={confirmandoEntrega || (!esEntregaPickUp && entregaCodigo.length !== 6)}
           >
-            {confirmandoEntrega ? 'Confirmando...' : 'Confirmar entrega'}
+            {confirmandoEntrega ? 'Confirmando...' : esEntregaPickUp ? 'Confirmar depósito' : 'Confirmar entrega'}
           </Button>
         </DialogActions>
       </Dialog>

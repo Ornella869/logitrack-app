@@ -77,7 +77,9 @@ namespace Back.Application.Services
             // Paquetes cuya FechaCalendarizada cae en el rango, más cualquier paquete
             // que haya sido entregado dentro del rango aunque haya sido calendarizado antes.
             var entregadosEnRangoIds = await _context.HistorialEstadosEnvio
-                .Where(h => h.EstadoNuevo == PaqueteStatus.Entregado
+                .Where(h => (h.EstadoNuevo == PaqueteStatus.Entregado
+                             || h.EstadoNuevo == PaqueteStatus.EntregadoEnPunto
+                             || h.EstadoNuevo == PaqueteStatus.ListoParaRetirar)
                             && h.FechaHora >= fromUtc
                             && h.FechaHora < toExclusiveUtc)
                 .Select(h => h.PaqueteId)
@@ -108,7 +110,9 @@ namespace Back.Application.Services
             var tramosCompletados = tramos.Count(t =>
                 t.Estado is TramoEnvioStatus.RecibidoEnSucursal or TramoEnvioStatus.Entregado);
             var totalAsignados = paquetes.Count + tramos.Count;
-            var totalEntregas = paquetes.Count(p => p.Status == PaqueteStatus.Entregado) + tramosCompletados;
+            var totalEntregas = paquetes.Count(p => p.Status == PaqueteStatus.Entregado
+                || p.Status == PaqueteStatus.EntregadoEnPunto
+                || p.Status == PaqueteStatus.ListoParaRetirar) + tramosCompletados;
             var totalCancelaciones = paquetes.Count(p => p.Status == PaqueteStatus.Cancelado)
                 + tramos.Count(t => t.Estado == TramoEnvioStatus.Cancelado);
 
@@ -118,11 +122,21 @@ namespace Back.Application.Services
             int onTime = 0;
             if (totalEntregas > 0)
             {
-                var entregados = paquetes.Where(p => p.Status == PaqueteStatus.Entregado).Select(p => p.Id).ToList();
+                var entregados = paquetes
+                    .Where(p => p.Status == PaqueteStatus.Entregado
+                        || p.Status == PaqueteStatus.EntregadoEnPunto
+                        || p.Status == PaqueteStatus.ListoParaRetirar)
+                    .Select(p => p.Id)
+                    .ToList();
                 var entregaEvents = await _context.HistorialEstadosEnvio
-                    .Where(h => entregados.Contains(h.PaqueteId) && h.EstadoNuevo == PaqueteStatus.Entregado)
+                    .Where(h => entregados.Contains(h.PaqueteId)
+                        && (h.EstadoNuevo == PaqueteStatus.Entregado
+                            || h.EstadoNuevo == PaqueteStatus.EntregadoEnPunto
+                            || h.EstadoNuevo == PaqueteStatus.ListoParaRetirar))
                     .ToListAsync();
-                foreach (var p in paquetes.Where(p => p.Status == PaqueteStatus.Entregado))
+                foreach (var p in paquetes.Where(p => p.Status == PaqueteStatus.Entregado
+                    || p.Status == PaqueteStatus.EntregadoEnPunto
+                    || p.Status == PaqueteStatus.ListoParaRetirar))
                 {
                     var ev = entregaEvents.Where(h => h.PaqueteId == p.Id).OrderBy(h => h.FechaHora).FirstOrDefault();
                     if (ev is null || !p.FechaCalendarizada.HasValue) continue;

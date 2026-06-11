@@ -108,6 +108,12 @@ const originForMaps = (origen: BranchOrigin | null) =>
 const routeDateForDisplay = dateOnlyForDisplay
 const ARRIVAL_RADIUS_METERS = 120
 
+const isParadaFinalizada = (status: Shipment['status']) =>
+  status === 'Entregado' || status === 'Cancelado' || status === 'Entregado en punto' || status === 'Listo para retirar'
+
+const statusRepartidor = (parada: Shipment): Shipment['status'] =>
+  parada.puntoPickUpId && parada.status === 'Listo para retirar' ? 'Entregado en punto' : parada.status
+
 function distanceInMeters(a: { latitud: number; longitud: number }, b: { latitud: number; longitud: number }) {
   const toRad = (value: number) => (value * Math.PI) / 180
   const earthRadius = 6371000
@@ -122,6 +128,9 @@ function distanceInMeters(a: { latitud: number; longitud: number }, b: { latitud
 function getParadaTone(status: Shipment['status'], isCurrent: boolean, isDark: boolean) {
   if (status === 'Entregado') {
     return { accent: '#2e7d32', bg: isDark ? 'rgba(46,125,50,0.12)' : '#f4fbf5', soft: isDark ? 'rgba(46,125,50,0.18)' : '#e8f5e9', label: 'Completada' }
+  }
+  if (status === 'Entregado en punto' || status === 'Listo para retirar') {
+    return { accent: '#1565c0', bg: isDark ? 'rgba(21,101,192,0.12)' : '#f3f8ff', soft: isDark ? 'rgba(21,101,192,0.2)' : '#e3f2fd', label: 'En PickUp' }
   }
   if (status === 'Cancelado') {
     return { accent: '#c62828', bg: isDark ? 'rgba(198,40,40,0.12)' : '#fff5f5', soft: isDark ? 'rgba(198,40,40,0.18)' : '#fdecea', label: 'Cancelada' }
@@ -281,8 +290,7 @@ export default function RepartidorDashboard() {
       p.receiverUbicacion?.latitud != null &&
       p.receiverUbicacion?.longitud != null,
     ) ?? paradas.find((p) =>
-      p.status !== 'Entregado' &&
-      p.status !== 'Cancelado' &&
+      !isParadaFinalizada(p.status) &&
       p.receiverUbicacion?.latitud != null &&
       p.receiverUbicacion?.longitud != null,
     )
@@ -368,22 +376,24 @@ export default function RepartidorDashboard() {
   const paradasFiltradas = useMemo(() => {
     if (!filtroEstado) return paradas
     if (filtroEstado === 'Pendientes')
-      return paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
-    return paradas.filter((p) => p.status === filtroEstado)
+      return paradas.filter((p) => !isParadaFinalizada(statusRepartidor(p)))
+    return paradas.filter((p) => statusRepartidor(p) === filtroEstado)
   }, [paradas, filtroEstado])
 
   const metrics = useMemo(() => {
     const entregadas = paradas.filter((p) => p.status === 'Entregado').length
+    const entregadasEnPunto = paradas.filter((p) => p.status === 'Entregado en punto' || p.status === 'Listo para retirar').length
+    const entregasOperativas = entregadas + entregadasEnPunto
     const canceladas = paradas.filter((p) => p.status === 'Cancelado').length
-    const finalizadas = entregadas + canceladas
+    const finalizadas = entregasOperativas + canceladas
     const enCamino = paradas.filter((p) => p.status === 'En tránsito').length
     const totalPeso = paradas.reduce((acc, p) => acc + (p.weight ?? 0), 0)
     const proximaIdx = paradas.findIndex(
-      (p) => p.status !== 'Entregado' && p.status !== 'Cancelado',
+      (p) => !isParadaFinalizada(statusRepartidor(p)),
     )
     const cpZona = paradas[0]?.receiver.postalCode
     const listosParaSalir = paradas.filter((p) => p.status === 'Listo para salir').length
-    return { entregadas, canceladas, finalizadas, enCamino, totalPeso, proximaIdx, cpZona, listosParaSalir }
+    return { entregadas, entregadasEnPunto, entregasOperativas, canceladas, finalizadas, enCamino, totalPeso, proximaIdx, cpZona, listosParaSalir }
   }, [paradas])
 
   // G1L-43: Inicializar Ruta — habilita la transición masiva Listo → En Tránsito.
@@ -531,7 +541,7 @@ export default function RepartidorDashboard() {
   const handleConfirmarInicio = async () => {
     setIniciandoRuta(true)
     setInicioFeedback(null)
-    const firstPending = paradas.find((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+    const firstPending = paradas.find((p) => !isParadaFinalizada(statusRepartidor(p)))
     const result = await shipmentService.inicializarRuta(fechaRuta ?? undefined)
     setIniciandoRuta(false)
     setConfirmInicioOpen(false)
@@ -561,7 +571,7 @@ export default function RepartidorDashboard() {
 
   const todasFinalizadas =
     paradas.length > 0 &&
-    paradas.every((p) => p.status === 'Entregado' || p.status === 'Cancelado')
+    paradas.every((p) => isParadaFinalizada(statusRepartidor(p)))
 
   useEffect(() => {
     if (todasFinalizadas) setParadaEnCurso(null)
@@ -824,7 +834,8 @@ export default function RepartidorDashboard() {
             </Stack>
 
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Chip size="small" label={`${metrics.entregadas} entregadas`} color="success" variant="outlined" />
+              <Chip size="small" label={`${metrics.entregasOperativas} entregadas`} color="success" variant="outlined" />
+              {metrics.entregadasEnPunto > 0 && <Chip size="small" label={`${metrics.entregadasEnPunto} en PickUp`} color="info" variant="outlined" />}
               {metrics.canceladas > 0 && <Chip size="small" label={`${metrics.canceladas} canceladas`} variant="outlined" />}
               <Chip size="small" label={`${paradas.length - metrics.finalizadas} pendientes`} variant="outlined" />
               {metrics.cpZona && <Chip size="small" label={`Zona CP ${metrics.cpZona}`} variant="outlined" />}
@@ -1042,7 +1053,8 @@ export default function RepartidorDashboard() {
                 </Stack>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip label={`${metrics.entregadas} entregadas`} color="success" variant="outlined" />
+                  <Chip label={`${metrics.entregasOperativas} entregadas`} color="success" variant="outlined" />
+                  {metrics.entregadasEnPunto > 0 && <Chip label={`${metrics.entregadasEnPunto} en PickUp`} color="info" variant="outlined" />}
                   <Chip label={`${metrics.canceladas} canceladas`} variant="outlined" />
                   <Chip label={`${paradas.length} paradas totales`} variant="outlined" />
                 </Stack>
@@ -1166,7 +1178,7 @@ export default function RepartidorDashboard() {
 
           {/* KPIs */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <KpiCard label="Entregadas" value={metrics.entregadas} color="#2e7d32" icon={<CheckCircleIcon />} />
+            <KpiCard label="Entregadas" value={metrics.entregasOperativas} color="#2e7d32" icon={<CheckCircleIcon />} />
             <KpiCard label="En camino" value={metrics.enCamino} color="#ed6c02" icon={<LocalShippingIcon />} />
             <KpiCard
               label="Capacidad"
@@ -1269,7 +1281,7 @@ export default function RepartidorDashboard() {
                   direccion: p.receiver.address,
                   localidad: p.receiver.city,
                   destinatario: p.receiver.name,
-                  status: p.status,
+                  status: statusRepartidor(p),
                   latitud: p.receiverUbicacion?.latitud ?? null,
                   longitud: p.receiverUbicacion?.longitud ?? null,
                 }))}
@@ -1339,7 +1351,7 @@ export default function RepartidorDashboard() {
                           <Typography variant="caption" sx={{ fontSize: 10, color: '#90a4ae', flexShrink: 0 }}>sin GPS</Typography>
                         )}
                         <Typography variant="caption" sx={{ fontSize: 10, color: tone.accent, fontWeight: 700, flexShrink: 0 }}>
-                          {isProxima && p.status !== 'Entregado' && p.status !== 'Cancelado' ? 'Actual' : p.status}
+                          {isProxima && !isParadaFinalizada(statusRepartidor(p)) ? 'Actual' : statusRepartidor(p)}
                         </Typography>
                       </Box>
                     )
@@ -1363,8 +1375,8 @@ export default function RepartidorDashboard() {
                 const count = value === null
                   ? paradas.length
                   : value === 'Pendientes'
-                    ? paradas.filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado').length
-                    : paradas.filter((p) => p.status === value).length
+                    ? paradas.filter((p) => !isParadaFinalizada(statusRepartidor(p))).length
+                    : paradas.filter((p) => statusRepartidor(p) === value).length
                 const selected = filtroEstado === value
                 return (
                   <Chip
@@ -1387,10 +1399,11 @@ export default function RepartidorDashboard() {
             )}
 
             {paradasFiltradas.map((p) => {
-              const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
+              const displayStatus = statusRepartidor(p)
+              const isCompleted = isParadaFinalizada(displayStatus)
               const isCurrent = p.id === proxima?.id
               const numeroParada = paradas.indexOf(p) + 1
-              const tone = getParadaTone(p.status, isCurrent, isDark)
+              const tone = getParadaTone(displayStatus, isCurrent, isDark)
               return (
                 <Card
                   key={p.id}
@@ -1421,7 +1434,7 @@ export default function RepartidorDashboard() {
                           <Typography variant={isMobile ? 'body1' : 'subtitle1'} fontWeight={600}>
                             {p.receiver.address}, {p.receiver.city}
                           </Typography>
-                          <StatusBadge status={p.status} />
+                          <StatusBadge status={displayStatus} />
                         </Stack>
                         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
                           <Chip size="small" label={`${tone.label} · parada ${numeroParada}`} sx={{ bgcolor: tone.soft, color: tone.accent, fontWeight: 700 }} />

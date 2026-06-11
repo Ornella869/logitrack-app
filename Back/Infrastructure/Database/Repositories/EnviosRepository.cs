@@ -161,6 +161,8 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.EnTransito,
                 PaqueteStatus.Demorado,
                 PaqueteStatus.Entregado,
+                PaqueteStatus.EntregadoEnPunto,
+                PaqueteStatus.ListoParaRetirar,
                 PaqueteStatus.Cancelado,
             };
             return await _context.Paquetes
@@ -183,6 +185,8 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.EnTransitoDescanso,
                 PaqueteStatus.Demorado,
                 PaqueteStatus.Entregado,
+                PaqueteStatus.EntregadoEnPunto,
+                PaqueteStatus.ListoParaRetirar,
                 PaqueteStatus.Cancelado,
             };
             var dia = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
@@ -202,6 +206,8 @@ namespace Back.Infrastructure.Database.Repositories
                 var activosHoy = paquetes
                     .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date
                                 && p.Status != PaqueteStatus.Entregado
+                                && p.Status != PaqueteStatus.EntregadoEnPunto
+                                && p.Status != PaqueteStatus.ListoParaRetirar
                                 && p.Status != PaqueteStatus.Cancelado)
                     .Select(p => p.Id)
                     .ToList();
@@ -217,13 +223,19 @@ namespace Back.Infrastructure.Database.Repositories
                     {
                         var finalizadosHoy = paquetes
                             .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date
-                                        && (p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado))
+                                        && (p.Status == PaqueteStatus.Entregado
+                                            || p.Status == PaqueteStatus.EntregadoEnPunto
+                                            || p.Status == PaqueteStatus.ListoParaRetirar
+                                            || p.Status == PaqueteStatus.Cancelado))
                             .Select(p => p.Id)
                             .ToList();
 
                         var finalizadosDeTandaActual = await _context.HistorialEstadosEnvio
                             .Where(h => finalizadosHoy.Contains(h.PaqueteId)
-                                        && (h.EstadoNuevo == PaqueteStatus.Entregado || h.EstadoNuevo == PaqueteStatus.Cancelado)
+                                        && (h.EstadoNuevo == PaqueteStatus.Entregado
+                                            || h.EstadoNuevo == PaqueteStatus.EntregadoEnPunto
+                                            || h.EstadoNuevo == PaqueteStatus.ListoParaRetirar
+                                            || h.EstadoNuevo == PaqueteStatus.Cancelado)
                                         && h.FechaHora >= inicioTandaActual.Value)
                             .Select(h => h.PaqueteId)
                             .Distinct()
@@ -231,7 +243,10 @@ namespace Back.Infrastructure.Database.Repositories
 
                         paquetes = paquetes
                             .Where(p => p.FechaCalendarizada!.Value.Date != dia.Date
-                                        || p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado
+                                        || p.Status != PaqueteStatus.Entregado
+                                            && p.Status != PaqueteStatus.EntregadoEnPunto
+                                            && p.Status != PaqueteStatus.ListoParaRetirar
+                                            && p.Status != PaqueteStatus.Cancelado
                                         || finalizadosDeTandaActual.Contains(p.Id))
                             .ToList();
                     }
@@ -252,13 +267,19 @@ namespace Back.Infrastructure.Database.Repositories
                 {
                     var finalizadosHoy = paquetes
                         .Where(p => p.FechaCalendarizada!.Value.Date == dia.Date
-                                    && (p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado))
+                                    && (p.Status == PaqueteStatus.Entregado
+                                        || p.Status == PaqueteStatus.EntregadoEnPunto
+                                        || p.Status == PaqueteStatus.ListoParaRetirar
+                                        || p.Status == PaqueteStatus.Cancelado))
                         .Select(p => p.Id)
                         .ToList();
 
                     var finalizadosDeUltimaRuta = await _context.HistorialEstadosEnvio
                         .Where(h => finalizadosHoy.Contains(h.PaqueteId)
-                                    && (h.EstadoNuevo == PaqueteStatus.Entregado || h.EstadoNuevo == PaqueteStatus.Cancelado)
+                                    && (h.EstadoNuevo == PaqueteStatus.Entregado
+                                        || h.EstadoNuevo == PaqueteStatus.EntregadoEnPunto
+                                        || h.EstadoNuevo == PaqueteStatus.ListoParaRetirar
+                                        || h.EstadoNuevo == PaqueteStatus.Cancelado)
                                     && h.FechaHora >= inicioUltimaRuta.Value)
                         .Select(h => h.PaqueteId)
                         .Distinct()
@@ -266,7 +287,10 @@ namespace Back.Infrastructure.Database.Repositories
 
                     paquetes = paquetes
                         .Where(p => p.FechaCalendarizada!.Value.Date != dia.Date
-                                    || p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado
+                                    || p.Status != PaqueteStatus.Entregado
+                                        && p.Status != PaqueteStatus.EntregadoEnPunto
+                                        && p.Status != PaqueteStatus.ListoParaRetirar
+                                        && p.Status != PaqueteStatus.Cancelado
                                     || finalizadosDeUltimaRuta.Contains(p.Id))
                         .ToList();
                 }

@@ -21,6 +21,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   'Cargado en vehículo': { label: 'Cargado en vehículo', color: '#311B92', bg: '#D1C4E9' },
   'Listo para salir': { label: 'Listo para salir', color: '#E65100', bg: '#FFF3E0' },
   'Listo para retirar': { label: 'Listo para retirar', color: '#00695C', bg: '#E0F2F1' },
+  'Entregado en punto': { label: 'Entregado en punto', color: '#1565C0', bg: '#E3F2FD' },
   'En transito': { label: 'En transito', color: '#0D47A1', bg: '#E3F2FD' },
   'En tránsito': { label: 'En tránsito', color: '#0D47A1', bg: '#E3F2FD' },
   Demorado: { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2' },

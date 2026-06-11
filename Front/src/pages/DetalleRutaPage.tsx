@@ -176,7 +176,7 @@ export default function DetalleRutaPage() {
   if (error) return <Alert severity="error">{error}</Alert>
   if (!detalle) return <Alert severity="info">Ruta no encontrada</Alert>
 
-  const entregadas = detalle.paradas.filter((p) => p.status === 'Entregado').length
+  const entregadas = detalle.paradas.filter((p) => p.status === 'Entregado' || p.status === 'EntregadoEnPunto' || p.status === 'ListoParaRetirar').length
   const canceladas = detalle.paradas.filter((p) => p.status === 'Cancelado').length
   const completas = entregadas + canceladas
   const proximaIdx = detalle.paradas.findIndex((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')

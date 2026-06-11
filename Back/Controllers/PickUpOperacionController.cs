@@ -141,8 +141,16 @@ namespace Back.Controllers
 
             try
             {
+                var repartidorId = paquete.RepartidorAsignadoId;
+                var fechaRuta = paquete.FechaCalendarizada;
+                if (paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado or PaqueteStatus.EnTransitoDescanso)
+                {
+                    paquete.EntregarEnPunto();
+                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.EntregadoEnPunto, socio.Id, OrigenCambioEstado.QR, "Deposito recibido en punto Pick Up");
+                }
                 paquete.MarcarListoParaRetirar();
                 await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.ListoParaRetirar, socio.Id, OrigenCambioEstado.QR, "Recepcion en punto Pick Up");
+                await TalvezMarcarRetornandoAsync(repartidorId, fechaRuta);
                 await _context.SaveChangesAsync();
                 var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == socio.PuntoPickUpId);
                 await _emails.NotificarListoParaRetirarAsync(paquete, punto);
@@ -178,6 +186,31 @@ namespace Back.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ex.Message);
+            }
+        }
+
+        private async Task TalvezMarcarRetornandoAsync(Guid? repartidorId, DateTime? fecha)
+        {
+            if (!repartidorId.HasValue || !fecha.HasValue) return;
+            var dia = DateTime.SpecifyKind(fecha.Value.Date, DateTimeKind.Utc);
+            var diaSiguiente = dia.AddDays(1);
+            var paquetesDia = await _context.Paquetes
+                .Where(p => p.RepartidorAsignadoId == repartidorId.Value
+                            && p.FechaCalendarizada >= dia
+                            && p.FechaCalendarizada < diaSiguiente)
+                .ToListAsync();
+            if (paquetesDia.Count == 0) return;
+            var todasFinalizadas = paquetesDia.All(p =>
+                p.Status == PaqueteStatus.Entregado
+                || p.Status == PaqueteStatus.EntregadoEnPunto
+                || p.Status == PaqueteStatus.ListoParaRetirar
+                || p.Status == PaqueteStatus.Cancelado);
+            if (!todasFinalizadas) return;
+
+            var repartidor = await _context.Usuarios.OfType<Repartidor>().FirstOrDefaultAsync(u => u.Id == repartidorId.Value);
+            if (repartidor?.EstadoJornada == Repartidor.EstadoJornadaRepartidor.EnRuta)
+            {
+                repartidor.MarcarRetornando();
             }
         }
 

@@ -96,7 +96,9 @@ namespace Back.Application.Services
                     var fecha = DateTime.SpecifyKind(g.Key.Item2, DateTimeKind.Utc);
                     repIndex.TryGetValue(repId, out var rep);
                     var totalParadas = g.Count();
-                    var entregadas = g.Count(p => p.Status == PaqueteStatus.Entregado);
+                    var entregadas = g.Count(p => p.Status == PaqueteStatus.Entregado
+                        || p.Status == PaqueteStatus.EntregadoEnPunto
+                        || p.Status == PaqueteStatus.ListoParaRetirar);
                     var canceladas = g.Count(p => p.Status == PaqueteStatus.Cancelado);
                     var enTransito = g.Any(p => p.Status == PaqueteStatus.EnTransito);
                     var pesoTotal = g.Sum(p => p.Peso);

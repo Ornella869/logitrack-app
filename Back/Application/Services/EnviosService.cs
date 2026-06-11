@@ -925,6 +925,12 @@ namespace Back.Application.Services
                 && paquete.FechaEstimadaEntrega.Value.Date > paquete.FechaCalendarizada.Value.Date;
         }
 
+        private static bool EsEstadoFinalParaRepartidor(Paquete paquete) =>
+            paquete.Status == PaqueteStatus.Entregado
+            || paquete.Status == PaqueteStatus.EntregadoEnPunto
+            || paquete.Status == PaqueteStatus.ListoParaRetirar
+            || paquete.Status == PaqueteStatus.Cancelado;
+
         // G1L-119: el repartidor reanuda la ruta al día siguiente.
         // Los paquetes vuelven de EnTransitoDescanso → EnTransito.
         public async Task<int> ReanudarJornadaAsync(Guid repartidorId)
@@ -976,8 +982,7 @@ namespace Back.Application.Services
             if (!repartidorId.HasValue || !fecha.HasValue) return;
             var paquetesDia = await _enviosRepository.GetPaquetesAsignadosARepartidorEnFecha(repartidorId.Value, fecha.Value);
             if (paquetesDia.Count == 0) return;
-            var todasFinalizadas = paquetesDia.All(p =>
-                p.Status == PaqueteStatus.Entregado || p.Status == PaqueteStatus.Cancelado);
+            var todasFinalizadas = paquetesDia.All(EsEstadoFinalParaRepartidor);
             if (!todasFinalizadas) return;
 
             if (await _userRepository.GetUsuarioById(repartidorId.Value) is Repartidor rep
