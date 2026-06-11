@@ -641,9 +641,12 @@ namespace Back.Application.Services
             }
             else if (accion == "Cancelar")
             {
+                var repartidorParaRetorno = paquete.RepartidorAsignadoId;
+                var fechaParaRetorno = paquete.FechaCalendarizada;
                 paquete.Cancelar(motivo);
                 await _tramos.SincronizarCancelacionAsync(paquete);
                 await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, supervisorId, OrigenCambioEstado.Manual, motivo);
+                await TalvezMarcarRetornandoAsync(repartidorParaRetorno, fechaParaRetorno);
                 await _auditoria.RegistrarAsync(
                     Domain.Models.TipoAccion.CancelacionEnvio,
                     $"Supervisor canceló {paquete.CodigoSeguimiento} por incidente: {motivo}",

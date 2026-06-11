@@ -374,6 +374,8 @@ export default function RepartidorDashboard() {
 
   const metrics = useMemo(() => {
     const entregadas = paradas.filter((p) => p.status === 'Entregado').length
+    const canceladas = paradas.filter((p) => p.status === 'Cancelado').length
+    const finalizadas = entregadas + canceladas
     const enCamino = paradas.filter((p) => p.status === 'En tránsito').length
     const totalPeso = paradas.reduce((acc, p) => acc + (p.weight ?? 0), 0)
     const proximaIdx = paradas.findIndex(
@@ -381,7 +383,7 @@ export default function RepartidorDashboard() {
     )
     const cpZona = paradas[0]?.receiver.postalCode
     const listosParaSalir = paradas.filter((p) => p.status === 'Listo para salir').length
-    return { entregadas, enCamino, totalPeso, proximaIdx, cpZona, listosParaSalir }
+    return { entregadas, canceladas, finalizadas, enCamino, totalPeso, proximaIdx, cpZona, listosParaSalir }
   }, [paradas])
 
   // G1L-43: Inicializar Ruta — habilita la transición masiva Listo → En Tránsito.
@@ -557,20 +559,19 @@ export default function RepartidorDashboard() {
   const proxima = metrics.proximaIdx >= 0 ? paradas[metrics.proximaIdx] : null
   const paradaParaIncidencia = paradas.find(puedeReportarIncidenciaSobre) ?? null
 
-  const todasEntregadas =
+  const todasFinalizadas =
     paradas.length > 0 &&
-    paradas.some((p) => p.status === 'Entregado') &&
     paradas.every((p) => p.status === 'Entregado' || p.status === 'Cancelado')
 
   useEffect(() => {
-    if (todasEntregadas) setParadaEnCurso(null)
-  }, [todasEntregadas])
+    if (todasFinalizadas) setParadaEnCurso(null)
+  }, [todasFinalizadas])
 
   // El retorno solo debe verse mientras la jornada sigue operativamente abierta.
   // Si ya volvió a "Disponible", aunque todas las entregas estén finalizadas,
   // no mostramos más la ruta de regreso ni sus acciones.
-  const showRetorno = estadoJornada === 'Retornando'
-  const jornadaFinalizada = estadoJornada === 'Disponible' && todasEntregadas
+  const showRetorno = estadoJornada === 'Retornando' || (estadoJornada === 'EnRuta' && todasFinalizadas)
+  const jornadaFinalizada = estadoJornada === 'Disponible' && todasFinalizadas
 
   // Resetear animación de retorno si se recarga la ruta y ya no está en retorno.
   useEffect(() => {
@@ -810,7 +811,7 @@ export default function RepartidorDashboard() {
               <Box sx={{ width: { xs: '100%', md: 'auto' }, minWidth: { md: 220 }, p: 1.5, borderRadius: 2, bgcolor: isDark ? 'rgba(46,125,50,0.14)' : '#f6fbf7', border: '1px solid', borderColor: isDark ? 'rgba(76,175,80,0.25)' : '#d7eadb' }}>
                 <Typography variant="caption" color="text.secondary">Avance de hoy</Typography>
                 <Typography variant="h4" fontWeight={700} sx={{ color: '#2e7d32', lineHeight: 1.1 }}>
-                  {metrics.entregadas} / {paradas.length}
+                  {metrics.finalizadas} / {paradas.length}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {showRetorno
@@ -824,7 +825,8 @@ export default function RepartidorDashboard() {
 
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip size="small" label={`${metrics.entregadas} entregadas`} color="success" variant="outlined" />
-              <Chip size="small" label={`${paradas.length - metrics.entregadas} pendientes`} variant="outlined" />
+              {metrics.canceladas > 0 && <Chip size="small" label={`${metrics.canceladas} canceladas`} variant="outlined" />}
+              <Chip size="small" label={`${paradas.length - metrics.finalizadas} pendientes`} variant="outlined" />
               {metrics.cpZona && <Chip size="small" label={`Zona CP ${metrics.cpZona}`} variant="outlined" />}
               <Chip size="small" label={!ojoPatronActivo ? 'Ojo desactivado' : consentimientoAceptado === false ? 'Consentimiento pendiente' : 'Consentimiento OK'} color={!ojoPatronActivo ? 'success' : consentimientoAceptado === false ? 'warning' : 'default'} variant={!ojoPatronActivo || consentimientoAceptado === false ? 'filled' : 'outlined'} />
               {estadoJornada === 'EnRuta' && gpsPermission === 'denied' && (
@@ -1041,7 +1043,7 @@ export default function RepartidorDashboard() {
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Chip label={`${metrics.entregadas} entregadas`} color="success" variant="outlined" />
-                  <Chip label={`${paradas.filter((p) => p.status === 'Cancelado').length} canceladas`} variant="outlined" />
+                  <Chip label={`${metrics.canceladas} canceladas`} variant="outlined" />
                   <Chip label={`${paradas.length} paradas totales`} variant="outlined" />
                 </Stack>
 
@@ -1173,7 +1175,7 @@ export default function RepartidorDashboard() {
               color="#1976d2"
               icon={<Inventory2Icon />}
             />
-            <KpiCard label="Paradas restantes" value={paradas.length - metrics.entregadas} color="#5e35b1" icon={<AccessTimeIcon />} />
+            <KpiCard label="Paradas restantes" value={paradas.length - metrics.finalizadas} color="#5e35b1" icon={<AccessTimeIcon />} />
           </Grid>
 
           {tab === 0 && (
