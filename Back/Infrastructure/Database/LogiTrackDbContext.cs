@@ -92,9 +92,14 @@ namespace Back.Infrastructure.Database
                 .HasValue<UsuarioPortal>("UsuarioPortal")
                 .HasValue<SocioPickUp>("SocioPickUp");
 
+            modelBuilder.Entity<Repartidor>()
+                .Property(x => x.CapacidadCargaKg)
+                .HasDefaultValue(500d);
+
             // Épica D: cobertura de provincias por sucursal, persistida como JSON.
             modelBuilder.Entity<Sucursal>(s =>
             {
+                s.Property(x => x.CapacidadAlmacenamientoPaquetes).HasDefaultValue(1000);
                 s.Property(x => x.ProvinciasCubiertas)
                     .HasConversion(
                         v => JsonSerializer.Serialize(v ?? new List<string>(), (JsonSerializerOptions?)null),

@@ -28,7 +28,7 @@ const formatOrigen = (o: MapsOrigen): string => {
 
 export function buildMapsUrl(stops: MapsStop[], origen: MapsOrigen | null): string | null {
   if (stops.length === 0) return null
-  const pending = stops.filter((s) => s.status !== 'Entregado' && s.status !== 'Cancelado')
+  const pending = stops.filter((s) => s.status !== 'Entregado' && s.status !== 'Cancelado' && s.status !== 'RetornandoASucursal' && s.status !== 'RetornadoASucursal' && s.status !== 'Retornando a sucursal' && s.status !== 'Retornado a sucursal')
   const active = pending.length > 0 ? pending : stops
 
   const origin = origen ? formatOrigen(origen) : formatStop(active[0])

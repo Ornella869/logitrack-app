@@ -21,6 +21,10 @@ namespace Back.Domain.Models
         EnTransitoDescanso = 9,
         // G1L-132: el repartidor depositó el paquete en el local; el socio aún no lo recibió.
         EntregadoEnPunto = 10,
+        // El envío fue cancelado/fallido y debe volver físicamente a una sucursal.
+        RetornandoASucursal = 11,
+        // La sucursal confirmó por escaneo la recepción física del paquete retornado.
+        RetornadoASucursal = 12,
     }
 
     public enum TipoEnvio
@@ -227,8 +231,8 @@ namespace Back.Domain.Models
 
         public void ReEnviar()
         {
-            if (Status != PaqueteStatus.Cancelado)
-                throw new InvalidOperationException("Solo se pueden reenviar paquetes cancelados.");
+            if (Status is not (PaqueteStatus.Cancelado or PaqueteStatus.RetornadoASucursal))
+                throw new InvalidOperationException("Solo se pueden reenviar paquetes cancelados o retornados a sucursal.");
 
             Status = PaqueteStatus.PendienteDeCalendarizacion;
             RazonCancelacion = null;
@@ -242,6 +246,28 @@ namespace Back.Domain.Models
             Status = PaqueteStatus.Cancelado;
 
             RazonCancelacion = razon;
+        }
+
+        public void CancelarConRetorno(string razon)
+        {
+            if (Status == PaqueteStatus.Entregado)
+                throw new InvalidOperationException("No se puede cancelar un paquete entregado.");
+
+            RazonCancelacion = razon;
+            RazonDemora = null;
+            Status = PaqueteStatus.RetornandoASucursal;
+        }
+
+        public void ConfirmarRetornoSucursal()
+        {
+            if (Status != PaqueteStatus.RetornandoASucursal)
+                throw new InvalidOperationException("Solo se puede recibir en sucursal un paquete que está retornando.");
+
+            Status = PaqueteStatus.RetornadoASucursal;
+            RepartidorAsignadoId = null;
+            FechaCalendarizada = null;
+            FechaEstimadaEntrega = null;
+            RazonDemora = null;
         }
 
         public void VolverAListoParaSalir()
@@ -311,7 +337,8 @@ namespace Back.Domain.Models
                 || Status == PaqueteStatus.ListoParaSalir
                 || Status == PaqueteStatus.EnTransito
                 || Status == PaqueteStatus.Demorado
-                || Status == PaqueteStatus.ListoParaRetirar)
+                || Status == PaqueteStatus.ListoParaRetirar
+                || Status == PaqueteStatus.RetornadoASucursal)
             {
                 Status = PaqueteStatus.PendienteDeCalendarizacion;
                 RazonDemora = null;

@@ -37,8 +37,6 @@ interface Props {
   onSuccess: (mensaje: string) => void
 }
 
-const CAPACIDAD_KG = 500
-
 const displayDate = (value: string) =>
   formatDateOnlyEs(value, {
     weekday: 'long',
@@ -170,8 +168,9 @@ export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, 
                   .filter((rep) => rep.nombre.toLowerCase().includes(search.trim().toLowerCase()))
                   .map((rep) => {
                   const carga = cargaPorRepartidor.get(rep.repartidorId) ?? { cantidad: 0, peso: 0 }
+                  const capacidadKg = rep.capacidadKg ?? 500
                   const seleccionado = repartidorId === rep.repartidorId
-                  const quedaExcedido = carga.peso + (shipment.weight ?? 0) > CAPACIDAD_KG
+                  const quedaExcedido = carga.peso + (shipment.weight ?? 0) > capacidadKg
                   const enTransitoHoy = fecha === hoy && rep.estadoJornada === 'EnRuta'
                   const retornando = rep.estadoJornada === 'Retornando'
                   const esPartTime = (rep.horasTrabajo ?? 8) <= 6
@@ -248,7 +247,7 @@ export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, 
                         </Box>
                         <Chip
                           size="small"
-                          label={`${carga.peso.toFixed(0)}/${CAPACIDAD_KG} kg`}
+                          label={`${carga.peso.toFixed(0)}/${capacidadKg.toFixed(0)} kg`}
                           sx={{
                             bgcolor: quedaExcedido ? '#ffebee' : '#e8f5e9',
                             color: quedaExcedido ? '#c62828' : '#2e7d32',
@@ -269,7 +268,7 @@ export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, 
 
             {repartidorId && (
               <Alert severity="info">
-                Peso resultante: {pesoResultante.toFixed(1)} kg de {CAPACIDAD_KG} kg.
+                Peso resultante: {pesoResultante.toFixed(1)} kg de {((calendario?.repartidores ?? []).find((rep) => rep.repartidorId === repartidorId)?.capacidadKg ?? 500).toFixed(0)} kg.
               </Alert>
             )}
 

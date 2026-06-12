@@ -236,6 +236,7 @@ namespace Back.Controllers
                     RouteStatusLabel = routeStatusLabel,
                     HorasTrabajo = t.HorasTrabajo,
                     TipoJornada = t.TipoJornada,
+                    CapacidadCargaKg = t.CapacidadCargaKg,
                     FotoPerfil = t.FotoPerfil,
                 };
             });
@@ -310,6 +311,7 @@ namespace Back.Controllers
                     Role = Roles.Repartidor,
                     Licencia = repartidor.Licencia,
                     Estado = repartidor.EstadoLabel,
+                    CapacidadCargaKg = repartidor.CapacidadCargaKg,
                     TemporaryPassword = result.TemporaryPassword
                 });
             }
@@ -348,6 +350,26 @@ namespace Back.Controllers
                 var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                     ?? throw new InvalidOperationException("Repartidor no encontrado.");
                 rep.ActualizarHorasTrabajo(request.HorasTrabajo);
+                await _context.SaveChangesAsync();
+                return Ok(MapRepartidor(rep));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpPut("repartidores/{repartidorId:guid}/capacidad-carga")]
+        public async Task<ActionResult<UserInfoResponse>> ActualizarCapacidadCargaRepartidor(Guid repartidorId, [FromBody] ActualizarCapacidadCargaRequest request)
+        {
+            try
+            {
+                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                if (scopeError is not null) return scopeError;
+                var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
+                    ?? throw new InvalidOperationException("Repartidor no encontrado.");
+                rep.ActualizarCapacidadCarga(request.CapacidadCargaKg);
                 await _context.SaveChangesAsync();
                 return Ok(MapRepartidor(rep));
             }
@@ -643,6 +665,7 @@ namespace Back.Controllers
             Activo = u.Activo,
             Licencia = u is Repartidor t ? t.Licencia : null,
             Estado = u is Repartidor t2 ? t2.EstadoLabel : null,
+            CapacidadCargaKg = u is Repartidor t3 ? t3.CapacidadCargaKg : null,
             // Épica D: ámbito del usuario para que el front gatee por sucursal/provincia.
             SucursalId = u.SucursalId?.ToString(),
             Provincia = u is Gerente ger ? ger.Provincia : null,
@@ -676,6 +699,7 @@ namespace Back.Controllers
             SucursalId = r.SucursalId?.ToString(),
             HorasTrabajo = r.HorasTrabajo,
             TipoJornada = r.TipoJornada,
+            CapacidadCargaKg = r.CapacidadCargaKg,
             FotoPerfil = r.FotoPerfil,
         };
     }
@@ -699,6 +723,7 @@ namespace Back.Controllers
         public string? PuntoPickUpId { get; set; }
         public int? HorasTrabajo { get; set; }
         public string? TipoJornada { get; set; }
+        public double? CapacidadCargaKg { get; set; }
         public string? FotoPerfil { get; set; }
     }
 
@@ -720,6 +745,8 @@ namespace Back.Controllers
         [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
         [Required] public string Licencia { get; set; } = string.Empty;
+        [Range(1, 5000, ErrorMessage = "La capacidad de carga debe estar entre 1 y 5000 kg.")]
+        public double CapacidadCargaKg { get; set; } = 500;
         // Épica D: sucursal a la que pertenece el repartidor.
         public Guid? SucursalId { get; set; }
     }
@@ -739,6 +766,13 @@ namespace Back.Controllers
         [Required]
         [Range(1, 24, ErrorMessage = "Las horas de trabajo deben estar entre 1 y 24.")]
         public int HorasTrabajo { get; set; }
+    }
+
+    public class ActualizarCapacidadCargaRequest
+    {
+        [Required]
+        [Range(1, 5000, ErrorMessage = "La capacidad de carga debe estar entre 1 y 5000 kg.")]
+        public double CapacidadCargaKg { get; set; }
     }
 
     public class CambiarEstadoRepartidorRequest
@@ -770,6 +804,8 @@ namespace Back.Controllers
         [MinLength(8, ErrorMessage = "La contraseña temporal debe tener al menos 8 caracteres.")]
         public string PasswordTemporal { get; set; } = string.Empty;
         public string? Licencia { get; set; }
+        [Range(1, 5000, ErrorMessage = "La capacidad de carga debe estar entre 1 y 5000 kg.")]
+        public double CapacidadCargaKg { get; set; } = 500;
         // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).
         public Guid? SucursalId { get; set; }
         public string? Provincia { get; set; }

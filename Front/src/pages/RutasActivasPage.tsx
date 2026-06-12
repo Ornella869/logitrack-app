@@ -53,6 +53,7 @@ type RutaActiva = {
   entregadas: number
   canceladas: number
   pesoTotal: number
+  capacidadKg?: number
   estado: string
   esDemorada: boolean
   paqueteIdParaSimulacion?: string | null
@@ -313,7 +314,7 @@ export default function RutasActivasPage() {
                       <Typography variant="body2">{r.cpZona}</Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">{r.pesoTotal.toFixed(0)} / 500 kg</Typography>
+                      <Typography variant="body2">{r.pesoTotal.toFixed(0)} / {(r.capacidadKg ?? 500).toFixed(0)} kg</Typography>
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1} alignItems="center">

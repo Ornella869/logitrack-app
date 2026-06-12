@@ -40,6 +40,7 @@ const mapRepartidor = (t: any): User => ({
   estado: (t.estado as RepartidorEstado) || 'Activo',
   horasTrabajo: t.horasTrabajo ?? 8,
   tipoJornada: (t.tipoJornada as 'Part Time' | 'Full Time') ?? 'Full Time',
+  capacidadCargaKg: Number(t.capacidadCargaKg ?? t.CapacidadCargaKg ?? 500),
 })
 
 const mapRepartidorListItem = (t: any): RepartidorListItem => ({
@@ -84,6 +85,7 @@ const mapUsuario = (usuario: any): User => ({
   provincias: usuario.provincias ?? usuario.Provincias ?? null,
   puntoPickUpId: usuario.puntoPickUpId ?? usuario.PuntoPickUpId ?? null,
   fotoPerfil: usuario.fotoPerfil ?? null,
+  capacidadCargaKg: usuario.capacidadCargaKg ?? usuario.CapacidadCargaKg ?? undefined,
 })
 
 const mapPagedUsuarios = (data: any): PagedResult<User> => ({
@@ -125,6 +127,7 @@ export const authService = {
         provincia: userInfo?.provincia ?? userInfo?.Provincia ?? null,
         provincias: userInfo?.provincias ?? userInfo?.Provincias ?? null,
         puntoPickUpId: userInfo?.puntoPickUpId ?? userInfo?.PuntoPickUpId ?? null,
+        capacidadCargaKg: userInfo?.capacidadCargaKg ?? userInfo?.CapacidadCargaKg ?? undefined,
         fotoPerfil: userInfo?.fotoPerfil ?? null,
       }
 
@@ -282,6 +285,7 @@ export const authService = {
         Email: data.email,
         DNI: data.dni,
         Licencia: data.licencia,
+        CapacidadCargaKg: data.capacidadCargaKg ?? 500,
       })
       const t = response.data
       return {
@@ -314,6 +318,18 @@ export const authService = {
       return mapRepartidor(response.data)
     } catch (error) {
       console.error('Update repartidor horas trabajo error:', error)
+      return null
+    }
+  },
+
+  updateRepartidorCapacidadCarga: async (repartidorId: string, capacidadCargaKg: number): Promise<User | null> => {
+    try {
+      const response = await api.put(`/auth/repartidores/${repartidorId}/capacidad-carga`, {
+        CapacidadCargaKg: capacidadCargaKg,
+      })
+      return mapRepartidor(response.data)
+    } catch (error) {
+      console.error('Update repartidor capacidad carga error:', error)
       return null
     }
   },
@@ -414,6 +430,7 @@ export const authService = {
         Role: roleMap[data.role],
         PasswordTemporal: data.passwordTemporal,
         ...(data.licencia ? { Licencia: data.licencia } : {}),
+        ...(data.role === 'repartidor' ? { CapacidadCargaKg: data.capacidadCargaKg ?? 500 } : {}),
         ...(data.sucursalId ? { SucursalId: data.sucursalId } : {}),
         ...(data.provincia ? { Provincia: data.provincia } : {}),
         ...(data.puntoPickUpId ? { PuntoPickUpId: data.puntoPickUpId } : {}),
@@ -429,6 +446,7 @@ export const authService = {
           role: normalizeUserRole(u.role ?? u.Role ?? ''),
           activo: u.activo ?? true,
           licencia: u.licencia,
+          capacidadCargaKg: u.capacidadCargaKg ?? u.CapacidadCargaKg ?? undefined,
           estado: (u.estado as UserEstado) || 'Activo',
           puntoPickUpId: u.puntoPickUpId ?? u.PuntoPickUpId ?? null,
         },

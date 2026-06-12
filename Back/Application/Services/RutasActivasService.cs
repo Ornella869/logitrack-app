@@ -15,6 +15,7 @@ namespace Back.Application.Services
         public required int Entregadas { get; init; }
         public required int Canceladas { get; init; }
         public required double PesoTotal { get; init; }
+        public required double CapacidadKg { get; init; }
         public required string Estado { get; init; } // EnTransito | ListoParaSalir | Completada | Demorada
         public required bool EsDemorada { get; init; }
         public Guid? PaqueteIdParaSimulacion { get; init; }
@@ -27,6 +28,7 @@ namespace Back.Application.Services
         public required Guid RepartidorId { get; init; }
         public required string RepartidorNombre { get; init; }
         public required string RepartidorEmail { get; init; }
+        public required double CapacidadKg { get; init; }
         public required DateTime Fecha { get; init; }
         public required List<DetalleRutaParada> Paradas { get; init; }
     }
@@ -137,6 +139,7 @@ namespace Back.Application.Services
                         Entregadas = entregadas,
                         Canceladas = canceladas,
                         PesoTotal = pesoTotal,
+                        CapacidadKg = rep?.CapacidadCargaKg ?? 500,
                         Estado = estado,
                         EsDemorada = demorada,
                         PaqueteIdParaSimulacion = paqueteSimulable?.Id,
@@ -213,6 +216,7 @@ namespace Back.Application.Services
                 RepartidorId = rep.Id,
                 RepartidorNombre = $"{rep.Nombre} {rep.Apellido}",
                 RepartidorEmail = rep.Email,
+                CapacidadKg = rep.CapacidadCargaKg,
                 Fecha = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc),
                 Paradas = paquetes.Select((p, idx) => new DetalleRutaParada
                 {

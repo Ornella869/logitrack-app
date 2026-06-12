@@ -163,6 +163,7 @@ const emptyForm = {
   dni: '',
   role: 'operador' as UserRole,
   licencia: '',
+  capacidadCargaKg: '500',
   passwordTemporal: '',
   // Épica D: vínculo de ámbito.
   sucursalId: '',
@@ -313,6 +314,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         role: formData.role,
         passwordTemporal: formData.passwordTemporal.trim(),
         ...(formData.role === 'repartidor' && formData.licencia ? { licencia: formData.licencia.trim() } : {}),
+        ...(formData.role === 'repartidor' ? { capacidadCargaKg: parseFloat(formData.capacidadCargaKg) } : {}),
         // Épica D: gerente lleva provincia; los demás roles operativos llevan sucursal.
         ...(formData.role === 'gerente' && formData.provincia ? { provincia: formData.provincia } : {}),
         ...(formData.role !== 'gerente' && formData.role !== 'administrador' && formData.sucursalId ? { sucursalId: formData.sucursalId } : {}),
@@ -342,6 +344,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       dni: user.dni,
       role: user.role,
       licencia: user.licencia ?? '',
+      capacidadCargaKg: String(user.capacidadCargaKg ?? 500),
       passwordTemporal: '',
       sucursalId: user.sucursalId ?? '',
       provincia: user.provincias && user.provincias.length > 0 ? user.provincias.join(', ') : (user.provincia ?? ''),
@@ -567,6 +570,11 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         }
         if (!/^[A-Za-z0-9\- ]{6,15}$/.test(formData.licencia.trim())) {
           setFormError('La licencia debe tener entre 6 y 15 caracteres alfanuméricos.')
+          return false
+        }
+        const capacidadCargaKg = parseFloat(formData.capacidadCargaKg)
+        if (Number.isNaN(capacidadCargaKg) || capacidadCargaKg < 1 || capacidadCargaKg > 5000) {
+          setFormError('La capacidad de carga debe estar entre 1 y 5000 kg.')
           return false
         }
       }
@@ -1071,6 +1079,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                   provincia: '',
                   sucursalId: '',
                   licencia: '',
+                  capacidadCargaKg: '500',
                   puntoPickUpId: '',
                 }))}
               >
@@ -1169,15 +1178,26 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
               </FormControl>
             )}
             {formData.role === 'repartidor' && (
-              <TextField
-                label="Licencia *"
-                value={formData.licencia}
-                onChange={(e) => setFormData((p) => ({ ...p, licencia: e.target.value.replace(/[^A-Za-z0-9\- ]/g, '') }))}
-                fullWidth
-                placeholder="Ej: 12345678"
-                helperText="Número de licencia de conducir (6–15 caracteres alfanuméricos)"
-                inputProps={{ maxLength: 15 }}
-              />
+              <>
+                <TextField
+                  label="Licencia *"
+                  value={formData.licencia}
+                  onChange={(e) => setFormData((p) => ({ ...p, licencia: e.target.value.replace(/[^A-Za-z0-9\- ]/g, '') }))}
+                  fullWidth
+                  placeholder="Ej: 12345678"
+                  helperText="Número de licencia de conducir (6–15 caracteres alfanuméricos)"
+                  inputProps={{ maxLength: 15 }}
+                />
+                <TextField
+                  label="Capacidad de carga (kg) *"
+                  type="number"
+                  value={formData.capacidadCargaKg}
+                  onChange={(e) => setFormData((p) => ({ ...p, capacidadCargaKg: e.target.value.replace(/[^0-9.]/g, '') }))}
+                  fullWidth
+                  helperText="Capacidad operativa inicial del repartidor"
+                  inputProps={{ min: 1, max: 5000, step: 1 }}
+                />
+              </>
             )}
             <TextField
               label="Contraseña Temporal *"

@@ -11,6 +11,7 @@ interface RegistarSucursalRequest {
   Provincia?: string
   ProvinciasCubiertas?: string[]
   Telefono: string
+  CapacidadAlmacenamientoPaquetes: number
 }
 
 // Mapear status del backend al frontend
@@ -33,6 +34,7 @@ const mapToBranch = (sucursal: any): Branch => ({
   province: sucursal.provincia ?? undefined,
   coveredProvinces: sucursal.provinciasCubiertas ?? sucursal.ProvinciasCubiertas ?? [],
   phone: sucursal.telefono,
+  storageCapacityPackages: Number(sucursal.capacidadAlmacenamientoPaquetes ?? sucursal.CapacidadAlmacenamientoPaquetes ?? 1000),
   createdDate: formatArgentinaDateInput(),
   status: mapStatus(sucursal.estado)
 })
@@ -72,6 +74,7 @@ export const branchService = {
         Provincia: branchData.province,
         ProvinciasCubiertas: branchData.coveredProvinces ?? [],
         Telefono: branchData.phone,
+        CapacidadAlmacenamientoPaquetes: branchData.storageCapacityPackages ?? 1000,
       }
 
       await api.post('/envios/sucursales/registrar-sucursal', request)
@@ -98,6 +101,7 @@ export const branchService = {
         Provincia: branchData.province,
         ProvinciasCubiertas: branchData.coveredProvinces ?? [],
         Telefono: branchData.phone,
+        CapacidadAlmacenamientoPaquetes: branchData.storageCapacityPackages ?? 1000,
       }
       await api.put(`/envios/sucursales/${id}`, request)
       return {

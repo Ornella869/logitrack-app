@@ -340,6 +340,36 @@ namespace Back.Controllers
                 PaginationDefaults.NormalizePageSize(pageSize)));
         }
 
+        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [HttpGet("sucursal/capacidad")]
+        public async Task<ActionResult<SucursalCapacidadResponse>> ObtenerCapacidadSucursal()
+        {
+            var sucursalId = await CurrentSucursalScopeAsync();
+            if (!sucursalId.HasValue || sucursalId.Value == Guid.Empty) return Forbid();
+
+            var sucursal = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == sucursalId.Value);
+            if (sucursal is null) return NotFound("Sucursal no encontrada.");
+
+            var estadosAlmacenados = new[]
+            {
+                PaqueteStatus.PendienteDeCalendarizacion,
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.RetornadoASucursal,
+            };
+
+            var ocupados = await _context.Paquetes.CountAsync(p =>
+                p.SucursalId == sucursal.Id && estadosAlmacenados.Contains(p.Status));
+            var capacidadTotal = sucursal.CapacidadAlmacenamientoPaquetes;
+            return Ok(new SucursalCapacidadResponse
+            {
+                SucursalId = sucursal.Id,
+                SucursalNombre = sucursal.Nombre,
+                CapacidadTotal = capacidadTotal,
+                Ocupados = ocupados,
+                Disponibles = Math.Max(0, capacidadTotal - ocupados),
+            });
+        }
+
         /// <summary>Paquetes pendientes de calendarización (Operador o Supervisor).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor)]
         [HttpGet("paquetes-pendientes")]
@@ -1036,7 +1066,7 @@ namespace Back.Controllers
             var error = await ValidarProvinciaGerente(request.Provincia);
             if (error is not null) return BadRequest(new { error });
 
-            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
+            var sucursal = new Sucursal(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia, capacidadAlmacenamientoPaquetes: request.CapacidadAlmacenamientoPaquetes);
             if (request.ProvinciasCubiertas is not null)
                 sucursal.DefinirCobertura(request.ProvinciasCubiertas);
             // Validar que, si el usuario es Gerente, las provincias cubiertas estén dentro de sus provincias asignadas
@@ -1116,7 +1146,7 @@ namespace Back.Controllers
             var error = await ValidarProvinciaGerente(request.Provincia)
                         ?? await ValidarProvinciaGerente(sucursal.Provincia);
             if (error is not null) return BadRequest(new { error });
-            sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia);
+            sucursal.Actualizar(request.Nombre, request.Direccion, request.Ciudad, request.CodigoPostal, request.Telefono, request.Provincia, request.CapacidadAlmacenamientoPaquetes);
             if (request.ProvinciasCubiertas is not null)
                 sucursal.DefinirCobertura(request.ProvinciasCubiertas);
             if (request.ProvinciasCubiertas is not null && request.ProvinciasCubiertas.Count > 0)
@@ -1255,10 +1285,21 @@ namespace Back.Controllers
         [Required] public string Ciudad { get; set; } = string.Empty;
         [Required] public string CodigoPostal { get; set; } = string.Empty;
         [Required] public string Telefono { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Range(1, 100000, ErrorMessage = "La capacidad de almacenamiento debe estar entre 1 y 100000 paquetes.")]
+        public int CapacidadAlmacenamientoPaquetes { get; set; } = 1000;
         // Opcional para no romper integraciones viejas; el front lo manda obligatorio.
         public string? Provincia { get; set; }
         // Épica D: provincias adicionales (sin sucursal propia) que cubre esta sucursal.
         public List<string>? ProvinciasCubiertas { get; set; }
+    }
+
+    public class SucursalCapacidadResponse
+    {
+        public Guid SucursalId { get; set; }
+        public string SucursalNombre { get; set; } = string.Empty;
+        public int CapacidadTotal { get; set; }
+        public int Ocupados { get; set; }
+        public int Disponibles { get; set; }
     }
 
     public class EtiquetaResponse

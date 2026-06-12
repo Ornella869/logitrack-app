@@ -113,7 +113,7 @@ export function useRepartidorState() {
       if (routeShipments.length === 0) return false
 
       return routeShipments.every(
-        (shipment) => shipment.status === 'Entregado' || shipment.status === 'Cancelado',
+        (shipment) => shipment.status === 'Entregado' || shipment.status === 'Cancelado' || shipment.status === 'Retornando a sucursal' || shipment.status === 'Retornado a sucursal',
       )
     },
     [state.shipments],

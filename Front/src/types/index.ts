@@ -27,6 +27,7 @@ export interface User {
   puntoPickUpId?: string | null
   horasTrabajo?: number
   tipoJornada?: 'Part Time' | 'Full Time'
+  capacidadCargaKg?: number
   fotoPerfil?: string | null
 }
 
@@ -36,6 +37,7 @@ export interface CreateRepartidorData {
   email: string
   dni: string
   licencia: string
+  capacidadCargaKg?: number
 }
 
 export interface CreateUsuarioData {
@@ -45,6 +47,7 @@ export interface CreateUsuarioData {
   dni: string
   role: UserRole
   licencia?: string
+  capacidadCargaKg?: number
   passwordTemporal: string
   // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).
   sucursalId?: string
@@ -88,6 +91,7 @@ export interface Branch {
   province?: string
   coveredProvinces?: string[]
   phone: string
+  storageCapacityPackages?: number
   createdDate: string
   status: BranchStatus
 }
@@ -118,7 +122,7 @@ export interface Shipment {
     email?: string
   }
   receiverUbicacion?: { latitud: number; longitud: number } | null
-  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado' | 'Listo para retirar' | 'En tránsito - Descanso' | 'Entregado en punto'
+  status: 'En tránsito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarización' | 'Listo para salir' | 'Asignado a vehículo' | 'Cargado en vehículo' | 'Demorado' | 'Listo para retirar' | 'En tránsito - Descanso' | 'Entregado en punto' | 'Retornando a sucursal' | 'Retornado a sucursal'
   fechaCalendarizada?: string | null
   fechaEstimadaEntrega?: string | null
   sucursalId?: string | null

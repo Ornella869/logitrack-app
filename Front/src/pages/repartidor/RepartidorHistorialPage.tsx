@@ -31,7 +31,7 @@ import { shipmentService } from '../../services/shipmentService'
 import type { Shipment } from '../../types'
 import { dateOnly, formatArgentinaDateInput, formatDateOnlyEs } from '../../utils/argentinaDate'
 
-const isFinal = (shipment: Shipment) => shipment.status === 'Entregado' || shipment.status === 'Cancelado'
+const isFinal = (shipment: Shipment) => shipment.status === 'Entregado' || shipment.status === 'Cancelado' || shipment.status === 'Retornando a sucursal' || shipment.status === 'Retornado a sucursal'
 
 const scheduledDate = (shipment: Shipment) =>
   shipment.fechaCalendarizada ? dateOnly(shipment.fechaCalendarizada) : null

@@ -1,7 +1,7 @@
 import { Chip } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
 
-type ShipmentStatus = 'En transito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarizacion' | 'Listo para salir' | 'Asignado a vehiculo' | 'Cargado en vehiculo' | 'Demorado' | 'Listo para retirar'
+type ShipmentStatus = 'En transito' | 'Entregado' | 'Cancelado' | 'Pendiente de calendarizacion' | 'Listo para salir' | 'Asignado a vehiculo' | 'Cargado en vehiculo' | 'Demorado' | 'Listo para retirar' | 'Retornando a sucursal' | 'Retornado a sucursal'
 type RouteStatus = 'Creada' | 'En Curso' | 'Finalizada' | 'Cancelada'
 
 type StatusType = ShipmentStatus | RouteStatus | string
@@ -27,6 +27,10 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   Demorado: { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2' },
   Entregado: { label: 'Entregado', color: '#1B5E20', bg: '#E8F5E9' },
   Cancelado: { label: 'Cancelado', color: '#7F0000', bg: '#FFEBEE' },
+  RetornandoASucursal: { label: 'Retornando a sucursal', color: '#BF360C', bg: '#FFF3E0' },
+  'Retornando a sucursal': { label: 'Retornando a sucursal', color: '#BF360C', bg: '#FFF3E0' },
+  RetornadoASucursal: { label: 'Retornado a sucursal', color: '#00695C', bg: '#E0F2F1' },
+  'Retornado a sucursal': { label: 'Retornado a sucursal', color: '#00695C', bg: '#E0F2F1' },
   Creada: { label: 'Creada', color: '#4A148C', bg: '#F3E5F5' },
   'En Curso': { label: 'En Curso', color: '#0D47A1', bg: '#E3F2FD' },
   Finalizada: { label: 'Finalizada', color: '#1B5E20', bg: '#E8F5E9' },

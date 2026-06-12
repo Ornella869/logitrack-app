@@ -287,6 +287,12 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                         </Box>
                         <Box>
                           <Typography variant="body2" color="textSecondary">
+                            Capacidad
+                          </Typography>
+                          <Typography variant="body2">{repartidor.capacidadCargaKg ?? 500} kg</Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" color="textSecondary">
                             Rutas asignadas
                           </Typography>
                           <Typography variant="body2">{repartidor.assignedRoutesCount}</Typography>

@@ -164,6 +164,8 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.EntregadoEnPunto,
                 PaqueteStatus.ListoParaRetirar,
                 PaqueteStatus.Cancelado,
+                PaqueteStatus.RetornandoASucursal,
+                PaqueteStatus.RetornadoASucursal,
             };
             return await _context.Paquetes
                 .Where(p => p.RepartidorAsignadoId == repartidorId
@@ -188,6 +190,8 @@ namespace Back.Infrastructure.Database.Repositories
                 PaqueteStatus.EntregadoEnPunto,
                 PaqueteStatus.ListoParaRetirar,
                 PaqueteStatus.Cancelado,
+                PaqueteStatus.RetornandoASucursal,
+                PaqueteStatus.RetornadoASucursal,
             };
             var dia = DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc);
             var diaSiguiente = dia.AddDays(1);
@@ -208,7 +212,9 @@ namespace Back.Infrastructure.Database.Repositories
                                 && p.Status != PaqueteStatus.Entregado
                                 && p.Status != PaqueteStatus.EntregadoEnPunto
                                 && p.Status != PaqueteStatus.ListoParaRetirar
-                                && p.Status != PaqueteStatus.Cancelado)
+                                && p.Status != PaqueteStatus.Cancelado
+                                && p.Status != PaqueteStatus.RetornandoASucursal
+                                && p.Status != PaqueteStatus.RetornadoASucursal)
                     .Select(p => p.Id)
                     .ToList();
 
@@ -226,7 +232,9 @@ namespace Back.Infrastructure.Database.Repositories
                                         && (p.Status == PaqueteStatus.Entregado
                                             || p.Status == PaqueteStatus.EntregadoEnPunto
                                             || p.Status == PaqueteStatus.ListoParaRetirar
-                                            || p.Status == PaqueteStatus.Cancelado))
+                                            || p.Status == PaqueteStatus.Cancelado
+                                            || p.Status == PaqueteStatus.RetornandoASucursal
+                                            || p.Status == PaqueteStatus.RetornadoASucursal))
                             .Select(p => p.Id)
                             .ToList();
 
@@ -235,7 +243,9 @@ namespace Back.Infrastructure.Database.Repositories
                                         && (h.EstadoNuevo == PaqueteStatus.Entregado
                                             || h.EstadoNuevo == PaqueteStatus.EntregadoEnPunto
                                             || h.EstadoNuevo == PaqueteStatus.ListoParaRetirar
-                                            || h.EstadoNuevo == PaqueteStatus.Cancelado)
+                                            || h.EstadoNuevo == PaqueteStatus.Cancelado
+                                            || h.EstadoNuevo == PaqueteStatus.RetornandoASucursal
+                                            || h.EstadoNuevo == PaqueteStatus.RetornadoASucursal)
                                         && h.FechaHora >= inicioTandaActual.Value)
                             .Select(h => h.PaqueteId)
                             .Distinct()
@@ -247,6 +257,8 @@ namespace Back.Infrastructure.Database.Repositories
                                             && p.Status != PaqueteStatus.EntregadoEnPunto
                                             && p.Status != PaqueteStatus.ListoParaRetirar
                                             && p.Status != PaqueteStatus.Cancelado
+                                            && p.Status != PaqueteStatus.RetornandoASucursal
+                                            && p.Status != PaqueteStatus.RetornadoASucursal
                                         || finalizadosDeTandaActual.Contains(p.Id))
                             .ToList();
                     }
@@ -270,7 +282,9 @@ namespace Back.Infrastructure.Database.Repositories
                                     && (p.Status == PaqueteStatus.Entregado
                                         || p.Status == PaqueteStatus.EntregadoEnPunto
                                         || p.Status == PaqueteStatus.ListoParaRetirar
-                                        || p.Status == PaqueteStatus.Cancelado))
+                                        || p.Status == PaqueteStatus.Cancelado
+                                        || p.Status == PaqueteStatus.RetornandoASucursal
+                                        || p.Status == PaqueteStatus.RetornadoASucursal))
                         .Select(p => p.Id)
                         .ToList();
 
@@ -279,7 +293,9 @@ namespace Back.Infrastructure.Database.Repositories
                                     && (h.EstadoNuevo == PaqueteStatus.Entregado
                                         || h.EstadoNuevo == PaqueteStatus.EntregadoEnPunto
                                         || h.EstadoNuevo == PaqueteStatus.ListoParaRetirar
-                                        || h.EstadoNuevo == PaqueteStatus.Cancelado)
+                                        || h.EstadoNuevo == PaqueteStatus.Cancelado
+                                        || h.EstadoNuevo == PaqueteStatus.RetornandoASucursal
+                                        || h.EstadoNuevo == PaqueteStatus.RetornadoASucursal)
                                     && h.FechaHora >= inicioUltimaRuta.Value)
                         .Select(h => h.PaqueteId)
                         .Distinct()
@@ -291,6 +307,8 @@ namespace Back.Infrastructure.Database.Repositories
                                         && p.Status != PaqueteStatus.EntregadoEnPunto
                                         && p.Status != PaqueteStatus.ListoParaRetirar
                                         && p.Status != PaqueteStatus.Cancelado
+                                        && p.Status != PaqueteStatus.RetornandoASucursal
+                                        && p.Status != PaqueteStatus.RetornadoASucursal
                                     || finalizadosDeUltimaRuta.Contains(p.Id))
                         .ToList();
                 }
