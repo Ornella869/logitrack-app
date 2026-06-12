@@ -27,9 +27,11 @@ export interface PickUpPaquete {
   provincia?: string | null
   peso: number
   creadoEn: string
+  fechaCalendarizada?: string | null
   fechaEstimadaEntrega?: string | null
   fechaListoParaRetirar?: string | null
   diasAlmacenado?: number | null
+  repartidorNombre?: string | null
 }
 
 export interface PickUpInventario {
@@ -52,9 +54,37 @@ export interface PickUpInventario {
   paquetes: PickUpPaquete[]
 }
 
+export interface PickUpAgenda {
+  fecha: string
+  paquetes: PickUpPaquete[]
+}
+
+export interface PickUpHistorialEvento {
+  estado: PickUpPaqueteStatus
+  fechaHora: string
+  origen: 'Manual' | 'QR' | 'Sistema' | number
+  motivo?: string | null
+}
+
+export interface PickUpHistorialPaquete {
+  paquete: PickUpPaquete
+  ultimoMovimiento: string
+  eventos: PickUpHistorialEvento[]
+}
+
 export const pickupOperacionService = {
   async inventario(): Promise<PickUpInventario> {
     const r = await api.get('/pickup-operacion/inventario')
+    return r.data
+  },
+
+  async esperadosHoy(): Promise<PickUpAgenda> {
+    const r = await api.get('/pickup-operacion/esperados-hoy')
+    return r.data
+  },
+
+  async historial(): Promise<PickUpHistorialPaquete[]> {
+    const r = await api.get('/pickup-operacion/historial')
     return r.data
   },
 

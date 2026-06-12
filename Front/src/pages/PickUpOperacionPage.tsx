@@ -15,7 +15,6 @@ import {
   DialogTitle,
   Divider,
   FormControl,
-  Grid,
   InputAdornment,
   InputLabel,
   LinearProgress,
@@ -476,17 +475,17 @@ export default function PickUpOperacionPage() {
         )}
 
         {data && (
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}><CapacidadCard usada={data.capacidadUsada} capacidad={data.punto.capacidadDiaria} /></Grid>
-            <Grid item xs={12} sm={6} md={3}><Kpi title="EN CAMINO AL PUNTO" value={data.enCamino} icon={<LocalShippingIcon />} color="#ED6C02" /></Grid>
-            <Grid item xs={12} sm={6} md={3}><Kpi title="PENDIENTES RECEPCIÓN" value={data.pendienteRecepcion} icon={<Inventory2Icon />} color="#7B1FA2" /></Grid>
-            <Grid item xs={12} sm={6} md={3}><Kpi title="LISTOS PARA RETIRAR" value={data.listosParaRetirar} icon={<QrCodeScannerIcon />} color="#00897B" /></Grid>
-            <Grid item xs={12} sm={6} md={3}><Kpi title="ENTREGADOS HOY" value={data.entregadosHoy} icon={<CheckCircleIcon />} color="#2E7D32" /></Grid>
-          </Grid>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 2, width: '100%' }}>
+            <CapacidadCard usada={data.capacidadUsada} capacidad={data.punto.capacidadDiaria} />
+            <Kpi title="EN CAMINO AL PUNTO" value={data.enCamino} icon={<LocalShippingIcon />} color="#ED6C02" />
+            <Kpi title="PENDIENTES RECEPCIÓN" value={data.pendienteRecepcion} icon={<Inventory2Icon />} color="#7B1FA2" />
+            <Kpi title="LISTOS PARA RETIRAR" value={data.listosParaRetirar} icon={<QrCodeScannerIcon />} color="#00897B" />
+            <Kpi title="ENTREGADOS HOY" value={data.entregadosHoy} icon={<CheckCircleIcon />} color="#2E7D32" />
+          </Box>
         )}
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, width: '100%' }}>
+          <Box>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={800} gutterBottom>Recibir envío</Typography>
@@ -516,8 +515,8 @@ export default function PickUpOperacionPage() {
                 </Stack>
               </CardContent>
             </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
+          </Box>
+          <Box>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={800} gutterBottom>Entregar al cliente</Typography>
@@ -530,8 +529,8 @@ export default function PickUpOperacionPage() {
                 </Stack>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         {abandonados.length > 0 && (
           <Alert severity="warning" icon={<WarningAmberIcon />}>

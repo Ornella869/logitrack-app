@@ -20,6 +20,7 @@ import IncidenciaDetallePage from './pages/IncidenciaDetallePage'
 import SucursalesPage from './pages/SucursalesPage'
 import PuntosPickUpPage from './pages/PuntosPickUpPage'
 import PickUpOperacionPage from './pages/PickUpOperacionPage'
+import PickUpHistorialPage from './pages/PickUpHistorialPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import ShipmentDetail from './pages/ShipmentDetail'
@@ -396,6 +397,16 @@ function App() {
             element={
               user && user.role === 'socio_pickup' ? (
                 <PickUpOperacionPage />
+              ) : (
+                <Navigate to="/access-denied" replace />
+              )
+            }
+          />
+          <Route
+            path="/pickup-historial"
+            element={
+              user && user.role === 'socio_pickup' ? (
+                <PickUpHistorialPage />
               ) : (
                 <Navigate to="/access-denied" replace />
               )

@@ -382,6 +382,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
     if (pathname.startsWith('/pickups')) return '/pickups'
+    if (pathname.startsWith('/pickup-historial')) return '/pickup-historial'
     if (pathname.startsWith('/pickup-operacion')) return '/pickup-operacion'
     if (pathname.startsWith('/tarifas')) return '/tarifas'
     if (pathname.startsWith('/ojo-patron')) return '/ojo-patron'
@@ -804,6 +805,9 @@ function Layout({ user, onLogout }: LayoutProps) {
             )}
             {user.role === 'socio_pickup' && (
               <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Mi PickUp" value="/pickup-operacion" sx={{ minHeight: 48, textTransform: 'none' }} />
+            )}
+            {user.role === 'socio_pickup' && (
+              <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Historial" value="/pickup-historial" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
           </Tabs>
         </Box>

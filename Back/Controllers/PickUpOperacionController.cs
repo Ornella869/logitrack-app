@@ -106,6 +106,105 @@ namespace Back.Controllers
             });
         }
 
+        [HttpGet("esperados-hoy")]
+        public async Task<ActionResult<PickUpAgendaResponse>> EsperadosHoy()
+        {
+            var socio = await CurrentSocioAsync();
+            if (socio is null) return Forbid();
+
+            var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == socio.PuntoPickUpId);
+            if (punto is null) return NotFound("Punto Pick Up no encontrado.");
+
+            var hoy = DateTime.UtcNow.Date;
+            var manana = hoy.AddDays(1);
+            var estadosEnViaje = new[]
+            {
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.CargadoEnVehiculo,
+                PaqueteStatus.ListoParaSalir,
+                PaqueteStatus.EnTransito,
+                PaqueteStatus.EnTransitoDescanso,
+                PaqueteStatus.Demorado,
+            };
+
+            var paquetes = await _context.Paquetes
+                .Where(p => p.PuntoPickUpId == punto.Id
+                            && estadosEnViaje.Contains(p.Status)
+                            && p.RepartidorAsignadoId.HasValue
+                            && (!p.FechaCalendarizada.HasValue || p.FechaCalendarizada < manana))
+                .OrderBy(p => p.FechaCalendarizada)
+                .ThenBy(p => p.CodigoSeguimiento)
+                .ToListAsync();
+
+            var repartidorIds = paquetes
+                .Where(p => p.RepartidorAsignadoId.HasValue)
+                .Select(p => p.RepartidorAsignadoId!.Value)
+                .Distinct()
+                .ToList();
+            var repartidores = repartidorIds.Count == 0
+                ? new Dictionary<Guid, string>()
+                : await _context.Usuarios
+                    .Where(u => repartidorIds.Contains(u.Id))
+                    .ToDictionaryAsync(u => u.Id, u => $"{u.Nombre} {u.Apellido}".Trim());
+
+            return Ok(new PickUpAgendaResponse
+            {
+                Fecha = hoy,
+                Paquetes = paquetes.Select(p =>
+                {
+                    var dto = MapPaquete(p);
+                    dto.FechaCalendarizada = p.FechaCalendarizada;
+                    dto.RepartidorNombre = p.RepartidorAsignadoId.HasValue && repartidores.TryGetValue(p.RepartidorAsignadoId.Value, out var nombre)
+                        ? nombre
+                        : null;
+                    return dto;
+                }).ToList(),
+            });
+        }
+
+        [HttpGet("historial")]
+        public async Task<ActionResult<List<PickUpHistorialPaqueteResponse>>> Historial()
+        {
+            var socio = await CurrentSocioAsync();
+            if (socio is null) return Forbid();
+
+            var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == socio.PuntoPickUpId);
+            if (punto is null) return NotFound("Punto Pick Up no encontrado.");
+
+            var paquetes = await _context.Paquetes
+                .Where(p => p.PuntoPickUpId == punto.Id)
+                .OrderByDescending(p => p.CreadoEn)
+                .Take(300)
+                .ToListAsync();
+
+            var paqueteIds = paquetes.Select(p => p.Id).ToList();
+            var eventos = paqueteIds.Count == 0
+                ? new List<HistorialEstadoEnvio>()
+                : await _context.HistorialEstadosEnvio
+                    .Where(h => paqueteIds.Contains(h.PaqueteId))
+                    .OrderByDescending(h => h.FechaHora)
+                    .ToListAsync();
+            var eventosPorPaquete = eventos.GroupBy(h => h.PaqueteId).ToDictionary(g => g.Key, g => g.ToList());
+
+            return Ok(paquetes.Select(p =>
+            {
+                eventosPorPaquete.TryGetValue(p.Id, out var historial);
+                historial ??= new List<HistorialEstadoEnvio>();
+                return new PickUpHistorialPaqueteResponse
+                {
+                    Paquete = MapPaquete(p),
+                    UltimoMovimiento = historial.FirstOrDefault()?.FechaHora ?? p.CreadoEn,
+                    Eventos = historial.Select(h => new PickUpHistorialEventoResponse
+                    {
+                        Estado = h.EstadoNuevo,
+                        FechaHora = h.FechaHora,
+                        Origen = h.Origen,
+                        Motivo = h.Motivo,
+                    }).ToList(),
+                };
+            }).OrderByDescending(x => x.UltimoMovimiento).ToList());
+        }
+
         [HttpPost("devolver")]
         public async Task<ActionResult<PickUpPaqueteResponse>> Devolver([FromBody] PickUpCodigoRequest request)
         {
@@ -364,9 +463,32 @@ namespace Back.Controllers
         public string? Provincia { get; set; }
         public double Peso { get; set; }
         public DateTime CreadoEn { get; set; }
+        public DateTime? FechaCalendarizada { get; set; }
         public DateTime? FechaEstimadaEntrega { get; set; }
         public DateTime? FechaListoParaRetirar { get; set; }
         public int? DiasAlmacenado { get; set; }
+        public string? RepartidorNombre { get; set; }
+    }
+
+    public class PickUpAgendaResponse
+    {
+        public DateTime Fecha { get; set; }
+        public List<PickUpPaqueteResponse> Paquetes { get; set; } = [];
+    }
+
+    public class PickUpHistorialPaqueteResponse
+    {
+        public PickUpPaqueteResponse Paquete { get; set; } = new();
+        public DateTime UltimoMovimiento { get; set; }
+        public List<PickUpHistorialEventoResponse> Eventos { get; set; } = [];
+    }
+
+    public class PickUpHistorialEventoResponse
+    {
+        public PaqueteStatus Estado { get; set; }
+        public DateTime FechaHora { get; set; }
+        public OrigenCambioEstado Origen { get; set; }
+        public string? Motivo { get; set; }
     }
 
     public class CalificacionPickUpResponse
