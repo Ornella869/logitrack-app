@@ -162,7 +162,15 @@ export default function PickUpHistorialPage() {
           </Box>
         </Box>
 
-        <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2, borderColor: '#90CAF9', bgcolor: '#F5FAFF' }}>
+        <Paper
+          variant="outlined"
+          sx={(theme) => ({
+            p: { xs: 2, md: 3 },
+            borderRadius: 2,
+            borderColor: theme.palette.mode === 'dark' ? 'rgba(66, 165, 245, 0.55)' : '#90CAF9',
+            bgcolor: theme.palette.mode === 'dark' ? 'rgba(25, 39, 68, 0.92)' : '#F5FAFF',
+          })}
+        >
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
             <LocalShippingIcon color="primary" />
             <Box>
@@ -174,11 +182,11 @@ export default function PickUpHistorialPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ minWidth: 150 }}>Código</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Destinatario</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Repartidor</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>Estado</TableCell>
-                  <TableCell sx={{ minWidth: 120, whiteSpace: 'nowrap' }}>Día de ruta</TableCell>
+                  <TableCell sx={(theme) => ({ minWidth: 150, bgcolor: theme.palette.mode === 'dark' ? 'rgba(30, 58, 94, 0.85)' : '#EAF6FF' })}>Código</TableCell>
+                  <TableCell sx={(theme) => ({ minWidth: 180, bgcolor: theme.palette.mode === 'dark' ? 'rgba(30, 58, 94, 0.85)' : '#EAF6FF' })}>Destinatario</TableCell>
+                  <TableCell sx={(theme) => ({ minWidth: 180, bgcolor: theme.palette.mode === 'dark' ? 'rgba(30, 58, 94, 0.85)' : '#EAF6FF' })}>Repartidor</TableCell>
+                  <TableCell sx={(theme) => ({ minWidth: 170, bgcolor: theme.palette.mode === 'dark' ? 'rgba(30, 58, 94, 0.85)' : '#EAF6FF' })}>Estado</TableCell>
+                  <TableCell sx={(theme) => ({ minWidth: 120, whiteSpace: 'nowrap', bgcolor: theme.palette.mode === 'dark' ? 'rgba(30, 58, 94, 0.85)' : '#EAF6FF' })}>Día de ruta</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
