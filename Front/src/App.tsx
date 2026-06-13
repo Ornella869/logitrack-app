@@ -296,7 +296,7 @@ function App() {
             }
           />
 
-          {/* Supervisor: calendario operativo y rutas activas */}
+          {/* Supervisor: listado de repartidores */}
           <Route
             path="/repartidores"
             element={

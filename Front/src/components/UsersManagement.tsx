@@ -109,6 +109,10 @@ function isActive(user?: { activo?: boolean; estado?: string }): boolean {
   return !user.estado || user.estado === 'Activo'
 }
 
+function toDateInputValue(value?: string | null): string {
+  return value ? value.slice(0, 10) : ''
+}
+
 function EstadoChip({ activo, estado }: { activo?: boolean; estado?: string }) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
@@ -163,6 +167,7 @@ const emptyForm = {
   dni: '',
   role: 'operador' as UserRole,
   licencia: '',
+  fechaVencimientoLicencia: '',
   capacidadCargaKg: '500',
   passwordTemporal: '',
   // Épica D: vínculo de ámbito.
@@ -173,9 +178,10 @@ const emptyForm = {
 
 interface UsersManagementProps {
   currentUserId?: string
+  highlightedUserIds?: string[]
 }
 
-export default function UsersManagement({ currentUserId }: UsersManagementProps = {}) {
+export default function UsersManagement({ currentUserId, highlightedUserIds = [] }: UsersManagementProps = {}) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [users, setUsers] = useState<User[]>([])
@@ -314,6 +320,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
         role: formData.role,
         passwordTemporal: formData.passwordTemporal.trim(),
         ...(formData.role === 'repartidor' && formData.licencia ? { licencia: formData.licencia.trim() } : {}),
+        ...(formData.role === 'repartidor' ? { fechaVencimientoLicencia: formData.fechaVencimientoLicencia || null } : {}),
         ...(formData.role === 'repartidor' ? { capacidadCargaKg: parseFloat(formData.capacidadCargaKg) } : {}),
         // Épica D: gerente lleva provincia; los demás roles operativos llevan sucursal.
         ...(formData.role === 'gerente' && formData.provincia ? { provincia: formData.provincia } : {}),
@@ -344,6 +351,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       dni: user.dni,
       role: user.role,
       licencia: user.licencia ?? '',
+      fechaVencimientoLicencia: toDateInputValue(user.fechaVencimientoLicencia),
       capacidadCargaKg: String(user.capacidadCargaKg ?? 500),
       passwordTemporal: '',
       sucursalId: user.sucursalId ?? '',
@@ -371,6 +379,10 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
       if (selectedUser.role === 'gerente' && formData.provincia) {
         const provincias = formData.provincia.split(',').map((s) => s.trim()).filter(Boolean)
         if (provincias.length > 0) await authService.assignProvincias(selectedUser.id, provincias)
+      }
+      if (selectedUser.role === 'repartidor') {
+        const licenciaActualizada = await authService.updateRepartidorLicencia(selectedUser.id, formData.licencia.trim(), formData.fechaVencimientoLicencia || null)
+        if (!licenciaActualizada) throw new Error('No se pudo actualizar la licencia del repartidor')
       }
       if (updated) {
         await loadUsers()
@@ -572,11 +584,29 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
           setFormError('La licencia debe tener entre 6 y 15 caracteres alfanuméricos.')
           return false
         }
+        if (!formData.fechaVencimientoLicencia) {
+          setFormError('El vencimiento de licencia es obligatorio para repartidores.')
+          return false
+        }
         const capacidadCargaKg = parseFloat(formData.capacidadCargaKg)
         if (Number.isNaN(capacidadCargaKg) || capacidadCargaKg < 1 || capacidadCargaKg > 5000) {
           setFormError('La capacidad de carga debe estar entre 1 y 5000 kg.')
           return false
         }
+      }
+    }
+    if (!isCreate && formData.role === 'repartidor') {
+      if (!formData.licencia.trim()) {
+        setFormError('La licencia es obligatoria para repartidores.')
+        return false
+      }
+      if (!/^[A-Za-z0-9\- ]{6,15}$/.test(formData.licencia.trim())) {
+        setFormError('La licencia debe tener entre 6 y 15 caracteres alfanuméricos.')
+        return false
+      }
+      if (!formData.fechaVencimientoLicencia) {
+        setFormError('El vencimiento de licencia es obligatorio para repartidores.')
+        return false
       }
     }
     setFormError('')
@@ -592,6 +622,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
   const selectedUsers = users.filter((u) => selectedIds.has(u.id))
   const toDeactivate = selectedUsers.filter((u) => isActive(u))
   const toActivate = selectedUsers.filter((u) => !isActive(u))
+  const highlightedIds = new Set(highlightedUserIds)
 
   return (
     <Box>
@@ -893,6 +924,7 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                 const initials = `${user.name.charAt(0)}${user.lastname.charAt(0)}`.toUpperCase()
                 const active = isActive(user)
                 const roleColor = ROLE_COLORS[user.role] ?? { color: '#555' }
+                const isHighlighted = highlightedIds.has(user.id)
                 return (
                   <TableRow
                     key={user.id}
@@ -900,6 +932,10 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                       opacity: active ? 1 : 0.6,
                       '&:last-child td': { border: 0 },
                       '&:hover': { bgcolor: 'action.hover' },
+                      ...(isHighlighted && {
+                        bgcolor: isDark ? 'rgba(245,124,0,0.16)' : '#FFF3E0',
+                        '& td:first-of-type': { borderLeft: '4px solid #ed6c02' },
+                      }),
                       ...(selectedIds.has(user.id) && { bgcolor: 'rgba(25,118,210,0.06)' }),
                     }}
                   >
@@ -928,6 +964,14 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                         <Typography variant="body2" fontWeight={600} lineHeight={1.2}>
                           {user.name} {user.lastname}
                         </Typography>
+                        {isHighlighted && (
+                          <Chip
+                            label="Licencia por vencer"
+                            size="small"
+                            color="warning"
+                            sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                          />
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell>
@@ -1189,6 +1233,15 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                   inputProps={{ maxLength: 15 }}
                 />
                 <TextField
+                  label="Vencimiento de licencia *"
+                  type="date"
+                  value={formData.fechaVencimientoLicencia}
+                  onChange={(e) => setFormData((p) => ({ ...p, fechaVencimientoLicencia: e.target.value }))}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Fecha hasta la que la licencia está vigente"
+                />
+                <TextField
                   label="Capacidad de carga (kg) *"
                   type="number"
                   value={formData.capacidadCargaKg}
@@ -1356,6 +1409,37 @@ export default function UsersManagement({ currentUserId }: UsersManagementProps 
                   })}
                 </Select>
               </FormControl>
+            )}
+
+            {selectedUser?.role === 'repartidor' && (
+              <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                  Licencia de conducir
+                </Typography>
+                <Stack spacing={2}>
+                  <TextField
+                    label="Licencia *"
+                    value={formData.licencia}
+                    onChange={(e) => setFormData((p) => ({ ...p, licencia: e.target.value.replace(/[^A-Za-z0-9\- ]/g, '') }))}
+                    fullWidth
+                    placeholder="Ej: 12345678"
+                    helperText="Número de licencia de conducir (6–15 caracteres alfanuméricos)"
+                    inputProps={{ maxLength: 15 }}
+                  />
+                  <TextField
+                    label="Vencimiento de licencia *"
+                    type="date"
+                    value={formData.fechaVencimientoLicencia}
+                    onChange={(e) => setFormData((p) => ({ ...p, fechaVencimientoLicencia: e.target.value }))}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    helperText="Actualizar esta fecha no reactiva automáticamente una suspensión existente"
+                  />
+                  {selectedUser.motivoSuspension && (
+                    <Alert severity="warning">Motivo de suspensión: {selectedUser.motivoSuspension}</Alert>
+                  )}
+                </Stack>
+              </Box>
             )}
 
             {/* Sección: Reseteo de contraseña de emergencia */}

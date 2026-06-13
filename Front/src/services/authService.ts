@@ -28,6 +28,18 @@ export interface RepartidorListItem extends User {
   routeStatusLabel: string
 }
 
+export interface LicenciaPorVencerItem {
+  repartidorId: string
+  nombre: string
+  apellido: string
+  email: string
+  dni: string
+  licencia: string
+  fechaVencimientoLicencia: string
+  diasRestantes: number
+  urgente: boolean
+}
+
 const mapRepartidor = (t: any): User => ({
   id: t.id,
   name: t.nombre,
@@ -37,7 +49,9 @@ const mapRepartidor = (t: any): User => ({
   role: 'repartidor',
   activo: t.activo ?? true,
   licencia: t.licencia,
+  fechaVencimientoLicencia: t.fechaVencimientoLicencia ?? null,
   estado: (t.estado as RepartidorEstado) || 'Activo',
+  motivoSuspension: t.motivoSuspension ?? null,
   horasTrabajo: t.horasTrabajo ?? 8,
   tipoJornada: (t.tipoJornada as 'Part Time' | 'Full Time') ?? 'Full Time',
   capacidadCargaKg: Number(t.capacidadCargaKg ?? t.CapacidadCargaKg ?? 500),
@@ -79,7 +93,9 @@ const mapUsuario = (usuario: any): User => ({
   role: normalizeUserRole(usuario.role ?? usuario.Role ?? ''),
   activo: usuario.activo ?? true,
   licencia: usuario.licencia,
+  fechaVencimientoLicencia: usuario.fechaVencimientoLicencia ?? null,
   estado: usuario.estado as (UserEstado | RepartidorEstado) | undefined,
+  motivoSuspension: usuario.motivoSuspension ?? null,
   sucursalId: usuario.sucursalId ?? usuario.SucursalId ?? null,
   provincia: usuario.provincia ?? usuario.Provincia ?? null,
   provincias: usuario.provincias ?? usuario.Provincias ?? null,
@@ -288,6 +304,7 @@ export const authService = {
         Email: data.email,
         DNI: data.dni,
         Licencia: data.licencia,
+        FechaVencimientoLicencia: data.fechaVencimientoLicencia || null,
         CapacidadCargaKg: data.capacidadCargaKg ?? 500,
       })
       const t = response.data
@@ -301,10 +318,11 @@ export const authService = {
     }
   },
 
-  updateRepartidorLicencia: async (repartidorId: string, licencia: string): Promise<User | null> => {
+  updateRepartidorLicencia: async (repartidorId: string, licencia: string, fechaVencimientoLicencia?: string | null): Promise<User | null> => {
     try {
       const response = await api.put(`/auth/repartidores/${repartidorId}/licencia`, {
         Licencia: licencia,
+        FechaVencimientoLicencia: fechaVencimientoLicencia || null,
       })
       return mapRepartidor(response.data)
     } catch (error) {
@@ -346,6 +364,28 @@ export const authService = {
     } catch (error) {
       console.error('Update repartidor estado error:', error)
       return null
+    }
+  },
+
+  getLicenciasPorVencer: async (dias = 30): Promise<LicenciaPorVencerItem[]> => {
+    try {
+      const response = await api.get(`/auth/repartidores/licencias-por-vencer?dias=${dias}`)
+      return Array.isArray(response.data)
+        ? response.data.map((item: any) => ({
+          repartidorId: item.repartidorId ?? item.RepartidorId ?? '',
+          nombre: item.nombre ?? item.Nombre ?? '',
+          apellido: item.apellido ?? item.Apellido ?? '',
+          email: item.email ?? item.Email ?? '',
+          dni: item.dni ?? item.DNI ?? item.dNI ?? '',
+          licencia: item.licencia ?? item.Licencia ?? '',
+          fechaVencimientoLicencia: item.fechaVencimientoLicencia ?? item.FechaVencimientoLicencia ?? '',
+          diasRestantes: Number(item.diasRestantes ?? item.DiasRestantes ?? 0),
+          urgente: Boolean(item.urgente ?? item.Urgente ?? false),
+        }))
+        : []
+    } catch (error) {
+      console.error('Get licencias por vencer error:', error)
+      return []
     }
   },
 
@@ -433,6 +473,7 @@ export const authService = {
         Role: roleMap[data.role],
         PasswordTemporal: data.passwordTemporal,
         ...(data.licencia ? { Licencia: data.licencia } : {}),
+        ...(data.role === 'repartidor' ? { FechaVencimientoLicencia: data.fechaVencimientoLicencia || null } : {}),
         ...(data.role === 'repartidor' ? { CapacidadCargaKg: data.capacidadCargaKg ?? 500 } : {}),
         ...(data.sucursalId ? { SucursalId: data.sucursalId } : {}),
         ...(data.provincia ? { Provincia: data.provincia } : {}),
@@ -449,8 +490,10 @@ export const authService = {
           role: normalizeUserRole(u.role ?? u.Role ?? ''),
           activo: u.activo ?? true,
           licencia: u.licencia,
+          fechaVencimientoLicencia: u.fechaVencimientoLicencia ?? null,
           capacidadCargaKg: u.capacidadCargaKg ?? u.CapacidadCargaKg ?? undefined,
           estado: (u.estado as UserEstado) || 'Activo',
+          motivoSuspension: u.motivoSuspension ?? null,
           puntoPickUpId: u.puntoPickUpId ?? u.PuntoPickUpId ?? null,
         },
         temporaryPassword: u.temporaryPassword || '',

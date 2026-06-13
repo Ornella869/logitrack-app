@@ -211,7 +211,9 @@ namespace Back.Domain.Models
         }
 
         public string Licencia { get; private set; }
+        public DateTime? FechaVencimientoLicencia { get; private set; }
         public EstadoRepartidor Estado { get; private set; } = EstadoRepartidor.Activo;
+        public string? MotivoSuspension { get; private set; }
         public EstadoJornadaRepartidor EstadoJornada { get; private set; } = EstadoJornadaRepartidor.Disponible;
         public int HorasTrabajo { get; private set; } = 8;
         public double CapacidadCargaKg { get; private set; } = 500;
@@ -224,9 +226,10 @@ namespace Back.Domain.Models
             Licencia = string.Empty;
         }
 
-        public Repartidor(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada", double capacidadCargaKg = 500) : base(nombre, apellido, email, password, dni)
+        public Repartidor(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada", double capacidadCargaKg = 500, DateTime? fechaVencimientoLicencia = null) : base(nombre, apellido, email, password, dni)
         {
             Licencia = licencia;
+            FechaVencimientoLicencia = NormalizarFechaLicencia(fechaVencimientoLicencia);
             ActualizarCapacidadCarga(capacidadCargaKg);
         }
 
@@ -244,7 +247,7 @@ namespace Back.Domain.Models
             CapacidadCargaKg = capacidadKg;
         }
 
-        public void ActualizarLicencia(string licencia)
+        public void ActualizarLicencia(string licencia, DateTime? fechaVencimientoLicencia = null)
         {
             var trimmed = licencia?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(trimmed))
@@ -252,11 +255,25 @@ namespace Back.Domain.Models
             if (!Regex.IsMatch(trimmed, @"^[A-Za-z0-9\- ]{6,15}$"))
                 throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
             Licencia = trimmed;
+            FechaVencimientoLicencia = NormalizarFechaLicencia(fechaVencimientoLicencia);
+        }
+
+        private static DateTime? NormalizarFechaLicencia(DateTime? fecha)
+        {
+            return fecha.HasValue ? DateTime.SpecifyKind(fecha.Value.Date, DateTimeKind.Utc) : null;
         }
 
         public void CambiarEstado(EstadoRepartidor estado)
         {
             Estado = estado;
+            if (estado == EstadoRepartidor.Activo)
+                MotivoSuspension = null;
+        }
+
+        public void SuspenderPorLicenciaVencida()
+        {
+            Estado = EstadoRepartidor.Suspendido;
+            MotivoSuspension = "Licencia vencida";
         }
 
         // Transiciones de jornada.

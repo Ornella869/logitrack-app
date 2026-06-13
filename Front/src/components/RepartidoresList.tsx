@@ -9,9 +9,14 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   Stack,
   TablePagination,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -19,6 +24,8 @@ import {
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 import BarChartIcon from '@mui/icons-material/BarChart'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import EditIcon from '@mui/icons-material/Edit'
 
 import { authService, type RepartidorListItem } from '../services/authService'
 import SearchBar from './SearchBar'
@@ -74,6 +81,25 @@ const toggleGroupSx = {
   },
 }
 
+function formatDateOnly(value?: string | null): string {
+  if (!value) return 'No informado'
+  const [year, month, day] = value.slice(0, 10).split('-')
+  return year && month && day ? `${day}/${month}/${year}` : value
+}
+
+function daysUntil(value?: string | null): number | null {
+  if (!value) return null
+  const today = new Date()
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return null
+  return Math.ceil((Date.UTC(year, month - 1, day) - todayUtc) / 86400000)
+}
+
+function toDateInputValue(value?: string | null): string {
+  return value ? value.slice(0, 10) : ''
+}
+
 function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const navigate = useNavigate()
   const [repartidores, setRepartidores] = useState<RepartidorListItem[]>([])
@@ -85,6 +111,10 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(8)
   const [totalItems, setTotalItems] = useState(0)
+  const [editing, setEditing] = useState<RepartidorListItem | null>(null)
+  const [licenciaForm, setLicenciaForm] = useState({ licencia: '', fechaVencimientoLicencia: '' })
+  const [savingLicencia, setSavingLicencia] = useState(false)
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     void loadRepartidores()
@@ -162,6 +192,45 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const handleSearch = async (value: string) => {
     setPage(0)
     setSearch(value.trim())
+  }
+
+  const openLicenciaDialog = (repartidor: RepartidorListItem) => {
+    setEditing(repartidor)
+    setLicenciaForm({
+      licencia: repartidor.licencia ?? '',
+      fechaVencimientoLicencia: toDateInputValue(repartidor.fechaVencimientoLicencia),
+    })
+    setFormError('')
+  }
+
+  const saveLicencia = async () => {
+    if (!editing) return
+    const licencia = licenciaForm.licencia.trim()
+    if (!licencia) {
+      setFormError('La licencia es obligatoria.')
+      return
+    }
+    if (!/^[A-Za-z0-9\- ]{6,15}$/.test(licencia)) {
+      setFormError('La licencia debe tener entre 6 y 15 caracteres alfanuméricos.')
+      return
+    }
+    if (!licenciaForm.fechaVencimientoLicencia) {
+      setFormError('El vencimiento de licencia es obligatorio.')
+      return
+    }
+
+    setSavingLicencia(true)
+    setFormError('')
+    try {
+      const updated = await authService.updateRepartidorLicencia(editing.id, licencia, licenciaForm.fechaVencimientoLicencia)
+      if (!updated) throw new Error('No se pudo actualizar la licencia.')
+      setEditing(null)
+      await loadRepartidores()
+    } catch (err: any) {
+      setFormError(err?.message ?? 'No se pudo actualizar la licencia.')
+    } finally {
+      setSavingLicencia(false)
+    }
   }
 
   const renderFilterButton = <T extends string>(opt: { value: T; label: string; color: string; bg: string }, selected: boolean) => (
@@ -303,6 +372,8 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
               const routeStatus = getRouteStatus(repartidor)
               const accountStatus = getAccountStatus(repartidor)
               const initials = `${repartidor.name.charAt(0)}${repartidor.lastname.charAt(0)}`.toUpperCase()
+              const diasLicencia = daysUntil(repartidor.fechaVencimientoLicencia)
+              const licenciaUrgente = diasLicencia !== null && diasLicencia <= 7
 
               return (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={repartidor.id}>
@@ -354,6 +425,9 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                             Licencia
                           </Typography>
                           <Typography variant="body2">{repartidor.licencia || 'No informada'}</Typography>
+                          <Typography variant="caption" color={licenciaUrgente ? 'error.main' : 'text.secondary'}>
+                            Vence: {formatDateOnly(repartidor.fechaVencimientoLicencia)}
+                          </Typography>
                         </Box>
                         <Box>
                           <Typography variant="body2" color="textSecondary">
@@ -390,6 +464,15 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                               fontWeight: 600,
                             }}
                           />
+                          {licenciaUrgente && (
+                            <Chip
+                              label={diasLicencia! < 0 ? 'Licencia vencida' : diasLicencia === 0 ? 'Licencia vence hoy' : `Licencia vence en ${diasLicencia} días`}
+                              color="error"
+                              size="small"
+                              variant="filled"
+                              icon={<WarningAmberIcon />}
+                            />
+                          )}
                         </Box>
                         <Button
                           size="small"
@@ -402,6 +485,19 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                           sx={{ mt: 1.5, textTransform: 'none', fontSize: 12 }}
                         >
                           Ver rendimiento
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="warning"
+                          startIcon={<EditIcon />}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openLicenciaDialog(repartidor)
+                          }}
+                          sx={{ textTransform: 'none', fontSize: 12 }}
+                        >
+                          Editar licencia
                         </Button>
                       </Stack>
                     </CardContent>
@@ -427,6 +523,42 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
           />
         )}
       </Box>
+
+      <Dialog open={!!editing} onClose={() => !savingLicencia && setEditing(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Editar licencia</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {formError && <Alert severity="error">{formError}</Alert>}
+            {editing && (
+              <Typography variant="body2" color="text.secondary">
+                {editing.name} {editing.lastname} · DNI {editing.dni}
+              </Typography>
+            )}
+            <TextField
+              label="Licencia *"
+              value={licenciaForm.licencia}
+              onChange={(e) => setLicenciaForm((prev) => ({ ...prev, licencia: e.target.value.replace(/[^A-Za-z0-9\- ]/g, '') }))}
+              fullWidth
+              inputProps={{ maxLength: 15 }}
+              helperText="Número de licencia de conducir (6-15 caracteres alfanuméricos)"
+            />
+            <TextField
+              label="Vencimiento de licencia *"
+              type="date"
+              value={licenciaForm.fechaVencimientoLicencia}
+              onChange={(e) => setLicenciaForm((prev) => ({ ...prev, fechaVencimientoLicencia: e.target.value }))}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditing(null)} disabled={savingLicencia}>Cancelar</Button>
+          <Button onClick={saveLicencia} variant="contained" disabled={savingLicencia}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

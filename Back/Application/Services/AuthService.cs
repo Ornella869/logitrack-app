@@ -208,7 +208,8 @@ namespace Back.Application.Services
                 generatedPassword,
                 request.DNI.Trim(),
                 request.Licencia.Trim(),
-                request.CapacidadCargaKg
+                request.CapacidadCargaKg,
+                request.FechaVencimientoLicencia
             );
             // Épica D: vincular el repartidor a su sucursal.
             if (request.SucursalId.HasValue) repartidor.AsignarSucursal(request.SucursalId);
@@ -342,7 +343,7 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
             if (request.CapacidadCargaKg <= 0 || request.CapacidadCargaKg > 5000)
                 throw new InvalidOperationException("La capacidad de carga debe estar entre 1 y 5000 kg.");
-            return new Repartidor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), licencia, request.CapacidadCargaKg);
+            return new Repartidor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), licencia, request.CapacidadCargaKg, request.FechaVencimientoLicencia);
         }
 
         /// <summary>Asigna una o más provincias a un Gerente existente.</summary>
@@ -376,13 +377,13 @@ namespace Back.Application.Services
             return gerente;
         }
 
-        public async Task<Repartidor> ActualizarLicenciaRepartidor(Guid repartidorId, string licencia)
+        public async Task<Repartidor> ActualizarLicenciaRepartidor(Guid repartidorId, string licencia, DateTime? fechaVencimientoLicencia)
         {
             var user = await _userRepository.GetUsuarioById(repartidorId);
             if (user is not Repartidor repartidor)
                 throw new InvalidOperationException("Repartidor no encontrado.");
 
-            repartidor.ActualizarLicencia(licencia);
+            repartidor.ActualizarLicencia(licencia, fechaVencimientoLicencia);
             return repartidor;
         }
 

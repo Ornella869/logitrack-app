@@ -19,7 +19,9 @@ export interface User {
   role: UserRole
   activo?: boolean
   licencia?: string
+  fechaVencimientoLicencia?: string | null
   estado?: UserEstado | RepartidorEstado
+  motivoSuspension?: string | null
   // Épica D: ámbito del usuario.
   sucursalId?: string | null
   provincia?: string | null
@@ -37,6 +39,7 @@ export interface CreateRepartidorData {
   email: string
   dni: string
   licencia: string
+  fechaVencimientoLicencia?: string | null
   capacidadCargaKg?: number
 }
 
@@ -47,6 +50,7 @@ export interface CreateUsuarioData {
   dni: string
   role: UserRole
   licencia?: string
+  fechaVencimientoLicencia?: string | null
   capacidadCargaKg?: number
   passwordTemporal: string
   // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).

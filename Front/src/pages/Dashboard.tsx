@@ -20,7 +20,7 @@ import GroupIcon from '@mui/icons-material/Group'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import RouteIcon from '@mui/icons-material/Route'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
-import { authService } from '../services/authService'
+import { authService, type LicenciaPorVencerItem } from '../services/authService'
 import { shipmentService } from '../services/shipmentService'
 import { incidenciaService } from '../services/incidenciaService'
 import type { Shipment, User } from '../types'
@@ -43,6 +43,7 @@ function Dashboard() {
   const [error, setError] = useState('')
   const [incidenciasAbiertas, setIncidenciasAbiertas] = useState(0)
   const [repartidoresEnViaje, setRepartidoresEnViaje] = useState(0)
+  const [licenciasPorVencer, setLicenciasPorVencer] = useState<LicenciaPorVencerItem[]>([])
 
   const isOperador = user.role === 'operador'
   const isSupervisor = user.role === 'supervisor'
@@ -56,6 +57,11 @@ function Dashboard() {
     window.addEventListener('logitrack:incidencias', handler)
     return () => window.removeEventListener('logitrack:incidencias', handler)
   }, [isSupervisor])
+
+  useEffect(() => {
+    if (!isSupervisor && !isAdmin) return
+    void authService.getLicenciasPorVencer(30).then(setLicenciasPorVencer).catch(() => setLicenciasPorVencer([]))
+  }, [isSupervisor, isAdmin])
 
   useEffect(() => {
     if (!isSupervisor) {
@@ -85,6 +91,24 @@ function Dashboard() {
 
     void loadShipments()
   }, [isSupervisor])
+
+  const renderLicenciasAlert = () => licenciasPorVencer.length > 0 && (
+    <Alert severity="warning" sx={{ mb: 2, borderLeft: '4px solid #ed6c02' }} icon={<ReportProblemIcon />}>
+      <Typography variant="subtitle2" fontWeight={700}>
+        {licenciasPorVencer.length === 1 ? 'Hay 1 licencia vencida o próxima a vencer' : `Hay ${licenciasPorVencer.length} licencias vencidas o próximas a vencer`}
+      </Typography>
+      <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+        {licenciasPorVencer.slice(0, 5).map((item) => (
+          <Typography key={item.repartidorId} variant="body2">
+            {[`${item.nombre} ${item.apellido}`, item.dni ? `DNI ${item.dni}` : null, item.email || null, `Lic. ${item.licencia}`].filter(Boolean).join(' · ')}: {item.diasRestantes < 0 ? 'venció' : 'vence'} el {formatDateOnlyEs(item.fechaVencimientoLicencia)}{item.diasRestantes <= 7 ? ' (urgente)' : ''}
+          </Typography>
+        ))}
+        {licenciasPorVencer.length > 5 && (
+          <Typography variant="body2">Y {licenciasPorVencer.length - 5} más.</Typography>
+        )}
+      </Stack>
+    </Alert>
+  )
 
   const supervisorMetrics = useMemo(() => {
     const pendientes = shipments.filter((shipment) => shipment.status === 'Pendiente de calendarización')
@@ -125,6 +149,8 @@ function Dashboard() {
           </Button>
         </Stack>
       </Stack>
+
+      {renderLicenciasAlert()}
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <KpiCard label="Pendientes de Calendarización" value={supervisorMetrics.pendientes.length} sub="Esperando proceso" color="#ed6c02" icon={<HourglassTopIcon />} />
@@ -251,7 +277,12 @@ function Dashboard() {
         </Typography>
       </Box>
 
-      <UsersManagement currentUserId={user.id} />
+      {renderLicenciasAlert()}
+
+      <UsersManagement
+        currentUserId={user.id}
+        highlightedUserIds={licenciasPorVencer.map((item) => item.repartidorId)}
+      />
     </Box>
   )
 

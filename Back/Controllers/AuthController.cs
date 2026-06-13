@@ -1,6 +1,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Back.Application.Abstractions;
 using Back.Application.Common;
 using Back.Application.Services;
@@ -232,7 +233,9 @@ namespace Back.Controllers
                     Activo = t.Activo,
                     Role = Roles.Repartidor,
                     Licencia = t.Licencia,
+                    FechaVencimientoLicencia = t.FechaVencimientoLicencia,
                     Estado = t.EstadoLabel,
+                    MotivoSuspension = t.MotivoSuspension,
                     AssignedRoutesCount = assignedRoutesCount,
                     RouteStatusKey = routeStatusKey,
                     RouteStatusLabel = routeStatusLabel,
@@ -336,7 +339,9 @@ namespace Back.Controllers
                     Activo = repartidor.Activo,
                     Role = Roles.Repartidor,
                     Licencia = repartidor.Licencia,
+                    FechaVencimientoLicencia = repartidor.FechaVencimientoLicencia,
                     Estado = repartidor.EstadoLabel,
+                    MotivoSuspension = repartidor.MotivoSuspension,
                     CapacidadCargaKg = repartidor.CapacidadCargaKg,
                     TemporaryPassword = result.TemporaryPassword
                 });
@@ -355,7 +360,7 @@ namespace Back.Controllers
             {
                 var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
                 if (scopeError is not null) return scopeError;
-                var repartidor = await _authService.ActualizarLicenciaRepartidor(repartidorId, request.Licencia);
+                var repartidor = await _authService.ActualizarLicenciaRepartidor(repartidorId, request.Licencia, request.FechaVencimientoLicencia);
                 await _context.SaveChangesAsync();
                 return Ok(MapRepartidor(repartidor));
             }
@@ -363,6 +368,40 @@ namespace Back.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [HttpGet("repartidores/licencias-por-vencer")]
+        public async Task<ActionResult<List<LicenciaPorVencerResponse>>> GetLicenciasPorVencer([FromQuery] int dias = 30)
+        {
+            var diasNormalizados = Math.Clamp(dias, 1, 365);
+            var currentUser = await CurrentUserAsync();
+            var sucursalScope = User.IsInRole(Roles.Administrador) ? null : currentUser?.SucursalId;
+            var hoy = OperationalClock.TodayUtcDate;
+            var hasta = hoy.AddDays(diasNormalizados);
+
+            var repartidores = (await _userRepository.GetRepartidores())
+                .Where(r => sucursalScope == null || r.SucursalId == sucursalScope)
+                .Where(r => r.FechaVencimientoLicencia.HasValue
+                    && r.FechaVencimientoLicencia.Value.Date <= hasta)
+                .OrderBy(r => r.FechaVencimientoLicencia)
+                .ThenBy(r => r.Nombre)
+                .ThenBy(r => r.Apellido)
+                .Select(r => new LicenciaPorVencerResponse
+                {
+                    RepartidorId = r.Id.ToString(),
+                    Nombre = r.Nombre,
+                    Apellido = r.Apellido,
+                    Email = r.Email,
+                    DNI = r.DNI,
+                    Licencia = r.Licencia,
+                    FechaVencimientoLicencia = r.FechaVencimientoLicencia!.Value,
+                    DiasRestantes = (int)(r.FechaVencimientoLicencia.Value.Date - hoy).TotalDays,
+                    Urgente = (r.FechaVencimientoLicencia.Value.Date - hoy).TotalDays <= 7,
+                })
+                .ToList();
+
+            return Ok(repartidores);
         }
 
         [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
@@ -703,8 +742,10 @@ namespace Back.Controllers
             DNI = u.DNI,
             Activo = u.Activo,
             Licencia = u is Repartidor t ? t.Licencia : null,
-            Estado = u is Repartidor t2 ? t2.EstadoLabel : null,
-            CapacidadCargaKg = u is Repartidor t3 ? t3.CapacidadCargaKg : null,
+            FechaVencimientoLicencia = u is Repartidor t2 ? t2.FechaVencimientoLicencia : null,
+            Estado = u is Repartidor t3 ? t3.EstadoLabel : null,
+            MotivoSuspension = u is Repartidor t4 ? t4.MotivoSuspension : null,
+            CapacidadCargaKg = u is Repartidor t5 ? t5.CapacidadCargaKg : null,
             // Épica D: ámbito del usuario para que el front gatee por sucursal/provincia.
             SucursalId = u.SucursalId?.ToString(),
             Provincia = u is Gerente ger ? ger.Provincia : null,
@@ -734,7 +775,9 @@ namespace Back.Controllers
             Activo = r.Activo,
             Role = Roles.Repartidor,
             Licencia = r.Licencia,
+            FechaVencimientoLicencia = r.FechaVencimientoLicencia,
             Estado = r.EstadoLabel,
+            MotivoSuspension = r.MotivoSuspension,
             SucursalId = r.SucursalId?.ToString(),
             HorasTrabajo = r.HorasTrabajo,
             TipoJornada = r.TipoJornada,
@@ -753,7 +796,9 @@ namespace Back.Controllers
         public string Role { get; set; }
         public bool Activo { get; set; } = true;
         public string? Licencia { get; set; }
+        public DateTime? FechaVencimientoLicencia { get; set; }
         public string? Estado { get; set; }
+        public string? MotivoSuspension { get; set; }
         public string? TemporaryPassword { get; set; }
         // Épica D: ámbito del usuario.
         public string? SucursalId { get; set; }
@@ -773,6 +818,20 @@ namespace Back.Controllers
         public string RouteStatusLabel { get; set; } = string.Empty;
     }
 
+    public class LicenciaPorVencerResponse
+    {
+        public string RepartidorId { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string Apellido { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        [JsonPropertyName("dni")]
+        public string DNI { get; set; } = string.Empty;
+        public string Licencia { get; set; } = string.Empty;
+        public DateTime FechaVencimientoLicencia { get; set; }
+        public int DiasRestantes { get; set; }
+        public bool Urgente { get; set; }
+    }
+
     public class RegistrarRepartidorRequest
     {
         [Required] public string Nombre { get; set; } = string.Empty;
@@ -784,6 +843,7 @@ namespace Back.Controllers
         [Length(8, 8, ErrorMessage = "El DNI debe tener exactamente 8 caracteres.")]
         public string DNI { get; set; } = string.Empty;
         [Required] public string Licencia { get; set; } = string.Empty;
+        public DateTime? FechaVencimientoLicencia { get; set; }
         [Range(1, 5000, ErrorMessage = "La capacidad de carga debe estar entre 1 y 5000 kg.")]
         public double CapacidadCargaKg { get; set; } = 500;
         // Épica D: sucursal a la que pertenece el repartidor.
@@ -798,6 +858,7 @@ namespace Back.Controllers
     public class ActualizarLicenciaRepartidorRequest
     {
         [Required] public string Licencia { get; set; } = string.Empty;
+        public DateTime? FechaVencimientoLicencia { get; set; }
     }
 
     public class ActualizarHorasTrabajoRequest
@@ -843,6 +904,7 @@ namespace Back.Controllers
         [MinLength(8, ErrorMessage = "La contraseña temporal debe tener al menos 8 caracteres.")]
         public string PasswordTemporal { get; set; } = string.Empty;
         public string? Licencia { get; set; }
+        public DateTime? FechaVencimientoLicencia { get; set; }
         [Range(1, 5000, ErrorMessage = "La capacidad de carga debe estar entre 1 y 5000 kg.")]
         public double CapacidadCargaKg { get; set; } = 500;
         // Épica D: sucursal (Supervisor/Operador/Repartidor) o provincia (Gerente).

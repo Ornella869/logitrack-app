@@ -84,6 +84,7 @@ builder.Services.AddHealthChecks();
 builder.Services.AddSignalR();
 // Registrar el servicio de fondo
 builder.Services.AddHostedService<UptimerService>();
+builder.Services.AddHostedService<LicenciasRepartidoresService>();
 builder.Services.AddScoped<IUserRepository, UsuariosRepository>();
 builder.Services.AddScoped<IEnviosRepository, EnviosRepository>();
 builder.Services.AddScoped<IVehiculoRepository, VehiculosRepository>();
