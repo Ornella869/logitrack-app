@@ -254,12 +254,14 @@ export const authService = {
     search,
     accountStatus,
     routeStatus,
+    tipoJornada,
   }: {
     page: number
     pageSize: number
     search?: string
     accountStatus?: 'activo' | 'inactivo'
     routeStatus?: 'en-viaje' | 'con-ruta-asignada' | 'sin-asignacion'
+    tipoJornada?: 'part-time' | 'full-time'
   }): Promise<PagedResult<RepartidorListItem>> => {
     try {
       const params = new URLSearchParams()
@@ -268,6 +270,7 @@ export const authService = {
       if (search) params.set('search', search)
       if (accountStatus) params.set('accountStatus', accountStatus)
       if (routeStatus) params.set('routeStatus', routeStatus)
+      if (tipoJornada) params.set('tipoJornada', tipoJornada)
       const response = await api.get(`/auth/repartidores?${params.toString()}`)
       return mapPagedRepartidores(response.data)
     } catch (error) {

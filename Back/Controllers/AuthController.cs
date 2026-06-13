@@ -158,6 +158,7 @@ namespace Back.Controllers
             [FromQuery] string? search,
             [FromQuery] string? accountStatus,
             [FromQuery] string? routeStatus,
+            [FromQuery] string? tipoJornada,
             [FromQuery] int? page,
             [FromQuery] int? pageSize)
         {
@@ -266,6 +267,17 @@ namespace Back.Controllers
             {
                 var normalized = routeStatus.Trim().ToLowerInvariant();
                 query = query.Where(r => r.RouteStatusKey == normalized);
+            }
+
+            if (!string.IsNullOrWhiteSpace(tipoJornada))
+            {
+                var normalized = tipoJornada.Trim().ToLowerInvariant();
+                query = normalized switch
+                {
+                    "part-time" => query.Where(r => (r.HorasTrabajo ?? 8) <= 6),
+                    "full-time" => query.Where(r => (r.HorasTrabajo ?? 8) >= 7),
+                    _ => query,
+                };
             }
 
             var filtered = query

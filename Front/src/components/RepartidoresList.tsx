@@ -30,12 +30,49 @@ interface RepartidoresListProps {
 const FILTER_OPTIONS = [
   { value: 'activo', label: 'Activo', color: '#1b5e20', bg: '#e8f5e9' },
   { value: 'inactivo', label: 'Inactivo', color: '#b71c1c', bg: '#ffebee' },
+] as const
+
+const ROUTE_FILTER_OPTIONS = [
   { value: 'en-viaje', label: 'En viaje', color: '#ed6c02', bg: '#fff3e0' },
   { value: 'sin-asignacion', label: 'Sin asignacion', color: '#616161', bg: '#f5f5f5' },
   { value: 'con-ruta-asignada', label: 'Con ruta asignada', color: '#1565c0', bg: '#e3f2fd' },
 ] as const
 
+const JORNADA_FILTER_OPTIONS = [
+  { value: 'part-time', label: 'Part Time', color: '#e65100', bg: '#fff3e0' },
+  { value: 'full-time', label: 'Full Time', color: '#1565c0', bg: '#e3f2fd' },
+] as const
+
 type FilterValue = typeof FILTER_OPTIONS[number]['value']
+  | typeof ROUTE_FILTER_OPTIONS[number]['value']
+type JornadaFilterValue = typeof JORNADA_FILTER_OPTIONS[number]['value']
+
+const filterGroupSx = {
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: 2,
+  px: 1,
+  py: 0.75,
+  m: 0,
+  minWidth: 0,
+}
+
+const filterLegendSx = {
+  px: 0.75,
+  fontSize: 12,
+  fontWeight: 700,
+  color: 'text.secondary',
+}
+
+const toggleGroupSx = {
+  flexWrap: 'wrap',
+  gap: 0.5,
+  '& .MuiToggleButtonGroup-grouped': {
+    borderRadius: '16px !important',
+    border: '1px solid !important',
+    mx: 0,
+  },
+}
 
 function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const navigate = useNavigate()
@@ -44,13 +81,14 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [estadoFilters, setEstadoFilters] = useState<FilterValue[]>([])
+  const [jornadaFilter, setJornadaFilter] = useState<JornadaFilterValue | null>(null)
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(8)
   const [totalItems, setTotalItems] = useState(0)
 
   useEffect(() => {
     void loadRepartidores()
-  }, [page, rowsPerPage, search, estadoFilters])
+  }, [page, rowsPerPage, search, estadoFilters, jornadaFilter])
 
   const loadRepartidores = async () => {
     setLoading(true)
@@ -76,6 +114,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
         search: search.trim() || undefined,
         accountStatus,
         routeStatus,
+        tipoJornada: jornadaFilter ?? undefined,
       })
       setRepartidores(result.items)
       setTotalItems(result.totalItems)
@@ -86,7 +125,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
     }
   }
 
-  const activeCount = estadoFilters.length + (search.trim() ? 1 : 0)
+  const activeCount = estadoFilters.length + (jornadaFilter ? 1 : 0) + (search.trim() ? 1 : 0)
   const hasActiveFilters = activeCount > 0
 
   const getRouteStatus = (repartidor: RepartidorListItem) => {
@@ -115,10 +154,37 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
     setEstadoFilters(newFilters)
   }
 
+  const handleJornadaToggle = (_event: unknown, newFilter: JornadaFilterValue | null) => {
+    setPage(0)
+    setJornadaFilter(newFilter)
+  }
+
   const handleSearch = async (value: string) => {
     setPage(0)
     setSearch(value.trim())
   }
+
+  const renderFilterButton = <T extends string>(opt: { value: T; label: string; color: string; bg: string }, selected: boolean) => (
+    <ToggleButton
+      key={opt.value}
+      value={opt.value}
+      sx={{
+        textTransform: 'none',
+        px: 1.5,
+        py: 0.5,
+        fontSize: 12,
+        fontWeight: selected ? 700 : 400,
+        color: selected ? opt.color : 'text.secondary',
+        bgcolor: selected ? opt.bg : 'transparent',
+        borderColor: selected ? `${opt.color} !important` : 'divider !important',
+        '&:hover': { bgcolor: opt.bg, color: opt.color },
+        '&.Mui-selected': { bgcolor: opt.bg, color: opt.color },
+        '&.Mui-selected:hover': { bgcolor: opt.bg },
+      }}
+    >
+      {opt.label}
+    </ToggleButton>
+  )
 
   if (loading && repartidores.length === 0) {
     return (
@@ -143,45 +209,48 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, flexWrap: 'wrap', flex: 1 }}>
-              <ToggleButtonGroup
-                value={estadoFilters}
-                onChange={handleEstadoToggle}
-                size="small"
-                sx={{
-                  flexWrap: 'wrap',
-                  gap: 0.5,
-                  '& .MuiToggleButtonGroup-grouped': {
-                    borderRadius: '16px !important',
-                    border: '1px solid !important',
-                    mx: 0,
-                  },
-                }}
-              >
-                {FILTER_OPTIONS.map((opt) => {
-                  const selected = estadoFilters.includes(opt.value)
-                  return (
-                    <ToggleButton
-                      key={opt.value}
-                      value={opt.value}
-                      sx={{
-                        textTransform: 'none',
-                        px: 1.5,
-                        py: 0.5,
-                        fontSize: 12,
-                        fontWeight: selected ? 700 : 400,
-                        color: selected ? opt.color : 'text.secondary',
-                        bgcolor: selected ? opt.bg : 'transparent',
-                        borderColor: selected ? `${opt.color} !important` : 'divider !important',
-                        '&:hover': { bgcolor: opt.bg, color: opt.color },
-                        '&.Mui-selected': { bgcolor: opt.bg, color: opt.color },
-                        '&.Mui-selected:hover': { bgcolor: opt.bg },
-                      }}
-                    >
-                      {opt.label}
-                    </ToggleButton>
-                  )
-                })}
-              </ToggleButtonGroup>
+              <Box component="fieldset" sx={filterGroupSx}>
+                <Box component="legend" sx={filterLegendSx}>
+                  Estado
+                </Box>
+                <ToggleButtonGroup
+                  value={estadoFilters}
+                  onChange={handleEstadoToggle}
+                  size="small"
+                  sx={toggleGroupSx}
+                >
+                  {FILTER_OPTIONS.map((opt) => renderFilterButton(opt, estadoFilters.includes(opt.value)))}
+                </ToggleButtonGroup>
+              </Box>
+
+              <Box component="fieldset" sx={filterGroupSx}>
+                <Box component="legend" sx={filterLegendSx}>
+                  Ruta
+                </Box>
+                <ToggleButtonGroup
+                  value={estadoFilters}
+                  onChange={handleEstadoToggle}
+                  size="small"
+                  sx={toggleGroupSx}
+                >
+                  {ROUTE_FILTER_OPTIONS.map((opt) => renderFilterButton(opt, estadoFilters.includes(opt.value)))}
+                </ToggleButtonGroup>
+              </Box>
+
+              <Box component="fieldset" sx={filterGroupSx}>
+                <Box component="legend" sx={filterLegendSx}>
+                  Tipo de jornada
+                </Box>
+                <ToggleButtonGroup
+                  exclusive
+                  value={jornadaFilter}
+                  onChange={handleJornadaToggle}
+                  size="small"
+                  sx={toggleGroupSx}
+                >
+                  {JORNADA_FILTER_OPTIONS.map((opt) => renderFilterButton(opt, jornadaFilter === opt.value))}
+                </ToggleButtonGroup>
+              </Box>
 
               {activeCount > 0 && (
                 <Button
@@ -192,6 +261,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                     setPage(0)
                     setSearch('')
                     setEstadoFilters([])
+                    setJornadaFilter(null)
                   }}
                   sx={{
                     borderRadius: '16px',

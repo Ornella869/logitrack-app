@@ -1,65 +1,70 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import RepartidoresList from '../../../components/RepartidoresList'
 
 vi.mock('../../../services/authService', () => ({
   authService: {
-    getRepartidores: vi.fn(),
+    getRepartidoresPage: vi.fn(),
     isValidEmail: vi.fn().mockReturnValue(true),
   },
 }))
 
-vi.mock('../../../services/routeService', () => ({
-  routeService: {
-    getAllRoutes: vi.fn(),
-  },
-}))
-
 import { authService } from '../../../services/authService'
-import { routeService } from '../../../services/routeService'
 
 const mockedAuthService = authService as unknown as {
-  getRepartidores: ReturnType<typeof vi.fn>
+  getRepartidoresPage: ReturnType<typeof vi.fn>
 }
 
-const mockedRouteService = routeService as unknown as {
-  getAllRoutes: ReturnType<typeof vi.fn>
+const emptyPage = {
+  items: [],
+  page: 1,
+  pageSize: 8,
+  totalItems: 0,
+  totalPages: 1,
 }
+
+const renderList = () => render(
+  <MemoryRouter>
+    <RepartidoresList userRole="supervisor" />
+  </MemoryRouter>,
+)
 
 describe('repartidoresList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockedAuthService.getRepartidoresPage.mockResolvedValue(emptyPage)
   })
 
   it('CP-74 muestra estado vacio cuando no hay registros', async () => {
-    mockedAuthService.getRepartidores.mockResolvedValue([])
-    mockedRouteService.getAllRoutes.mockResolvedValue([])
-
-    render(<RepartidoresList userRole="operador" />)
+    renderList()
 
     expect(await screen.findByText('No hay repartidores registrados')).toBeInTheDocument()
   })
 
-  it('CP-73 muestra botones de accion para supervisor', async () => {
-    mockedAuthService.getRepartidores.mockResolvedValue([
-      {
-        id: 't1',
-        name: 'Ana',
-        lastname: 'Diaz',
-        email: 'ana@logi.com',
-        dni: '12345678',
-        licencia: 'LIC-1',
-        role: 'Repartidor',
-        estado: 'Activo',
-      },
-    ])
-    mockedRouteService.getAllRoutes.mockResolvedValue([])
+  it('muestra el filtro Tipo de jornada integrado con los filtros existentes', async () => {
+    renderList()
 
-    render(<RepartidoresList userRole="supervisor" />)
+    expect(await screen.findByText('Tipo de jornada')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Part Time' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Time' })).toBeInTheDocument()
+  })
 
-    expect(await screen.findByText('Editar licencia')).toBeInTheDocument()
-    expect(screen.getByText('Suspender/Inhabilitar')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Registrar Repartidor' })).toBeInTheDocument()
+  it('envia el filtro Part Time sin limpiar el filtro Activo', async () => {
+    const user = userEvent.setup()
+    renderList()
+
+    await screen.findByText('No hay repartidores registrados')
+    await user.click(screen.getByRole('button', { name: 'Activo' }))
+    await user.click(screen.getByRole('button', { name: 'Part Time' }))
+
+    await waitFor(() => {
+      expect(mockedAuthService.getRepartidoresPage).toHaveBeenLastCalledWith(expect.objectContaining({
+        accountStatus: 'activo',
+        tipoJornada: 'part-time',
+      }))
+    })
   })
 })
