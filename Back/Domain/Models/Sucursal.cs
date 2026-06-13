@@ -13,6 +13,7 @@ namespace Back.Domain.Models
         public string? Provincia { get; private set; }
         public string Telefono { get; private set; }
         public SucursalStatus Estado { get; private set; } = SucursalStatus.Activa;
+        public int CapacidadAlmacenamientoPaquetes { get; private set; } = 1000;
         // Épica D: provincias adicionales (sin sucursal propia) que esta sucursal cubre.
         // La provincia propia siempre se considera cubierta. Se persiste como JSON.
         public List<string> ProvinciasCubiertas { get; private set; } = new();
@@ -21,7 +22,7 @@ namespace Back.Domain.Models
         {
         }
 
-        public Sucursal(string nombre, string direccion, string ciudad, string codigoPostal, string telefono, string? provincia = null, SucursalStatus estado = SucursalStatus.Activa)
+        public Sucursal(string nombre, string direccion, string ciudad, string codigoPostal, string telefono, string? provincia = null, SucursalStatus estado = SucursalStatus.Activa, int capacidadAlmacenamientoPaquetes = 1000)
         {
             Nombre = nombre;
             Direccion = direccion;
@@ -30,9 +31,10 @@ namespace Back.Domain.Models
             Provincia = provincia;
             Telefono = telefono;
             Estado = estado;
+            ActualizarCapacidadAlmacenamiento(capacidadAlmacenamientoPaquetes);
         }
 
-        public void Actualizar(string nombre, string direccion, string ciudad, string codigoPostal, string telefono, string? provincia = null)
+        public void Actualizar(string nombre, string direccion, string ciudad, string codigoPostal, string telefono, string? provincia = null, int capacidadAlmacenamientoPaquetes = 1000)
         {
             Nombre = nombre;
             Direccion = direccion;
@@ -40,6 +42,14 @@ namespace Back.Domain.Models
             CodigoPostal = codigoPostal;
             Provincia = provincia;
             Telefono = telefono;
+            ActualizarCapacidadAlmacenamiento(capacidadAlmacenamientoPaquetes);
+        }
+
+        public void ActualizarCapacidadAlmacenamiento(int capacidadPaquetes)
+        {
+            if (capacidadPaquetes <= 0 || capacidadPaquetes > 100000)
+                throw new InvalidOperationException("La capacidad de almacenamiento debe estar entre 1 y 100000 paquetes.");
+            CapacidadAlmacenamientoPaquetes = capacidadPaquetes;
         }
 
         public void DefinirCobertura(IEnumerable<string> provinciasCubiertas)

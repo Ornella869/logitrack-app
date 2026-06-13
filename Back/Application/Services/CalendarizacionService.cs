@@ -26,6 +26,7 @@ namespace Back.Application.Services
         public required string Email { get; init; }
         public required int Cantidad { get; init; }
         public required double PesoTotal { get; init; }
+        public required double CapacidadKg { get; init; }
     }
 
     public class CalendarioCelda
@@ -66,6 +67,7 @@ namespace Back.Application.Services
         public required int HorasTrabajo { get; init; }
         /// <summary>"Part Time" (≤ 6 h) o "Full Time" (≥ 7 h).</summary>
         public required string TipoJornada { get; init; }
+        public required double CapacidadKg { get; init; }
         public required List<CalendarioCelda> Celdas { get; init; }
     }
 
@@ -189,6 +191,7 @@ namespace Back.Application.Services
                     EstadoJornada = r.EstadoJornada.ToString(),
                     HorasTrabajo = r.HorasTrabajo,
                     TipoJornada = r.TipoJornada,
+                    CapacidadKg = r.CapacidadCargaKg,
                     Celdas = celdas,
                 };
             }).ToList();
@@ -229,6 +232,7 @@ namespace Back.Application.Services
                                 Email = rep?.Email ?? "",
                                 Cantidad = rg.Count(),
                                 PesoTotal = rg.Sum(p => p.Peso),
+                                CapacidadKg = rep?.CapacidadCargaKg ?? 500,
                             };
                         })
                         .OrderBy(r => r.Nombre)
@@ -292,16 +296,19 @@ namespace Back.Application.Services
 
             // Excluir paquetes ya finalizados del cálculo de peso.
             var pesoActual = delDia
-                .Where(p => p.Status != PaqueteStatus.Entregado && p.Status != PaqueteStatus.Cancelado)
+                .Where(p => p.Status != PaqueteStatus.Entregado
+                    && p.Status != PaqueteStatus.Cancelado
+                    && p.Status != PaqueteStatus.RetornandoASucursal
+                    && p.Status != PaqueteStatus.RetornadoASucursal)
                 .Sum(p => p.Peso);
             var pesoResultante = pesoActual + paquete.Peso;
 
             // Capacidad superada: bloqueamos la asignación; el supervisor debe elegir otro día.
-            if (pesoResultante > Capacidad.RepartidorKg)
+            if (pesoResultante > rep.CapacidadCargaKg)
             {
                 throw new InvalidOperationException(
                     $"El repartidor {rep.Nombre} {rep.Apellido} ya tiene la capacidad máxima para este día " +
-                    $"({pesoActual:0.#}/{Capacidad.RepartidorKg} kg). Elegí otro día.");
+                    $"({pesoActual:0.#}/{rep.CapacidadCargaKg:0.#} kg). Elegí otro día.");
             }
 
             paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
@@ -341,7 +348,7 @@ namespace Back.Application.Services
             {
                 PesoActual = pesoActual,
                 PesoResultante = pesoResultante,
-                CapacidadKg = Capacidad.RepartidorKg,
+                CapacidadKg = rep.CapacidadCargaKg,
                 HuboReversion = huboReversion,
                 FechaAsignada = fechaUtc,
                 Mensaje = huboReversion
@@ -473,7 +480,7 @@ namespace Back.Application.Services
                         {
                             if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0) return false;
                             var coincide = lista.Any(p => p.Destinatario.Direccion.CP == paquete.Destinatario.Direccion.CP);
-                            return coincide && (lista.Sum(p => p.Peso) + paquete.Peso) <= Capacidad.RepartidorKg;
+                            return coincide && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg;
                         })
                         .ToList();
                     if (candidatosCP.Count > 0)
@@ -497,7 +504,7 @@ namespace Back.Application.Services
                     //    Ya no exige "libre" (0 paquetes): distribuye entre todos los disponibles
                     //    ordenando por cantidad de paquetes asignados, garantizando reparto parejo.
                     var menosCargado = repsElegibles
-                        .Where(r => (carga.TryGetValue((r.Id, fecha), out var lista2) ? lista2.Sum(p => p.Peso) : 0) + paquete.Peso <= Capacidad.RepartidorKg)
+                        .Where(r => (carga.TryGetValue((r.Id, fecha), out var lista2) ? lista2.Sum(p => p.Peso) : 0) + paquete.Peso <= r.CapacidadCargaKg)
                         .OrderBy(r => carga.TryGetValue((r.Id, fecha), out var l3) ? l3.Count : 0)
                         .ThenBy(r => totalHistorico[r.Id])
                         .ThenBy(r => r.Id)
@@ -513,7 +520,7 @@ namespace Back.Application.Services
                     //    Si no hay ninguno con capacidad, avanzamos al siguiente día.
                     var cercano = repsElegibles
                         .Where(r => carga.TryGetValue((r.Id, fecha), out var lista) && lista.Count > 0
-                                    && (lista.Sum(p => p.Peso) + paquete.Peso) <= Capacidad.RepartidorKg)
+                                    && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg)
                         .Select(r => new
                         {
                             Rep = r,
@@ -568,6 +575,7 @@ namespace Back.Application.Services
                             Email = rep.Email,
                             Cantidad = x.Value.Count,
                             PesoTotal = x.Value.Sum(p => p.Peso),
+                            CapacidadKg = rep.CapacidadCargaKg,
                         };
                     }).ToList(),
                 })

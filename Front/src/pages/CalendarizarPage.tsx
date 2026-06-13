@@ -44,11 +44,11 @@ const PROCESS_STEPS = [
   { id: 1, title: 'Recolectar envíos pendientes', detail: 'Buscando envíos en estado "Pendiente de Calendarización"' },
   { id: 2, title: 'Ordenar por prioridad', detail: 'Prioritarios primero, luego Comunes (FIFO dentro de cada grupo)' },
   { id: 3, title: 'Agrupar por código postal', detail: 'Detectando zonas de destino' },
-  { id: 4, title: 'Asignar a repartidores', detail: 'Buscando repartidores con capacidad disponible (≤500 kg)' },
+  { id: 4, title: 'Asignar a repartidores', detail: 'Buscando repartidores con capacidad disponible' },
   { id: 5, title: 'Persistir y registrar', detail: 'Guardando asignaciones y registrando historial' },
 ] as const
 
-type Repartidor = { id: string; nombre: string; apellido: string; email: string; activo: boolean; estado?: string }
+type Repartidor = { id: string; nombre: string; apellido: string; email: string; activo: boolean; estado?: string; capacidadCargaKg: number }
 
 export default function CalendarizarPage() {
   const user = useOutletContext<User>()
@@ -99,6 +99,7 @@ export default function CalendarizarPage() {
           email: r.email ?? '',
           activo: r.activo ?? true,
           estado: r.estado,
+          capacidadCargaKg: Number(r.capacidadCargaKg ?? 500),
         })),
       )
     } catch {
@@ -127,9 +128,7 @@ export default function CalendarizarPage() {
   }, [estadoActual])
 
   // Próxima fecha disponible: usa los mismos datos que el Calendario Operativo (30 días).
-  // Un día se considera "disponible" cuando el repartidor tiene < 450 kg asignados ese día
-  // (mismo umbral que el color naranja/rojo del calendario — ≥ 450 kg es prácticamente lleno).
-  // Si todos los días tienen ≥ 450 kg, muestra el día con menor carga.
+  // Un día se considera disponible cuando todavía no llegó al 90% de la capacidad real del repartidor.
   const proximaFechaDisponible = useMemo(() => {
     const result: Record<string, { fecha: string; pesoTotal: number } | null> = {}
 
@@ -143,7 +142,8 @@ export default function CalendarizarPage() {
       // Solo días futuros (no hoy)
       const celdas = repCal.celdas.filter((c) => c.fecha.substring(0, 10) > hoyStr)
 
-      const libre = celdas.find((c) => c.pesoTotal < 450)
+      const capacidad = r.capacidadCargaKg || 500
+      const libre = celdas.find((c) => c.pesoTotal < capacidad * 0.9)
       if (libre) {
         result[r.id] = { fecha: libre.fecha, pesoTotal: libre.pesoTotal }
       } else {
@@ -188,7 +188,7 @@ export default function CalendarizarPage() {
     const comm = pendientes.length - prio
     const peso = pendientes.reduce((acc, p) => acc + (p.weight ?? 0), 0)
     const cps = Array.from(new Set(pendientes.map((p) => p.receiver.postalCode).filter(Boolean)))
-    const capacidad = repartidoresActivos.length * 500
+    const capacidad = repartidoresActivos.reduce((acc, r) => acc + (r.capacidadCargaKg || 500), 0)
     return { prio, comm, peso, cps, capacidad }
   }, [pendientes, repartidoresActivos])
 
@@ -335,7 +335,7 @@ export default function CalendarizarPage() {
                       <TableCell align="right"><strong>{repartidoresActivos.length}</strong></TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Capacidad total ({repartidoresActivos.length} × 500 kg)</TableCell>
+                      <TableCell>Capacidad total configurable</TableCell>
                       <TableCell align="right">{summary.capacidad.toLocaleString('es-AR')} kg</TableCell>
                     </TableRow>
                   </TableBody>
@@ -398,8 +398,9 @@ export default function CalendarizarPage() {
                       const initials = `${r.nombre[0] ?? ''}${r.apellido[0] ?? ''}`.toUpperCase()
                       const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                       const info = proximaFechaDisponible[r.id]
-                      const libre = info ? Math.max(0, 500 - info.pesoTotal) : 0
-                      const esCargado = info ? info.pesoTotal >= 450 : false
+                      const capacidad = r.capacidadCargaKg || 500
+                      const libre = info ? Math.max(0, capacidad - info.pesoTotal) : 0
+                      const esCargado = info ? info.pesoTotal >= capacidad * 0.9 : false
                       return (
                         <Stack key={r.id} direction="row" alignItems="center" spacing={1.5} sx={{ py: 1 }}>
                           <Avatar sx={{ bgcolor: color, width: 32, height: 32, fontSize: 12 }}>
@@ -416,7 +417,7 @@ export default function CalendarizarPage() {
                               <Typography variant="caption" sx={{ color: esCargado ? 'warning.main' : 'success.main' }}>
                                 {esCargado ? 'Parcial · ' : 'Disponible · '}
                                 {formatDateOnlyEs(info.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}
-                                {' · '}{libre.toFixed(0)} kg libres
+                                {' · '}{libre.toFixed(0)} kg libres de {capacidad.toFixed(0)} kg
                               </Typography>
                             ) : (
                               <Typography variant="caption" color="error.main">
@@ -589,7 +590,7 @@ export default function CalendarizarPage() {
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.email}</TableCell>
                         <TableCell>{formatDateOnlyEs(dia.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}</TableCell>
                         <TableCell align="right">{r.cantidad}</TableCell>
-                        <TableCell align="right">{r.pesoTotal.toFixed(0)} / 500 kg</TableCell>
+                        <TableCell align="right">{r.pesoTotal.toFixed(0)} / {(r.capacidadKg ?? 500).toFixed(0)} kg</TableCell>
                       </TableRow>
                     )),
                   )}

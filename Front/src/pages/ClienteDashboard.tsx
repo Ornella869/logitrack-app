@@ -40,6 +40,8 @@ const STATUS_CONFIG: Record<Shipment['status'], { label: string; color: string; 
   'Demorado': { label: 'Demorado', color: '#BF360C', bg: '#FFE0B2', icon: <LocalShippingOutlinedIcon /> },
   'En tránsito - Descanso': { label: 'En ruta (pausa nocturna)', color: '#37474F', bg: '#ECEFF1', icon: <LocalShippingOutlinedIcon /> },
   'Entregado en punto': { label: 'Llegó al punto Pick Up', color: '#1565C0', bg: '#E3F2FD', icon: <LocalShippingOutlinedIcon /> },
+  'Retornando a sucursal': { label: 'Retornando a sucursal', color: '#BF360C', bg: '#FFF3E0', icon: <LocalShippingOutlinedIcon /> },
+  'Retornado a sucursal': { label: 'Retornado a sucursal', color: '#00695C', bg: '#E0F2F1', icon: <LocalShippingOutlinedIcon /> },
   'Entregado': { label: 'Entregado', color: '#1B5E20', bg: '#E8F5E9', icon: <CheckCircleOutlineIcon /> },
   'Cancelado': { label: 'Cancelado', color: '#7F0000', bg: '#FFEBEE', icon: <CancelOutlinedIcon /> },
 }

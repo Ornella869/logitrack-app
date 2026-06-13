@@ -214,6 +214,7 @@ namespace Back.Domain.Models
         public EstadoRepartidor Estado { get; private set; } = EstadoRepartidor.Activo;
         public EstadoJornadaRepartidor EstadoJornada { get; private set; } = EstadoJornadaRepartidor.Disponible;
         public int HorasTrabajo { get; private set; } = 8;
+        public double CapacidadCargaKg { get; private set; } = 500;
 
         public string TipoJornada => HorasTrabajo <= 6 ? "Part Time" : "Full Time";
         public bool EsPartTime => HorasTrabajo <= 6;
@@ -223,9 +224,10 @@ namespace Back.Domain.Models
             Licencia = string.Empty;
         }
 
-        public Repartidor(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada") : base(nombre, apellido, email, password, dni)
+        public Repartidor(string nombre, string apellido, string email, string password, string dni, string licencia = "No informada", double capacidadCargaKg = 500) : base(nombre, apellido, email, password, dni)
         {
             Licencia = licencia;
+            ActualizarCapacidadCarga(capacidadCargaKg);
         }
 
         public void ActualizarHorasTrabajo(int horas)
@@ -233,6 +235,13 @@ namespace Back.Domain.Models
             if (horas < 1 || horas > 24)
                 throw new InvalidOperationException("Las horas de trabajo deben estar entre 1 y 24.");
             HorasTrabajo = horas;
+        }
+
+        public void ActualizarCapacidadCarga(double capacidadKg)
+        {
+            if (capacidadKg <= 0 || capacidadKg > 5000)
+                throw new InvalidOperationException("La capacidad de carga debe estar entre 1 y 5000 kg.");
+            CapacidadCargaKg = capacidadKg;
         }
 
         public void ActualizarLicencia(string licencia)

@@ -56,6 +56,7 @@ type DetalleRuta = {
   repartidorId: string
   repartidorNombre: string
   repartidorEmail: string
+  capacidadKg?: number
   fecha: string
   paradas: DetalleParada[]
 }
@@ -69,9 +70,14 @@ const statusToShipmentStatus = (s: string): any => {
     case 'EnTransito': return 'En tránsito'
     case 'Entregado': return 'Entregado'
     case 'Cancelado': return 'Cancelado'
+    case 'RetornandoASucursal': return 'Retornando a sucursal'
+    case 'RetornadoASucursal': return 'Retornado a sucursal'
     default: return s
   }
 }
+
+const isFinalParaRuta = (status: string) =>
+  status === 'Entregado' || status === 'Cancelado' || status === 'RetornandoASucursal' || status === 'RetornadoASucursal'
 
 export default function DetalleRutaPage() {
   const user = useOutletContext<User>()
@@ -148,7 +154,7 @@ export default function DetalleRutaPage() {
   const handleMapClick = (lat: number, lng: number) => {
     setPendingPos({ lat, lng })
     if (!pendingPaqueteId) {
-      const primera = detalle?.paradas.find((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+      const primera = detalle?.paradas.find((p) => !isFinalParaRuta(p.status))
       if (primera) setPendingPaqueteId(primera.paqueteId)
     }
   }
@@ -177,9 +183,9 @@ export default function DetalleRutaPage() {
   if (!detalle) return <Alert severity="info">Ruta no encontrada</Alert>
 
   const entregadas = detalle.paradas.filter((p) => p.status === 'Entregado' || p.status === 'EntregadoEnPunto' || p.status === 'ListoParaRetirar').length
-  const canceladas = detalle.paradas.filter((p) => p.status === 'Cancelado').length
+  const canceladas = detalle.paradas.filter((p) => p.status === 'Cancelado' || p.status === 'RetornandoASucursal' || p.status === 'RetornadoASucursal').length
   const completas = entregadas + canceladas
-  const proximaIdx = detalle.paradas.findIndex((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+  const proximaIdx = detalle.paradas.findIndex((p) => !isFinalParaRuta(p.status))
   const proxima = proximaIdx >= 0 ? detalle.paradas[proximaIdx] : null
   const pesoTotal = detalle.paradas.reduce((acc, p) => acc + p.peso, 0)
   const initials = detalle.repartidorNombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
@@ -313,7 +319,7 @@ export default function DetalleRutaPage() {
                       onChange={(e) => setPendingPaqueteId(e.target.value)}
                     >
                       {detalle.paradas
-                        .filter((p) => p.status !== 'Entregado' && p.status !== 'Cancelado')
+                        .filter((p) => !isFinalParaRuta(p.status))
                         .map((p) => (
                           <MenuItem key={p.paqueteId} value={p.paqueteId}>
                             {p.codigoSeguimiento} · Parada {p.orden}
@@ -377,7 +383,7 @@ export default function DetalleRutaPage() {
               </Typography>
               <Stack spacing={1.5}>
                 {detalle.paradas.map((p, idx) => {
-                  const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
+                  const isCompleted = isFinalParaRuta(p.status)
                   const isCurrent = idx === proximaIdx
                   return (
                     <Card
@@ -453,7 +459,7 @@ export default function DetalleRutaPage() {
                 <Row label="Canceladas" value={canceladas} color="#c62828" />
                 <Row label="Pendientes" value={detalle.paradas.length - completas} color="#ed6c02" />
                 <Row label="Avance" value={`${detalle.paradas.length ? Math.round((completas / detalle.paradas.length) * 100) : 0}%`} color="#1976d2" />
-                <Row label="Capacidad" value={`${pesoTotal.toFixed(0)} / 500 kg`} />
+                <Row label="Capacidad" value={`${pesoTotal.toFixed(0)} / ${(detalle.capacidadKg ?? 500).toFixed(0)} kg`} />
               </Stack>
             </CardContent>
           </Card>

@@ -453,7 +453,7 @@ export default function RouteMap({ paradas, proximaIdx, origen, ubicacionActual,
             la parada 1 quede arriba si hay solapamiento residual y se separan
             visualmente las que tienen coords casi idénticas. */}
         {paradasParaMostrar.map((p) => {
-          const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado'
+          const isCompleted = p.status === 'Entregado' || p.status === 'Cancelado' || p.status === 'RetornandoASucursal' || p.status === 'RetornadoASucursal' || p.status === 'Retornando a sucursal' || p.status === 'Retornado a sucursal'
           const isCurrent = paradas.findIndex((x) => x.paqueteId === p.paqueteId) === proximaIdx
           const color = isCompleted ? '#2e7d32' : isCurrent ? '#ed6c02' : '#9e9e9e'
           return (

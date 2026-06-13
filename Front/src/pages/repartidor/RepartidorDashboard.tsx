@@ -109,7 +109,7 @@ const routeDateForDisplay = dateOnlyForDisplay
 const ARRIVAL_RADIUS_METERS = 120
 
 const isParadaFinalizada = (status: Shipment['status']) =>
-  status === 'Entregado' || status === 'Cancelado' || status === 'Entregado en punto' || status === 'Listo para retirar'
+  status === 'Entregado' || status === 'Cancelado' || status === 'Entregado en punto' || status === 'Listo para retirar' || status === 'Retornando a sucursal' || status === 'Retornado a sucursal'
 
 const statusRepartidor = (parada: Shipment): Shipment['status'] =>
   parada.puntoPickUpId && parada.status === 'Listo para retirar' ? 'Entregado en punto' : parada.status
@@ -134,6 +134,9 @@ function getParadaTone(status: Shipment['status'], isCurrent: boolean, isDark: b
   }
   if (status === 'Cancelado') {
     return { accent: '#c62828', bg: isDark ? 'rgba(198,40,40,0.12)' : '#fff5f5', soft: isDark ? 'rgba(198,40,40,0.18)' : '#fdecea', label: 'Cancelada' }
+  }
+  if (status === 'Retornando a sucursal' || status === 'Retornado a sucursal') {
+    return { accent: '#ef6c00', bg: isDark ? 'rgba(239,108,0,0.12)' : '#fff8f1', soft: isDark ? 'rgba(239,108,0,0.18)' : '#fff3e0', label: 'Retorno' }
   }
   if (status === 'Demorado') {
     return { accent: '#8d6e63', bg: isDark ? 'rgba(141,110,99,0.16)' : '#fbf6f4', soft: isDark ? 'rgba(141,110,99,0.22)' : '#efebe9', label: 'Demorada' }
@@ -384,7 +387,7 @@ export default function RepartidorDashboard() {
     const entregadas = paradas.filter((p) => p.status === 'Entregado').length
     const entregadasEnPunto = paradas.filter((p) => p.status === 'Entregado en punto' || p.status === 'Listo para retirar').length
     const entregasOperativas = entregadas + entregadasEnPunto
-    const canceladas = paradas.filter((p) => p.status === 'Cancelado').length
+    const canceladas = paradas.filter((p) => p.status === 'Cancelado' || p.status === 'Retornando a sucursal' || p.status === 'Retornado a sucursal').length
     const finalizadas = entregasOperativas + canceladas
     const enCamino = paradas.filter((p) => p.status === 'En tránsito').length
     const totalPeso = paradas.reduce((acc, p) => acc + (p.weight ?? 0), 0)
@@ -1183,7 +1186,7 @@ export default function RepartidorDashboard() {
             <KpiCard
               label="Capacidad"
               value={Math.round(metrics.totalPeso)}
-              suffix=" / 500 kg"
+              suffix={` / ${(user.capacidadCargaKg ?? 500).toFixed(0)} kg`}
               color="#1976d2"
               icon={<Inventory2Icon />}
             />

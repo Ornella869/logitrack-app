@@ -242,6 +242,9 @@ function BranchManagement({ gerenteProvincia, gerenteId, gerenteName }: BranchMa
                   <Typography variant="body2" color="text.secondary">
                     Tel: {b.phone}
                   </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Capacidad: {b.storageCapacityPackages ?? 1000} paquetes
+                  </Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                     <Chip label={`Provincia: ${b.province ?? '-'}`} size="small" />
                     {(b.coveredProvinces ?? []).map((p) => (

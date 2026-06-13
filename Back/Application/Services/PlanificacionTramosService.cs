@@ -8,6 +8,7 @@ namespace Back.Application.Services
     public class PlanificacionTramosService
     {
         private const double MaxKmPorTramo = 560d;
+        private const double MaxDesvioPorcentaje = 0.30d;
         private readonly LogiTrackDbContext _context;
         private readonly GeocodingService _geocoding;
 
@@ -28,6 +29,7 @@ namespace Back.Application.Services
             var sucursales = await _context.Sucursales
                 .Where(s => s.Estado == SucursalStatus.Activa)
                 .ToListAsync();
+            var ocupacion = await ObtenerOcupacionSucursalesAsync();
             var origen = sucursales.FirstOrDefault(s => s.Id == sucursalOrigenId)
                 ?? throw new InvalidOperationException("La sucursal de origen no existe o no está activa.");
             var ubicacionDestino = paquete.Destinatario.Direccion.Ubicacion
@@ -56,14 +58,18 @@ namespace Back.Application.Services
                 .Where(s => s.Cubre(paquete.ProvinciaDestino))
                 .Where(s => ubicaciones.ContainsKey(s.Id))
                 .ToList();
-            var candidatasFinales = candidatasFisicas.Count > 0 ? candidatasFisicas : candidatasCobertura;
+            var candidatasFinalesBase = candidatasFisicas.Count > 0 ? candidatasFisicas : candidatasCobertura;
+            var candidatasFinales = candidatasFinalesBase
+                .Where(s => TieneCupoParaPlanificacion(s, ocupacion, paquete))
+                .ToList();
             if (candidatasFinales.Count == 0)
-                throw new InvalidOperationException($"No hay una sucursal que atienda {paquete.ProvinciaDestino}.");
+                throw new InvalidOperationException($"No hay una sucursal con capacidad disponible que atienda {paquete.ProvinciaDestino}.");
 
-            var sucursalFinal = candidatasFinales
-                .OrderBy(s => DistanciaKm(ubicaciones[s.Id], ubicacionDestino))
-                .First();
-            var camino = BuscarCamino(origen, sucursalFinal, sucursales, ubicaciones);
+            var sucursalesDisponibles = sucursales
+                .Where(s => s.Id == origen.Id || candidatasFinales.Any(c => c.Id == s.Id) || TieneCupo(s, ocupacion))
+                .ToList();
+            var sucursalFinal = ElegirSucursalFinal(origen, candidatasFinalesBase, candidatasFinales, sucursalesDisponibles, ubicaciones, ubicacionDestino);
+            var camino = BuscarCamino(origen, sucursalFinal, sucursalesDisponibles, ubicaciones);
 
             var tramos = new List<TramoEnvio>();
             for (var i = 0; i < camino.Count - 1; i++)
@@ -383,15 +389,22 @@ namespace Back.Application.Services
         public async Task<bool> IntentarRecibirEnSucursalAsync(Paquete paquete, Guid operadorId)
         {
             var operador = await _context.Usuarios.FindAsync(operadorId);
-            if (operador is not Operador || !operador.SucursalId.HasValue)
+            if (operador is not (Operador or Supervisor) || !operador.SucursalId.HasValue)
                 return false;
+            var sucursalOperadorId = operador.SucursalId.Value;
 
             var tramo = await _context.TramosEnvio
                 .Where(t => t.PaqueteId == paquete.Id && t.Estado == TramoEnvioStatus.EnTransito)
                 .OrderBy(t => t.Orden)
                 .FirstOrDefaultAsync();
-            if (tramo is null || tramo.EsUltimaMilla || tramo.SucursalDestinoId != operador.SucursalId)
+            if (tramo is null || tramo.EsUltimaMilla || tramo.SucursalDestinoId != sucursalOperadorId)
                 return false;
+
+            var sucursalDestino = await _context.Sucursales.FindAsync(sucursalOperadorId);
+            if (sucursalDestino is null) return false;
+            var ocupacion = await ObtenerOcupacionSucursalesAsync();
+            if (!TieneCupo(sucursalDestino, ocupacion))
+                throw new InvalidOperationException($"La sucursal {sucursalDestino.Nombre} no tiene capacidad disponible para recibir más paquetes.");
 
             var repartidorAnterior = paquete.RepartidorAsignadoId;
             tramo.RecibirEnSucursal();
@@ -415,6 +428,28 @@ namespace Back.Application.Services
                 repartidor.MarcarRetornando();
             }
 
+            return true;
+        }
+
+        public async Task<bool> IntentarRecibirRetornoEnSucursalAsync(Paquete paquete, Guid operadorId)
+        {
+            if (paquete.Status != PaqueteStatus.RetornandoASucursal)
+                return false;
+
+            var operador = await _context.Usuarios.FindAsync(operadorId);
+            if (operador is not (Operador or Supervisor) || !operador.SucursalId.HasValue)
+                return false;
+            var sucursalOperadorId = operador.SucursalId.Value;
+            if (paquete.SucursalId != sucursalOperadorId)
+                return false;
+
+            var sucursal = await _context.Sucursales.FindAsync(sucursalOperadorId);
+            if (sucursal is null) return false;
+            var ocupacion = await ObtenerOcupacionSucursalesAsync();
+            if (!TieneCupo(sucursal, ocupacion))
+                throw new InvalidOperationException($"La sucursal {sucursal.Nombre} no tiene capacidad disponible para recibir más paquetes.");
+
+            paquete.ConfirmarRetornoSucursal();
             return true;
         }
 
@@ -550,5 +585,90 @@ namespace Back.Application.Services
         }
 
         private static double GradosARadianes(double grados) => grados * Math.PI / 180d;
+
+        private async Task<Dictionary<Guid, int>> ObtenerOcupacionSucursalesAsync()
+        {
+            var estadosAlmacenados = new[]
+            {
+                PaqueteStatus.PendienteDeCalendarizacion,
+                PaqueteStatus.AsignadoAVehiculo,
+                PaqueteStatus.RetornadoASucursal,
+            };
+            var ocupacion = await _context.Paquetes
+                .Where(p => p.SucursalId.HasValue && estadosAlmacenados.Contains(p.Status))
+                .GroupBy(p => p.SucursalId!.Value)
+                .ToDictionaryAsync(g => g.Key, g => g.Count());
+
+            foreach (var paquete in _context.Paquetes.Local.Where(p => p.SucursalId.HasValue && estadosAlmacenados.Contains(p.Status)))
+            {
+                var id = paquete.SucursalId!.Value;
+                if (!ocupacion.ContainsKey(id)) ocupacion[id] = 0;
+                if (_context.Entry(paquete).State == EntityState.Added)
+                    ocupacion[id]++;
+            }
+
+            return ocupacion;
+        }
+
+        private static bool TieneCupo(Sucursal sucursal, IReadOnlyDictionary<Guid, int> ocupacion)
+            => ocupacion.GetValueOrDefault(sucursal.Id) < sucursal.CapacidadAlmacenamientoPaquetes;
+
+        private static bool TieneCupoParaPlanificacion(Sucursal sucursal, IReadOnlyDictionary<Guid, int> ocupacion, Paquete paquete)
+        {
+            var cantidad = ocupacion.GetValueOrDefault(sucursal.Id);
+            if (cantidad < sucursal.CapacidadAlmacenamientoPaquetes) return true;
+            return paquete.SucursalId == sucursal.Id && cantidad <= sucursal.CapacidadAlmacenamientoPaquetes;
+        }
+
+        private static Sucursal ElegirSucursalFinal(
+            Sucursal origen,
+            List<Sucursal> candidatasBase,
+            List<Sucursal> candidatasConCupo,
+            List<Sucursal> sucursalesDisponibles,
+            IReadOnlyDictionary<Guid, Ubicacion> ubicaciones,
+            Ubicacion ubicacionDestino)
+        {
+            var ideal = candidatasBase
+                .Where(s => ubicaciones.ContainsKey(s.Id))
+                .Select(s => DistanciaKm(ubicaciones[origen.Id], ubicaciones[s.Id]) + DistanciaKm(ubicaciones[s.Id], ubicacionDestino))
+                .DefaultIfEmpty(double.PositiveInfinity)
+                .Min();
+
+            var candidatas = candidatasConCupo
+                .Select(s =>
+                {
+                    var camino = BuscarCamino(origen, s, sucursalesDisponibles, ubicaciones);
+                    var distanciaCamino = DistanciaCamino(camino, ubicaciones);
+                    var total = distanciaCamino + DistanciaKm(ubicaciones[s.Id], ubicacionDestino);
+                    var tramosValidos = TramosValidos(camino, ubicaciones);
+                    return new { Sucursal = s, Total = total, TramosValidos = tramosValidos };
+                })
+                .Where(x => x.TramosValidos && (double.IsPositiveInfinity(ideal) || x.Total <= ideal * (1 + MaxDesvioPorcentaje)))
+                .OrderBy(x => x.Total)
+                .ToList();
+
+            if (candidatas.Count == 0)
+                throw new InvalidOperationException("No hay sucursales con capacidad disponible dentro de un desvío operativo razonable.");
+
+            return candidatas[0].Sucursal;
+        }
+
+        private static double DistanciaCamino(List<Sucursal> camino, IReadOnlyDictionary<Guid, Ubicacion> ubicaciones)
+        {
+            double total = 0;
+            for (var i = 0; i < camino.Count - 1; i++)
+                total += DistanciaKm(ubicaciones[camino[i].Id], ubicaciones[camino[i + 1].Id]);
+            return total;
+        }
+
+        private static bool TramosValidos(List<Sucursal> camino, IReadOnlyDictionary<Guid, Ubicacion> ubicaciones)
+        {
+            for (var i = 0; i < camino.Count - 1; i++)
+            {
+                if (DistanciaKm(ubicaciones[camino[i].Id], ubicaciones[camino[i + 1].Id]) > MaxKmPorTramo)
+                    return false;
+            }
+            return true;
+        }
     }
 }

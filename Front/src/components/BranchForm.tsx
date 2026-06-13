@@ -79,6 +79,7 @@ const EMPTY_FORM = {
   phone: '',
   status: 'Activa' as BranchStatus,
   coveredProvinces: [] as string[],
+  storageCapacityPackages: '1000',
 }
 
 function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lockedProvince, existingBranches }: BranchFormProps) {
@@ -113,6 +114,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
         phone: initialData.phone,
         status: initialData.status,
         coveredProvinces: initialData.coveredProvinces ?? [],
+        storageCapacityPackages: String(initialData.storageCapacityPackages ?? 1000),
       })
     } else {
       // lockedProvince puede ser una lista CSV de provincias asignadas al gerente.
@@ -144,6 +146,9 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
     }
     if (name === 'phone') {
       value = value.replace(/[^\d+\s-]/g, '').slice(0, 15)
+    }
+    if (name === 'storageCapacityPackages') {
+      value = value.replace(/\D/g, '').slice(0, 6)
     }
     if (name === 'city') {
       value = value.replace(/[^A-Za-zÀ-ÿ\s'-]/g, '')
@@ -258,6 +263,11 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
       newErrors.phone = 'Teléfono inválido'
     }
 
+    const storageCapacityPackages = parseInt(formData.storageCapacityPackages, 10)
+    if (Number.isNaN(storageCapacityPackages) || storageCapacityPackages < 1 || storageCapacityPackages > 100000) {
+      newErrors.storageCapacityPackages = 'Debe estar entre 1 y 100000 paquetes'
+    }
+
     if (!newErrors.postalCode) {
       const cpResult = await postalCodeService.validate(formData.postalCode)
       if (!cpResult.valid) {
@@ -305,6 +315,7 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
         phone: formData.phone.trim(),
         status: formData.status,
         coveredProvinces: formData.coveredProvinces,
+        storageCapacityPackages: parseInt(formData.storageCapacityPackages, 10),
       }
       const saved = isEdit && initialData
         ? await branchService.updateBranch(initialData.id, payload)
@@ -525,6 +536,20 @@ function BranchForm({ open, onClose, onSaved, mode = 'create', initialData, lock
             placeholder="Ej: 11 4567-8901"
             disabled={loading}
             inputProps={{ maxLength: 15 }}
+          />
+
+          <TextField
+            label="Capacidad de almacenamiento"
+            name="storageCapacityPackages"
+            type="number"
+            value={formData.storageCapacityPackages}
+            onChange={handleChange}
+            error={!!errors.storageCapacityPackages}
+            helperText={errors.storageCapacityPackages ?? 'Cantidad máxima de paquetes activos que puede alojar la sucursal'}
+            required
+            fullWidth
+            disabled={loading}
+            inputProps={{ min: 1, max: 100000 }}
           />
 
           {/* Vista previa de ubicación */}

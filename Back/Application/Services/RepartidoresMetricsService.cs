@@ -31,6 +31,7 @@ namespace Back.Application.Services
         public required bool TieneActividad { get; init; }
         public required int HorasTrabajo { get; init; }
         public required string TipoJornada { get; init; }
+        public required double CapacidadCargaKg { get; init; }
     }
 
     public class RepartidoresMetricsService
@@ -167,6 +168,7 @@ namespace Back.Application.Services
                 TieneActividad = totalAsignados > 0,
                 HorasTrabajo = rep.HorasTrabajo,
                 TipoJornada = rep.TipoJornada,
+                CapacidadCargaKg = rep.CapacidadCargaKg,
                 FotoPerfil = rep.FotoPerfil,
             };
         }

@@ -283,6 +283,8 @@ namespace Back.Application.Services
                 PaqueteStatus.CargadoEnVehiculo => "Cargado en vehículo",
                 PaqueteStatus.Demorado => "Demorado",
                 PaqueteStatus.Cancelado => "Cancelado",
+                PaqueteStatus.RetornandoASucursal => "Retornando a sucursal",
+                PaqueteStatus.RetornadoASucursal => "Retornado a sucursal",
                 _ => ""
             };
             return template
@@ -504,12 +506,16 @@ namespace Back.Application.Services
                     PaqueteStatus.Demorado => "Demorado",
                     PaqueteStatus.Entregado => "Entregado",
                     PaqueteStatus.Cancelado => "Cancelado",
+                    PaqueteStatus.RetornandoASucursal => "Retornando a sucursal",
+                    PaqueteStatus.RetornadoASucursal => "Retornado a sucursal",
                     _ => "Actualizado"
                 };
                 var dot = h.EstadoNuevo switch
                 {
                     PaqueteStatus.Entregado => "#22c55e",
                     PaqueteStatus.Cancelado => "#ef4444",
+                    PaqueteStatus.RetornandoASucursal => "#f97316",
+                    PaqueteStatus.RetornadoASucursal => "#14b8a6",
                     PaqueteStatus.Demorado => "#f97316",
                     PaqueteStatus.EnTransito => "#3b82f6",
                     _ => "#64748b"
@@ -535,6 +541,8 @@ namespace Back.Application.Services
             PaqueteStatus.Entregado => "green",
             PaqueteStatus.Demorado => "orange",
             PaqueteStatus.Cancelado => "red",
+            PaqueteStatus.RetornandoASucursal => "orange",
+            PaqueteStatus.RetornadoASucursal => "green",
             _ => "blue"
         };
 

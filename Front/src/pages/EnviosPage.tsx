@@ -4,12 +4,15 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Grid,
+  LinearProgress,
   MenuItem,
   Snackbar,
   Stack,
@@ -23,7 +26,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
-import { shipmentService, type GenerarLoteDemoResultado, type ImportarEnviosResultado } from '../services/shipmentService'
+import { shipmentService, type GenerarLoteDemoResultado, type ImportarEnviosResultado, type SucursalCapacidadResumen } from '../services/shipmentService'
 import type { Shipment, User } from '../types'
 import ShipmentCard from '../components/ShipmentCard'
 import ShipmentForm from '../components/ShipmentForm'
@@ -67,6 +70,7 @@ export default function EnviosPage() {
   const [receiveCode, setReceiveCode] = useState('')
   const [receiveLoading, setReceiveLoading] = useState(false)
   const [receiveError, setReceiveError] = useState('')
+  const [branchCapacity, setBranchCapacity] = useState<SucursalCapacidadResumen | null>(null)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<ShipmentFiltersValue>(EMPTY_FILTERS)
   const [hasQuery, setHasQuery] = useState(false)
@@ -110,10 +114,20 @@ export default function EnviosPage() {
     }
   }
 
+  const loadBranchCapacity = async () => {
+    if (user.role !== 'operador' && user.role !== 'supervisor') return
+    setBranchCapacity(await shipmentService.getSucursalCapacidad())
+  }
+
   useEffect(() => {
     void loadShipments(search, filters, page, pageSize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filters.status.join(','), filters.from, filters.to, page, pageSize])
+
+  useEffect(() => {
+    void loadBranchCapacity()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.role])
 
   useEffect(() => {
     if (location.pathname === '/envios' && location.state?.forceReload) {
@@ -134,6 +148,7 @@ export default function EnviosPage() {
     if (newShipment) {
       setPage(1)
       void loadShipments(search, filters, 1, pageSize)
+      void loadBranchCapacity()
       showActionToast(`Envío creado. Tracking ID: ${newShipment.trackingId}`, 'success')
       setOpenShipmentForm(false)
       return
@@ -149,6 +164,7 @@ export default function EnviosPage() {
       setBulkResult(result)
       setPage(1)
       void loadShipments(search, filters, 1, pageSize)
+      void loadBranchCapacity()
       showActionToast(`Carga masiva lista: ${result.creados} envios creados`, result.fallidos ? 'warning' : 'success')
     } catch (error: any) {
       showActionToast(error?.message || 'Error al generar la carga masiva', 'error')
@@ -168,6 +184,7 @@ export default function EnviosPage() {
       setImportResult(result)
       setPage(1)
       void loadShipments(search, filters, 1, pageSize)
+      void loadBranchCapacity()
       if (result.creados === 0 && result.fallidos > 0) {
         showActionToast(`No se importo ningun envio. ${result.detalles?.find((d) => !d.creado)?.error ?? 'Revisa los errores del archivo.'}`, 'error')
       } else {
@@ -228,7 +245,7 @@ export default function EnviosPage() {
       setReceiveError(result.error ?? 'No se pudo recibir el envío.')
       return
     }
-    if (result.data?.accion !== 'RecibidoEnSucursal') {
+    if (result.data?.accion !== 'RecibidoEnSucursal' && result.data?.accion !== 'RetornadoASucursal') {
       setReceiveError('El envío no está esperando recepción en esta sucursal.')
       return
     }
@@ -236,7 +253,8 @@ export default function EnviosPage() {
     setReceiveCode('')
     setPage(1)
     void loadShipments(search, filters, 1, pageSize)
-    showActionToast('Envío recibido. Ya está pendiente de calendarización en esta sucursal.', 'success')
+    void loadBranchCapacity()
+    showActionToast(result.data?.accion === 'RetornadoASucursal' ? 'Retorno recibido físicamente en sucursal.' : 'Envío recibido. Ya está pendiente de calendarización en esta sucursal.', 'success')
   }
 
   const handleClearFilters = () => {
@@ -304,6 +322,42 @@ export default function EnviosPage() {
         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
 
+      {branchCapacity && (user.role === 'operador' || user.role === 'supervisor') && (
+        <Card variant="outlined" sx={{ mb: 2 }}>
+          <CardContent>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Capacidad de sucursal
+                </Typography>
+                <Typography variant="h6" fontWeight={700}>
+                  {branchCapacity.sucursalNombre}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={branchCapacity.capacidadTotal > 0 ? Math.min(100, (branchCapacity.ocupados / branchCapacity.capacidadTotal) * 100) : 0}
+                  sx={{ mt: 1, height: 8, borderRadius: 999 }}
+                />
+              </Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Ocupados</Typography>
+                  <Typography variant="h6" fontWeight={700}>{branchCapacity.ocupados}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Disponibles</Typography>
+                  <Typography variant="h6" fontWeight={700}>{branchCapacity.disponibles}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Total</Typography>
+                  <Typography variant="h6" fontWeight={700}>{branchCapacity.capacidadTotal}</Typography>
+                </Box>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
       <SearchBar onSearch={handleSearch} loading={loading} />
       <ShipmentFilters value={filters} onChange={setFilters} onClear={handleClearFilters} />
 
@@ -350,11 +404,11 @@ export default function EnviosPage() {
       <ShipmentForm open={openShipmentForm} onClose={() => setOpenShipmentForm(false)} onSubmit={handleCreateShipment} />
 
       <Dialog open={receiveOpen} onClose={() => !receiveLoading && setReceiveOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Recibir envío de otra sucursal</DialogTitle>
+        <DialogTitle>Recibir envío en sucursal</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="info">
-              Escaneá el QR cuando el paquete llegue físicamente. El envío quedará disponible para calendarizar desde esta sucursal.
+              Escaneá el QR cuando el paquete llegue físicamente. Puede ser un tramo entre sucursales o un retorno de entrega fallida.
             </Alert>
             <QrCameraScanner onDetect={(code) => void handleReceiveShipment(code)} height={220} />
             <TextField

@@ -43,6 +43,7 @@ type Rendimiento = {
   tieneActividad: boolean
   horasTrabajo: number
   tipoJornada: string
+  capacidadCargaKg: number
   fotoPerfil?: string | null
 }
 
@@ -85,6 +86,10 @@ export default function PerfilRendimientoPage() {
   const [savingHoras, setSavingHoras] = useState(false)
   const [horasError, setHorasError] = useState('')
   const [horasSuccess, setHorasSuccess] = useState('')
+  const [capacidadInput, setCapacidadInput] = useState<string>('')
+  const [savingCapacidad, setSavingCapacidad] = useState(false)
+  const [capacidadError, setCapacidadError] = useState('')
+  const [capacidadSuccess, setCapacidadSuccess] = useState('')
 
   useEffect(() => {
     if (!repartidorId) return
@@ -115,6 +120,7 @@ export default function PerfilRendimientoPage() {
       setData(res.data)
       setPrevData(prevRes?.data ?? null)
       if (horasInput === '') setHorasInput(String(res.data?.horasTrabajo ?? 8))
+      if (capacidadInput === '') setCapacidadInput(String(res.data?.capacidadCargaKg ?? 500))
     } catch (e: any) {
       setError(e.response?.data ?? 'No se pudo cargar el rendimiento')
     } finally {
@@ -139,6 +145,26 @@ export default function PerfilRendimientoPage() {
     } else {
       setData((prev) => prev ? { ...prev, horasTrabajo: result.horasTrabajo ?? horas, tipoJornada: result.tipoJornada ?? (horas <= 6 ? 'Part Time' : 'Full Time') } : prev)
       setHorasSuccess('Jornada actualizada correctamente.')
+    }
+  }
+
+  const handleSaveCapacidad = async () => {
+    const capacidad = parseFloat(capacidadInput)
+    if (isNaN(capacidad) || capacidad < 1 || capacidad > 5000) {
+      setCapacidadError('Ingresá un valor entre 1 y 5000 kg.')
+      return
+    }
+    if (!repartidorId) return
+    setSavingCapacidad(true)
+    setCapacidadError('')
+    setCapacidadSuccess('')
+    const result = await authService.updateRepartidorCapacidadCarga(repartidorId, capacidad)
+    setSavingCapacidad(false)
+    if (!result) {
+      setCapacidadError('No se pudo actualizar. Intentá de nuevo.')
+    } else {
+      setData((prev) => prev ? { ...prev, capacidadCargaKg: result.capacidadCargaKg ?? capacidad } : prev)
+      setCapacidadSuccess('Capacidad actualizada correctamente.')
     }
   }
 
@@ -220,6 +246,39 @@ export default function PerfilRendimientoPage() {
                 </Typography>
                 {horasError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{horasError}</Alert>}
                 {horasSuccess && <Alert severity="success" sx={{ mt: 1, py: 0 }}>{horasSuccess}</Alert>}
+              </CardContent>
+            </Card>
+          )}
+
+          {(user.role === 'supervisor' || user.role === 'administrador') && (
+            <Card variant="outlined">
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Typography variant="subtitle2" gutterBottom>Capacidad operativa</Typography>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <Chip label={`${data.capacidadCargaKg ?? 500} kg`} size="small" color="primary" variant="outlined" />
+                  <TextField
+                    size="small"
+                    label="Capacidad de carga (kg)"
+                    type="number"
+                    value={capacidadInput}
+                    onChange={(e) => { setCapacidadInput(e.target.value); setCapacidadError(''); setCapacidadSuccess('') }}
+                    inputProps={{ min: 1, max: 5000, step: 1, style: { width: 90 } }}
+                    sx={{ maxWidth: 190 }}
+                  />
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => void handleSaveCapacidad()}
+                    disabled={savingCapacidad}
+                  >
+                    {savingCapacidad ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
+                  </Button>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Usala para reflejar cambios de vehículo o capacidad disponible del repartidor.
+                </Typography>
+                {capacidadError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{capacidadError}</Alert>}
+                {capacidadSuccess && <Alert severity="success" sx={{ mt: 1, py: 0 }}>{capacidadSuccess}</Alert>}
               </CardContent>
             </Card>
           )}

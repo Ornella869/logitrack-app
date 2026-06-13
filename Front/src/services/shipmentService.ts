@@ -46,6 +46,8 @@ const mapStatus = (status: string): Shipment['status'] => {
     case 'ListoParaRetirar': return 'Listo para retirar'
     case 'EnTransitoDescanso': return 'En tránsito - Descanso'
     case 'EntregadoEnPunto': return 'Entregado en punto'
+    case 'RetornandoASucursal': return 'Retornando a sucursal'
+    case 'RetornadoASucursal': return 'Retornado a sucursal'
     default: return 'Pendiente de calendarización'
   }
 }
@@ -67,6 +69,8 @@ const mapStatusToBackend = (status: string): string => {
     case 'Listo para retirar': return 'ListoParaRetirar'
     case 'En tránsito - Descanso': return 'EnTransitoDescanso'
     case 'Entregado en punto': return 'EntregadoEnPunto'
+    case 'Retornando a sucursal': return 'RetornandoASucursal'
+    case 'Retornado a sucursal': return 'RetornadoASucursal'
     default:
       return 'PendienteDeCalendarizacion'
   }
@@ -85,6 +89,14 @@ export interface ImportarEnviosResultado {
   creados: number
   fallidos: number
   detalles: Array<{ fila: number; creado: boolean; codigoSeguimiento?: string | null; error?: string | null }>
+}
+
+export interface SucursalCapacidadResumen {
+  sucursalId: string
+  sucursalNombre: string
+  capacidadTotal: number
+  ocupados: number
+  disponibles: number
 }
 
 export interface TramoEnvio {
@@ -463,6 +475,16 @@ export const shipmentService = {
     }
   },
 
+  getSucursalCapacidad: async (): Promise<SucursalCapacidadResumen | null> => {
+    try {
+      const response = await api.get('/envios/sucursal/capacidad')
+      return response.data
+    } catch (error) {
+      console.error('Get branch capacity error:', error)
+      return null
+    }
+  },
+
   // Obtener todos los envíos con búsqueda y filtros opcionales — G1L-39, G1L-40
   getAllShipments: async (
     search?: string,
@@ -695,6 +717,7 @@ export interface RepartidorResumen {
   email: string
   cantidad: number
   pesoTotal: number
+  capacidadKg?: number
 }
 
 export interface DiaResumen {
@@ -797,6 +820,7 @@ export interface CalendarioRepartidor {
   estadoJornada?: string
   horasTrabajo?: number
   tipoJornada?: string
+  capacidadKg?: number
   celdas: CalendarioCelda[]
 }
 

@@ -52,12 +52,14 @@ type CalendarioCelda = {
   fecha: string
   paquetes: CalendarioPaquete[]
   pesoTotal: number
+  capacidadKg?: number
 }
 
 type CalendarioRepartidor = {
   repartidorId: string
   nombre: string
   email: string
+  capacidadKg?: number
   celdas: CalendarioCelda[]
 }
 
@@ -250,7 +252,8 @@ export default function CalendarioOperativoPage() {
                     </Stack>
 
                     {rep.celdas.map((celda) => {
-                      const pct = Math.min(100, (celda.pesoTotal / 500) * 100)
+                      const capacidadKg = rep.capacidadKg ?? 500
+                      const pct = Math.min(100, (celda.pesoTotal / capacidadKg) * 100)
                       const colorBar = pct >= 90 ? '#c62828' : pct >= 70 ? '#ed6c02' : '#2e7d32'
                       const cps = Array.from(new Set(celda.paquetes.map((p) => p.cpDestino).filter(Boolean)))
                       return (
@@ -263,7 +266,7 @@ export default function CalendarioOperativoPage() {
                             cursor: celda.paquetes.length ? 'pointer' : 'default',
                             '&:hover': celda.paquetes.length ? { bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f5f5f5' } : {},
                           }}
-                          onClick={() => celda.paquetes.length && setDetalleCelda(celda)}
+                          onClick={() => celda.paquetes.length && setDetalleCelda({ ...celda, capacidadKg })}
                         >
                           {celda.paquetes.length === 0 ? (
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>—</Typography>
@@ -325,7 +328,7 @@ export default function CalendarioOperativoPage() {
                                 sx={{ height: 4, borderRadius: 1, mt: 0.8, '& .MuiLinearProgress-bar': { bgcolor: colorBar } }}
                               />
                               <Typography variant="caption" sx={{ fontSize: 9, color: colorBar, fontWeight: 600, display: 'block', mt: 0.3 }}>
-                                {celda.pesoTotal.toFixed(0)} / 500 kg
+                                {celda.pesoTotal.toFixed(0)} / {capacidadKg.toFixed(0)} kg
                               </Typography>
                             </>
                           )}
@@ -349,7 +352,7 @@ export default function CalendarioOperativoPage() {
               <Typography variant="caption" display="block" color="text.secondary">
                 {formatDateOnlyEs(detalleCelda.fecha, { weekday: 'long', day: '2-digit', month: 'long' })}
                 {' · '}
-                {detalleCelda.pesoTotal.toFixed(0)} / 500 kg
+                {detalleCelda.pesoTotal.toFixed(0)} / {(detalleCelda.capacidadKg ?? 500).toFixed(0)} kg
               </Typography>
             </>
           )}

@@ -583,13 +583,13 @@ namespace Back.Application.Services
                     }
                     else
                     {
-                        paquete.Cancelar(motivo);
+                        paquete.CancelarConRetorno(motivo);
                         await _tramos.SincronizarCancelacionAsync(paquete);
                         await DesvincularDeRutasPendientes(paquete.Id);
-                        await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
+                        await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.RetornandoASucursal, usuarioId, OrigenCambioEstado.Manual, motivo);
                         await _auditoria.RegistrarAsync(
                             Domain.Models.TipoAccion.CancelacionEnvio,
-                            $"Canceló {paquete.CodigoSeguimiento} (definitivo)",
+                            $"Canceló {paquete.CodigoSeguimiento}; queda pendiente de retorno a sucursal",
                             recursoId: paquete.CodigoSeguimiento,
                             contexto: $"Motivo: {motivo}");
                     }
@@ -603,9 +603,9 @@ namespace Back.Application.Services
                     // G1L-9 / G1L-82 (Entrega Fallida): solo repartidor, desde tránsito o demorado.
                     if (!esRepartidor)
                         throw new InvalidOperationException("Un envío En Tránsito o Demorado solo puede cancelarlo el repartidor (Entrega Fallida).");
-                    paquete.Cancelar(motivo);
+                    paquete.CancelarConRetorno(motivo);
                     await _tramos.SincronizarCancelacionAsync(paquete);
-                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
+                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.RetornandoASucursal, usuarioId, OrigenCambioEstado.Manual, motivo);
                     await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
 
@@ -643,9 +643,13 @@ namespace Back.Application.Services
             {
                 var repartidorParaRetorno = paquete.RepartidorAsignadoId;
                 var fechaParaRetorno = paquete.FechaCalendarizada;
-                paquete.Cancelar(motivo);
+                var estadoRetorno = paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado or PaqueteStatus.EnTransitoDescanso or PaqueteStatus.CargadoEnVehiculo or PaqueteStatus.ListoParaSalir;
+                if (estadoRetorno)
+                    paquete.CancelarConRetorno(motivo);
+                else
+                    paquete.Cancelar(motivo);
                 await _tramos.SincronizarCancelacionAsync(paquete);
-                await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, supervisorId, OrigenCambioEstado.Manual, motivo);
+                await _historial.RegistrarCambioAsync(paquete.Id, paquete.Status, supervisorId, OrigenCambioEstado.Manual, motivo);
                 await TalvezMarcarRetornandoAsync(repartidorParaRetorno, fechaParaRetorno);
                 await _auditoria.RegistrarAsync(
                     Domain.Models.TipoAccion.CancelacionEnvio,
@@ -703,9 +707,9 @@ namespace Back.Application.Services
                     // G1L-82: la entrega fallida es válida desde EnTransito y desde Demorado.
                     if (paquete.Status != PaqueteStatus.EnTransito && paquete.Status != PaqueteStatus.Demorado)
                         throw new InvalidOperationException("Solo se puede cancelar una entrega en tránsito o demorada.");
-                    paquete.Cancelar(motivo);
+                    paquete.CancelarConRetorno(motivo);
                     await _tramos.SincronizarCancelacionAsync(paquete);
-                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.Cancelado, usuarioId, OrigenCambioEstado.Manual, motivo);
+                    await _historial.RegistrarCambioAsync(paquete.Id, PaqueteStatus.RetornandoASucursal, usuarioId, OrigenCambioEstado.Manual, motivo);
                     await TalvezMarcarRetornandoAsync(paquete.RepartidorAsignadoId, paquete.FechaCalendarizada);
                     break;
 
@@ -750,6 +754,24 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaqueteByCodigoSeguimiento(codigoSeguimiento)
                 ?? throw new InvalidOperationException("No se encontró un envío con ese código.");
+
+            if (usuarioId.HasValue
+                && await _tramos.IntentarRecibirRetornoEnSucursalAsync(paquete, usuarioId.Value))
+            {
+                await _historial.RegistrarCambioAsync(
+                    paquete.Id,
+                    PaqueteStatus.RetornadoASucursal,
+                    usuarioId,
+                    OrigenCambioEstado.QR,
+                    "Recepción física de retorno en sucursal");
+                return new EscaneoResultado
+                {
+                    Status = paquete.Status,
+                    Accion = "RetornadoASucursal",
+                    CodigoSeguimiento = paquete.CodigoSeguimiento,
+                    PaqueteId = paquete.Id,
+                };
+            }
 
             if (usuarioId.HasValue
                 && await _tramos.IntentarRecibirEnSucursalAsync(paquete, usuarioId.Value))
@@ -929,6 +951,8 @@ namespace Back.Application.Services
             paquete.Status == PaqueteStatus.Entregado
             || paquete.Status == PaqueteStatus.EntregadoEnPunto
             || paquete.Status == PaqueteStatus.ListoParaRetirar
+            || paquete.Status == PaqueteStatus.RetornandoASucursal
+            || paquete.Status == PaqueteStatus.RetornadoASucursal
             || paquete.Status == PaqueteStatus.Cancelado;
 
         // G1L-119: el repartidor reanuda la ruta al día siguiente.

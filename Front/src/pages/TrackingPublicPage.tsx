@@ -200,6 +200,22 @@ const getPublicStatusCopy = (status: Shipment['status']): PublicStatusCopy => {
         badgeColor: '#1565C0',
         badgeBg: '#E3F2FD',
       }
+    case 'Retornando a sucursal':
+      return {
+        badge: 'Retornando a sucursal',
+        title: 'Tu paquete está volviendo a una sucursal',
+        description: 'La entrega fue interrumpida y el paquete está en proceso de retorno operativo.',
+        badgeColor: '#BF360C',
+        badgeBg: '#FFF3E0',
+      }
+    case 'Retornado a sucursal':
+      return {
+        badge: 'Retornado a sucursal',
+        title: 'Tu paquete fue recibido en sucursal',
+        description: 'La sucursal confirmó la recepción física del paquete retornado.',
+        badgeColor: '#00695C',
+        badgeBg: '#E0F2F1',
+      }
     case 'Entregado':
       return {
         badge: 'Entregado',
@@ -232,6 +248,8 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
     'En tránsito - Descanso': 2,
     // G1L-132: depositado en el local, equivale a "en camino" visualmente.
     'Entregado en punto': 2,
+    'Retornando a sucursal': 2,
+    'Retornado a sucursal': 2,
     Entregado: 3,
     Cancelado: 2,
   }
@@ -241,8 +259,8 @@ const buildTimeline = (status: Shipment['status']): TimelineStep[] => {
   return [
     { key: 'created', label: 'Pedido registrado', done: currentIndex >= 0, active: currentIndex === 0 },
     { key: 'ready', label: 'Preparado para despacho', done: currentIndex >= 1, active: currentIndex === 1 },
-    { key: 'transit', label: status === 'Cancelado' ? 'Proceso interrumpido' : status === 'Demorado' ? 'Demorado' : 'En tránsito', done: currentIndex >= 2, active: currentIndex === 2 },
-    { key: 'final', label: status === 'Cancelado' ? 'Envío cancelado' : 'Entregado', done: status === 'Entregado' || status === 'Cancelado', active: currentIndex === 3 },
+    { key: 'transit', label: status === 'Cancelado' || status === 'Retornando a sucursal' || status === 'Retornado a sucursal' ? 'Proceso interrumpido' : status === 'Demorado' ? 'Demorado' : 'En tránsito', done: currentIndex >= 2, active: currentIndex === 2 },
+    { key: 'final', label: status === 'Cancelado' ? 'Envío cancelado' : status === 'Retornando a sucursal' || status === 'Retornado a sucursal' ? 'Retorno a sucursal' : 'Entregado', done: status === 'Entregado' || status === 'Cancelado' || status === 'Retornado a sucursal', active: currentIndex === 3 },
   ]
 }
 

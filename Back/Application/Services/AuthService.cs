@@ -124,6 +124,7 @@ namespace Back.Application.Services
                     sucursalId = user.SucursalId?.ToString(),
                     provincia = user is Gerente gerente ? gerente.Provincia : null,
                     puntoPickUpId = user is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
+                    capacidadCargaKg = user is Repartidor repartidor ? repartidor.CapacidadCargaKg : (double?)null,
                     provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null,
                     fotoPerfil = user.FotoPerfil
                 }
@@ -183,6 +184,8 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("La licencia es obligatoria.");
             if (!System.Text.RegularExpressions.Regex.IsMatch(request.Licencia.Trim(), @"^[A-Za-z0-9\- ]{6,15}$"))
                 throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
+            if (request.CapacidadCargaKg <= 0 || request.CapacidadCargaKg > 5000)
+                throw new InvalidOperationException("La capacidad de carga debe estar entre 1 y 5000 kg.");
 
             var existingByDni = await _userRepository.GetUsuarioByDni(request.DNI.Trim());
             if (existingByDni is not null)
@@ -204,7 +207,8 @@ namespace Back.Application.Services
                 request.Email.Trim(),
                 generatedPassword,
                 request.DNI.Trim(),
-                request.Licencia.Trim()
+                request.Licencia.Trim(),
+                request.CapacidadCargaKg
             );
             // Épica D: vincular el repartidor a su sucursal.
             if (request.SucursalId.HasValue) repartidor.AsignarSucursal(request.SucursalId);
@@ -336,7 +340,9 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("La licencia es obligatoria para repartidores.");
             if (!System.Text.RegularExpressions.Regex.IsMatch(licencia, @"^[A-Za-z0-9\- ]{6,15}$"))
                 throw new InvalidOperationException("La licencia debe tener entre 6 y 15 caracteres alfanuméricos.");
-            return new Repartidor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), licencia);
+            if (request.CapacidadCargaKg <= 0 || request.CapacidadCargaKg > 5000)
+                throw new InvalidOperationException("La capacidad de carga debe estar entre 1 y 5000 kg.");
+            return new Repartidor(request.Nombre.Trim(), request.Apellido.Trim(), request.Email.Trim(), hash, request.DNI.Trim(), licencia, request.CapacidadCargaKg);
         }
 
         /// <summary>Asigna una o más provincias a un Gerente existente.</summary>

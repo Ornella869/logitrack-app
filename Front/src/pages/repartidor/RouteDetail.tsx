@@ -185,7 +185,7 @@ export default function RouteDetail() {
       return
     }
 
-    if (found.status === 'Entregado' || found.status === 'Cancelado') {
+    if (isDoneForRoute(found.status)) {
       setScanError(`Este paquete ya fue ${found.status.toLowerCase()}`)
       return
     }
@@ -215,9 +215,9 @@ export default function RouteDetail() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const delivered = routeShipments.filter((s) => s.status === 'Entregado').length
-  const rejected = routeShipments.filter((s) => s.status === 'Cancelado').length
+  const rejected = routeShipments.filter((s) => s.status === 'Cancelado' || s.status === 'Retornando a sucursal' || s.status === 'Retornado a sucursal').length
   const pending = routeShipments.filter(
-    (s) => s.status !== 'Entregado' && s.status !== 'Cancelado',
+    (s) => !isDoneForRoute(s.status),
   ).length
   const total = routeShipments.length
   const progress = total > 0 ? Math.round(((delivered + rejected) / total) * 100) : 0
@@ -400,9 +400,7 @@ export default function RouteDetail() {
             </TableHead>
             <TableBody>
               {routeShipments.map((shipment) => {
-                const isDone =
-                  shipment.status === 'Entregado' ||
-                  shipment.status === 'Cancelado'
+                const isDone = isDoneForRoute(shipment.status)
                 const hlType = scanHighlight?.id === shipment.id ? scanHighlight.type : null
                 return (
                   <TableRow
@@ -519,6 +517,9 @@ export default function RouteDetail() {
   )
 }
 
+const isDoneForRoute = (status: Shipment['status']) =>
+  status === 'Entregado' || status === 'Cancelado' || status === 'Retornando a sucursal' || status === 'Retornado a sucursal'
+
 // ─── Summary card ──────────────────────────────────────────────────────────────
 
 function SummaryCard({
@@ -565,9 +566,7 @@ interface ShipmentCardProps {
 }
 
 function ShipmentCard({ shipment, highlight, routeActive, onDeliver, onReject }: ShipmentCardProps) {
-  const isDone =
-    shipment.status === 'Entregado' ||
-    shipment.status === 'Cancelado'
+  const isDone = isDoneForRoute(shipment.status)
 
   return (
     <Card
