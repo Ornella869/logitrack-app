@@ -1,5 +1,6 @@
 
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Back.Application.Abstractions;
 using Back.Application.Common;
 using Back.Application.Services;
@@ -310,6 +311,19 @@ namespace Back.Controllers
                 var result = await _authService.RegistrarRepartidor(request);
                 var repartidor = result.Repartidor;
 
+                await _auditoria.RegistrarAsync(
+                    TipoAccion.JornadaLaboral,
+                    $"Alta del repartidor: jornada laboral inicial de {repartidor.HorasTrabajo} h/día",
+                    repartidor.Id.ToString(),
+                    JsonSerializer.Serialize(new
+                    {
+                        RepartidorId = repartidor.Id,
+                        Repartidor = $"{repartidor.Nombre} {repartidor.Apellido}",
+                        ValorAnterior = (int?)null,
+                        ValorNuevo = repartidor.HorasTrabajo,
+                        Motivo = "Alta del repartidor"
+                    }));
+
                 await _context.SaveChangesAsync();
 
                 return Ok(new UserInfoResponse
@@ -361,7 +375,20 @@ namespace Back.Controllers
                 if (scopeError is not null) return scopeError;
                 var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                     ?? throw new InvalidOperationException("Repartidor no encontrado.");
+                var horasAnteriores = rep.HorasTrabajo;
                 rep.ActualizarHorasTrabajo(request.HorasTrabajo);
+                await _auditoria.RegistrarAsync(
+                    TipoAccion.JornadaLaboral,
+                    $"Cambio de jornada laboral de {horasAnteriores} a {rep.HorasTrabajo} h/día",
+                    rep.Id.ToString(),
+                    JsonSerializer.Serialize(new
+                    {
+                        RepartidorId = rep.Id,
+                        Repartidor = $"{rep.Nombre} {rep.Apellido}",
+                        ValorAnterior = horasAnteriores,
+                        ValorNuevo = rep.HorasTrabajo,
+                        Motivo = "Actualización de jornada laboral"
+                    }));
                 await _context.SaveChangesAsync();
                 return Ok(MapRepartidor(rep));
             }

@@ -38,7 +38,7 @@ namespace Back.Application.Services
         {
             var now = OperationalClock.Now;
             var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
-            var toUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            var toExclusiveUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1), DateTimeKind.Utc);
 
             List<Guid>? sucursalesProvincia = null;
             if (provinciasGerente != null && provinciasGerente.Any())
@@ -55,7 +55,7 @@ namespace Back.Application.Services
             // CA: se filtran todos los paquetes cuya fecha de creación cae en el rango.
             var paquetes = await _context.Paquetes
                 .Where(p => p.CreadoEn >= fromUtc
-                            && p.CreadoEn <= toUtc
+                            && p.CreadoEn < toExclusiveUtc
                             && (sucursalId == null || p.SucursalId == sucursalId)
                             && (sucursalesProvincia == null || (p.SucursalId.HasValue && sucursalesProvincia.Contains(p.SucursalId.Value))))
                 .Select(p => new
@@ -86,7 +86,7 @@ namespace Back.Application.Services
             return new ReporteVolumen
             {
                 Desde = fromUtc,
-                Hasta = toUtc,
+                Hasta = toExclusiveUtc.AddTicks(-1),
                 TotalEnvios = total,
                 Entregados = entregados,
                 Cancelados = cancelados,

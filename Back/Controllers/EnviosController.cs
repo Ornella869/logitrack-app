@@ -303,8 +303,8 @@ namespace Back.Controllers
                         || p.Destinatario.Apellido.ToLowerInvariant().Contains(s));
                 }
                 if (estados is { Count: > 0 }) query = query.Where(p => estados.Contains(p.Status));
-                if (from.HasValue) query = query.Where(p => p.CreadoEn >= DateTime.SpecifyKind(from.Value, DateTimeKind.Utc));
-                if (to.HasValue) query = query.Where(p => p.CreadoEn <= DateTime.SpecifyKind(to.Value, DateTimeKind.Utc));
+                if (from.HasValue) query = query.Where(p => p.CreadoEn >= DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc));
+                if (to.HasValue) query = query.Where(p => p.CreadoEn < DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc));
                 var filtered = query.OrderByDescending(p => p.CreadoEn).ToList();
                 return Ok(PagedResponse<Paquete>.Create(
                     filtered.Skip((normalizedPage - 1) * normalizedPageSize).Take(normalizedPageSize).ToList(),

@@ -19,6 +19,7 @@ namespace Back.Domain.Models
         ConsentimientoOjoPatron,
         PruebaOjoDelPatron,
         Notificacion,
+        JornadaLaboral,
     }
 
     public class LogAuditoria

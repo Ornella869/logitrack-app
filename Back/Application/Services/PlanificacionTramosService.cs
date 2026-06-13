@@ -217,13 +217,13 @@ namespace Back.Application.Services
 
             if (from.HasValue)
             {
-                var fromUtc = DateTime.SpecifyKind(from.Value, DateTimeKind.Utc);
+                var fromUtc = DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc);
                 query = query.Where(x => x.Paquete.CreadoEn >= fromUtc);
             }
             if (to.HasValue)
             {
-                var toUtc = DateTime.SpecifyKind(to.Value, DateTimeKind.Utc);
-                query = query.Where(x => x.Paquete.CreadoEn <= toUtc);
+                var toUtc = DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc);
+                query = query.Where(x => x.Paquete.CreadoEn < toUtc);
             }
 
             var tramoRows = await query.ToListAsync();
@@ -259,13 +259,13 @@ namespace Back.Application.Services
                 legacyQuery = legacyQuery.Where(p => estados.Contains(p.Status));
             if (from.HasValue)
             {
-                var fromUtc = DateTime.SpecifyKind(from.Value, DateTimeKind.Utc);
+                var fromUtc = DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc);
                 legacyQuery = legacyQuery.Where(p => p.CreadoEn >= fromUtc);
             }
             if (to.HasValue)
             {
-                var toUtc = DateTime.SpecifyKind(to.Value, DateTimeKind.Utc);
-                legacyQuery = legacyQuery.Where(p => p.CreadoEn <= toUtc);
+                var toUtc = DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc);
+                legacyQuery = legacyQuery.Where(p => p.CreadoEn < toUtc);
             }
 
             var legacy = await legacyQuery.ToListAsync();

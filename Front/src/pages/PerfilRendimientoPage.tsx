@@ -9,6 +9,8 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Collapse,
+  Divider,
   Grid,
   LinearProgress,
   Stack,
@@ -24,10 +26,12 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import api from '../services/api'
 import { authService } from '../services/authService'
 import type { User } from '../types'
-import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs } from '../utils/argentinaDate'
+import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs, formatInstantArgentinaDate, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 type Rendimiento = {
   repartidorId: string
@@ -45,6 +49,16 @@ type Rendimiento = {
   tipoJornada: string
   capacidadCargaKg: number
   fotoPerfil?: string | null
+}
+
+type JornadaLaboralHistorial = {
+  id: string
+  timestamp: string
+  usuarioNombre: string
+  usuarioRol: string
+  valorAnterior: number | null
+  valorNuevo: number | null
+  motivo: string
 }
 
 const today = () => formatArgentinaDateInput()
@@ -71,6 +85,15 @@ function prevPeriod(from: string, to: string) {
   return { from: prevFrom, to: prevTo }
 }
 
+const isValidDateInput = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+
+const validateDateRangeForRender = (from: string, to: string) => (
+  isValidDateInput(from)
+  && isValidDateInput(to)
+  && to >= from
+  && to <= today()
+)
+
 export default function PerfilRendimientoPage() {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
@@ -86,6 +109,9 @@ export default function PerfilRendimientoPage() {
   const [savingHoras, setSavingHoras] = useState(false)
   const [horasError, setHorasError] = useState('')
   const [horasSuccess, setHorasSuccess] = useState('')
+  const [jornadaHistorial, setJornadaHistorial] = useState<JornadaLaboralHistorial[]>([])
+  const [jornadaHistorialError, setJornadaHistorialError] = useState('')
+  const [showJornadaHistorial, setShowJornadaHistorial] = useState(false)
   const [capacidadInput, setCapacidadInput] = useState<string>('')
   const [savingCapacidad, setSavingCapacidad] = useState(false)
   const [capacidadError, setCapacidadError] = useState('')
@@ -98,33 +124,49 @@ export default function PerfilRendimientoPage() {
   }, [repartidorId, user.role])
 
   const validate = (f: string, t: string): boolean => {
+    if (!f || !t) { setDateError('Completá ambas fechas para aplicar el rango.'); return false }
+    if (!isValidDateInput(f) || !isValidDateInput(t)) { setDateError('Ingresá fechas válidas.'); return false }
     if (t < f) { setDateError('La fecha fin no puede ser anterior a la fecha inicio.'); return false }
     if (t > today()) { setDateError('La fecha fin no puede ser una fecha futura.'); return false }
     setDateError('')
     return true
   }
 
-  const load = async (overrideFrom?: string, overrideTo?: string) => {
+  const hasValidComparisonRange = validateDateRangeForRender(from, to)
+
+  const restoreScroll = (scrollY?: number) => {
+    if (scrollY === undefined) return
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.scrollTo({ top: scrollY }))
+    })
+  }
+
+  const load = async (overrideFrom?: string, overrideTo?: string, preserveScroll = false) => {
     const f = overrideFrom ?? from
     const t = overrideTo ?? to
     if (!validate(f, t)) return
     if (!repartidorId) return
-    setLoading(true)
+    const scrollY = preserveScroll ? window.scrollY : undefined
+    if (!data) setLoading(true)
     setError('')
     try {
       const prev = prevPeriod(f, t)
-      const [res, prevRes] = await Promise.all([
+      const [res, prevRes, jornadaHistorialRes] = await Promise.all([
         api.get(`/repartidores/${repartidorId}/rendimiento`, { params: { from: f, to: t } }),
         api.get(`/repartidores/${repartidorId}/rendimiento`, { params: { from: prev.from, to: prev.to } }).catch(() => null),
+        api.get<JornadaLaboralHistorial[]>(`/repartidores/${repartidorId}/jornada-historial`).catch(() => null),
       ])
       setData(res.data)
       setPrevData(prevRes?.data ?? null)
+      setJornadaHistorial(jornadaHistorialRes?.data ?? [])
+      setJornadaHistorialError(jornadaHistorialRes ? '' : 'No se pudo cargar el historial de jornada laboral.')
       if (horasInput === '') setHorasInput(String(res.data?.horasTrabajo ?? 8))
       if (capacidadInput === '') setCapacidadInput(String(res.data?.capacidadCargaKg ?? 500))
     } catch (e: any) {
       setError(e.response?.data ?? 'No se pudo cargar el rendimiento')
     } finally {
       setLoading(false)
+      restoreScroll(scrollY)
     }
   }
 
@@ -145,6 +187,18 @@ export default function PerfilRendimientoPage() {
     } else {
       setData((prev) => prev ? { ...prev, horasTrabajo: result.horasTrabajo ?? horas, tipoJornada: result.tipoJornada ?? (horas <= 6 ? 'Part Time' : 'Full Time') } : prev)
       setHorasSuccess('Jornada actualizada correctamente.')
+      void loadJornadaHistorial()
+    }
+  }
+
+  const loadJornadaHistorial = async () => {
+    if (!repartidorId) return
+    setJornadaHistorialError('')
+    try {
+      const res = await api.get<JornadaLaboralHistorial[]>(`/repartidores/${repartidorId}/jornada-historial`)
+      setJornadaHistorial(res.data ?? [])
+    } catch {
+      setJornadaHistorialError('No se pudo cargar el historial de jornada laboral.')
     }
   }
 
@@ -173,7 +227,7 @@ export default function PerfilRendimientoPage() {
     const t = preset.to()
     setFrom(f)
     setTo(t)
-    void load(f, t)
+    void load(f, t, true)
   }
 
   if (user.role !== 'supervisor' && user.role !== 'administrador') {
@@ -208,77 +262,131 @@ export default function PerfilRendimientoPage() {
             </Box>
           </Stack>
 
-          {/* Jornada editable por Supervisor */}
           {(user.role === 'supervisor' || user.role === 'administrador') && (
             <Card variant="outlined">
-              <CardContent sx={{ pb: '12px !important' }}>
-                <Typography variant="subtitle2" gutterBottom>Jornada laboral</Typography>
-                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                  <Chip
-                    label={data.tipoJornada ?? 'Full Time'}
-                    size="small"
-                    sx={{
-                      bgcolor: data.tipoJornada === 'Part Time' ? '#fff3e0' : '#e3f2fd',
-                      color: data.tipoJornada === 'Part Time' ? '#e65100' : '#1565c0',
-                      fontWeight: 700,
-                    }}
-                  />
-                  <TextField
-                    size="small"
-                    label="Horas de trabajo / día"
-                    type="number"
-                    value={horasInput}
-                    onChange={(e) => { setHorasInput(e.target.value); setHorasError(''); setHorasSuccess('') }}
-                    inputProps={{ min: 1, max: 24, style: { width: 70 } }}
-                    sx={{ maxWidth: 160 }}
-                  />
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => void handleSaveHoras()}
-                    disabled={savingHoras}
-                  >
-                    {savingHoras ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
-                  </Button>
+              <CardContent sx={{ pb: '14px !important' }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>Configuración operativa</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Ajustes que definen disponibilidad diaria y capacidad del repartidor.
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      label={`${data.horasTrabajo ?? 8} h/día`}
+                      size="small"
+                      sx={{ fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={data.tipoJornada ?? 'Full Time'}
+                      size="small"
+                      sx={{
+                        bgcolor: data.tipoJornada === 'Part Time' ? '#fff3e0' : '#e3f2fd',
+                        color: data.tipoJornada === 'Part Time' ? '#e65100' : '#1565c0',
+                        fontWeight: 700,
+                      }}
+                    />
+                    <Chip label={`${data.capacidadCargaKg ?? 500} kg`} size="small" color="primary" variant="outlined" />
+                  </Stack>
                 </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  ≤ 6 h = Part Time · ≥ 7 h = Full Time. Los Part Time solo reciben envíos de hasta 6 h de ruta.
-                </Typography>
-                {horasError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{horasError}</Alert>}
-                {horasSuccess && <Alert severity="success" sx={{ mt: 1, py: 0 }}>{horasSuccess}</Alert>}
-              </CardContent>
-            </Card>
-          )}
 
-          {(user.role === 'supervisor' || user.role === 'administrador') && (
-            <Card variant="outlined">
-              <CardContent sx={{ pb: '12px !important' }}>
-                <Typography variant="subtitle2" gutterBottom>Capacidad operativa</Typography>
-                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                  <Chip label={`${data.capacidadCargaKg ?? 500} kg`} size="small" color="primary" variant="outlined" />
-                  <TextField
-                    size="small"
-                    label="Capacidad de carga (kg)"
-                    type="number"
-                    value={capacidadInput}
-                    onChange={(e) => { setCapacidadInput(e.target.value); setCapacidadError(''); setCapacidadSuccess('') }}
-                    inputProps={{ min: 1, max: 5000, step: 1, style: { width: 90 } }}
-                    sx={{ maxWidth: 190 }}
-                  />
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => void handleSaveCapacidad()}
-                    disabled={savingCapacidad}
-                  >
-                    {savingCapacidad ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
-                  </Button>
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  Usala para reflejar cambios de vehículo o capacidad disponible del repartidor.
-                </Typography>
-                {capacidadError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{capacidadError}</Alert>}
-                {capacidadSuccess && <Alert severity="success" sx={{ mt: 1, py: 0 }}>{capacidadSuccess}</Alert>}
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" fontWeight={700}>Jornada laboral</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                        Part Time: hasta 6 h/día. Full Time: 7 h o más.
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <TextField
+                          size="small"
+                          label="Horas por día"
+                          type="number"
+                          value={horasInput}
+                          onChange={(e) => { setHorasInput(e.target.value); setHorasError(''); setHorasSuccess('') }}
+                          inputProps={{ min: 1, max: 24, style: { width: 70 } }}
+                          sx={{ maxWidth: 150 }}
+                        />
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => void handleSaveHoras()}
+                          disabled={savingHoras}
+                        >
+                          {savingHoras ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
+                        </Button>
+                      </Stack>
+                      {horasError && <Alert severity="error" sx={{ mt: 1.5, py: 0 }}>{horasError}</Alert>}
+                      {horasSuccess && <Alert severity="success" sx={{ mt: 1.5, py: 0 }}>{horasSuccess}</Alert>}
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" fontWeight={700}>Capacidad de carga</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                        Actualizala cuando cambie el vehículo o la capacidad disponible.
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <TextField
+                          size="small"
+                          label="Kg disponibles"
+                          type="number"
+                          value={capacidadInput}
+                          onChange={(e) => { setCapacidadInput(e.target.value); setCapacidadError(''); setCapacidadSuccess('') }}
+                          inputProps={{ min: 1, max: 5000, step: 1, style: { width: 90 } }}
+                          sx={{ maxWidth: 165 }}
+                        />
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => void handleSaveCapacidad()}
+                          disabled={savingCapacidad}
+                        >
+                          {savingCapacidad ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
+                        </Button>
+                      </Stack>
+                      {capacidadError && <Alert severity="error" sx={{ mt: 1.5, py: 0 }}>{capacidadError}</Alert>}
+                      {capacidadSuccess && <Alert severity="success" sx={{ mt: 1.5, py: 0 }}>{capacidadSuccess}</Alert>}
+                    </Box>
+                  </Grid>
+                </Grid>
+
+                <Divider sx={{ my: 2 }} />
+                <Button
+                  size="small"
+                  variant="text"
+                  endIcon={showJornadaHistorial ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  onClick={() => setShowJornadaHistorial((value) => !value)}
+                  sx={{ textTransform: 'none', px: 0 }}
+                >
+                  {showJornadaHistorial ? 'Ocultar historial de jornada' : `Ver historial de jornada (${jornadaHistorial.length})`}
+                </Button>
+                <Collapse in={showJornadaHistorial} timeout="auto" unmountOnExit>
+                  <Box sx={{ mt: 1.5 }}>
+                    {jornadaHistorialError && <Alert severity="warning" sx={{ mb: 1, py: 0 }}>{jornadaHistorialError}</Alert>}
+                    {jornadaHistorial.length === 0 ? (
+                      <Alert severity="info" sx={{ py: 0 }}>Todavía no hay cambios registrados para la jornada laboral.</Alert>
+                    ) : (
+                      <Stack spacing={1}>
+                        {jornadaHistorial.map((item) => (
+                          <Box key={item.id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.5, py: 1 }}>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                              <Typography variant="body2">
+                                <strong>{item.usuarioNombre}</strong> cambió {item.valorAnterior == null ? 'sin valor previo' : `${item.valorAnterior} h`} → {item.valorNuevo == null ? '-' : `${item.valorNuevo} h`}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                                {formatInstantArgentinaDate(item.timestamp)} · {formatInstantArgentinaTime(item.timestamp, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">{item.motivo}</Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </Box>
+                </Collapse>
               </CardContent>
             </Card>
           )}
@@ -286,50 +394,69 @@ export default function PerfilRendimientoPage() {
       )}
 
       <Card variant="outlined" sx={{ mb: 3 }}>
-        <CardContent>
+        <CardContent sx={{ pb: '18px !important' }}>
           <Stack spacing={2}>
-            {/* Presets */}
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mr: 0.5 }}>Período rápido:</Typography>
-              <ButtonGroup size="small" variant="outlined">
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700}>Período de análisis</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Elegí un rango para calcular métricas y compararlas contra el período anterior.
+              </Typography>
+            </Box>
+
+            <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems={{ xs: 'stretch', lg: 'center' }}>
+              <Box sx={{ minWidth: { lg: 330 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, mb: 0.75 }}>
+                  Accesos rápidos
+                </Typography>
+                <ButtonGroup size="small" variant="outlined" sx={{ flexWrap: 'wrap' }}>
                 {PRESETS.map((p) => (
                   <Button key={p.label} onClick={() => applyPreset(p)} sx={{ textTransform: 'none', fontSize: '0.75rem' }}>
                     {p.label}
                   </Button>
                 ))}
-              </ButtonGroup>
-            </Stack>
+                </ButtonGroup>
+              </Box>
 
-            {/* Custom range */}
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <Typography variant="subtitle2">Rango personalizado</Typography>
-              <TextField
-                type="date"
-                size="small"
-                label="Desde"
-                InputLabelProps={{ shrink: true }}
-                value={from}
-                inputProps={{ max: today() }}
-                onChange={(e) => { setFrom(e.target.value); setDateError('') }}
-              />
-              <TextField
-                type="date"
-                size="small"
-                label="Hasta"
-                InputLabelProps={{ shrink: true }}
-                value={to}
-                inputProps={{ max: today() }}
-                onChange={(e) => { setTo(e.target.value); setDateError('') }}
-              />
-              <Button size="small" variant="contained" onClick={() => void load()}>Aplicar</Button>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, mb: 0.75 }}>
+                  Rango personalizado
+                </Typography>
+                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <TextField
+                    type="date"
+                    size="small"
+                    label="Desde"
+                    InputLabelProps={{ shrink: true }}
+                    value={from}
+                    inputProps={{ max: today() }}
+                    onChange={(e) => { setFrom(e.target.value); setDateError('') }}
+                    sx={{ width: 165 }}
+                  />
+                  <TextField
+                    type="date"
+                    size="small"
+                    label="Hasta"
+                    InputLabelProps={{ shrink: true }}
+                    value={to}
+                    inputProps={{ max: today() }}
+                    onChange={(e) => { setTo(e.target.value); setDateError('') }}
+                    sx={{ width: 165 }}
+                  />
+                  <Button size="small" variant="contained" onClick={() => void load(undefined, undefined, true)} sx={{ minHeight: 40, px: 2 }}>
+                    Aplicar
+                  </Button>
+                </Stack>
+              </Box>
             </Stack>
 
             {dateError && <Alert severity="error" sx={{ py: 0 }}>{dateError}</Alert>}
 
-            {prevData && (
-              <Typography variant="caption" color="text.secondary">
-                Comparando con período anterior: {prevData.from} → {prevData.to}
-              </Typography>
+            {prevData && hasValidComparisonRange && (
+              <Box sx={{ display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', px: 1.25, py: 0.5, borderRadius: 999, bgcolor: 'action.hover' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Comparando contra <strong>{formatDateOnlyEs(prevData.from, { day: '2-digit', month: 'short', year: 'numeric' })}</strong> - <strong>{formatDateOnlyEs(prevData.to, { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+                </Typography>
+              </Box>
             )}
           </Stack>
         </CardContent>
@@ -364,6 +491,7 @@ export default function PerfilRendimientoPage() {
               progressColor={data.efectividadOnTimePct >= 80 ? '#2e7d32' : data.efectividadOnTimePct >= 60 ? '#ed6c02' : '#c62828'}
               compareValue={data.efectividadOnTimePct}
               comparePrev={prevData ? prevData.efectividadOnTimePct : undefined}
+              compareAsPercentPoints
               higherIsBetter
             />
             <Kpi
@@ -376,6 +504,7 @@ export default function PerfilRendimientoPage() {
               progressColor={data.tasaIncidenciasPct <= 10 ? '#2e7d32' : data.tasaIncidenciasPct <= 25 ? '#ed6c02' : '#c62828'}
               compareValue={data.tasaIncidenciasPct}
               comparePrev={prevData ? prevData.tasaIncidenciasPct : undefined}
+              compareAsPercentPoints
               higherIsBetter={false}
             />
             <Kpi
@@ -390,7 +519,7 @@ export default function PerfilRendimientoPage() {
             />
           </Grid>
 
-          {prevData && (
+          {prevData && hasValidComparisonRange && (
             <ComparisonChart data={data} prevData={prevData} from={from} to={to} />
           )}
         </>
@@ -408,14 +537,27 @@ interface ComparisonChartProps {
   to: string
 }
 
-const BAR_MAX_H = 100
+function formatMetricValue(value: number, isPercent = false) {
+  return isPercent ? `${value.toFixed(1)}%` : String(value)
+}
 
-function ComparisonBar({
+function getTrend(current: number, prev: number, higherIsBetter: boolean) {
+  const diff = current - prev
+  const isNeutral = Math.abs(diff) < 0.05
+  const improved = higherIsBetter ? diff > 0 : diff < 0
+  return {
+    diff,
+    label: isNeutral ? 'Sin cambios' : improved ? 'Mejoró' : 'Empeoró',
+    color: isNeutral ? '#616161' : improved ? '#2e7d32' : '#c62828',
+    bg: isNeutral ? '#f5f5f5' : improved ? '#e8f5e9' : '#ffebee',
+  }
+}
+
+function ComparisonRow({
   label,
   current,
   prev,
   color,
-  maxVal,
   isPercent = false,
   higherIsBetter = true,
 }: {
@@ -423,65 +565,57 @@ function ComparisonBar({
   current: number
   prev: number
   color: string
-  maxVal: number
   isPercent?: boolean
   higherIsBetter?: boolean
 }) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const safe = maxVal > 0 ? maxVal : 1
-  const currentH = Math.max(4, (current / safe) * BAR_MAX_H)
-  const prevH = Math.max(4, (prev / safe) * BAR_MAX_H)
-  const improved = higherIsBetter ? current >= prev : current <= prev
-  const fmt = (v: number) => (isPercent ? `${v.toFixed(1)}%` : String(v))
+  const maxVal = Math.max(current, prev, isPercent ? 100 : 1)
+  const currentWidth = Math.max(4, (current / maxVal) * 100)
+  const prevWidth = Math.max(prev === 0 ? 0 : 4, (prev / maxVal) * 100)
+  const trend = getTrend(current, prev, higherIsBetter)
+  const diffLabel = `${trend.diff > 0 ? '+' : ''}${isPercent ? `${trend.diff.toFixed(1)} pp` : trend.diff.toFixed(0)}`
+  const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#eef2f6'
 
   return (
-    <Box sx={{ flex: 1, minWidth: 120, textAlign: 'center' }}>
-      <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 1.5, fontSize: '0.7rem', minHeight: 18 }}>
-        {label}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '8px', minHeight: BAR_MAX_H + 34 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-          <Typography variant="caption" fontWeight={700} sx={{ color, fontSize: '0.65rem' }}>{fmt(current)}</Typography>
-          <Box sx={{ height: BAR_MAX_H, display: 'flex', alignItems: 'flex-end' }}>
-            <Box sx={{ width: 26, height: `${currentH}px`, bgcolor: color, borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
-          </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Actual</Typography>
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+        <Box sx={{ width: { xs: '100%', sm: 180 }, flexShrink: 0 }}>
+          <Typography variant="body2" fontWeight={700}>{label}</Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+            <Chip size="small" label={trend.label} sx={{ height: 20, fontSize: 11, bgcolor: trend.bg, color: trend.color, fontWeight: 700 }} />
+            <Typography variant="caption" color="text.secondary">{diffLabel}</Typography>
+          </Stack>
         </Box>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>{fmt(prev)}</Typography>
-          <Box sx={{ height: BAR_MAX_H, display: 'flex', alignItems: 'flex-end' }}>
-            <Box sx={{ width: 26, height: `${prevH}px`, bgcolor: isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd', borderRadius: '4px 4px 0 0', transformOrigin: 'bottom center', animation: 'barRise 0.6s ease 0.1s both', '@keyframes barRise': { from: { transform: 'scaleY(0)', opacity: 0 }, to: { transform: 'scaleY(1)', opacity: 1 } } }} />
-          </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Anterior</Typography>
-        </Box>
-      </Box>
-      <Box sx={{ mt: 0.5 }}>
-        <Chip
-          size="small"
-          label={improved ? '↑ Mejor' : '↓ Bajó'}
-          sx={{
-            height: 18,
-            fontSize: '0.62rem',
-            bgcolor: improved
-              ? (isDark ? 'rgba(46,125,50,0.3)' : '#e8f5e9')
-              : (isDark ? 'rgba(198,40,40,0.3)' : '#ffebee'),
-            color: improved ? '#2e7d32' : '#c62828',
-          }}
-        />
-      </Box>
+
+        <Stack spacing={0.8} sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="caption" color="text.secondary" sx={{ width: 54, flexShrink: 0 }}>Actual</Typography>
+            <Box sx={{ flex: 1, height: 10, bgcolor: trackBg, borderRadius: 999, overflow: 'hidden' }}>
+              <Box sx={{ width: `${currentWidth}%`, height: '100%', bgcolor: color, borderRadius: 999, transition: 'width .25s ease' }} />
+            </Box>
+            <Typography variant="caption" fontWeight={700} sx={{ width: 58, textAlign: 'right', flexShrink: 0 }}>{formatMetricValue(current, isPercent)}</Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="caption" color="text.secondary" sx={{ width: 54, flexShrink: 0 }}>Anterior</Typography>
+            <Box sx={{ flex: 1, height: 10, bgcolor: trackBg, borderRadius: 999, overflow: 'hidden' }}>
+              <Box sx={{ width: `${prevWidth}%`, height: '100%', bgcolor: isDark ? 'rgba(255,255,255,0.28)' : '#b0bec5', borderRadius: 999 }} />
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ width: 58, textAlign: 'right', flexShrink: 0 }}>{formatMetricValue(prev, isPercent)}</Typography>
+          </Stack>
+        </Stack>
+      </Stack>
     </Box>
   )
 }
 
 function ComparisonChart({ data, prevData, from, to }: ComparisonChartProps) {
   const { from: prevFrom, to: prevTo } = prevPeriod(from, to)
-  const maxEntregas = Math.max(data.totalEntregas, prevData.totalEntregas) * 1.15 || 1
 
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1} sx={{ mb: 2 }}>
           <Typography variant="subtitle1" fontWeight={700}>
             Comparativa con Período anterior
           </Typography>
@@ -489,42 +623,38 @@ function ComparisonChart({ data, prevData, from, to }: ComparisonChartProps) {
             Anterior: {formatDateOnlyEs(prevFrom, { day: '2-digit', month: 'short' })} — {formatDateOnlyEs(prevTo, { day: '2-digit', month: 'short' })}
           </Typography>
         </Stack>
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-around', flexWrap: 'wrap' }}>
-          <ComparisonBar
+        <Stack spacing={1.25}>
+          <ComparisonRow
             label="Entregas totales"
             current={data.totalEntregas}
             prev={prevData.totalEntregas}
             color="#2e7d32"
-            maxVal={maxEntregas}
             higherIsBetter
           />
-          <ComparisonBar
+          <ComparisonRow
             label="On-Time %"
             current={data.efectividadOnTimePct}
             prev={prevData.efectividadOnTimePct}
             color="#1976d2"
-            maxVal={100}
             isPercent
             higherIsBetter
           />
-          <ComparisonBar
+          <ComparisonRow
             label="Incidencias %"
             current={data.tasaIncidenciasPct}
             prev={prevData.tasaIncidenciasPct}
             color="#c62828"
-            maxVal={Math.max(data.tasaIncidenciasPct, prevData.tasaIncidenciasPct) * 1.15 || 1}
             isPercent
             higherIsBetter={false}
           />
-          <ComparisonBar
+          <ComparisonRow
             label="Asignados"
             current={data.totalAsignados}
             prev={prevData.totalAsignados}
             color="#5e35b1"
-            maxVal={Math.max(data.totalAsignados, prevData.totalAsignados) * 1.15 || 1}
             higherIsBetter
           />
-        </Box>
+        </Stack>
       </CardContent>
     </Card>
   )
@@ -541,15 +671,19 @@ interface KpiProps {
   compareValue?: number
   comparePrev?: number
   higherIsBetter?: boolean
+  compareAsPercentPoints?: boolean
 }
 
-function Kpi({ label, value, sub, color, icon, progress, progressColor, compareValue, comparePrev, higherIsBetter = true }: KpiProps) {
-  const showCompare = compareValue !== undefined && comparePrev !== undefined && comparePrev !== 0
-  let pct = 0
-  let isGood = false
+function Kpi({ label, value, sub, color, icon, progress, progressColor, compareValue, comparePrev, higherIsBetter = true, compareAsPercentPoints = false }: KpiProps) {
+  const showCompare = compareValue !== undefined && comparePrev !== undefined
+  let trend = getTrend(0, 0, higherIsBetter)
+  let diffLabel = ''
   if (showCompare) {
-    pct = ((compareValue! - comparePrev!) / Math.abs(comparePrev!)) * 100
-    isGood = higherIsBetter ? pct >= 0 : pct <= 0
+    trend = getTrend(compareValue!, comparePrev!, higherIsBetter)
+    const diff = compareValue! - comparePrev!
+    diffLabel = compareAsPercentPoints
+      ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)} pp vs anterior`
+      : `${diff > 0 ? '+' : ''}${diff.toFixed(0)} vs anterior`
   }
 
   return (
@@ -573,15 +707,15 @@ function Kpi({ label, value, sub, color, icon, progress, progressColor, compareV
             <Tooltip title={`Período anterior: ${comparePrev!.toFixed(comparePrev! % 1 !== 0 ? 1 : 0)}`}>
               <Chip
                 size="small"
-                icon={pct >= 0 ? <TrendingUpIcon sx={{ fontSize: '14px !important' }} /> : <TrendingDownIcon sx={{ fontSize: '14px !important' }} />}
-                label={`${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs anterior`}
+                icon={trend.diff >= 0 ? <TrendingUpIcon sx={{ fontSize: '14px !important' }} /> : <TrendingDownIcon sx={{ fontSize: '14px !important' }} />}
+                label={`${trend.label}: ${diffLabel}`}
                 sx={{
                   mt: 1,
                   fontSize: '0.68rem',
                   height: 20,
-                  bgcolor: isGood ? '#e8f5e9' : '#ffebee',
-                  color: isGood ? '#2e7d32' : '#c62828',
-                  '& .MuiChip-icon': { color: isGood ? '#2e7d32' : '#c62828' },
+                  bgcolor: trend.bg,
+                  color: trend.color,
+                  '& .MuiChip-icon': { color: trend.color },
                 }}
               />
             </Tooltip>

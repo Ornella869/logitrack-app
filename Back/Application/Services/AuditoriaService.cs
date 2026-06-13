@@ -9,6 +9,21 @@ namespace Back.Application.Services
 {
     public class AuditoriaService
     {
+        private static readonly HashSet<TipoAccion> AccionesSupervisorPermitidas = new()
+        {
+            TipoAccion.CreacionEnvio,
+            TipoAccion.EdicionEnvio,
+            TipoAccion.CambioEstadoEnvio,
+            TipoAccion.CancelacionEnvio,
+            TipoAccion.Calendarizacion,
+            TipoAccion.Recalendarizacion,
+            TipoAccion.ConsentimientoOjoPatron,
+            TipoAccion.PruebaOjoDelPatron,
+            TipoAccion.Notificacion,
+            TipoAccion.JornadaLaboral,
+            TipoAccion.Otro,
+        };
+
         private readonly LogiTrackDbContext _context;
         private readonly IHttpContextAccessor _httpContext;
         private readonly IUserRepository _userRepository;
@@ -77,6 +92,9 @@ namespace Back.Application.Services
             // Supervisor: scope automático a su propia sucursal.
             if (limitarASucursalSupervisor)
             {
+                if (accion.HasValue && !AccionesSupervisorPermitidas.Contains(accion.Value))
+                    return PagedResponse<LogAuditoria>.Create(new List<LogAuditoria>(), page, pageSize, 0);
+
                 var sucursalId = await ResolverSucursalUsuarioActualAsync();
                 if (!sucursalId.HasValue)
                     return PagedResponse<LogAuditoria>.Create(new List<LogAuditoria>(), page, pageSize, 0);
@@ -89,6 +107,8 @@ namespace Back.Application.Services
                     .ToListAsync();
 
                 query = query.Where(l => l.UsuarioId.HasValue && usuariosSucursalIds.Contains(l.UsuarioId.Value));
+                query = query.Where(l => AccionesSupervisorPermitidas.Contains(l.Accion));
+                rol = null;
             }
             // Administrador: filtro explícito por sucursal (opcional).
             else if (filtroSucursalId.HasValue)
@@ -118,8 +138,8 @@ namespace Back.Application.Services
             }
             if (to.HasValue)
             {
-                var t = DateTime.SpecifyKind(to.Value, DateTimeKind.Utc);
-                query = query.Where(l => l.Timestamp <= t);
+                var t = DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc);
+                query = query.Where(l => l.Timestamp < t);
             }
             if (!string.IsNullOrWhiteSpace(search))
             {

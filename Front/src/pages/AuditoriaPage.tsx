@@ -50,6 +50,22 @@ const ACCIONES = [
   'ConsentimientoOjoPatron',
   'PruebaOjoDelPatron',
   'Notificacion',
+  'JornadaLaboral',
+  'Otro',
+] as const
+
+const SUPERVISOR_ACCIONES = [
+  'Todas',
+  'CreacionEnvio',
+  'EdicionEnvio',
+  'CambioEstadoEnvio',
+  'CancelacionEnvio',
+  'Calendarizacion',
+  'Recalendarizacion',
+  'ConsentimientoOjoPatron',
+  'PruebaOjoDelPatron',
+  'Notificacion',
+  'JornadaLaboral',
   'Otro',
 ] as const
 
@@ -69,6 +85,7 @@ const ACCION_LABELS: Record<string, string> = {
   ConsentimientoOjoPatron: 'Consentimiento Ojo del Patrón',
   PruebaOjoDelPatron: 'Prueba Ojo del Patrón',
   Notificacion: 'Notificacion',
+  JornadaLaboral: 'Jornada laboral',
   Otro: 'Otro',
 }
 
@@ -87,6 +104,7 @@ const ACCION_COLORS: Record<string, { bg: string; color: string }> = {
   ConsentimientoOjoPatron: { bg: '#ede7f6', color: '#4527a0' },
   PruebaOjoDelPatron: { bg: '#e0f2f1', color: '#00695c' },
   Notificacion: { bg: '#e3f2fd', color: '#1565c0' },
+  JornadaLaboral: { bg: '#fff3e0', color: '#e65100' },
   Otro: { bg: '#f5f5f5', color: '#555' },
 }
 
@@ -127,6 +145,7 @@ export default function AuditoriaPage() {
 
   const canAccess = user.role === 'administrador' || user.role === 'supervisor'
   const isAdmin = user.role === 'administrador'
+  const accionesDisponibles = isAdmin ? ACCIONES : SUPERVISOR_ACCIONES
 
   useEffect(() => {
     if (!canAccess) return
@@ -145,7 +164,7 @@ export default function AuditoriaPage() {
       const params: any = {}
       if (search.trim()) params.search = search.trim()
       if (accion && accion !== 'Todas') params.accion = accion
-      if (rol && rol !== 'Todos') params.rol = rol
+      if (isAdmin && rol && rol !== 'Todos') params.rol = rol
       if (isAdmin && sucursalId && sucursalId !== 'Todas') params.sucursalId = sucursalId
       if (from) params.from = from
       if (to) params.to = to
@@ -162,10 +181,10 @@ export default function AuditoriaPage() {
   }
 
   const limpiar = () => {
-    setSearch('')
-    setAccion('Todas')
-    setRol('Todos')
-    setSucursalId('Todas')
+      setSearch('')
+      setAccion('Todas')
+      setRol('Todos')
+      setSucursalId('Todas')
     setFrom('')
     setTo('')
     setPage(1)
@@ -216,7 +235,9 @@ export default function AuditoriaPage() {
       </Stack>
 
       <Alert severity="info" sx={{ mb: 3 }}>
-        Cada calendarización, cambio de estado, asignación o cancelación queda registrada con timestamp, usuario, rol y contexto. El log es inmutable.
+        {isAdmin
+          ? 'Cada acción relevante del sistema queda registrada con timestamp, usuario, rol y contexto. El log es inmutable.'
+          : 'Estás viendo únicamente registros operativos asociados a tu sucursal. El log es inmutable.'}
       </Alert>
 
       {/* Filtros */}
@@ -238,22 +259,24 @@ export default function AuditoriaPage() {
               onChange={(e) => setAccion(e.target.value)}
               sx={{ minWidth: 200 }}
             >
-              {ACCIONES.map((a) => (
+              {accionesDisponibles.map((a) => (
                 <MenuItem key={a} value={a}>{ACCION_LABELS[a] ?? a}</MenuItem>
               ))}
             </TextField>
-            <TextField
-              size="small"
-              select
-              label="Rol"
-              value={rol}
-              onChange={(e) => setRol(e.target.value)}
-              sx={{ minWidth: 170 }}
-            >
-              {ROLES.map((r) => (
-                <MenuItem key={r} value={r}>{r}</MenuItem>
-              ))}
-            </TextField>
+            {isAdmin && (
+              <TextField
+                size="small"
+                select
+                label="Rol"
+                value={rol}
+                onChange={(e) => setRol(e.target.value)}
+                sx={{ minWidth: 170 }}
+              >
+                {ROLES.map((r) => (
+                  <MenuItem key={r} value={r}>{r}</MenuItem>
+                ))}
+              </TextField>
+            )}
             {isAdmin && (
               <TextField
                 size="small"
@@ -301,7 +324,7 @@ export default function AuditoriaPage() {
                   {items.map((log) => {
                     const accionColor = ACCION_COLORS[log.accion] ?? ACCION_COLORS.Otro
                     const rolColor = ROL_COLORS[log.usuarioRol] ?? '#777'
-                    const time = formatInstantArgentinaTime(log.timestamp, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                    const time = formatInstantArgentinaTime(log.timestamp, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
                     return (
                       <Stack
                         key={log.id}
@@ -313,7 +336,7 @@ export default function AuditoriaPage() {
                           alignItems: 'flex-start',
                         }}
                       >
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', width: 80, flexShrink: 0, color: 'text.secondary', pt: 0.3 }}>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace', width: 92, flexShrink: 0, color: 'text.secondary', pt: 0.3, whiteSpace: 'nowrap' }}>
                           {time}
                         </Typography>
                         <Box sx={{ flex: 1 }}>
@@ -321,7 +344,7 @@ export default function AuditoriaPage() {
                             <Typography variant="body2" fontWeight={600}>{log.usuarioNombre}</Typography>
                             <Chip size="small" label={log.usuarioRol} sx={{ bgcolor: `${rolColor}22`, color: rolColor, fontSize: 10, height: 18 }} />
                             <Chip size="small" label={ACCION_LABELS[log.accion] ?? log.accion} sx={{ bgcolor: accionColor.bg, color: accionColor.color, fontSize: 10, height: 18 }} />
-                            {log.recursoId && (
+                            {log.recursoId && log.accion !== 'JornadaLaboral' && (
                               <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#1976d2' }}>
                                 {log.recursoId}
                               </Typography>
@@ -344,6 +367,24 @@ export default function AuditoriaPage() {
                                 return (
                                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3, fontFamily: 'monospace' }}>
                                     {fields || log.contexto}
+                                  </Typography>
+                                )
+                              }
+                            }
+                            if (log.accion === 'JornadaLaboral') {
+                              const parsed = parsePruebaContexto(log.contexto)
+                              if (parsed) {
+                                const valorAnterior = parsed.ValorAnterior && parsed.ValorAnterior !== 'null' ? `${parsed.ValorAnterior} h` : 'Sin valor previo'
+                                const valorNuevo = parsed.ValorNuevo ? `${parsed.ValorNuevo} h` : 'Sin valor informado'
+                                const fields = [
+                                  `Valor anterior: ${valorAnterior}`,
+                                  `Valor nuevo: ${valorNuevo}`,
+                                  parsed.Motivo && `Motivo: ${parsed.Motivo}`,
+                                  parsed.Repartidor && `Repartidor: ${parsed.Repartidor}`,
+                                ].filter(Boolean).join(' · ')
+                                return (
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
+                                    {fields}
                                   </Typography>
                                 )
                               }

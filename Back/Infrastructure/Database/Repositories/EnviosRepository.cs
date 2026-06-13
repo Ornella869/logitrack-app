@@ -72,14 +72,14 @@ namespace Back.Infrastructure.Database.Repositories
 
             if (from.HasValue)
             {
-                var fromUtc = DateTime.SpecifyKind(from.Value, DateTimeKind.Utc);
+                var fromUtc = DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc);
                 query = query.Where(p => p.CreadoEn >= fromUtc);
             }
 
             if (to.HasValue)
             {
-                var toUtc = DateTime.SpecifyKind(to.Value, DateTimeKind.Utc);
-                query = query.Where(p => p.CreadoEn <= toUtc);
+                var toUtc = DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc);
+                query = query.Where(p => p.CreadoEn < toUtc);
             }
 
             var totalItems = await query.CountAsync();
