@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ElementType } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useOutletContext, useParams } from 'react-router-dom'
 import {
   Alert,
   Accordion,
@@ -107,7 +107,6 @@ function SeveridadChip({ severidad, vencido }: { severidad?: string; vencido?: b
 
 export default function IncidenciaDetallePage() {
   const user = useOutletContext<User>()
-  const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'

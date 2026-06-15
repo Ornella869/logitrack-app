@@ -68,7 +68,7 @@ describe('App route guards', () => {
     expect(timeoutCallback).toBeTypeOf('function')
 
     act(() => {
-      ;(timeoutCallback as TimerHandler)()
+      ;(timeoutCallback as () => void)()
     })
 
     expect(await screen.findByText('LOGIN_PAGE')).toBeInTheDocument()
