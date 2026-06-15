@@ -33,7 +33,7 @@ namespace Back.Controllers
             return userId is null ? null : await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [HttpGet]
         public async Task<ActionResult> Listar([FromQuery] bool soloActivos = true)
         {

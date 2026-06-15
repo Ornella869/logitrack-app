@@ -9,6 +9,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/plantillas-email")]
+    [RequirePermission("plantillas_email")]
     [Authorize(Roles = Roles.Gerente)]
     public class PlantillasEmailController : ControllerBase
     {

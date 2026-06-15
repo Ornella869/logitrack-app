@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -38,7 +38,7 @@ import api from '../services/api'
 import { shipmentService } from '../services/shipmentService'
 import { pickupService, type PuntoPickUp } from '../services/pickupService'
 import { mergeUbicacionPreferida, subscribeUbicacionActualizada } from '../services/ubicacionLiveService'
-import type { PagedResult, User } from '../types'
+import type { PagedResult } from '../types'
 import { dateOnly, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
@@ -86,7 +86,6 @@ type UbicacionRepartidor = {
 }
 
 export default function RutasActivasPage() {
-  const user = useOutletContext<User>()
   const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
@@ -113,12 +112,10 @@ export default function RutasActivasPage() {
   const [pickupsLoading, setPickupsLoading] = useState(false)
 
   useEffect(() => {
-    if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
-  }, [user.role, page, rowsPerPage, search])
+  }, [page, rowsPerPage, search])
 
   useEffect(() => {
-    if (user.role !== 'supervisor' && user.role !== 'administrador') return
     return subscribeUbicacionActualizada((event) => {
       if (!event.repartidorId) return
       setUbicaciones((prev) => {
@@ -141,7 +138,7 @@ export default function RutasActivasPage() {
           : [...prev, next]
       })
     })
-  }, [user.role])
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -202,10 +199,6 @@ export default function RutasActivasPage() {
     }
   }
 
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo Supervisor puede ver rutas activas.</Alert>
-  }
-
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -219,11 +212,9 @@ export default function RutasActivasPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
-          {user.role === 'supervisor' && (
-            <Button startIcon={<PlaceIcon />} onClick={() => void abrirPickUps()} disabled={pickupsLoading}>
-              PickUps cobertura
-            </Button>
-          )}
+          <Button startIcon={<PlaceIcon />} onClick={() => void abrirPickUps()} disabled={pickupsLoading}>
+            PickUps cobertura
+          </Button>
           <TextField
             size="small"
             placeholder="Buscar repartidor o CP..."

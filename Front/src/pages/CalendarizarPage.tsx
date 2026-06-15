@@ -74,9 +74,8 @@ export default function CalendarizarPage() {
   const [calendarData, setCalendarData] = useState<CalendarioOperativo | null>(null)
 
   useEffect(() => {
-    if (user.role !== 'supervisor') return
     void loadAll()
-  }, [user.role])
+  }, [])
 
   const loadAll = async () => {
     setLoading(true)
@@ -191,10 +190,6 @@ export default function CalendarizarPage() {
     const capacidad = repartidoresActivos.reduce((acc, r) => acc + (r.capacidadCargaKg || 500), 0)
     return { prio, comm, peso, cps, capacidad }
   }, [pendientes, repartidoresActivos])
-
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo el Supervisor puede acceder a esta pantalla.</Alert>
-  }
 
   const ejecutar = async () => {
     setConfirmOpen(false)

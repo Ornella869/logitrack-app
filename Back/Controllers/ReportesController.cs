@@ -9,6 +9,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/reportes")]
+    [RequirePermission("reportes")]
     public class ReportesController : ControllerBase
     {
         private readonly ReportesService _service;

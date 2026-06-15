@@ -15,7 +15,7 @@ namespace Back.Domain.Repositories
         Task<PuntoPickUp?> GetPuntoPickUpById(Guid id);
         void DeleteSucursal(Sucursal sucursal);
         Task<List<Paquete>> GetPaquetesByIds(List<Guid> paqueteIds);
-        Task<Back.Application.Common.PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize, Guid? sucursalId = null);
+        Task<Back.Application.Common.PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize, Guid? sucursalId = null, IReadOnlyCollection<Guid>? sucursalIds = null);
         Task<List<Paquete>> GetAll();
         Task<List<Paquete>> GetPaquetesAsignadosARepartidorEnFecha(Guid repartidorId, DateTime fecha);
         Task<List<Paquete>> GetPaquetesConAsignacionActiva();

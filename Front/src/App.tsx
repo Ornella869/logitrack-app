@@ -31,6 +31,7 @@ import SatisfaccionPage from './pages/SatisfaccionPage'
 import SatisfaccionMetricasPage from './pages/SatisfaccionMetricasPage'
 import PlantillasEmailPage from './pages/PlantillasEmailPage'
 import PlantillaEmailEditPage from './pages/PlantillaEmailEditPage'
+import PermisosPage from './pages/PermisosPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import RepartidorHistorialPage from './pages/repartidor/RepartidorHistorialPage'
@@ -39,7 +40,8 @@ import LandingPage from './pages/landing/LandingPage'
 import AccessDenied from './pages/AccessDenied'
 import ProfilePage from './pages/ProfilePage'
 import type { User } from './types'
-import { isRepartidorRole, normalizeUserRole } from './utils/roleUtils'
+import { normalizeUserRole } from './utils/roleUtils'
+import { permissionService } from './services/permissionService'
 
 const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
 const LOGOUT_EVENT_NAME = 'logitrack:logout'
@@ -63,6 +65,8 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [permissions, setPermissions] = useState<Set<string>>(new Set())
+  const [permissionsLoading, setPermissionsLoading] = useState(false)
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user')
@@ -93,6 +97,7 @@ function App() {
           localStorage.setItem('user', JSON.stringify(normalizedUser))
         }
 
+        setPermissionsLoading(true)
         setUser(normalizedUser)
         touchSessionActivity()
       }
@@ -103,6 +108,7 @@ function App() {
   }, [])
 
   const handleLogin = (userData: User) => {
+    setPermissionsLoading(true)
     setUser(userData)
     setSessionExpired(false)
     localStorage.setItem('user', JSON.stringify(userData))
@@ -114,6 +120,29 @@ function App() {
     setSessionExpired(false)
     clearStoredSession()
   }
+
+  useEffect(() => {
+    if (!user) {
+      setPermissions(new Set())
+      setPermissionsLoading(false)
+      return
+    }
+
+    const loadPermissions = (showLoading = false) => {
+      if (showLoading) setPermissionsLoading(true)
+      void permissionService.getMine()
+        .then((items) => setPermissions(new Set(items)))
+        .catch(() => setPermissions(new Set()))
+        .finally(() => {
+          if (showLoading) setPermissionsLoading(false)
+        })
+    }
+
+    loadPermissions(true)
+    const handlePermissionsChanged = () => loadPermissions()
+    window.addEventListener('logitrack:permissions', handlePermissionsChanged)
+    return () => window.removeEventListener('logitrack:permissions', handlePermissionsChanged)
+  }, [user])
 
   useEffect(() => {
     const handler = () => {
@@ -173,13 +202,17 @@ function App() {
     }
   }, [user])
 
-  if (loading) {
+  if (loading || (user && permissionsLoading)) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
         <CircularProgress />
       </Box>
     )
   }
+
+  const homePath = getHomePath(user?.role, permissions)
+  const permitted = (permission: string, element: JSX.Element) =>
+    user && permissions.has(permission) ? element : <Navigate to="/access-denied" replace />
 
   return (
     <BrowserRouter>
@@ -193,7 +226,7 @@ function App() {
           path="/login"
           element={
             user
-              ? <Navigate to={isRepartidorRole(user.role) ? '/repartidor' : user.role === 'cliente' ? '/cliente' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app'} />
+              ? <Navigate to={homePath} />
               : <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} />
           }
         />
@@ -205,45 +238,33 @@ function App() {
         {/* Rutas autenticadas (cualquier rol) */}
         <Route
           element={
-            user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
+            user ? <Layout user={user} permissions={permissions} onLogout={handleLogout} /> : <Navigate to="/login" />
           }
         >
           <Route path="/access-denied" element={<AccessDenied user={user as User} />} />
 
           {/* Rutas comunes — el componente decide qué hacer según rol */}
           <Route path="/perfil" element={<ProfilePage />} />
-          <Route path="/shipment/:id" element={<ShipmentDetail />} />
+          <Route path="/shipment/:id" element={<ShipmentDetail permissions={permissions} />} />
           <Route path="/shipment/:id/etiqueta" element={<ShipmentLabel />} />
 
           {/* Repartidor */}
           <Route
             path="/repartidor"
             element={
-              user && isRepartidorRole(user.role) ? (
-                <RepartidorDashboard />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('ruta_repartidor', <RepartidorDashboard />)
             }
           />
           <Route
             path="/repartidor/paradas"
             element={
-              user && isRepartidorRole(user.role) ? (
-                <RepartidorDashboard />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('ruta_repartidor', <RepartidorDashboard />)
             }
           />
           <Route
             path="/repartidor/historial"
             element={
-              user && isRepartidorRole(user.role) ? (
-                <RepartidorHistorialPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('historial_repartidor', <RepartidorHistorialPage />)
             }
           />
 
@@ -263,24 +284,15 @@ function App() {
           <Route
             path="/app"
             element={
-              user && !isRepartidorRole(user.role) && user.role !== 'cliente' ? (
-                user.role === 'socio_pickup' ? <Navigate to="/pickup-operacion" replace />
-                  : user.role === 'operador' ? <Navigate to="/envios" replace />
-                  : user.role === 'gerente' ? <Navigate to="/sucursales" replace />
-                  : <Dashboard />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              user && permissions.has('dashboard')
+                ? <Dashboard />
+                : <Navigate to={homePath === '/app' ? '/access-denied' : homePath} replace />
             }
           />
           <Route
             path="/envios"
             element={
-              user && (user.role === 'operador' || user.role === 'supervisor') ? (
-                <EnviosPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('envios_ver', <EnviosPage permissions={permissions} />)
             }
           />
 
@@ -288,11 +300,7 @@ function App() {
           <Route
             path="/calendarizar"
             element={
-              user && user.role === 'supervisor' ? (
-                <CalendarizarPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('calendarizacion', <CalendarizarPage />)
             }
           />
 
@@ -300,42 +308,26 @@ function App() {
           <Route
             path="/repartidores"
             element={
-              user && user.role === 'supervisor' ? (
-                <RepartidoresPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('repartidores', <RepartidoresPage />)
             }
           />
 
           <Route
             path="/calendario"
             element={
-              user && user.role === 'supervisor' ? (
-                <CalendarioOperativoPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('calendario', <CalendarioOperativoPage permissions={permissions} />)
             }
           />
           <Route
             path="/rutas-activas"
             element={
-              user && user.role === 'supervisor' ? (
-                <RutasActivasPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('rutas_activas', <RutasActivasPage />)
             }
           />
           <Route
             path="/rutas-activas/:repartidorId"
             element={
-              user && user.role === 'supervisor' ? (
-                <DetalleRutaPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('rutas_activas', <DetalleRutaPage />)
             }
           />
 
@@ -343,94 +335,58 @@ function App() {
           <Route
             path="/auditoria"
             element={
-              user && (user.role === 'administrador' || user.role === 'supervisor') ? (
-                <AuditoriaPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('auditoria', <AuditoriaPage />)
             }
           />
           <Route
             path="/auditoria-notificaciones"
             element={
-              user && user.role === 'administrador' ? (
-                <NotificacionesAuditoriaPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('auditoria_notificaciones', <NotificacionesAuditoriaPage />)
             }
           />
           <Route
             path="/mi-plan"
             element={
-              user && user.role === 'administrador' ? (
-                <MiPlanPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('mi_plan', <MiPlanPage />)
             }
           />
           {/* Épica D: sucursales las gestiona el Gerente (por provincia) */}
           <Route
             path="/sucursales"
             element={
-              user && user.role === 'gerente' ? (
-                <SucursalesPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('sucursales', <SucursalesPage />)
             }
           />
           {/* G1L-86/87/88 + Épica D: tarifas y zonas peligrosas las gestiona el Gerente */}
           <Route
             path="/pickups"
             element={
-              user && user.role === 'gerente' ? (
-                <PuntosPickUpPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('pickups', <PuntosPickUpPage />)
             }
           />
           <Route
             path="/pickup-operacion"
             element={
-              user && user.role === 'socio_pickup' ? (
-                <PickUpOperacionPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('pickup_operacion', <PickUpOperacionPage />)
             }
           />
           <Route
             path="/pickup-historial"
             element={
-              user && user.role === 'socio_pickup' ? (
-                <PickUpHistorialPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('pickup_historial', <PickUpHistorialPage />)
             }
           />
           <Route
             path="/tarifas"
             element={
-              user && user.role === 'gerente' ? (
-                <TarifasPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('tarifas', <TarifasPage />)
             }
           />
           {/* G1L-61 + Épica D: umbral del Ojo del Patrón lo gestiona el Gerente */}
           <Route
             path="/ojo-patron"
             element={
-              user && (user.role === 'gerente' || user.role === 'supervisor') ? (
-                <OjoPatronConfigPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('ojo_patron', <OjoPatronConfigPage />)
             }
           />
 
@@ -438,21 +394,13 @@ function App() {
           <Route
             path="/incidencias"
             element={
-              user && user.role === 'supervisor' ? (
-                <IncidenciasPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('incidencias', <IncidenciasPage />)
             }
           />
           <Route
             path="/incidencias/:id"
             element={
-              user && user.role === 'supervisor' ? (
-                <IncidenciaDetallePage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('incidencias', <IncidenciaDetallePage />)
             }
           />
 
@@ -460,11 +408,7 @@ function App() {
           <Route
             path="/alertas"
             element={
-              user && user.role === 'supervisor' ? (
-                <AlertasPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('alertas', <AlertasPage />)
             }
           />
 
@@ -472,11 +416,7 @@ function App() {
           <Route
             path="/reportes"
             element={
-              user && (user.role === 'supervisor' || user.role === 'gerente') ? (
-                <ReportesPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('reportes', <ReportesPage />)
             }
           />
 
@@ -484,41 +424,73 @@ function App() {
           <Route
             path="/satisfaccion"
             element={
-              user && (user.role === 'supervisor' || user.role === 'gerente' || user.role === 'administrador') ? (
-                <SatisfaccionMetricasPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('satisfaccion', <SatisfaccionMetricasPage />)
             }
           />
 
           {/* G1L-114: plantillas de email provinciales (Gerente) */}
           <Route
             path="/plantillas-email"
-            element={user && user.role === 'gerente' ? <PlantillasEmailPage /> : <Navigate to="/access-denied" replace />}
+            element={permitted('plantillas_email', <PlantillasEmailPage />)}
           />
           <Route
             path="/plantillas-email/:evento"
-            element={user && user.role === 'gerente' ? <PlantillaEmailEditPage /> : <Navigate to="/access-denied" replace />}
+            element={permitted('plantillas_email', <PlantillaEmailEditPage />)}
           />
 
           {/* Supervisor / Admin: perfil de rendimiento de un repartidor */}
           <Route
             path="/repartidor/:repartidorId/rendimiento"
             element={
-              user && (user.role === 'supervisor' || user.role === 'administrador') ? (
-                <PerfilRendimientoPage />
-              ) : (
-                <Navigate to="/access-denied" replace />
-              )
+              permitted('perfil_rendimiento', <PerfilRendimientoPage permissions={permissions} />)
             }
           />
+          <Route path="/permisos" element={permitted('gestionar_permisos', <PermisosPage />)} />
         </Route>
 
-        <Route path="*" element={<Navigate to={user ? (isRepartidorRole(user.role) ? '/repartidor' : user.role === 'socio_pickup' ? '/pickup-operacion' : '/app') : '/login'} />} />
+        <Route path="*" element={<Navigate to={user ? homePath : '/login'} />} />
       </Routes>
     </BrowserRouter>
   )
 }
 
 export default App
+
+function getHomePath(role: string | undefined, permissions: Set<string>): string {
+  if (role === 'cliente') return '/cliente'
+  const options: Array<[string, string]> = role === 'repartidor'
+    ? [
+        ['ruta_repartidor', '/repartidor'],
+        ['envios_ver', '/envios'],
+        ['calendarizacion', '/calendarizar'],
+        ['repartidores', '/repartidores'],
+        ['calendario', '/calendario'],
+        ['rutas_activas', '/rutas-activas'],
+        ['alertas', '/alertas'],
+        ['incidencias', '/incidencias'],
+        ['historial_repartidor', '/repartidor/historial'],
+      ]
+    : role === 'socio_pickup'
+      ? [['pickup_operacion', '/pickup-operacion'], ['pickup_historial', '/pickup-historial']]
+      : role === 'gerente'
+        ? [['sucursales', '/sucursales'], ['reportes', '/reportes'], ['envios_ver', '/envios'], ['dashboard', '/app']]
+        : role === 'operador'
+          ? [
+              ['envios_ver', '/envios'],
+              ['calendarizacion', '/calendarizar'],
+              ['repartidores', '/repartidores'],
+              ['calendario', '/calendario'],
+              ['rutas_activas', '/rutas-activas'],
+              ['alertas', '/alertas'],
+              ['incidencias', '/incidencias'],
+              ['dashboard', '/app'],
+            ]
+      : [
+          ['dashboard', '/app'],
+          ['envios_ver', '/envios'],
+          ['sucursales', '/sucursales'],
+          ['calendarizacion', '/calendarizar'],
+          ['reportes', '/reportes'],
+        ]
+  return options.find(([permission]) => permissions.has(permission))?.[1] ?? '/access-denied'
+}

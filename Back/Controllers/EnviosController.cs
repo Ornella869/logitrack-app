@@ -65,15 +65,50 @@ namespace Back.Controllers
             return (await CurrentUserAsync())?.SucursalId ?? Guid.Empty;
         }
 
+        private async Task<List<Guid>?> CurrentGerenteSucursalesScopeAsync()
+        {
+            if (!User.IsInRole(Roles.Gerente)) return null;
+
+            var user = await CurrentUserAsync();
+            if (user is not Gerente gerente) return new List<Guid>();
+
+            var provincia = gerente.Provincia;
+            if (string.IsNullOrWhiteSpace(provincia))
+            {
+                provincia = await _context.GerentesProvincias
+                    .Where(x => x.GerenteId == gerente.Id)
+                    .Select(x => x.Provincia)
+                    .FirstOrDefaultAsync();
+            }
+            if (string.IsNullOrWhiteSpace(provincia)) return new List<Guid>();
+
+            var sucursales = await _context.Sucursales
+                .Select(x => new { x.Id, x.Provincia })
+                .ToListAsync();
+
+            return sucursales
+                .Where(s => string.Equals(
+                    provincia.Trim(),
+                    s.Provincia?.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(s => s.Id)
+                .ToList();
+        }
+
         private async Task<bool> PuedeVerPaqueteAsync(Paquete paquete)
         {
-            if (User.IsInRole(Roles.Administrador) || User.IsInRole(Roles.Gerente)) return true;
+            if (User.IsInRole(Roles.Administrador)) return true;
+            if (User.IsInRole(Roles.Gerente))
+            {
+                var sucursales = await CurrentGerenteSucursalesScopeAsync() ?? new List<Guid>();
+                return (paquete.SucursalId.HasValue && sucursales.Contains(paquete.SucursalId.Value))
+                    || await _context.TramosEnvio.AnyAsync(t =>
+                        t.PaqueteId == paquete.Id
+                        && (sucursales.Contains(t.SucursalOrigenId)
+                            || (t.SucursalDestinoId.HasValue && sucursales.Contains(t.SucursalDestinoId.Value))));
+            }
             var user = await CurrentUserAsync();
             if (user is null) return false;
-            if (User.IsInRole(Roles.Repartidor))
-                return paquete.RepartidorAsignadoId == user.Id
-                    && (paquete.FechaCalendarizada?.Date == OperationalClock.TodayUtcDate
-                        || paquete.Status is PaqueteStatus.EnTransito or PaqueteStatus.Demorado);
             // Supervisor/Operador: debe pertenecer a la misma sucursal. Sin sucursal → sin acceso.
             return user.SucursalId.HasValue
                 && (paquete.SucursalId == user.SucursalId
@@ -147,7 +182,8 @@ namespace Back.Controllers
         // ============== G1L-10: Alta de envío ==============
 
         /// <summary>Registra un nuevo paquete (Operador).</summary>
-        [Authorize(Roles = Roles.Operador)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_crear")]
         [HttpPost("registrar-paquete")]
         public async Task<ActionResult<RegistrarPaqueteResult>> RegistrarPaquete([FromBody] RegistrarPaqueteRequest request)
         {
@@ -163,7 +199,8 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Operador)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_crear")]
         [HttpPost("generar-lote-demo")]
         public async Task<ActionResult<GenerarLoteDemoResult>> GenerarLoteDemo([FromBody] GenerarLoteDemoRequest request)
         {
@@ -179,7 +216,8 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Operador)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_crear")]
         [HttpGet("importacion/template")]
         public async Task<ActionResult> DescargarTemplateImportacion([FromServices] EnviosExcelImportService excel)
         {
@@ -201,7 +239,8 @@ namespace Back.Controllers
                 "template_envios_logitrack.xlsx");
         }
 
-        [Authorize(Roles = Roles.Operador)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_crear")]
         [HttpPost("importacion/excel")]
         public async Task<ActionResult<ImportarEnviosResult>> ImportarExcel([FromForm] ImportarEnviosExcelRequest request, [FromServices] EnviosExcelImportService excel)
         {
@@ -274,7 +313,8 @@ namespace Back.Controllers
         // ============== G1L-39 + G1L-40: Listado, búsqueda y filtros ==============
 
         /// <summary>Listado de paquetes con búsqueda parcial y filtros por estado y fecha.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquetes")]
         public async Task<ActionResult<PagedResponse<Paquete>>> BuscarYFiltrar(
             [FromQuery] string? search,
@@ -313,11 +353,20 @@ namespace Back.Controllers
                     filtered.Count));
             }
 
-            var paquetes = await _enviosRepository.Buscar(search, estados, from, to, normalizedPage, normalizedPageSize, await CurrentSucursalScopeAsync());
+            var paquetes = await _enviosRepository.Buscar(
+                search,
+                estados,
+                from,
+                to,
+                normalizedPage,
+                normalizedPageSize,
+                await CurrentSucursalScopeAsync(),
+                await CurrentGerenteSucursalesScopeAsync());
             return Ok(paquetes);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_ver")]
         [HttpGet("tramos-operativos")]
         public async Task<ActionResult<PagedResponse<Paquete>>> BuscarTramosOperativos(
             [FromQuery] string? search,
@@ -340,7 +389,8 @@ namespace Back.Controllers
                 PaginationDefaults.NormalizePageSize(pageSize)));
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_ver")]
         [HttpGet("sucursal/capacidad")]
         public async Task<ActionResult<SucursalCapacidadResponse>> ObtenerCapacidadSucursal()
         {
@@ -371,7 +421,8 @@ namespace Back.Controllers
         }
 
         /// <summary>Paquetes pendientes de calendarización (Operador o Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquetes-pendientes")]
         public async Task<ActionResult<List<Paquete>>> GetPaquetesPendientesDeCalendarizacion()
         {
@@ -548,7 +599,8 @@ namespace Back.Controllers
         // ============== G1L-41: Detalle de envío ==============
 
         /// <summary>Detalle del paquete por ID (incluye flag isEditable).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquete/{paqueteId:guid}")]
         public async Task<ActionResult<Paquete>> GetPaquete(Guid paqueteId)
         {
@@ -561,7 +613,8 @@ namespace Back.Controllers
         // ============== G1L-12: Edición de envío ==============
 
         /// <summary>Edita un envío pendiente de calendarización (Operador).</summary>
-        [Authorize(Roles = Roles.Operador)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_editar")]
         [HttpPut("paquete/{paqueteId:guid}")]
         public async Task<ActionResult> EditarPaquete(Guid paqueteId, [FromBody] RegistrarPaqueteRequest request)
         {
@@ -645,6 +698,7 @@ namespace Back.Controllers
         /// Operador/Supervisor: Pendiente o Listo para Salir (G1L-13).
         /// Repartidor: solo En Tránsito (G1L-9, Entrega Fallida).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_cancelar")]
         [HttpPost("cancelar-paquete/{paqueteId:guid}")]
         public async Task<ActionResult> CancelarPaquete(Guid paqueteId, [FromBody] CancelarPaqueteRequest request)
         {
@@ -663,6 +717,7 @@ namespace Back.Controllers
 
         /// <summary>Reenvía un paquete cancelado (Operador o Supervisor).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [RequirePermission("envios_cancelar")]
         [HttpPost("reenviar-paquete/{paqueteId:guid}")]
         public async Task<ActionResult> ReenviarPaquete(Guid paqueteId)
         {
@@ -702,7 +757,8 @@ namespace Back.Controllers
         // ============== G1L-15: Historial de estados ==============
 
         /// <summary>Historial cronológico (descendente) de cambios de estado del paquete.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquete/{paqueteId:guid}/historial")]
         public async Task<ActionResult<List<HistorialEstadoEnvioDto>>> GetHistorial(Guid paqueteId)
         {
@@ -716,6 +772,7 @@ namespace Back.Controllers
         // ============== G1L-32: QR ==============
 
         [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquete/{paqueteId:guid}/tramos")]
         public async Task<ActionResult> GetTramos(Guid paqueteId)
         {
@@ -726,7 +783,8 @@ namespace Back.Controllers
         }
 
         /// <summary>Devuelve el QR del paquete como PNG.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquete/{paqueteId:guid}/qr")]
         public async Task<ActionResult> GetQr(Guid paqueteId)
         {
@@ -859,7 +917,8 @@ namespace Back.Controllers
         // ============== G1L-28: Etiqueta ==============
 
         /// <summary>Datos de la etiqueta imprimible (Operador o Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [RequirePermission("envios_ver")]
         [HttpGet("paquete/{paqueteId:guid}/etiqueta")]
         public async Task<ActionResult<EtiquetaResponse>> GetEtiqueta(Guid paqueteId)
         {

@@ -21,6 +21,7 @@ namespace Back.Application.Services
             TipoAccion.PruebaOjoDelPatron,
             TipoAccion.Notificacion,
             TipoAccion.JornadaLaboral,
+            TipoAccion.Permisos,
             TipoAccion.Otro,
         };
 

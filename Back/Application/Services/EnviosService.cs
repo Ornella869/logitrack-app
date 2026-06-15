@@ -443,7 +443,13 @@ namespace Back.Application.Services
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
-            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
+            if (usuarioId.HasValue)
+            {
+                var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
+                if (usuario is not null and not Administrador
+                    && (!usuario.SucursalId.HasValue || paquete.SucursalId != usuario.SucursalId))
+                    throw new InvalidOperationException("No podés editar envíos de otra sucursal.");
+            }
 
             if (paquete.Status != PaqueteStatus.PendienteDeCalendarizacion)
             {

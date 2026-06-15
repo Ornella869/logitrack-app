@@ -14,6 +14,7 @@ using Microsoft.Extensions.ML;
 using Back.Ml.Service;
 using Back.Background;
 using Back.Hubs;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,6 +71,8 @@ builder.Services.AddScoped<OjoPatronService>();
 builder.Services.AddScoped<AlertasService>();
 builder.Services.AddScoped<EmpresaService>();
 builder.Services.AddScoped<HistorialEstadoEnvioService>();
+builder.Services.AddScoped<PermisosService>();
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, PermissionAuthorizationResultHandler>();
 builder.Services.AddSingleton<QrService>();
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddHttpClient<IRecaptchaValidationService, GoogleRecaptchaValidationService>();

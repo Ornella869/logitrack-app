@@ -125,6 +125,7 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor)]
+        [RequirePermission("ojo_patron")]
         [HttpGet("override/solicitudes")]
         public async Task<ActionResult<List<OverrideOjoPatronDto>>> ListarOverrides()
         {
@@ -135,6 +136,7 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor)]
+        [RequirePermission("ojo_patron")]
         [HttpPost("override/{overrideId:guid}/resolver")]
         public async Task<ActionResult<OverrideOjoPatronDto>> ResolverOverride(Guid overrideId, [FromBody] ResolverOverrideOjoPatronRequest request)
         {
@@ -152,6 +154,7 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor)]
+        [RequirePermission("ojo_patron")]
         [HttpGet("metricas-historicas")]
         public async Task<ActionResult<List<object>>> MetricasHistoricas([FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {
@@ -162,6 +165,7 @@ namespace Back.Controllers
 
         /// <summary>Configuración del umbral de la provincia del usuario logueado.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador)]
+        [RequirePermission("ojo_patron")]
         [HttpGet("configuracion")]
         public async Task<ActionResult<ConfiguracionOjoPatron>> GetConfiguracion()
         {
@@ -171,6 +175,7 @@ namespace Back.Controllers
 
         /// <summary>Ajusta el umbral de activación vocal de la provincia del Gerente.</summary>
         [Authorize(Roles = Roles.Gerente)]
+        [RequirePermission("ojo_patron")]
         [HttpPut("configuracion")]
         public async Task<ActionResult<ConfiguracionOjoPatron>> ActualizarConfiguracion([FromBody] ConfiguracionOjoPatronRequest request)
         {

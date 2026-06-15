@@ -85,6 +85,7 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor + "," + Roles.Gerente + "," + Roles.Administrador)]
+        [RequirePermission("satisfaccion")]
         [HttpGet("respuestas")]
         public async Task<IActionResult> GetRespuestas([FromQuery] DateTime? desde, [FromQuery] DateTime? hasta, [FromQuery] Guid? repartidorId)
         {
@@ -133,6 +134,7 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Supervisor + "," + Roles.Gerente + "," + Roles.Administrador)]
+        [RequirePermission("satisfaccion")]
         [HttpGet("metricas")]
         public async Task<IActionResult> GetMetricas([FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {

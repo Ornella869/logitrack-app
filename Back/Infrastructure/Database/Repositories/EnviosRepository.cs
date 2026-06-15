@@ -45,13 +45,24 @@ namespace Back.Infrastructure.Database.Repositories
             return await _context.Paquetes.FirstOrDefaultAsync(p => p.CodigoSeguimiento == codigoSeguimiento);
         }
 
-        public async Task<PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize, Guid? sucursalId = null)
+        public async Task<PagedResponse<Paquete>> Buscar(string? search, List<PaqueteStatus>? estados, DateTime? from, DateTime? to, int page, int pageSize, Guid? sucursalId = null, IReadOnlyCollection<Guid>? sucursalIds = null)
         {
             var query = _context.Paquetes.AsQueryable();
 
             if (sucursalId.HasValue)
             {
                 query = query.Where(p => p.SucursalId == sucursalId.Value);
+            }
+            else if (sucursalIds is not null)
+            {
+                query = sucursalIds.Count == 0
+                    ? query.Where(_ => false)
+                    : query.Where(p =>
+                        (p.SucursalId.HasValue && sucursalIds.Contains(p.SucursalId.Value))
+                        || _context.TramosEnvio.Any(t =>
+                            t.PaqueteId == p.Id
+                            && (sucursalIds.Contains(t.SucursalOrigenId)
+                                || (t.SucursalDestinoId.HasValue && sucursalIds.Contains(t.SucursalDestinoId.Value)))));
             }
 
             if (!string.IsNullOrWhiteSpace(search))

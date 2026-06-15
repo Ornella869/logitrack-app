@@ -71,7 +71,7 @@ export default function AlertasPage() {
   }
 
   useEffect(() => {
-    if (user.role === 'supervisor') void load()
+    void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -86,10 +86,6 @@ export default function AlertasPage() {
       return
     }
     await load()
-  }
-
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo el Supervisor puede ver las alertas.</Alert>
   }
 
   return (

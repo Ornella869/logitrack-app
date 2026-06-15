@@ -52,7 +52,7 @@ function getGreeting(name: string) {
   return `Buenas noches, ${name}!`
 }
 
-export default function EnviosPage() {
+export default function EnviosPage({ permissions }: { permissions: Set<string> }) {
   const user = useOutletContext<User>()
   const navigate = useNavigate()
   const location = useLocation()
@@ -102,7 +102,7 @@ export default function EnviosPage() {
         activeFilters.status.length ? activeFilters.status : undefined,
         activeFilters.from || undefined,
         activeFilters.to || undefined,
-        user.role === 'operador' || user.role === 'supervisor',
+        user.role === 'operador' || user.role === 'supervisor' || user.role === 'repartidor',
       )
       setShipments(result.items)
       setTotalItems(result.totalItems)
@@ -115,7 +115,7 @@ export default function EnviosPage() {
   }
 
   const loadBranchCapacity = async () => {
-    if (user.role !== 'operador' && user.role !== 'supervisor') return
+    if (!permissions.has('envios_ver')) return
     setBranchCapacity(await shipmentService.getSucursalCapacidad())
   }
 
@@ -272,7 +272,7 @@ export default function EnviosPage() {
     setPage(1)
   }
 
-  const showCreateButton = user.role === 'operador'
+  const showCreateButton = permissions.has('envios_crear')
 
   return (
     <Box>
@@ -322,7 +322,7 @@ export default function EnviosPage() {
         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
 
-      {branchCapacity && (user.role === 'operador' || user.role === 'supervisor') && (
+      {branchCapacity && (
         <Card variant="outlined" sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>

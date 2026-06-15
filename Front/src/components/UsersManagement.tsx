@@ -179,11 +179,25 @@ const emptyForm = {
 interface UsersManagementProps {
   currentUserId?: string
   highlightedUserIds?: string[]
+  mode?: 'manage' | 'select'
+  selectedUserId?: string
+  onSelectUser?: (user: User) => void
+  title?: string
+  subtitle?: string
 }
 
-export default function UsersManagement({ currentUserId, highlightedUserIds = [] }: UsersManagementProps = {}) {
+export default function UsersManagement({
+  currentUserId,
+  highlightedUserIds = [],
+  mode = 'manage',
+  selectedUserId,
+  onSelectUser,
+  title = 'Equipo',
+  subtitle,
+}: UsersManagementProps = {}) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const selectionMode = mode === 'select'
   const [users, setUsers] = useState<User[]>([])
   const [provinceOwners, setProvinceOwners] = useState<User[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
@@ -259,7 +273,7 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
 
   useEffect(() => {
     void loadUsers()
-    loadPendingResets()
+    if (!selectionMode) loadPendingResets()
   }, [page, pageSize, search, roleFilter, estadoFilter, sucursalFilter])
 
   useEffect(() => {
@@ -629,22 +643,29 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="h6" component="span">Equipo</Typography>
+          <Typography variant="h6" component="span">{title}</Typography>
           <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
             {filtersApplied
               ? `${users.length} de ${totalItems} integrantes`
               : `${totalItems} ${totalItems === 1 ? 'integrante' : 'integrantes'}`}
           </Typography>
+          {subtitle && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {subtitle}
+            </Typography>
+          )}
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
-          Nuevo usuario
-        </Button>
+        {!selectionMode && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+            Nuevo usuario
+          </Button>
+        )}
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {/* Solicitudes pendientes de restablecimiento */}
-      {pendingResets.length > 0 && (
+      {!selectionMode && pendingResets.length > 0 && (
         <Paper
           variant="outlined"
           sx={{ borderRadius: 2, mb: 3, overflow: 'hidden', borderColor: '#F57C00' }}
@@ -859,7 +880,7 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
         </Box>
       </Stack>
 
-      {selectedIds.size > 0 && (
+      {!selectionMode && selectedIds.size > 0 && (
         <Paper
           variant="outlined"
           sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', bgcolor: isDark ? 'rgba(25,118,210,0.18)' : '#E3F2FD', borderColor: '#1976D2', borderRadius: 2 }}
@@ -896,20 +917,22 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
           <Table size="small">
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: (theme) => theme.palette.mode === 'dark' ? '#1B2D42' : '#F5F7FA', fontSize: '0.78rem' } }}>
-                <TableCell padding="checkbox" sx={{ width: 40 }}>
-                  <Checkbox
-                    size="small"
-                    checked={allSelected}
-                    indeterminate={someSelected && !allSelected}
-                    onChange={() => {
-                      if (allSelected) {
-                        setSelectedIds(new Set())
-                      } else {
-                        setSelectedIds(new Set(selectableUsers.map((u) => u.id)))
-                      }
-                    }}
-                  />
-                </TableCell>
+                {!selectionMode && (
+                  <TableCell padding="checkbox" sx={{ width: 40 }}>
+                    <Checkbox
+                      size="small"
+                      checked={allSelected}
+                      indeterminate={someSelected && !allSelected}
+                      onChange={() => {
+                        if (allSelected) {
+                          setSelectedIds(new Set())
+                        } else {
+                          setSelectedIds(new Set(selectableUsers.map((u) => u.id)))
+                        }
+                      }}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>Integrante</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>DNI</TableCell>
@@ -928,32 +951,48 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
                 return (
                   <TableRow
                     key={user.id}
+                    hover
+                    onClick={selectionMode ? () => onSelectUser?.(user) : undefined}
                     sx={{
                       opacity: active ? 1 : 0.6,
                       '&:last-child td': { border: 0 },
                       '&:hover': { bgcolor: 'action.hover' },
+                      cursor: selectionMode ? 'pointer' : 'default',
+                      transition: 'background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease',
+                      ...(selectionMode && {
+                        '&:hover': {
+                          bgcolor: isDark ? 'rgba(66,165,245,0.10)' : '#F4F9FF',
+                          boxShadow: 'inset 3px 0 0 #1976d2',
+                        },
+                      }),
                       ...(isHighlighted && {
                         bgcolor: isDark ? 'rgba(245,124,0,0.16)' : '#FFF3E0',
                         '& td:first-of-type': { borderLeft: '4px solid #ed6c02' },
                       }),
                       ...(selectedIds.has(user.id) && { bgcolor: 'rgba(25,118,210,0.06)' }),
+                      ...(selectionMode && selectedUserId === user.id && {
+                        bgcolor: isDark ? 'rgba(66,165,245,0.16)' : '#EAF4FF',
+                        boxShadow: 'inset 4px 0 0 #1976d2',
+                      }),
                     }}
                   >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        size="small"
-                        checked={selectedIds.has(user.id)}
-                        disabled={!!(currentUserId && user.id === currentUserId)}
-                        onChange={() => {
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev)
-                            if (next.has(user.id)) next.delete(user.id)
-                            else next.add(user.id)
-                            return next
-                          })
-                        }}
-                      />
-                    </TableCell>
+                    {!selectionMode && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={selectedIds.has(user.id)}
+                          disabled={!!(currentUserId && user.id === currentUserId)}
+                          onChange={() => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(user.id)) next.delete(user.id)
+                              else next.add(user.id)
+                              return next
+                            })
+                          }}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar
@@ -1011,7 +1050,19 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
                     </TableCell>
                     <TableCell><EstadoChip activo={user.activo} estado={user.estado} /></TableCell>
                     <TableCell align="center">
-                      <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+                      {selectionMode ? (
+                        <Button
+                          size="small"
+                          variant={selectedUserId === user.id ? 'contained' : 'outlined'}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onSelectUser?.(user)
+                          }}
+                        >
+                          {selectedUserId === user.id ? 'Seleccionado' : 'Configurar'}
+                        </Button>
+                      ) : (
+                        <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
                         <Tooltip title="Editar datos">
                           <span>
                             <Button
@@ -1054,7 +1105,8 @@ export default function UsersManagement({ currentUserId, highlightedUserIds = []
                             </Tooltip>
                           )
                         })()}
-                      </Stack>
+                        </Stack>
+                      )}
                     </TableCell>
                   </TableRow>
                 )

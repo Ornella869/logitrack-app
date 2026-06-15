@@ -46,6 +46,7 @@ import PlaceIcon from '@mui/icons-material/Place'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockIcon from '@mui/icons-material/Lock'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import AccountCircleIcon from '@mui/icons-material/AccountCircle'
 import WbSunnyIcon from '@mui/icons-material/WbSunny'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
@@ -64,10 +65,11 @@ import ChangePasswordDialog from './ChangePasswordDialog'
 
 interface LayoutProps {
   user: User
+  permissions: Set<string>
   onLogout: () => void
 }
 
-function Layout({ user, onLogout }: LayoutProps) {
+function Layout({ user, permissions, onLogout }: LayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const theme = useTheme()
@@ -92,7 +94,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   const [incidenciasCount, setIncidenciasCount] = useState(0)
 
   useEffect(() => {
-    if (user.role !== 'supervisor') return
+    if (!permissions.has('alertas')) return
     void alertService.contar().then(setAlertasCount)
 
     // UH-84: generar notificaciones in-app al inicio de jornada por paquetes sin estado final
@@ -119,16 +121,16 @@ function Layout({ user, onLogout }: LayoutProps) {
       })
       if (huboNuevas) localStorage.setItem(ALERTA_NOTIF_KEY, JSON.stringify([...notificadas]))
     })
-  }, [user.role, user.id])
+  }, [permissions, user.id])
 
   useEffect(() => {
-    if (user.role !== 'supervisor') return
+    if (!permissions.has('incidencias')) return
     const refresh = () => void incidenciaService.countAbiertas().then(setIncidenciasCount).catch(() => setIncidenciasCount(0))
     refresh()
     const handler = () => refresh()
     window.addEventListener('logitrack:incidencias', handler)
     return () => window.removeEventListener('logitrack:incidencias', handler)
-  }, [user.role])
+  }, [permissions])
 
   const refreshNotifications = useCallback(() => {
     const notifs = notificationService.getForUser(user.id, user.role, user.sucursalId ?? undefined)
@@ -380,6 +382,7 @@ function Layout({ user, onLogout }: LayoutProps) {
     if (pathname.startsWith('/auditoria-notificaciones')) return '/auditoria-notificaciones'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
+    if (pathname.startsWith('/permisos')) return '/permisos'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
     if (pathname.startsWith('/pickups')) return '/pickups'
     if (pathname.startsWith('/pickup-historial')) return '/pickup-historial'
@@ -390,7 +393,7 @@ function Layout({ user, onLogout }: LayoutProps) {
   })()
 
   const isAccessDeniedPage = location.pathname === '/access-denied'
-  const hasSidebar = user.role === 'gerente' || user.role === 'supervisor' || user.role === 'administrador'
+  const hasSidebar = (user.role !== 'repartidor' || !isMobile) && user.role !== 'socio_pickup' && user.role !== 'cliente'
   const sidebarNavItems: Array<{ path: string; label: string; icon: React.ReactNode; badge?: number }> =
     user.role === 'gerente' ? [
       { path: '/sucursales',       label: 'Sucursales',          icon: <StoreIcon fontSize="small" /> },
@@ -422,11 +425,40 @@ function Layout({ user, onLogout }: LayoutProps) {
       { path: '/auditoria-notificaciones', label: 'Notif. Auditoría',     icon: <NotificationsActiveIcon fontSize="small" /> },
       { path: '/mi-plan',                  label: 'Mi Plan',              icon: <WorkspacePremiumIcon fontSize="small" /> },
     ] : []
-  const isRepartidorArea = user.role === 'repartidor' && location.pathname.startsWith('/repartidor')
+
+  const permissionNavItems: Array<{ path: string; label: string; icon: React.ReactNode; badge?: number; permission: string }> = [
+    { path: '/app', label: 'Dashboard', icon: <DashboardIcon fontSize="small" />, permission: 'dashboard' },
+    { path: '/envios', label: 'Envíos', icon: <Inventory2Icon fontSize="small" />, permission: 'envios_ver' },
+    { path: '/calendarizar', label: 'Calendarizar', icon: <BoltIcon fontSize="small" />, permission: 'calendarizacion' },
+    { path: '/repartidores', label: 'Repartidores', icon: <GroupIcon fontSize="small" />, permission: 'repartidores' },
+    { path: '/calendario', label: 'Calendario operativo', icon: <CalendarMonthIcon fontSize="small" />, permission: 'calendario' },
+    { path: '/rutas-activas', label: 'Rutas activas', icon: <RouteIcon fontSize="small" />, permission: 'rutas_activas' },
+    { path: '/alertas', label: 'Alertas', icon: <WarningAmberIcon fontSize="small" />, badge: alertasCount, permission: 'alertas' },
+    { path: '/incidencias', label: 'Incidencias', icon: <ReportProblemIcon fontSize="small" />, badge: incidenciasCount, permission: 'incidencias' },
+    { path: '/sucursales', label: 'Sucursales', icon: <StoreIcon fontSize="small" />, permission: 'sucursales' },
+    { path: '/pickups', label: 'PickUps', icon: <PlaceIcon fontSize="small" />, permission: 'pickups' },
+    { path: '/tarifas', label: 'Tarifas', icon: <PriceChangeIcon fontSize="small" />, permission: 'tarifas' },
+    { path: '/ojo-patron', label: 'Ojo del Patrón', icon: <GraphicEqIcon fontSize="small" />, permission: 'ojo_patron' },
+    { path: '/reportes', label: 'Reportes', icon: <BarChartIcon fontSize="small" />, permission: 'reportes' },
+    { path: '/satisfaccion', label: 'Satisfacción', icon: <StarBorderIcon fontSize="small" />, permission: 'satisfaccion' },
+    { path: '/plantillas-email', label: 'Plantillas de email', icon: <EmailIcon fontSize="small" />, permission: 'plantillas_email' },
+    { path: '/auditoria', label: 'Auditoría', icon: <HistoryIcon fontSize="small" />, permission: 'auditoria' },
+    { path: '/auditoria-notificaciones', label: 'Notif. auditoría', icon: <NotificationsActiveIcon fontSize="small" />, permission: 'auditoria_notificaciones' },
+    { path: '/mi-plan', label: 'Mi plan', icon: <WorkspacePremiumIcon fontSize="small" />, permission: 'mi_plan' },
+    { path: '/permisos', label: 'Permisos', icon: <AdminPanelSettingsIcon fontSize="small" />, permission: 'gestionar_permisos' },
+  ]
+
+  for (const item of permissionNavItems) {
+    const existingIndex = sidebarNavItems.findIndex((current) => current.path === item.path)
+    if (!permissions.has(item.permission) && existingIndex >= 0) sidebarNavItems.splice(existingIndex, 1)
+    if (permissions.has(item.permission) && existingIndex < 0) sidebarNavItems.push(item)
+  }
+  const isRepartidorArea = user.role === 'repartidor'
   const repartidorNavValue = (() => {
     if (location.pathname.startsWith('/repartidor/historial')) return '/repartidor/historial'
     if (location.pathname.startsWith('/repartidor/paradas')) return '/repartidor/paradas'
-    return '/repartidor'
+    if (location.pathname === '/repartidor') return '/repartidor'
+    return false
   })()
 
   return (
@@ -779,7 +811,7 @@ function Layout({ user, onLogout }: LayoutProps) {
       )}
 
       {/* Tabs nav — solo Operador y Socio PickUp (Gerente/Supervisor/Administrador usan sidebar) */}
-      {!isAccessDeniedPage && (user.role === 'operador' || user.role === 'socio_pickup') && (
+      {!isAccessDeniedPage && user.role === 'socio_pickup' && (
         <Box sx={{
           bgcolor: isDarkPremium ? '#1B2D42' : 'white',
           borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
@@ -800,13 +832,13 @@ function Layout({ user, onLogout }: LayoutProps) {
               '& .MuiTabs-indicator': { backgroundColor: '#42A5F5' },
             } : {}}
           >
-            {user.role === 'operador' && (
+            {permissions.has('envios_ver') && (
               <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/envios" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {user.role === 'socio_pickup' && (
+            {permissions.has('pickup_operacion') && (
               <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Mi PickUp" value="/pickup-operacion" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
-            {user.role === 'socio_pickup' && (
+            {permissions.has('pickup_historial') && (
               <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Historial" value="/pickup-historial" sx={{ minHeight: 48, textTransform: 'none' }} />
             )}
           </Tabs>
@@ -836,9 +868,9 @@ function Layout({ user, onLogout }: LayoutProps) {
                 navigate(value)
               }}
             >
-              <BottomNavigationAction label="Ruta" value="/repartidor" icon={<RouteIcon />} />
-              <BottomNavigationAction label="Paradas" value="/repartidor/paradas" icon={<Inventory2Icon />} />
-              <BottomNavigationAction label="Historial" value="/repartidor/historial" icon={<HistoryIcon />} />
+              {permissions.has('ruta_repartidor') && <BottomNavigationAction label="Ruta" value="/repartidor" icon={<RouteIcon />} />}
+              {permissions.has('ruta_repartidor') && <BottomNavigationAction label="Paradas" value="/repartidor/paradas" icon={<Inventory2Icon />} />}
+              {permissions.has('historial_repartidor') && <BottomNavigationAction label="Historial" value="/repartidor/historial" icon={<HistoryIcon />} />}
               <BottomNavigationAction
                 label="Más"
                 value="more"
@@ -856,6 +888,21 @@ function Layout({ user, onLogout }: LayoutProps) {
             transformOrigin={{ horizontal: 'center', vertical: 'bottom' }}
             slotProps={{ paper: { sx: { mb: 1, minWidth: 220, borderRadius: 2 } } }}
           >
+            {permissionNavItems
+              .filter((item) => permissions.has(item.permission))
+              .map((item) => (
+                <MenuItem
+                  key={item.path}
+                  onClick={() => {
+                    setRepartidorNavAnchor(null)
+                    navigate(item.path)
+                  }}
+                >
+                  <ListItemIcon>{item.icon}</ListItemIcon>
+                  <ListItemText>{item.label}</ListItemText>
+                </MenuItem>
+              ))}
+            {permissionNavItems.some((item) => permissions.has(item.permission)) && <Divider />}
             <MenuItem onClick={() => { setRepartidorNavAnchor(null); navigate('/perfil') }}>
               <ListItemIcon><AccountCircleIcon fontSize="small" /></ListItemIcon>
               <ListItemText>Mi perfil</ListItemText>

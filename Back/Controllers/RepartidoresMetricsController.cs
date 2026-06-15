@@ -12,6 +12,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/repartidores")]
+    [RequirePermission("perfil_rendimiento")]
     public class RepartidoresMetricsController : ControllerBase
     {
         private readonly RepartidoresMetricsService _service;
@@ -29,12 +30,12 @@ namespace Back.Controllers
         {
             if (User.IsInRole(Roles.Administrador)) return null;
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdStr, out var userId)) return null;
-            return (await _userRepository.GetUsuarioById(userId))?.SucursalId;
+            if (!Guid.TryParse(userIdStr, out var userId)) return Guid.Empty;
+            return (await _userRepository.GetUsuarioById(userId))?.SucursalId ?? Guid.Empty;
         }
 
         /// <summary>G1L-20: Perfil de rendimiento de un repartidor en un período.</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("{repartidorId:guid}/rendimiento")]
         public async Task<ActionResult<RendimientoRepartidor>> GetRendimiento(
             Guid repartidorId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
@@ -50,7 +51,7 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("{repartidorId:guid}/jornada-historial")]
         public async Task<ActionResult<List<JornadaLaboralHistorialResponse>>> GetHistorialJornada(Guid repartidorId)
         {

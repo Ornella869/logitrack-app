@@ -74,7 +74,7 @@ const DEMORA_REASONS = [
 type CancelMode = 'Definitivo' | 'Reagendar'
 
 
-function ShipmentDetail() {
+function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -164,15 +164,18 @@ function ShipmentDetail() {
     : false
   const esUltimaMillaActual = !tramoActual || tramoActual.esUltimaMilla
   const canCancel =
-    ((isOperador || isSupervisor) && puedeGestionarTramo &&
+    ((isOperador || isSupervisor) && permissions.has('envios_cancelar') && puedeGestionarTramo &&
       (status === 'Pendiente de calendarización' ||
         status === 'Asignado a vehículo' ||
         status === 'Cargado en vehículo' ||
         status === 'Listo para salir')) ||
     // G1L-82: el repartidor cancela desde "En tránsito" o "Demorado" (entrega fallida).
-    (isRepartidor && (status === 'En tránsito' || status === 'Demorado'))
+    (isRepartidor && permissions.has('envios_cancelar') && (status === 'En tránsito' || status === 'Demorado'))
   // G1L-12, G1L-41: Editar solo si está pendiente de calendarización (paquete.isEditable)
-  const canEdit = isOperador && puedeGestionarTramo && shipment?.isEditable === true
+  const canEdit = (isOperador || isSupervisor || isRepartidor)
+    && permissions.has('envios_editar')
+    && puedeGestionarTramo
+    && shipment?.isEditable === true
   // G1L-82: marcar como Demorado lo pueden hacer Repartidor o Supervisor sobre un envío En Tránsito.
   const canMarcarDemorado = (isRepartidor || (isSupervisor && puedeGestionarTramo)) && status === 'En tránsito'
   // G1L-82: continuar ruta tras la demora — solo el repartidor.
@@ -560,7 +563,7 @@ function ShipmentDetail() {
         </Button>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {/* G1L-28 + G1L-32: Etiqueta con QR (Operador, Supervisor, Admin — no Repartidor) */}
-          {!isRepartidor && (
+          {(isOperador || isSupervisor || isAdmin) && permissions.has('envios_ver') && (
             <Button
               variant="outlined"
               size="small"

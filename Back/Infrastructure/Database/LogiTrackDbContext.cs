@@ -34,6 +34,8 @@ namespace Back.Infrastructure.Database
         public DbSet<SatisfaccionEncuesta> SatisfaccionEncuestas { get; set; }
         public DbSet<TramoEnvio> TramosEnvio { get; set; }
         public DbSet<PlantillaEmail> PlantillasEmail { get; set; }
+        public DbSet<PermisoRol> PermisosRol { get; set; }
+        public DbSet<PermisoUsuario> PermisosUsuario { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {
@@ -138,6 +140,22 @@ namespace Back.Infrastructure.Database
                 l.HasIndex(x => x.Timestamp);
                 l.HasIndex(x => x.UsuarioId);
                 l.HasIndex(x => x.Accion);
+            });
+
+            modelBuilder.Entity<PermisoRol>(p =>
+            {
+                p.HasKey(x => x.Id);
+                p.Property(x => x.Rol).HasMaxLength(40).IsRequired();
+                p.Property(x => x.Permiso).HasMaxLength(80).IsRequired();
+                p.HasIndex(x => new { x.Rol, x.Permiso }).IsUnique();
+            });
+
+            modelBuilder.Entity<PermisoUsuario>(p =>
+            {
+                p.HasKey(x => x.Id);
+                p.Property(x => x.Permiso).HasMaxLength(80).IsRequired();
+                p.HasIndex(x => new { x.UsuarioId, x.Permiso }).IsUnique();
+                p.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId).OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<SolicitudComercial>(s =>

@@ -1,14 +1,10 @@
-import { Alert, Box, Typography } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { useOutletContext } from 'react-router-dom'
 import RepartidoresList from '../components/RepartidoresList'
 import type { User } from '../types'
 
 export default function RepartidoresPage() {
   const user = useOutletContext<User>()
-
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo el Supervisor puede acceder a esta pantalla.</Alert>
-  }
 
   return (
     <Box>

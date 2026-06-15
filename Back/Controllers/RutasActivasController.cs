@@ -9,6 +9,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/rutas-activas")]
+    [RequirePermission("rutas_activas")]
     public class RutasActivasController : ControllerBase
     {
         private readonly RutasActivasService _service;
@@ -24,12 +25,12 @@ namespace Back.Controllers
         {
             if (User.IsInRole(Roles.Administrador)) return null;
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdStr, out var userId)) return null;
-            return (await _userRepository.GetUsuarioById(userId))?.SucursalId;
+            if (!Guid.TryParse(userIdStr, out var userId)) return Guid.Empty;
+            return (await _userRepository.GetUsuarioById(userId))?.SucursalId ?? Guid.Empty;
         }
 
         /// <summary>G1L-70: Listado de rutas del día con progreso, capacidad y demoras.</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet]
         public async Task<ActionResult<ListadoRutasActivasResponse>> Listado(
             [FromQuery] string? search,
@@ -43,7 +44,7 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-42 + G1L-70: Detalle de la ruta de un repartidor para un día.</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("{repartidorId:guid}")]
         public async Task<ActionResult<DetalleRutaResponse>> Detalle(Guid repartidorId, [FromQuery] DateTime? fecha)
         {

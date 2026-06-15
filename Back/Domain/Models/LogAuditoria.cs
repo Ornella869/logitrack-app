@@ -20,6 +20,7 @@ namespace Back.Domain.Models
         PruebaOjoDelPatron,
         Notificacion,
         JornadaLaboral,
+        Permisos,
     }
 
     public class LogAuditoria

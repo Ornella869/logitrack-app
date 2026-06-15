@@ -8,6 +8,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/auditoria")]
+    [RequirePermission("auditoria")]
     public class AuditoriaController : ControllerBase
     {
         private readonly AuditoriaService _service;
@@ -40,7 +41,7 @@ namespace Back.Controllers
                 from,
                 to,
                 search,
-                User.IsInRole(Roles.Supervisor),
+                !User.IsInRole(Roles.Administrador),
                 User.IsInRole(Roles.Administrador) ? sucursalId : null,
                 normalizedPage,
                 normalizedPageSize);

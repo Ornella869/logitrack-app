@@ -8,6 +8,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/calendarizacion")]
+    [RequirePermission("calendarizacion")]
     public class CalendarizacionController : ControllerBase
     {
         private readonly CalendarizacionService _service;
@@ -28,13 +29,14 @@ namespace Back.Controllers
         // Épica D: sucursal del usuario logueado (para acotar la calendarización).
         private async Task<Guid?> CurrentSucursalIdAsync()
         {
+            if (User.IsInRole(Roles.Administrador)) return null;
             if (CurrentUserId() is not Guid uid) return null;
             var u = await _context.Usuarios.FindAsync(uid);
-            return u?.SucursalId;
+            return u?.SucursalId ?? Guid.Empty;
         }
 
         /// <summary>Cantidad de paquetes pendientes de calendarización de la sucursal del usuario.</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("pendientes")]
         public async Task<ActionResult<object>> Pendientes()
         {
@@ -43,7 +45,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Estado actual de asignaciones activas de la sucursal, agrupado por día y repartidor.</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("estado-actual")]
         public async Task<ActionResult<List<DiaResumen>>> EstadoActual()
         {
@@ -52,7 +54,7 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-55: Calendario operativo grilla repartidor x día (próximos N días, default 14).</summary>
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("calendario")]
         public async Task<ActionResult<CalendarioOperativo>> Calendario([FromQuery] int dias = 14)
         {
@@ -62,7 +64,7 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-83: Precalendarización manual de un envío a un repartidor y día (Supervisor).</summary>
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
         [HttpPost("precalendarizar")]
         public async Task<ActionResult<PrecalendarizacionResultado>> Precalendarizar([FromBody] PrecalendarizarRequest request)
         {
@@ -80,7 +82,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Ejecuta el algoritmo de calendarización automática (G1L-54).</summary>
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
         [HttpPost("ejecutar")]
         public async Task<ActionResult<CalendarizacionResultado>> Ejecutar()
         {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -30,7 +30,6 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import api from '../services/api'
 import { authService } from '../services/authService'
-import type { User } from '../types'
 import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs, formatInstantArgentinaDate, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 type Rendimiento = {
@@ -94,8 +93,7 @@ const validateDateRangeForRender = (from: string, to: string) => (
   && to <= today()
 )
 
-export default function PerfilRendimientoPage() {
-  const user = useOutletContext<User>()
+export default function PerfilRendimientoPage({ permissions }: { permissions: Set<string> }) {
   const navigate = useNavigate()
   const { repartidorId } = useParams<{ repartidorId: string }>()
   const [from, setFrom] = useState<string>(daysAgo(30))
@@ -119,9 +117,8 @@ export default function PerfilRendimientoPage() {
 
   useEffect(() => {
     if (!repartidorId) return
-    if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
-  }, [repartidorId, user.role])
+  }, [repartidorId])
 
   const validate = (f: string, t: string): boolean => {
     if (!f || !t) { setDateError('Completá ambas fechas para aplicar el rango.'); return false }
@@ -230,10 +227,6 @@ export default function PerfilRendimientoPage() {
     void load(f, t, true)
   }
 
-  if (user.role !== 'supervisor' && user.role !== 'administrador') {
-    return <Alert severity="warning">Solo Supervisor o Administrador.</Alert>
-  }
-
   return (
     <Box>
       <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
@@ -262,7 +255,7 @@ export default function PerfilRendimientoPage() {
             </Box>
           </Stack>
 
-          {(user.role === 'supervisor' || user.role === 'administrador') && (
+          {permissions.has('repartidores') && (
             <Card variant="outlined">
               <CardContent sx={{ pb: '14px !important' }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>

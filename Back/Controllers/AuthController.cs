@@ -56,14 +56,14 @@ namespace Back.Controllers
             return userId is null ? null : await _userRepository.GetUsuarioById(userId.Value);
         }
 
-        private async Task<ActionResult?> ValidarRepartidorEnSucursalDelSupervisor(Guid repartidorId)
+        private async Task<ActionResult?> ValidarRepartidorEnSucursalDelUsuario(Guid repartidorId)
         {
-            if (!User.IsInRole(Roles.Supervisor)) return null;
-            var supervisor = await CurrentUserAsync();
-            if (supervisor?.SucursalId is null) return null;
+            if (User.IsInRole(Roles.Administrador)) return null;
+            var usuario = await CurrentUserAsync();
+            if (usuario?.SucursalId is null) return Forbid();
             var repartidor = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
             if (repartidor is null) return NotFound("Repartidor no encontrado.");
-            return repartidor.SucursalId == supervisor.SucursalId ? null : Forbid();
+            return repartidor.SucursalId == usuario.SucursalId ? null : Forbid();
         }
 
         /// <summary>Login con email + contraseña + reCAPTCHA. Devuelve JWT.</summary>
@@ -154,7 +154,8 @@ namespace Back.Controllers
         }
 
         /// <summary>Listado de repartidores (Admin / Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpGet("repartidores")]
         public async Task<ActionResult<PagedResponse<RepartidorListadoResponse>>> GetRepartidores(
             [FromQuery] string? search,
@@ -168,7 +169,9 @@ namespace Back.Controllers
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
 
             var currentUser = await CurrentUserAsync();
-            var sucursalScope = User.IsInRole(Roles.Administrador) ? null : currentUser?.SucursalId;
+            Guid? sucursalScope = User.IsInRole(Roles.Administrador)
+                ? null
+                : currentUser?.SucursalId ?? Guid.Empty;
             var repartidores = (await _userRepository.GetRepartidores())
                 .Where(r => sucursalScope == null || r.SucursalId == sucursalScope)
                 .ToList();
@@ -299,17 +302,18 @@ namespace Back.Controllers
         }
 
         /// <summary>Alta de Repartidor (genera contraseña temporal).</summary>
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpPost("repartidores")]
         public async Task<ActionResult<UserInfoResponse>> RegistrarRepartidor([FromBody] RegistrarRepartidorRequest request)
         {
             try
             {
-                if (User.IsInRole(Roles.Supervisor))
+                if (!User.IsInRole(Roles.Administrador))
                 {
-                    var supervisor = await CurrentUserAsync();
-                    if (supervisor?.SucursalId is null) return BadRequest("El supervisor no tiene sucursal asignada.");
-                    request.SucursalId = supervisor.SucursalId;
+                    var usuario = await CurrentUserAsync();
+                    if (usuario?.SucursalId is null) return BadRequest("El usuario no tiene sucursal asignada.");
+                    request.SucursalId = usuario.SucursalId;
                 }
                 var result = await _authService.RegistrarRepartidor(request);
                 var repartidor = result.Repartidor;
@@ -352,13 +356,14 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/licencia")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarLicenciaRepartidor(Guid repartidorId, [FromBody] ActualizarLicenciaRepartidorRequest request)
         {
             try
             {
-                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                var scopeError = await ValidarRepartidorEnSucursalDelUsuario(repartidorId);
                 if (scopeError is not null) return scopeError;
                 var repartidor = await _authService.ActualizarLicenciaRepartidor(repartidorId, request.Licencia, request.FechaVencimientoLicencia);
                 await _context.SaveChangesAsync();
@@ -370,13 +375,16 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpGet("repartidores/licencias-por-vencer")]
         public async Task<ActionResult<List<LicenciaPorVencerResponse>>> GetLicenciasPorVencer([FromQuery] int dias = 30)
         {
             var diasNormalizados = Math.Clamp(dias, 1, 365);
             var currentUser = await CurrentUserAsync();
-            var sucursalScope = User.IsInRole(Roles.Administrador) ? null : currentUser?.SucursalId;
+            Guid? sucursalScope = User.IsInRole(Roles.Administrador)
+                ? null
+                : currentUser?.SucursalId ?? Guid.Empty;
             var hoy = OperationalClock.TodayUtcDate;
             var hasta = hoy.AddDays(diasNormalizados);
 
@@ -404,13 +412,14 @@ namespace Back.Controllers
             return Ok(repartidores);
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/horas-trabajo")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarHorasTrabajoRepartidor(Guid repartidorId, [FromBody] ActualizarHorasTrabajoRequest request)
         {
             try
             {
-                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                var scopeError = await ValidarRepartidorEnSucursalDelUsuario(repartidorId);
                 if (scopeError is not null) return scopeError;
                 var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                     ?? throw new InvalidOperationException("Repartidor no encontrado.");
@@ -437,13 +446,14 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/capacidad-carga")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarCapacidadCargaRepartidor(Guid repartidorId, [FromBody] ActualizarCapacidadCargaRequest request)
         {
             try
             {
-                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                var scopeError = await ValidarRepartidorEnSucursalDelUsuario(repartidorId);
                 if (scopeError is not null) return scopeError;
                 var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                     ?? throw new InvalidOperationException("Repartidor no encontrado.");
@@ -457,13 +467,14 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/estado")]
         public async Task<ActionResult<UserInfoResponse>> CambiarEstadoRepartidor(Guid repartidorId, [FromBody] CambiarEstadoRepartidorRequest request)
         {
             try
             {
-                var scopeError = await ValidarRepartidorEnSucursalDelSupervisor(repartidorId);
+                var scopeError = await ValidarRepartidorEnSucursalDelUsuario(repartidorId);
                 if (scopeError is not null) return scopeError;
                 var repartidor = await _authService.CambiarEstadoRepartidor(repartidorId, request.Estado);
                 await _context.SaveChangesAsync();

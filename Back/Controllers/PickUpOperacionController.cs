@@ -10,6 +10,7 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/pickup-operacion")]
+    [RequirePermission("pickup_operacion")]
     [Authorize(Roles = Roles.SocioPickUp)]
     public class PickUpOperacionController : ControllerBase
     {

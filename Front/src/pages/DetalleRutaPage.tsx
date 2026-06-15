@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -32,7 +32,6 @@ import { shipmentService } from '../services/shipmentService'
 import { mergeUbicacionPreferida, subscribeUbicacionActualizada, type UbicacionVisual } from '../services/ubicacionLiveService'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 import { buildMapsUrl } from '../utils/mapsUrl'
-import type { User } from '../types'
 
 type DetalleParada = {
   paqueteId: string
@@ -80,7 +79,6 @@ const isFinalParaRuta = (status: string) =>
   status === 'Entregado' || status === 'Cancelado' || status === 'RetornandoASucursal' || status === 'RetornadoASucursal'
 
 export default function DetalleRutaPage() {
-  const user = useOutletContext<User>()
   const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
@@ -115,7 +113,6 @@ export default function DetalleRutaPage() {
 
   useEffect(() => {
     if (!repartidorId) return
-    if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
     void loadUbicacion()
     return subscribeUbicacionActualizada((event) => {
@@ -129,7 +126,7 @@ export default function DetalleRutaPage() {
       }))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repartidorId, user.role, fecha])
+  }, [repartidorId, fecha])
 
   const load = async () => {
     setLoading(true)
@@ -172,10 +169,6 @@ export default function DetalleRutaPage() {
     } else {
       setUbicacionMsg({ type: 'error', text: result.error || 'No se pudo actualizar la ubicación.' })
     }
-  }
-
-  if (user.role !== 'supervisor' && user.role !== 'administrador') {
-    return <Alert severity="warning">Solo Supervisor o Administrador.</Alert>
   }
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>

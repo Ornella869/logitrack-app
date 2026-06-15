@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -29,7 +29,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SearchIcon from '@mui/icons-material/Search'
 import RepeatIcon from '@mui/icons-material/Repeat'
 import api from '../services/api'
-import type { User } from '../types'
 import { dateOnlyForDisplay, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
@@ -73,8 +72,7 @@ const DIAS_TOTAL = 30
 
 const dateForDisplay = dateOnlyForDisplay
 
-export default function CalendarioOperativoPage() {
-  const user = useOutletContext<User>()
+export default function CalendarioOperativoPage({ permissions }: { permissions: Set<string> }) {
   const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
@@ -86,9 +84,8 @@ export default function CalendarioOperativoPage() {
   const [searchRepartidor, setSearchRepartidor] = useState('')
 
   useEffect(() => {
-    if (user.role !== 'supervisor' && user.role !== 'administrador') return
     void load()
-  }, [user.role])
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -124,11 +121,7 @@ export default function CalendarioOperativoPage() {
     }
   }, [data, pageOffset, searchRepartidor])
 
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo Supervisor puede ver el calendario operativo.</Alert>
-  }
-
-  const canCreateCalendarizacion = user.role === 'supervisor'
+  const canCreateCalendarizacion = permissions.has('calendarizacion')
 
   return (
     <Box>
