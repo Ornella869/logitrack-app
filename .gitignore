@@ -1,5 +1,5 @@
 # Frida specifications folder
 .frida-specs/**
-
+.claude/
 /Stress
 /geocoding-compare

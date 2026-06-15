@@ -10,6 +10,9 @@ namespace Back.Application.Services
         public required int TotalCalendarizados { get; init; }
         public required int TotalSinAsignar { get; init; }
         public required List<DiaResumen> ResumenPorDia { get; init; }
+        public List<PaqueteSinAsignarResumen>? PaquetesSinAsignar { get; init; }
+        public int TotalPartTime { get; init; }
+        public int TotalFullTime { get; init; }
     }
 
     public class DiaResumen
@@ -27,6 +30,15 @@ namespace Back.Application.Services
         public required int Cantidad { get; init; }
         public required double PesoTotal { get; init; }
         public required double CapacidadKg { get; init; }
+        public string TipoJornada { get; init; } = "Full Time";
+        public List<CalendarioPaquete>? Paquetes { get; init; }
+    }
+
+    public class PaqueteSinAsignarResumen
+    {
+        public required string CodigoSeguimiento { get; init; }
+        public required double Peso { get; init; }
+        public required string Motivo { get; init; }
     }
 
     public class CalendarioCelda
@@ -355,6 +367,218 @@ namespace Back.Application.Services
                     ? "El repartidor estaba listo para salir. Debe escanear el nuevo envío antes de iniciar la ruta; los ya cargados siguen en el vehículo."
                     : null,
             };
+        }
+
+        // G1L-150: simula el algoritmo sin persistir ningún cambio.
+        public async Task<CalendarizacionResultado> PreviewAsync(Guid? supervisorId)
+        {
+            Guid? sucursalId = null;
+            if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
+                sucursalId = sup.SucursalId;
+
+            var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion(sucursalId);
+
+            if (pendientes.Count == 0)
+                return new CalendarizacionResultado
+                {
+                    TotalPendientes = 0, TotalCalendarizados = 0, TotalSinAsignar = 0,
+                    TotalPartTime = 0, TotalFullTime = 0,
+                    ResumenPorDia = new List<DiaResumen>(),
+                    PaquetesSinAsignar = new List<PaqueteSinAsignarResumen>(),
+                };
+
+            var todosRepartidores = (await _userRepository.GetRepartidores())
+                .Where(r => sucursalId == null || r.SucursalId == sucursalId)
+                .Where(r => r.Activo && r.PuedeSerAsignado)
+                .ToList();
+
+            if (todosRepartidores.Count == 0)
+                throw new InvalidOperationException("No hay repartidores activos disponibles.");
+
+            var existentes = (await _enviosRepository.GetPaquetesConAsignacionActiva())
+                .Where(p => sucursalId == null || p.SucursalId == sucursalId)
+                .ToList();
+
+            var repartidores = todosRepartidores
+                .Where(r => r.EstadoJornada != Repartidor.EstadoJornadaRepartidor.Retornando)
+                .ToList();
+
+            if (repartidores.Count == 0)
+                throw new InvalidOperationException(
+                    "Todos los repartidores activos están retornando a la sucursal.");
+
+            var cola = pendientes
+                .OrderByDescending(p => p.Distancia)
+                .ThenByDescending(p => p.Prioridad)
+                .ThenBy(p => p.CreadoEn)
+                .ToList();
+
+            var carga = new Dictionary<(Guid repartidorId, DateTime fecha), List<Paquete>>();
+            foreach (var existente in existentes)
+            {
+                if (!existente.RepartidorAsignadoId.HasValue || !existente.FechaCalendarizada.HasValue) continue;
+                if (existente.Status == PaqueteStatus.EnTransito) continue;
+                var current = existente.FechaCalendarizada.Value.Date;
+                int dias = existente.DiasEstimadosEntrega;
+                while (dias > 0)
+                {
+                    AsignarEnMemoria(carga, existente.RepartidorAsignadoId.Value, current, existente);
+                    if (current.DayOfWeek != DayOfWeek.Sunday) dias--;
+                    if (dias > 0) current = current.AddDays(1);
+                }
+            }
+
+            var totalHistorico = repartidores.ToDictionary(
+                r => r.Id,
+                r => existentes.Count(p => p.RepartidorAsignadoId == r.Id));
+
+            var hoy = OperationalClock.TodayUtcDate;
+            var paquetesSinAsignar = new List<PaqueteSinAsignarResumen>();
+            var asignacionesNuevas = new Dictionary<(Guid, DateTime), List<Paquete>>();
+            int previewPartTime = 0;
+            int previewFullTime = 0;
+
+            foreach (var paquete in cola)
+            {
+                bool asignado = false;
+                var cpPaquete = ParseCp(paquete.Destinatario.Direccion.CP);
+
+                var repsElegibles = (paquete.SucursalId.HasValue
+                    ? repartidores.Where(r => r.SucursalId == paquete.SucursalId)
+                    : repartidores.AsEnumerable())
+                    .Where(r => !r.EsPartTime
+                        || (!paquete.RequiereRepartidorFullTime && paquete.HorasEstimadasRuta <= 6f))
+                    .ToList();
+
+                if (repsElegibles.Count == 0)
+                {
+                    paquetesSinAsignar.Add(new PaqueteSinAsignarResumen
+                    {
+                        CodigoSeguimiento = paquete.CodigoSeguimiento,
+                        Peso = paquete.Peso,
+                        Motivo = "Sin repartidores elegibles",
+                    });
+                    continue;
+                }
+
+                for (int offset = 1; offset <= MaxDiasParaProgramar && !asignado; offset++)
+                {
+                    var fecha = hoy.AddDays(offset);
+
+                    var candidatosCP = repsElegibles
+                        .Where(r =>
+                        {
+                            if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0) return false;
+                            return lista.Any(p => p.Destinatario.Direccion.CP == paquete.Destinatario.Direccion.CP)
+                                && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg;
+                        })
+                        .ToList();
+
+                    if (candidatosCP.Count > 0)
+                    {
+                        var minCargaDia = repsElegibles
+                            .Select(r => carga.TryGetValue((r.Id, fecha), out var l) ? l.Count : 0)
+                            .Min();
+                        var matchCp = candidatosCP
+                            .Where(r => (carga.TryGetValue((r.Id, fecha), out var l2) ? l2.Count : 0) <= minCargaDia + 1)
+                            .OrderBy(r => carga[(r.Id, fecha)].Sum(p => p.Peso))
+                            .FirstOrDefault();
+                        if (matchCp is not null) { AsignarPreview(matchCp, fecha, paquete); asignado = true; break; }
+                    }
+
+                    var menosCargado = repsElegibles
+                        .Where(r => (carga.TryGetValue((r.Id, fecha), out var lista2) ? lista2.Sum(p => p.Peso) : 0) + paquete.Peso <= r.CapacidadCargaKg)
+                        .OrderBy(r => carga.TryGetValue((r.Id, fecha), out var l3) ? l3.Count : 0)
+                        .ThenBy(r => totalHistorico[r.Id])
+                        .ThenBy(r => r.Id)
+                        .FirstOrDefault();
+                    if (menosCargado is not null) { AsignarPreview(menosCargado, fecha, paquete); asignado = true; break; }
+
+                    var cercano = repsElegibles
+                        .Where(r => carga.TryGetValue((r.Id, fecha), out var lista) && lista.Count > 0
+                                    && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg)
+                        .Select(r => new
+                        {
+                            Rep = r,
+                            Distancia = carga[(r.Id, fecha)].Min(p => Math.Abs(ParseCp(p.Destinatario.Direccion.CP) - cpPaquete)),
+                            Peso = carga[(r.Id, fecha)].Sum(p => p.Peso),
+                        })
+                        .OrderBy(x => x.Distancia).ThenBy(x => x.Peso)
+                        .FirstOrDefault();
+                    if (cercano is not null) { AsignarPreview(cercano.Rep, fecha, paquete); asignado = true; break; }
+                }
+
+                if (!asignado)
+                    paquetesSinAsignar.Add(new PaqueteSinAsignarResumen
+                    {
+                        CodigoSeguimiento = paquete.CodigoSeguimiento,
+                        Peso = paquete.Peso,
+                        Motivo = "Sin capacidad disponible en los próximos 30 días",
+                    });
+            }
+
+            var repIndex = repartidores.ToDictionary(r => r.Id);
+
+            var resumen = asignacionesNuevas
+                .GroupBy(kv => kv.Key.Item2)
+                .OrderBy(g => g.Key)
+                .Select(g => new DiaResumen
+                {
+                    Fecha = g.Key,
+                    Cantidad = g.Sum(x => x.Value.DistinctBy(p => p.Id).Count()),
+                    Repartidores = g.Select(x =>
+                    {
+                        repIndex.TryGetValue(x.Key.Item1, out var rep);
+                        var paquetesUnicos = x.Value.DistinctBy(p => p.Id).ToList();
+                        return new RepartidorResumen
+                        {
+                            RepartidorId = x.Key.Item1,
+                            Nombre = rep is null ? "(repartidor)" : $"{rep.Nombre} {rep.Apellido}",
+                            Email = rep?.Email ?? "",
+                            Cantidad = paquetesUnicos.Count,
+                            PesoTotal = paquetesUnicos.Sum(p => p.Peso),
+                            CapacidadKg = rep?.CapacidadCargaKg ?? 500,
+                            TipoJornada = rep?.TipoJornada ?? "Full Time",
+                            Paquetes = paquetesUnicos.Select(p => new CalendarioPaquete
+                            {
+                                PaqueteId = p.Id,
+                                CodigoSeguimiento = p.CodigoSeguimiento,
+                                CpDestino = p.Destinatario.Direccion.CP,
+                                Peso = p.Peso,
+                                EsPrioritario = p.TipoEnvio == TipoEnvio.Prioritario,
+                                Status = p.Status.ToString(),
+                            }).ToList(),
+                        };
+                    }).ToList(),
+                })
+                .ToList();
+
+            return new CalendarizacionResultado
+            {
+                TotalPendientes = pendientes.Count,
+                TotalCalendarizados = pendientes.Count - paquetesSinAsignar.Count,
+                TotalSinAsignar = paquetesSinAsignar.Count,
+                TotalPartTime = previewPartTime,
+                TotalFullTime = previewFullTime,
+                ResumenPorDia = resumen,
+                PaquetesSinAsignar = paquetesSinAsignar,
+            };
+
+            void AsignarPreview(Repartidor rep, DateTime fecha, Paquete pk)
+            {
+                var current = fecha;
+                int diasHabilesAAgregar = pk.DiasEstimadosEntrega;
+                while (diasHabilesAAgregar > 0)
+                {
+                    AsignarEnMemoria(carga, rep.Id, current, pk);
+                    AsignarEnMemoria(asignacionesNuevas, rep.Id, current, pk);
+                    if (current.DayOfWeek != DayOfWeek.Sunday) diasHabilesAAgregar--;
+                    if (diasHabilesAAgregar > 0) current = current.AddDays(1);
+                }
+                totalHistorico[rep.Id]++;
+                if (rep.EsPartTime) previewPartTime++;
+                else previewFullTime++;
+            }
         }
 
         public async Task<CalendarizacionResultado> EjecutarAsync(Guid? supervisorId)

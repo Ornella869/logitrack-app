@@ -81,6 +81,22 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>G1L-150: Simula la calendarización sin persistir ningún cambio (vista previa).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [HttpPost("preview")]
+        public async Task<ActionResult<CalendarizacionResultado>> Preview()
+        {
+            try
+            {
+                var resultado = await _service.PreviewAsync(CurrentUserId());
+                return Ok(resultado);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         /// <summary>Ejecuta el algoritmo de calendarización automática (G1L-54).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
         [HttpPost("ejecutar")]

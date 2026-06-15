@@ -711,6 +711,15 @@ export const shipmentService = {
 }
 
 // G1L-54: Calendarización Automática
+export interface PaquetePreview {
+  paqueteId: string
+  codigoSeguimiento: string
+  cpDestino: string
+  peso: number
+  esPrioritario: boolean
+  status: string
+}
+
 export interface RepartidorResumen {
   repartidorId: string
   nombre: string
@@ -718,6 +727,8 @@ export interface RepartidorResumen {
   cantidad: number
   pesoTotal: number
   capacidadKg?: number
+  tipoJornada?: string
+  paquetes?: PaquetePreview[]
 }
 
 export interface DiaResumen {
@@ -736,6 +747,8 @@ export interface CalendarizacionResultado {
   totalPendientes: number
   totalCalendarizados: number
   totalSinAsignar: number
+  totalPartTime?: number
+  totalFullTime?: number
   resumenPorDia: DiaResumen[]
   paquetesSinAsignar?: PaqueteSinAsignarResumen[]
 }

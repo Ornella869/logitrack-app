@@ -1,0 +1,508 @@
+================================================================================
+HISTORIAS DE USUARIO — SPRINT 5
+PROYECTO: LogiTrack
+================================================================================
+
+
+--------------------------------------------------------------------------------
+G1L-141 · Filtro de jornada en listado de repartidores
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero poder filtrar el listado de repartidores por tipo de
+jornada (Part Time / Full Time), para identificar rápidamente qué repartidores
+tengo disponibles según el tipo de envíos que necesito cubrir.
+
+Criterios de Aceptación:
+
+(Filtro visible junto a los existentes): Given el listado de repartidores con
+los filtros actuales de estado y ruta, When el Supervisor accede a la pantalla,
+Then debe ver un nuevo filtro "Tipo de jornada" con opciones "Part Time" y
+"Full Time" integrado visualmente con los demás filtros.
+
+(Filtrado por Part Time): Given que el Supervisor selecciona el filtro
+"Part Time", When se aplica el filtro, Then solo deben mostrarse repartidores
+cuya configuración de horas de trabajo sea menor o igual a 6 h por día.
+
+(Filtrado por Full Time): Given que el Supervisor selecciona el filtro
+"Full Time", When se aplica el filtro, Then solo deben mostrarse repartidores
+con 7 o más horas de trabajo configuradas.
+
+(Combinación con otros filtros): Given que el Supervisor tiene activo el filtro
+"Activo" y selecciona además "Part Time", When se aplica la combinación, Then
+el resultado debe cumplir ambas condiciones simultáneamente sin limpiar los
+filtros previos.
+
+Estimación: 3 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-142 · Informe de envíos sin asignar por incompatibilidad de jornada
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero ver cuáles envíos pendientes no pudieron ser
+calendarizados automáticamente por falta de repartidores Full Time disponibles,
+para poder tomar decisiones: cambiar la jornada de un repartidor o escalar
+el caso al administrador.
+
+Criterios de Aceptación:
+
+(Desglose de motivos de no asignación): Given que la calendarización automática
+finalizó y hay envíos sin asignar, When el Supervisor consulta el resultado,
+Then debe ver los envíos sin asignar agrupados por motivo: "Capacidad de peso
+excedida", "Sin repartidor disponible" y "Requiere Full Time — sin cobertura".
+
+(Indicador porcentual): Given el resumen final de la calendarización, When hay
+envíos sin asignar por falta de personal, Then el sistema debe mostrar el
+porcentaje que representan sobre el total de envíos pendientes en esa ejecución.
+
+(Acceso rápido al perfil del repartidor): Given la lista de envíos sin asignar
+por jornada incompatible, When el Supervisor hace clic en un ítem, Then debe
+poder navegar directamente al perfil del repartidor más cercano al destino para
+ajustar sus horas de trabajo.
+
+(Alerta de recurrencia): Given que el porcentaje de envíos sin asignar por
+falta de personal superó el 15% en tres ejecuciones consecutivas, When el
+Supervisor abre la pantalla de calendarización, Then debe ver un banner de
+advertencia que indique que la cobertura de personal es insuficiente de
+forma recurrente.
+
+Estimación: 5 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-143 · Historial de cambios de jornada
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Administrador, quiero ver el historial de cambios de horas de trabajo de
+cada repartidor, para tener trazabilidad completa de quién modificó la jornada,
+cuándo y desde qué valor.
+
+Criterios de Aceptación:
+
+(Registro automático al modificar): Given que un Supervisor o Administrador
+modifica las horas de trabajo de un repartidor, When confirma el cambio, Then
+el sistema debe registrar automáticamente en el log de auditoría: usuario que
+realizó el cambio, fecha y hora, valor anterior y valor nuevo.
+
+(Visualización en el perfil de rendimiento): Given que el Administrador accede
+al perfil de rendimiento de un repartidor, When navega a la sección "Jornada
+laboral", Then debe ver una tabla con el historial completo de cambios ordenado
+del más reciente al más antiguo.
+
+(Registro del valor inicial): Given que un repartidor es creado con el valor por
+defecto de 8 horas, When el registro es guardado, Then el sistema debe registrar
+ese primer valor como la entrada inicial del historial con motivo "Alta del
+repartidor".
+
+(Restricción de visibilidad): Given que un Operador intenta acceder al historial
+de cambios de jornada de un repartidor, When realiza la solicitud, Then el
+sistema debe denegar el acceso y mostrar un mensaje indicando que esa sección
+es exclusiva para Supervisores y Administradores.
+
+Estimación: 5 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-144 · Exportación de calendario operativo a Excel/PDF
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero exportar el calendario operativo de la semana a Excel
+o PDF, para compartirlo con el equipo o tenerlo como respaldo ante imprevistos
+operativos.
+
+Criterios de Aceptación:
+
+(Botón de exportación disponible): Given que el Supervisor está visualizando
+el calendario operativo, When la vista tiene datos cargados, Then debe ver un
+botón "Exportar" con opciones para elegir entre formato Excel (.xlsx) y PDF.
+
+(Contenido del export): Given que el Supervisor confirma la exportación, When
+el archivo es generado, Then debe incluir por cada celda del calendario: nombre
+del repartidor, tipo de jornada (Part Time / Full Time), fecha, cantidad de
+envíos asignados y peso total acumulado.
+
+(Selección de rango de fechas): Given que el Supervisor hace clic en "Exportar",
+When aparece el diálogo de configuración, Then debe poder elegir entre las
+opciones: semana actual, próximos 7 días o rango personalizado con fecha de
+inicio y fin.
+
+(Formato PDF con identidad visual): Given que el Supervisor selecciona exportar
+en PDF, When el archivo es descargado, Then debe incluir el logo de LogiTrack,
+el nombre de la sucursal, la fecha de generación y los datos del calendario con
+el mismo orden visual que la pantalla.
+
+Estimación: 8 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-145 · Panel de incidencias por tipo y repartidor
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero ver un panel que agrupe las incidencias por tipo y por
+repartidor en un período determinado, para identificar patrones recurrentes y
+tomar decisiones de mejora operativa o capacitación.
+
+Criterios de Aceptación:
+
+(Tabla de incidencias cruzada): Given que el Supervisor accede al panel de
+incidencias, When selecciona un período, Then debe ver una tabla con filas =
+repartidores y columnas = tipos de incidencia (mecánica, cliente ausente, corte
+de ruta, domicilio incorrecto, otros), con el recuento en cada celda.
+
+(Drill-down por celda): Given la tabla cruzada de incidencias, When el Supervisor
+hace clic en una celda específica, Then debe desplegarse el listado de las
+incidencias que componen ese recuento con fecha, descripción y estado de
+resolución.
+
+(Resaltado de valores atípicos): Given que un repartidor tiene una cantidad de
+incidencias de un tipo que supera el doble del promedio del equipo, When se
+renderiza la tabla, Then esa celda debe resaltarse visualmente para llamar la
+atención del Supervisor.
+
+(Filtros de período y sucursal): Given el panel de incidencias, When el
+Supervisor aplica un filtro de sucursal o cambia el rango de fechas, Then la
+tabla debe actualizarse mostrando únicamente los datos correspondientes al
+filtro sin recargar toda la pantalla.
+
+Estimación: 8 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-146 · Gestión de licencia vencida de repartidor
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Administrador, quiero poder registrar la fecha de vencimiento de la
+licencia de cada repartidor y recibir alertas cuando esté próxima a vencer,
+para cumplir con los requisitos legales y evitar que repartidores con licencias
+vencidas operen.
+
+Criterios de Aceptación:
+
+(Registro de fecha de vencimiento): Given el formulario de edición de un
+repartidor, When el Administrador o Supervisor completa el campo "Vencimiento de
+licencia", Then el sistema debe guardar esa fecha y mostrarla en la tarjeta del
+repartidor junto al número de licencia.
+
+(Alerta de vencimiento próximo a 30 días): Given que la licencia de un
+repartidor vence en 30 días o menos, When cualquier usuario con rol
+Administrador o Supervisor accede al sistema, Then debe ver una alerta en el
+panel indicando el nombre del repartidor y la fecha de vencimiento.
+
+(Alerta urgente a 7 días): Given que la licencia de un repartidor vence en 7
+días o menos, When se muestra la tarjeta de ese repartidor en el listado, Then
+debe aparecer un indicador visual de alerta urgente visible sin necesidad de
+abrir el detalle.
+
+(Suspensión automática al vencer): Given que la fecha de vencimiento de la
+licencia de un repartidor es igual a la fecha actual, When el sistema ejecuta su
+proceso diario, Then el repartidor debe quedar suspendido automáticamente con el
+motivo "Licencia vencida" y no puede recibir nuevas asignaciones hasta que se
+actualice la fecha.
+
+Estimación: 8 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-147 · Reagendamiento de envíos no entregados
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero poder reagendar automáticamente los envíos que no fueron
+entregados por cliente ausente o domicilio incorrecto, para evitar tener que
+crear una precalendarización manual para cada caso.
+
+Criterios de Aceptación:
+
+(Sección de pendientes de reagendamiento): Given que uno o más envíos tienen
+incidencia de "no entregado" cerrada sin éxito, When el Supervisor accede a la
+pantalla de calendarización, Then debe ver una sección diferenciada "Pendientes
+de reagendamiento" con esos envíos listados.
+
+(Reagendamiento automático individual): Given que el Supervisor selecciona un
+envío de la lista de pendientes y hace clic en "Reagendar", When el sistema
+procesa la solicitud, Then debe proponer la próxima fecha disponible respetando
+capacidad de peso, tipo de jornada del repartidor y días hábiles.
+
+(Reagendamiento masivo): Given que el Supervisor selecciona múltiples envíos
+pendientes de reagendamiento, When confirma la acción "Reagendar seleccionados",
+Then el sistema debe redistribuirlos automáticamente y mostrar un resumen de
+cuántos fueron reagendados y cuántos quedaron sin fecha disponible.
+
+(Notificación al destinatario): Given que un envío fue reagendado exitosamente,
+When el sistema confirma la nueva fecha, Then debe enviar automáticamente un
+email al destinatario informando la nueva fecha estimada de entrega.
+
+Estimación: 8 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-148 · Reporte de rendimiento comparativo entre sucursales
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Gerente, quiero comparar el rendimiento operativo entre sucursales en un
+período determinado, para identificar cuáles necesitan mejoras o recursos
+adicionales y fundamentar decisiones de inversión.
+
+Criterios de Aceptación:
+
+(Tabla comparativa entre sucursales): Given que el Gerente accede al reporte de
+rendimiento comparativo, When selecciona un período, Then debe ver una tabla con
+una fila por sucursal y columnas con: total de envíos gestionados, tasa de
+entrega on-time (%), tasa de incidencias (%) y promedio de días de demora.
+
+(Ordenamiento por métrica): Given la tabla comparativa, When el Gerente hace
+clic en el encabezado de una columna, Then las sucursales deben ordenarse de
+mayor a menor (o viceversa) según esa métrica, permitiendo identificar
+rápidamente las extremas.
+
+(Exportación del reporte): Given que el Gerente está viendo el reporte
+comparativo con datos cargados, When hace clic en "Exportar a Excel", Then se
+descarga un archivo con la misma estructura de la tabla, incluyendo encabezados,
+datos y el período consultado.
+
+(Filtro por provincia): Given el reporte comparativo, When el Gerente aplica un
+filtro por provincia, Then solo se muestran las sucursales ubicadas en esa
+provincia, manteniendo el resto de los filtros activos.
+
+Estimación: 8 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-149 · Cambio de sucursal de un repartidor
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Administrador, quiero poder transferir un repartidor de una sucursal a
+otra, para redistribuir recursos humanos según la demanda operativa de cada zona
+sin necesidad de dar de baja y volver a crear el usuario.
+
+Criterios de Aceptación:
+
+(Opción de transferencia en el perfil): Given que el Administrador accede al
+perfil de un repartidor, When visualiza sus datos, Then debe ver una opción
+"Transferir a otra sucursal" que abre un selector con las sucursales activas
+disponibles.
+
+(Advertencia por envíos pendientes): Given que el repartidor tiene envíos
+calendarizados en su sucursal actual, When el Administrador inicia la
+transferencia, Then el sistema debe mostrar una advertencia indicando la cantidad
+de envíos afectados antes de confirmar la acción.
+
+(Liberación de envíos calendarizados): Given que la transferencia es confirmada
+y el repartidor tenía envíos asignados en la sucursal origen, When se ejecuta
+el cambio, Then esos envíos deben volver al estado "Pendiente de calendarización"
+y aparecer en la sección de pendientes de la sucursal origen.
+
+(Registro en auditoría): Given que la transferencia fue completada, When se
+guarda el cambio, Then el sistema debe registrar en el log de auditoría: el
+Administrador que realizó la acción, la sucursal anterior, la nueva sucursal
+y la fecha y hora del cambio.
+
+Estimación: 5 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-150 · Vista previa del impacto antes de ejecutar calendarización
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero ver una vista previa de cómo quedaría distribuida la
+carga antes de confirmar la calendarización automática, para poder evaluar el
+resultado y ajustar manualmente si lo considero necesario antes de aplicarlo.
+
+Criterios de Aceptación:
+
+(Resumen previo a la ejecución): Given que el Supervisor hace clic en "Ejecutar
+calendarización", When el sistema calcula el plan preliminar, Then debe mostrar
+primero un resumen con: total de envíos a asignar, repartidores afectados, días
+involucrados, envíos que irían a Part Time, envíos que irían a Full Time y
+envíos que quedarían sin asignar.
+
+(Opción de cancelar sin impacto): Given que el Supervisor está viendo la vista
+previa, When hace clic en "Cancelar", Then ningún envío debe modificar su estado
+ni su asignación, quedando todo exactamente como estaba antes de la vista previa.
+
+(Detalle por repartidor en la previsualización): Given la vista previa de la
+calendarización, When el Supervisor expande la sección de un repartidor, Then
+debe ver el listado de envíos que se le asignarían, el peso total por día y el
+tipo de jornada.
+
+(Confirmación explícita para aplicar): Given que el Supervisor revisó la vista
+previa y decide proceder, When hace clic en "Confirmar y ejecutar", Then el
+sistema aplica la calendarización de forma definitiva y muestra el resultado
+final igual que en el flujo actual.
+
+Estimación: 5 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-151 · Gestión de permisos por rol desde el panel del administrador
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Administrador, quiero poder configurar qué secciones y funcionalidades
+puede ver o acceder cada rol del sistema, para adaptar la experiencia de uso
+a las necesidades operativas de cada empresa sin requerir cambios de código.
+
+Criterios de Aceptación:
+
+(Pantalla de permisos exclusiva del Administrador): Given que el Administrador
+accede al panel de configuración, When navega a "Permisos por rol", Then debe
+ver una tabla con filas = funcionalidades del sistema y columnas = roles
+(Supervisor, Operador, Repartidor, Gerente), con un toggle por celda.
+
+(Aplicación en tiempo real): Given que el Administrador desactiva una
+funcionalidad para un rol determinado, When confirma el cambio, Then los
+usuarios de ese rol deben dejar de ver esa sección o botón en su próxima carga
+de pantalla, sin necesidad de reiniciar la sesión.
+
+(Permisos mínimos no desactivables): Given que el Administrador intenta
+desactivar un permiso considerado mínimo para un rol (ej: el Repartidor ver sus
+envíos del día), When intenta hacer el cambio, Then el sistema debe mostrar un
+mensaje indicando que ese permiso es obligatorio para el rol y no puede
+deshabilitarse.
+
+(Registro en auditoría): Given que el Administrador modifica los permisos de
+algún rol, When guarda los cambios, Then el sistema debe registrar en auditoría:
+qué funcionalidad fue modificada, para qué rol, el estado anterior y el nuevo,
+con fecha y usuario responsable.
+
+Estimación: 13 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-152 · Restricción de llegada de envíos según horario del punto Pick Up
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Socio de un punto Pick Up, quiero que el sistema no permita calendarizar
+la llegada de un envío en mi punto fuera del horario de apertura configurado,
+para no recibir repartidores cuando el local está cerrado ni tener paquetes
+acumulados en la puerta.
+
+Criterios de Aceptación:
+
+(Configuración de horarios por día): Given que el Socio accede a la gestión de
+su punto Pick Up, When edita los horarios, Then debe poder configurar por
+separado la apertura y cierre para cada día de la semana, con la opción de
+marcar un día como "cerrado".
+
+(Bloqueo en calendarización automática): Given que hay envíos con destino a un
+punto Pick Up, When el motor de calendarización automática los procesa, Then
+debe excluir los días en que ese punto está marcado como cerrado y asignar
+únicamente en días hábiles dentro del horario configurado.
+
+(Advertencia en calendarización manual): Given que el Supervisor está asignando
+manualmente un envío con destino Pick Up, When selecciona una fecha en que el
+punto está cerrado, Then debe ver un mensaje de error que indique el motivo y
+sugiera la próxima fecha disponible según el horario del punto.
+
+(Advertencia por hora estimada fuera de horario): Given que la hora estimada de
+llegada del repartidor cae fuera del horario de apertura del punto, When el
+Supervisor confirma la asignación, Then debe recibir una advertencia con la hora
+estimada calculada y la posibilidad de continuar bajo su responsabilidad o
+elegir otra fecha.
+
+Estimación: 13 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-153 · Proyección de personal necesario para los próximos 30 días
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Supervisor, quiero ver una proyección de cuántos repartidores necesitaría
+para cubrir la demanda esperada de los próximos 30 días sin dejar envíos sin
+asignar, para anticiparme y solicitar contrataciones con tiempo suficiente.
+
+Criterios de Aceptación:
+
+(Cálculo basado en histórico): Given que el Supervisor accede al módulo de
+proyección de personal, When el sistema calcula la demanda esperada, Then debe
+basarse en el promedio de envíos de las últimas 4 semanas y la tendencia de
+crecimiento semanal del período.
+
+(Expresión del déficit en repartidores equivalentes): Given que la demanda
+proyectada supera la capacidad actual, When se muestra el resultado, Then el
+sistema debe expresar la brecha en "repartidores equivalentes" calculados como
+horas_faltantes / 8, diferenciando cuántos deberían ser Full Time y cuántos
+Part Time según el mix histórico de envíos.
+
+(Simulación manual de volumen): Given la pantalla de proyección, When el
+Supervisor modifica manualmente el volumen esperado de envíos (ej: anticipa una
+campaña de alto tráfico), Then la proyección debe recalcularse en tiempo real
+mostrando el nuevo déficit o superávit estimado.
+
+(Mensaje de conclusión accionable): Given que la proyección fue calculada, When
+el resultado se muestra, Then debe incluir una síntesis: "Con el personal actual
+cubrís el X% de la demanda proyectada. Para llegar al 100% se estiman N
+repartidores adicionales (Z Full Time, W Part Time)."
+
+Estimación: 13 puntos
+
+
+--------------------------------------------------------------------------------
+G1L-154 · Métricas de personal por cobertura operativa
+--------------------------------------------------------------------------------
+
+Descripción:
+Como Gerente o Administrador, quiero ver un reporte semanal que compare la
+demanda de horas de ruta contra la capacidad total disponible de los
+repartidores activos, para tomar decisiones fundamentadas sobre contratación
+de personal Part Time o Full Time.
+
+Criterios de Aceptación:
+
+(Reporte de demanda vs. capacidad semanal): Given que el Gerente accede al
+reporte de métricas de personal, When selecciona un período, Then debe ver por
+semana: total de envíos ingresados, horas de ruta estimadas requeridas, horas
+disponibles (suma de HorasTrabajo × días hábiles de todos los repartidores
+activos) y la brecha resultante.
+
+(Alerta de déficit recurrente): Given que la brecha entre horas requeridas y
+disponibles es positiva (déficit) en dos semanas consecutivas, When se renderiza
+el reporte, Then las semanas afectadas deben resaltarse con el mensaje: "Déficit
+de X horas — equivalente a Y repartidores Full Time adicionales."
+
+(Desglose por tipo de jornada): Given el reporte de métricas, When se muestra
+la brecha, Then debe desagregarse indicando cuántas horas faltantes corresponden
+a envíos que solo admiten Full Time y cuántas a envíos que también admiten Part
+Time, para orientar el tipo de contratación necesaria.
+
+(Exportación para gestión): Given que el Gerente está visualizando el reporte
+con datos cargados, When hace clic en "Exportar a Excel", Then se descarga un
+archivo con la tabla completa por semana, incluyendo todos los indicadores,
+listo para presentar en reuniones de gestión.
+
+Estimación: 13 puntos
+
+
+================================================================================
+RESUMEN DE ESTIMACIONES
+================================================================================
+
+G1L-141  Filtro de jornada en listado de repartidores              3 puntos
+G1L-142  Informe de envíos sin asignar por incompatibilidad        5 puntos
+G1L-143  Historial de cambios de jornada                           5 puntos
+G1L-144  Exportación de calendario operativo a Excel/PDF           8 puntos
+G1L-145  Panel de incidencias por tipo y repartidor                8 puntos
+G1L-146  Gestión de licencia vencida de repartidor                 8 puntos
+G1L-147  Reagendamiento de envíos no entregados                    8 puntos
+G1L-148  Reporte de rendimiento comparativo entre sucursales       8 puntos
+G1L-149  Cambio de sucursal de un repartidor                       5 puntos
+G1L-150  Vista previa del impacto antes de ejecutar calendarización 5 puntos
+G1L-151  Gestión de permisos por rol                              13 puntos
+G1L-152  Restricción según horario del punto Pick Up              13 puntos
+G1L-153  Proyección de personal necesario                         13 puntos
+G1L-154  Métricas de personal por cobertura operativa             13 puntos
+
+                                               TOTAL:            116 puntos
+
+================================================================================

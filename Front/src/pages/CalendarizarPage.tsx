@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Avatar,
   Box,
@@ -29,6 +32,7 @@ import {
 } from '@mui/material'
 import BoltIcon from '@mui/icons-material/Bolt'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import PreviewIcon from '@mui/icons-material/Visibility'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
@@ -366,27 +370,16 @@ export default function CalendarizarPage() {
                   {previewError && <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>{previewError}</Alert>}
                   <Button
                     size="large"
-                    variant="outlined"
-                    color="primary"
-                    startIcon={previewing ? <CircularProgress size={18} /> : <PreviewIcon />}
+                    variant="contained"
+                    startIcon={previewing ? <CircularProgress size={18} color="inherit" /> : <BoltIcon />}
                     onClick={handlePreview}
                     disabled={pendientes.length === 0 || repartidoresActivos.length === 0 || previewing}
-                    sx={{ px: 4, py: 1.5, fontSize: 14, mr: 2 }}
-                  >
-                    {previewing ? 'Simulando...' : 'Vista Previa'}
-                  </Button>
-                  <Button
-                    size="large"
-                    variant="contained"
-                    startIcon={<BoltIcon />}
-                    onClick={ejecutar}
-                    disabled={pendientes.length === 0 || repartidoresActivos.length === 0}
                     sx={{ px: 4, py: 1.5, fontSize: 14 }}
                   >
-                    Ejecutar
+                    {previewing ? 'Calculando vista previa...' : 'Ejecutar calendarización'}
                   </Button>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                    Usá "Vista Previa" para ver la distribución estimada antes de confirmar
+                    Se mostrará un resumen para confirmar antes de aplicar los cambios
                   </Typography>
                 </Box>
               </CardContent>
@@ -547,84 +540,225 @@ export default function CalendarizarPage() {
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Stack direction="row" spacing={1} alignItems="center">
-            <PreviewIcon color="primary" /> <span>Vista Previa — Calendarización estimada</span>
+            <PreviewIcon color="primary" />
+            <span>Vista Previa — Calendarización estimada</span>
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
-          {previewResultado && (
-            <>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Simulación completada · <strong>{previewResultado.totalCalendarizados}</strong> envíos serán asignados a {new Set(previewResultado.resumenPorDia.flatMap((d) => d.repartidores.map((r) => r.repartidorId))).size} repartidores
-                {previewResultado.totalSinAsignar > 0 && ` · ${previewResultado.totalSinAsignar} sin asignar`}
-              </Alert>
+          {previewResultado && (() => {
+            // Agrupar por repartidor (a lo largo de todos los días)
+            const porRepartidor = new Map<string, {
+              repartidorId: string
+              nombre: string
+              email: string
+              tipoJornada: string
+              dias: Array<{ fecha: string; cantidad: number; pesoTotal: number; capacidadKg: number; paquetes: NonNullable<(typeof previewResultado.resumenPorDia)[0]['repartidores'][0]['paquetes']> }>
+            }>()
+            previewResultado.resumenPorDia.forEach((dia) => {
+              dia.repartidores.forEach((rep) => {
+                if (!porRepartidor.has(rep.repartidorId)) {
+                  porRepartidor.set(rep.repartidorId, {
+                    repartidorId: rep.repartidorId,
+                    nombre: rep.nombre,
+                    email: rep.email,
+                    tipoJornada: rep.tipoJornada ?? 'Full Time',
+                    dias: [],
+                  })
+                }
+                porRepartidor.get(rep.repartidorId)!.dias.push({
+                  fecha: dia.fecha,
+                  cantidad: rep.cantidad,
+                  pesoTotal: rep.pesoTotal,
+                  capacidadKg: rep.capacidadKg ?? 500,
+                  paquetes: rep.paquetes ?? [],
+                })
+              })
+            })
+            const repsArray = Array.from(porRepartidor.values())
+            const diasInvolucrados = previewResultado.resumenPorDia.length
 
-              {previewResultado.paquetesSinAsignar && previewResultado.paquetesSinAsignar.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Alert severity="warning" sx={{ mb: 1 }}>
-                    {previewResultado.totalSinAsignar} envío{previewResultado.totalSinAsignar > 1 ? 's' : ''} no podrán asignarse
-                    {' '}({((previewResultado.totalSinAsignar / previewResultado.totalPendientes) * 100).toFixed(1)}% del total)
-                  </Alert>
-                  {Object.entries(
-                    previewResultado.paquetesSinAsignar.reduce<Record<string, typeof previewResultado.paquetesSinAsignar>>((acc, p) => {
-                      acc[p.motivo] = [...(acc[p.motivo] ?? []), p]
-                      return acc
-                    }, {})
-                  ).map(([motivo, items]) => (
-                    <Box key={motivo} sx={{ mb: 1 }}>
-                      <Typography variant="caption" fontWeight={700} color="warning.main" display="block">
-                        {motivo} ({items.length})
-                      </Typography>
-                      <Stack spacing={0.3}>
-                        {items.map((p) => (
-                          <Typography key={p.codigoSeguimiento} variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                            · {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
-                          </Typography>
-                        ))}
-                      </Stack>
-                    </Box>
+            return (
+              <>
+                {/* Resumen de 6 métricas */}
+                <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
+                  {[
+                    { label: 'Envíos a asignar', value: previewResultado.totalCalendarizados, color: 'primary.main' },
+                    { label: 'Repartidores afectados', value: repsArray.length, color: 'primary.main' },
+                    { label: 'Días involucrados', value: diasInvolucrados, color: 'primary.main' },
+                    { label: 'Envíos Full Time', value: previewResultado.totalFullTime ?? 0, color: 'success.main' },
+                    { label: 'Envíos Part Time', value: previewResultado.totalPartTime ?? 0, color: 'info.main' },
+                    {
+                      label: 'Sin asignar',
+                      value: previewResultado.totalSinAsignar,
+                      color: previewResultado.totalSinAsignar > 0 ? 'warning.main' : 'text.secondary',
+                    },
+                  ].map(({ label, value, color }) => (
+                    <Grid item xs={6} sm={4} key={label}>
+                      <Box
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2,
+                          textAlign: 'center',
+                          bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f5f5f5',
+                          border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
+                        }}
+                      >
+                        <Typography variant="h5" fontWeight={800} sx={{ color, lineHeight: 1 }}>{value}</Typography>
+                        <Typography variant="caption" color="text.secondary">{label}</Typography>
+                      </Box>
+                    </Grid>
                   ))}
-                </Box>
-              )}
+                </Grid>
 
-              {previewResultado.resumenPorDia.length > 0 && (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Repartidor</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Día estimado</TableCell>
-                      <TableCell align="right">Envíos</TableCell>
-                      <TableCell align="right">Peso estimado</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {previewResultado.resumenPorDia.flatMap((dia) =>
-                      dia.repartidores.map((r) => (
-                        <TableRow key={`${dia.fecha}-${r.repartidorId}`}>
-                          <TableCell>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Avatar sx={{ bgcolor: '#7b1fa2', width: 24, height: 24, fontSize: 11 }}>
-                                {r.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
-                              </Avatar>
-                              {r.nombre}
+                {/* Aviso sin asignar */}
+                {previewResultado.paquetesSinAsignar && previewResultado.paquetesSinAsignar.length > 0 && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    {previewResultado.totalSinAsignar} envío{previewResultado.totalSinAsignar !== 1 ? 's' : ''} no pueden asignarse
+                    {' '}({((previewResultado.totalSinAsignar / previewResultado.totalPendientes) * 100).toFixed(1)}% del total).
+                    {' '}Verificá la capacidad de los repartidores o reagendá envíos demorados.
+                  </Alert>
+                )}
+
+                {/* Secciones expandibles por repartidor */}
+                {repsArray.length > 0 && (
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                      Distribución por repartidor
+                    </Typography>
+                    {repsArray.map((rep, idx) => {
+                      const totalEnvios = rep.dias.reduce((acc, d) => acc + d.cantidad, 0)
+                      const totalPeso = rep.dias.reduce((acc, d) => acc + d.pesoTotal, 0)
+                      const initials = rep.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+                      const color = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                      return (
+                        <Accordion
+                          key={rep.repartidorId}
+                          disableGutters
+                          elevation={0}
+                          sx={{
+                            border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
+                            borderRadius: '8px !important',
+                            mb: 1,
+                            '&:before': { display: 'none' },
+                          }}
+                        >
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2, py: 0.5 }}>
+                            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%', mr: 1 }}>
+                              <Avatar sx={{ bgcolor: color, width: 30, height: 30, fontSize: 11 }}>{initials}</Avatar>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight={700} noWrap>{rep.nombre}</Typography>
+                                <Typography variant="caption" color="text.secondary" noWrap>{rep.email}</Typography>
+                              </Box>
+                              <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
+                                <Chip
+                                  size="small"
+                                  label={rep.tipoJornada}
+                                  color={rep.tipoJornada === 'Part Time' ? 'info' : 'success'}
+                                  variant="outlined"
+                                  sx={{ fontSize: 10 }}
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  {rep.dias.length} día{rep.dias.length !== 1 ? 's' : ''} · {totalEnvios} envío{totalEnvios !== 1 ? 's' : ''} · {totalPeso.toFixed(0)} kg
+                                </Typography>
+                              </Stack>
                             </Stack>
-                          </TableCell>
-                          <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.email}</TableCell>
-                          <TableCell>{formatDateOnlyEs(dia.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}</TableCell>
-                          <TableCell align="right">{r.cantidad}</TableCell>
-                          <TableCell align="right">{r.pesoTotal.toFixed(0)} / 500 kg</TableCell>
-                        </TableRow>
-                      )),
-                    )}
-                  </TableBody>
-                </Table>
-              )}
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 2, pt: 0, pb: 1.5 }}>
+                            {rep.dias.map((dia) => (
+                              <Box key={dia.fecha} sx={{ mb: 1.5 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                                  <Typography variant="caption" fontWeight={700} color="primary">
+                                    {formatDateOnlyEs(dia.fecha, { weekday: 'long', day: '2-digit', month: 'short' })}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {dia.pesoTotal.toFixed(0)} / {dia.capacidadKg.toFixed(0)} kg
+                                  </Typography>
+                                </Stack>
+                                {dia.paquetes.length > 0 ? (
+                                  <Table size="small" sx={{ '& td, & th': { py: 0.4, fontSize: 11 } }}>
+                                    <TableHead>
+                                      <TableRow>
+                                        <TableCell>Código</TableCell>
+                                        <TableCell>CP destino</TableCell>
+                                        <TableCell align="right">Peso</TableCell>
+                                        <TableCell align="right">Tipo</TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {dia.paquetes.map((p) => (
+                                        <TableRow key={p.paqueteId}>
+                                          <TableCell sx={{ fontFamily: 'monospace' }}>{p.codigoSeguimiento}</TableCell>
+                                          <TableCell>{p.cpDestino}</TableCell>
+                                          <TableCell align="right">{p.peso.toFixed(0)} kg</TableCell>
+                                          <TableCell align="right">
+                                            {p.esPrioritario
+                                              ? <Chip size="small" label="Prioritario" color="error" sx={{ fontSize: 9, height: 18 }} />
+                                              : <Typography variant="caption" color="text.secondary">Común</Typography>}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {dia.cantidad} envío{dia.cantidad !== 1 ? 's' : ''} asignados
+                                  </Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </AccordionDetails>
+                        </Accordion>
+                      )
+                    })}
+                  </Box>
+                )}
 
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                Esta es una estimación. Los resultados reales pueden variar si cambia el estado de los envíos o repartidores antes de ejecutar.
-              </Typography>
-            </>
-          )}
+                {/* Sin asignar detalle */}
+                {previewResultado.paquetesSinAsignar && previewResultado.paquetesSinAsignar.length > 0 && (
+                  <Accordion
+                    disableGutters
+                    elevation={0}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'warning.main',
+                      borderRadius: '8px !important',
+                      mt: 1,
+                      '&:before': { display: 'none' },
+                    }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2 }}>
+                      <Typography variant="body2" fontWeight={700} color="warning.main">
+                        Sin asignar ({previewResultado.totalSinAsignar})
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ px: 2, pb: 1.5 }}>
+                      {Object.entries(
+                        previewResultado.paquetesSinAsignar.reduce<Record<string, typeof previewResultado.paquetesSinAsignar>>((acc, p) => {
+                          acc[p.motivo] = [...(acc[p.motivo] ?? []), p]
+                          return acc
+                        }, {})
+                      ).map(([motivo, items]) => (
+                        <Box key={motivo} sx={{ mb: 1 }}>
+                          <Typography variant="caption" fontWeight={700} color="warning.main" display="block">{motivo} ({items.length})</Typography>
+                          <Stack spacing={0.3}>
+                            {items.map((p) => (
+                              <Typography key={p.codigoSeguimiento} variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                · {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
+                              </Typography>
+                            ))}
+                          </Stack>
+                        </Box>
+                      ))}
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                  Esta es una estimación. Los resultados reales pueden variar si cambia el estado de los envíos o repartidores antes de confirmar.
+                </Typography>
+              </>
+            )
+          })()}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPreviewOpen(false)}>Cancelar</Button>

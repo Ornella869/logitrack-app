@@ -155,7 +155,7 @@ function AnimatedRoad() {
     { cx: 370, cy: 95, t: 2.9 },
     { cx: 600, cy: 65, t: 4.5 },
     { cx: 870, cy: 28, t: 6.5 },
-    { cx: 1120, cy: 62, t: 8.2 },
+    { cx: 1120, cy: 51, t: 8.2 },
   ]
   const beginTimes = (t: number) =>
     Array.from({ length: 10 }, (_el, i) => `${(t + i * cycle).toFixed(1)}s`).join(';')
@@ -217,34 +217,30 @@ function AnimatedRoad() {
           </g>
         ))}
 
-        {/* Destination flag */}
-        <g transform="translate(1120, 40)">
-          <line x1="0" y1="0" x2="0" y2="28" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
-          <polygon points="0,0 16,5 0,10" fill="#00E5FF" opacity="0.85" />
-        </g>
-
         {/* Animated truck */}
         <g filter="url(#neonRoadGlow)" style={{ willChange: 'transform' }}>
           <animateMotion dur="9s" repeatCount="indefinite" rotate="auto" begin="0.7s">
             <mpath href="#lt-road" />
           </animateMotion>
-          {/* Cab */}
-          <rect x="-23" y="-7" width="12" height="13" rx="2.5" fill="#1565C0" stroke="#4FC3F7" strokeWidth="0.8" />
-          {/* Windshield */}
-          <rect x="-22" y="-6" width="7" height="6" rx="1" fill="rgba(157,231,255,0.82)" />
-          {/* Headlight */}
-          <ellipse cx="-22" cy="3.5" rx="1.2" ry="1.5" fill="#FFF176" />
-          {/* Cargo body */}
-          <rect x="-11" y="-8" width="24" height="15" rx="2" fill="#0D47A1" stroke="#29B6F6" strokeWidth="0.8" />
-          {/* Cargo ribs */}
-          <line x1="-3" y1="-7" x2="-3" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
-          <line x1="4" y1="-7" x2="4" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
-          <line x1="10" y1="-7" x2="10" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
-          {/* Wheels */}
-          <circle cx="-14" cy="8" r="4" fill="#060F1A" stroke="#4FC3F7" strokeWidth="1" />
-          <circle cx="-14" cy="8" r="1.5" fill="#29B6F6" />
-          <circle cx="8" cy="8" r="4" fill="#060F1A" stroke="#4FC3F7" strokeWidth="1" />
-          <circle cx="8" cy="8" r="1.5" fill="#29B6F6" />
+          <g transform="scale(-1, 1)">
+            {/* Cab */}
+            <rect x="-23" y="-7" width="12" height="13" rx="2.5" fill="#1565C0" stroke="#4FC3F7" strokeWidth="0.8" />
+            {/* Windshield */}
+            <rect x="-22" y="-6" width="7" height="6" rx="1" fill="rgba(157,231,255,0.82)" />
+            {/* Headlight */}
+            <ellipse cx="-22" cy="3.5" rx="1.2" ry="1.5" fill="#FFF176" />
+            {/* Cargo body */}
+            <rect x="-11" y="-8" width="24" height="15" rx="2" fill="#0D47A1" stroke="#29B6F6" strokeWidth="0.8" />
+            {/* Cargo ribs */}
+            <line x1="-3" y1="-7" x2="-3" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
+            <line x1="4" y1="-7" x2="4" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
+            <line x1="10" y1="-7" x2="10" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
+            {/* Wheels */}
+            <circle cx="-14" cy="8" r="4" fill="#060F1A" stroke="#4FC3F7" strokeWidth="1" />
+            <circle cx="-14" cy="8" r="1.5" fill="#29B6F6" />
+            <circle cx="8" cy="8" r="4" fill="#060F1A" stroke="#4FC3F7" strokeWidth="1" />
+            <circle cx="8" cy="8" r="1.5" fill="#29B6F6" />
+          </g>
         </g>
       </svg>
     </Box>
