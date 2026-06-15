@@ -99,9 +99,20 @@ function Dashboard() {
       </Typography>
       <Stack spacing={0.5} sx={{ mt: 0.5 }}>
         {licenciasPorVencer.slice(0, 5).map((item) => (
-          <Typography key={item.repartidorId} variant="body2">
-            {[`${item.nombre} ${item.apellido}`, item.dni ? `DNI ${item.dni}` : null, item.email || null, `Lic. ${item.licencia}`].filter(Boolean).join(' · ')}: {item.diasRestantes <= 0 ? 'venció' : 'vence'} el {formatDateOnlyEs(item.fechaVencimientoLicencia)}{item.diasRestantes === 0 ? ' (hoy)' : item.diasRestantes < 0 ? '' : item.diasRestantes <= 7 ? ' (urgente)' : ''}
-          </Typography>
+          <Stack key={item.repartidorId} direction="row" alignItems="center" spacing={1}>
+            <Typography variant="body2" sx={{ flex: 1 }}>
+              {[`${item.nombre} ${item.apellido}`, item.dni ? `DNI ${item.dni}` : null, item.email || null, `Lic. ${item.licencia}`].filter(Boolean).join(' · ')}: {item.diasRestantes <= 0 ? 'venció' : 'vence'} el {formatDateOnlyEs(item.fechaVencimientoLicencia)}{item.diasRestantes === 0 ? ' (hoy)' : item.diasRestantes < 0 ? '' : item.diasRestantes <= 7 ? ' (urgente)' : ''}
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              onClick={() => navigate(`/repartidor/${item.repartidorId}/rendimiento`)}
+              sx={{ whiteSpace: 'nowrap', fontSize: 11, py: 0.2, minWidth: 0, px: 1 }}
+            >
+              Ver →
+            </Button>
+          </Stack>
         ))}
         {licenciasPorVencer.length > 5 && (
           <Typography variant="body2">Y {licenciasPorVencer.length - 5} más.</Typography>

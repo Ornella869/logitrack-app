@@ -36,6 +36,7 @@ namespace Back.Application.Services
 
     public class PaqueteSinAsignarResumen
     {
+        public required Guid PaqueteId { get; init; }
         public required string CodigoSeguimiento { get; init; }
         public required double Peso { get; init; }
         public required string Motivo { get; init; }
@@ -454,6 +455,7 @@ namespace Back.Application.Services
                 {
                     paquetesSinAsignar.Add(new PaqueteSinAsignarResumen
                     {
+                        PaqueteId = paquete.Id,
                         CodigoSeguimiento = paquete.CodigoSeguimiento,
                         Peso = paquete.Peso,
                         Motivo = "Sin repartidores elegibles",
@@ -511,6 +513,7 @@ namespace Back.Application.Services
                 if (!asignado)
                     paquetesSinAsignar.Add(new PaqueteSinAsignarResumen
                     {
+                        PaqueteId = paquete.Id,
                         CodigoSeguimiento = paquete.CodigoSeguimiento,
                         Peso = paquete.Peso,
                         Motivo = "Sin capacidad disponible en los próximos 30 días",

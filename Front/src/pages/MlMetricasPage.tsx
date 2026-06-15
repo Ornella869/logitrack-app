@@ -150,32 +150,16 @@ export default function MlMetricasPage() {
           </CardContent>
         </Card>
 
-        {/* MAE histórico */}
-        <Card variant="outlined">
+        {/* MAE histórico — gráfico neón */}
+        <Card variant="outlined" sx={{ background: 'linear-gradient(135deg, #0a0a1a 0%, #0d1b2a 100%)', border: '1px solid rgba(0,212,255,0.25)' }}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} mb={2}>
+            <Typography variant="subtitle1" fontWeight={700} mb={1} sx={{ color: '#00d4ff', textShadow: '0 0 10px #00d4ff66' }}>
               Evolución del MAE (últimos 6 meses)
             </Typography>
             {metricas && metricas.maeHistorico.length > 0 ? (
-              <Stack spacing={1.5}>
-                {metricas.maeHistorico.map((p) => (
-                  <Box key={p.mes}>
-                    <Stack direction="row" justifyContent="space-between" mb={0.3}>
-                      <Typography variant="caption">{p.mes}</Typography>
-                      <Typography variant="caption" fontWeight={700}>
-                        {p.mae} h · {p.registros} reg.
-                      </Typography>
-                    </Stack>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min((p.mae / 48) * 100, 100)}
-                      sx={{ height: 6, borderRadius: 3 }}
-                    />
-                  </Box>
-                ))}
-              </Stack>
+              <MaeNeonChart data={metricas.maeHistorico} />
             ) : (
-              <Typography color="text.secondary">Sin datos históricos aún.</Typography>
+              <Typography color="rgba(255,255,255,0.4)" sx={{ py: 4, textAlign: 'center' }}>Sin datos históricos aún.</Typography>
             )}
           </CardContent>
         </Card>
@@ -343,6 +327,136 @@ function SummaryCard({ label, value, sub, color }: { label: string; value: strin
         <Typography variant="caption" color="text.secondary">{sub}</Typography>
       </CardContent>
     </Card>
+  )
+}
+
+function MaeNeonChart({ data }: { data: { mes: string; mae: number; registros: number }[] }) {
+  const W = 380, H = 180
+  const PAD = { top: 16, right: 16, bottom: 36, left: 44 }
+  const innerW = W - PAD.left - PAD.right
+  const innerH = H - PAD.top - PAD.bottom
+  const maxMae = Math.max(...data.map(d => d.mae), 1)
+
+  const xOf = (i: number) => PAD.left + (data.length < 2 ? innerW / 2 : (i / (data.length - 1)) * innerW)
+  const yOf = (v: number) => PAD.top + innerH - (v / maxMae) * innerH
+
+  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(d.mae).toFixed(1)}`).join(' ')
+  const areaPath = linePath
+    + ` L${xOf(data.length - 1).toFixed(1)},${(PAD.top + innerH).toFixed(1)}`
+    + ` L${xOf(0).toFixed(1)},${(PAD.top + innerH).toFixed(1)} Z`
+
+  const gridValues = [0, maxMae * 0.5, maxMae]
+
+  return (
+    <Box sx={{
+      '@keyframes drawLine': { from: { strokeDashoffset: 2000 }, to: { strokeDashoffset: 0 } },
+      '@keyframes fadeIn': { from: { opacity: 0 }, to: { opacity: 1 } },
+    }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ overflow: 'visible' }}>
+        <defs>
+          <filter id="neon-line">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <filter id="neon-dot">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00d4ff" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#00d4ff" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="mag-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ff00ff" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="#ff00ff" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid horizontales */}
+        {gridValues.map((v, i) => (
+          <g key={i}>
+            <line x1={PAD.left} y1={yOf(v)} x2={W - PAD.right} y2={yOf(v)}
+              stroke="rgba(255,255,255,0.07)" strokeWidth="1" strokeDasharray="4,4" />
+            <text x={PAD.left - 6} y={yOf(v)} textAnchor="end" dominantBaseline="middle"
+              fontSize="9" fill="rgba(255,255,255,0.35)">{v.toFixed(1)}h</text>
+          </g>
+        ))}
+
+        {/* Grid verticales */}
+        {data.map((_, i) => (
+          <line key={i} x1={xOf(i)} y1={PAD.top} x2={xOf(i)} y2={PAD.top + innerH}
+            stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+        ))}
+
+        {/* Área relleno */}
+        <path d={areaPath} fill="url(#area-grad)"
+          style={{ animation: 'fadeIn 1.2s ease forwards', animationDelay: '0.4s', opacity: 0 }} />
+
+        {/* Línea glow (blur) */}
+        <path d={linePath} fill="none" stroke="#00d4ff" strokeWidth="3" filter="url(#neon-line)" opacity={0.5} />
+
+        {/* Línea principal animada */}
+        <path d={linePath} fill="none" stroke="#00d4ff" strokeWidth="2"
+          strokeDasharray="2000" strokeDashoffset="2000"
+          style={{ animation: 'drawLine 1.8s cubic-bezier(0.4,0,0.2,1) forwards' }} />
+
+        {/* Segunda línea neón magenta (mejora: si el mae baja, colorea verde) */}
+        {data.length >= 2 && (() => {
+          const trend = data[data.length - 1].mae - data[0].mae
+          const color = trend < 0 ? '#39ff14' : '#ff00ff'
+          const glow = trend < 0 ? 'rgba(57,255,20,0.4)' : 'rgba(255,0,255,0.4)'
+          return (
+            <>
+              <path d={linePath} fill="none" stroke={color} strokeWidth="1" opacity="0.35"
+                strokeDasharray="2000" strokeDashoffset="2000"
+                style={{ animation: 'drawLine 1.8s cubic-bezier(0.4,0,0.2,1) 0.15s forwards' }}
+                filter="url(#neon-line)"
+              />
+              <text x={W - PAD.right} y={PAD.top - 4} textAnchor="end" fontSize="9"
+                fill={glow} style={{ animation: 'fadeIn 1s ease 1.5s forwards', opacity: 0 }}>
+                {trend < 0 ? '▼ mejorando' : '▲ empeorando'}
+              </text>
+            </>
+          )
+        })()}
+
+        {/* Puntos neón */}
+        {data.map((d, i) => (
+          <g key={i} style={{ animation: `fadeIn 0.4s ease ${0.8 + i * 0.12}s forwards`, opacity: 0 }}>
+            <circle cx={xOf(i)} cy={yOf(d.mae)} r="6" fill="transparent" stroke="#00d4ff" strokeWidth="1.5"
+              opacity="0.4" filter="url(#neon-dot)" />
+            <circle cx={xOf(i)} cy={yOf(d.mae)} r="3.5" fill="#00d4ff" filter="url(#neon-dot)" />
+            <circle cx={xOf(i)} cy={yOf(d.mae)} r="2" fill="#fff" />
+          </g>
+        ))}
+
+        {/* Etiqueta valor sobre cada punto */}
+        {data.map((d, i) => (
+          <text key={i} x={xOf(i)} y={yOf(d.mae) - 12} textAnchor="middle" fontSize="9"
+            fill="#00d4ff" fontWeight="700"
+            style={{ animation: `fadeIn 0.4s ease ${1 + i * 0.12}s forwards`, opacity: 0 }}
+            filter="url(#neon-line)">
+            {d.mae}h
+          </text>
+        ))}
+
+        {/* Etiquetas eje X */}
+        {data.map((d, i) => (
+          <text key={i} x={xOf(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.45)">
+            {d.mes.split(' ')[0]}
+          </text>
+        ))}
+      </svg>
+
+      {/* Leyenda mini */}
+      <Stack direction="row" spacing={2} sx={{ mt: 1, px: 1 }} flexWrap="wrap">
+        {data.map((d, i) => (
+          <Typography key={i} variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>
+            {d.mes}: <strong style={{ color: '#00d4ff' }}>{d.mae}h</strong> · {d.registros} reg.
+          </Typography>
+        ))}
+      </Stack>
+    </Box>
   )
 }
 

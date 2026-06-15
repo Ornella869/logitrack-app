@@ -28,11 +28,13 @@ import {
   Select,
   Snackbar,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -94,6 +96,18 @@ export default function CalendarizarPage() {
   const [selectedReagendar, setSelectedReagendar] = useState<Set<string>>(new Set())
   const [reagendandoMasivo, setReagendandoMasivo] = useState(false)
   const [reagendarMasivoResult, setReagendarMasivoResult] = useState<{ reagendados: number; sinFechaDisponible: number } | null>(null)
+
+  // Tab principal: automatica | reagendamiento
+  const [calTab, setCalTab] = useState<'automatica' | 'reagendamiento'>('automatica')
+
+  // Overrides aplicados en la última ejecución (para mostrar en resumen final)
+  const [appliedOverrides, setAppliedOverrides] = useState<Map<string, { repartidorId: string; repartidorNombre: string; fecha: string }> | null>(null)
+
+  // Reasignación masiva de sin-asignar en preview
+  const [selectedSinAsignar, setSelectedSinAsignar] = useState<Set<string>>(new Set())
+  const [bulkSinAsignarOpen, setBulkSinAsignarOpen] = useState(false)
+  const [bulkSinAsignarRepartidorId, setBulkSinAsignarRepartidorId] = useState('')
+  const [bulkSinAsignarFecha, setBulkSinAsignarFecha] = useState('')
 
   // Ajustes manuales sobre el preview antes de ejecutar
   const [overrides, setOverrides] = useState<Map<string, { repartidorId: string; repartidorNombre: string; fecha: string }>>(new Map())
@@ -296,10 +310,12 @@ export default function CalendarizarPage() {
     }
 
     // Aplicar ajustes manuales del preview
+    const savedOverrides = new Map(overrides)
     for (const [paqueteId, ov] of overrides) {
       await calendarizacionService.precalendarizar(paqueteId, ov.repartidorId, ov.fecha)
     }
     setOverrides(new Map())
+    setAppliedOverrides(savedOverrides.size > 0 ? savedOverrides : null)
 
     const resultado = res.data ?? null
     setResultado(resultado)
@@ -345,6 +361,7 @@ export default function CalendarizarPage() {
     setResultado(null)
     setExec(null)
     setStepIdx(0)
+    setAppliedOverrides(null)
   }
 
   const progressPct = Math.round((stepIdx / PROCESS_STEPS.length) * 100)
@@ -359,17 +376,47 @@ export default function CalendarizarPage() {
     <Box>
       <Typography variant="h4" fontWeight={700}>
         <BoltIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-        Calendarización Automática
+        Calendarización
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Asignación automática de envíos a repartidores por código postal y capacidad.
       </Typography>
 
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={calTab} onChange={(_, v: 'automatica' | 'reagendamiento') => setCalTab(v)}>
+          <Tab
+            value="automatica"
+            label={
+              <Stack direction="row" alignItems="center" spacing={0.8}>
+                <BoltIcon sx={{ fontSize: 16 }} />
+                <span>Calendarización Automática</span>
+                {pendientes.length > 0 && (
+                  <Chip label={pendientes.length} size="small" color="primary"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 700, '& .MuiChip-label': { px: 0.8 } }} />
+                )}
+              </Stack>
+            }
+          />
+          <Tab
+            value="reagendamiento"
+            label={
+              <Stack direction="row" alignItems="center" spacing={0.8}>
+                <span>Pendientes de Reagendamiento</span>
+                {pendientesReagendamiento.length > 0 && (
+                  <Chip label={pendientesReagendamiento.length} size="small" color="warning"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 700, '& .MuiChip-label': { px: 0.8 } }} />
+                )}
+              </Stack>
+            }
+          />
+        </Tabs>
+      </Box>
+
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {loading ? (
+      {calTab === 'automatica' && loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
-      ) : (
+      ) : calTab === 'automatica' ? (
         <Grid container spacing={3}>
           {/* IZQUIERDA: Resumen previo */}
           <Grid item xs={12} md={8}>
@@ -533,12 +580,16 @@ export default function CalendarizarPage() {
             </Card>
           </Grid>
         </Grid>
-      )}
+      ) : null}
 
 
       {/* G1L-147: Reagendamiento de envíos no entregados */}
-      {pendientesReagendamiento.length > 0 && (
-        <Card variant="outlined" sx={{ mt: 3, borderLeft: '4px solid #e65100' }}>
+      {calTab === 'reagendamiento' && pendientesReagendamiento.length === 0 && (
+        <Alert severity="success">No hay envíos pendientes de reagendamiento en este momento.</Alert>
+      )}
+
+      {calTab === 'reagendamiento' && pendientesReagendamiento.length > 0 && (
+        <Card variant="outlined" sx={{ borderLeft: '4px solid #e65100' }}>
           <CardContent>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
               <Box>
@@ -909,25 +960,76 @@ export default function CalendarizarPage() {
                     }}
                   >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2 }}>
-                      <Typography variant="body2" fontWeight={700} color="warning.main">
-                        Sin asignar ({previewResultado.totalSinAsignar})
-                      </Typography>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%">
+                        <Typography variant="body2" fontWeight={700} color="warning.main">
+                          Sin asignar ({previewResultado.totalSinAsignar})
+                        </Typography>
+                        {selectedSinAsignar.size > 0 && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="secondary"
+                            onClick={(e) => { e.stopPropagation(); setBulkSinAsignarOpen(true) }}
+                            sx={{ mr: 1, fontSize: 11 }}
+                          >
+                            Reasignar {selectedSinAsignar.size} seleccionado{selectedSinAsignar.size !== 1 ? 's' : ''}
+                          </Button>
+                        )}
+                      </Stack>
                     </AccordionSummary>
                     <AccordionDetails sx={{ px: 2, pb: 1.5 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                        <Checkbox
+                          size="small"
+                          checked={selectedSinAsignar.size === previewResultado.paquetesSinAsignar.length}
+                          indeterminate={selectedSinAsignar.size > 0 && selectedSinAsignar.size < previewResultado.paquetesSinAsignar.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSinAsignar(new Set(previewResultado.paquetesSinAsignar!.map(p => p.paqueteId)))
+                            } else {
+                              setSelectedSinAsignar(new Set())
+                            }
+                          }}
+                          sx={{ p: 0.3 }}
+                        />
+                        <Typography variant="caption" color="text.secondary">Seleccionar todos</Typography>
+                      </Stack>
                       {Object.entries(
                         previewResultado.paquetesSinAsignar.reduce<Record<string, typeof previewResultado.paquetesSinAsignar>>((acc, p) => {
                           acc[p.motivo] = [...(acc[p.motivo] ?? []), p]
                           return acc
                         }, {})
                       ).map(([motivo, items]) => (
-                        <Box key={motivo} sx={{ mb: 1 }}>
-                          <Typography variant="caption" fontWeight={700} color="warning.main" display="block">{motivo} ({items.length})</Typography>
-                          <Stack spacing={0.3}>
-                            {items.map((p) => (
-                              <Typography key={p.codigoSeguimiento} variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                                · {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
-                              </Typography>
-                            ))}
+                        <Box key={motivo} sx={{ mb: 1.5 }}>
+                          <Typography variant="caption" fontWeight={700} color="warning.main" display="block" sx={{ mb: 0.5 }}>{motivo} ({items.length})</Typography>
+                          <Stack spacing={0.2}>
+                            {items.map((p) => {
+                              const isSelected = selectedSinAsignar.has(p.paqueteId)
+                              const hasOverride = overrides.has(p.paqueteId)
+                              return (
+                                <Stack key={p.paqueteId} direction="row" alignItems="center" spacing={0.8}
+                                  sx={{
+                                    px: 0.5, py: 0.3, borderRadius: 1, cursor: 'pointer',
+                                    bgcolor: isSelected ? 'action.selected' : hasOverride ? 'success.light' + '22' : 'transparent',
+                                    '&:hover': { bgcolor: 'action.hover' },
+                                  }}
+                                  onClick={() => setSelectedSinAsignar(prev => {
+                                    const next = new Set(prev)
+                                    if (next.has(p.paqueteId)) next.delete(p.paqueteId)
+                                    else next.add(p.paqueteId)
+                                    return next
+                                  })}
+                                >
+                                  <Checkbox size="small" checked={isSelected} sx={{ p: 0 }}
+                                    onChange={() => {}}
+                                  />
+                                  <Typography variant="caption" color={hasOverride ? 'success.main' : 'text.secondary'} sx={{ fontFamily: 'monospace' }}>
+                                    {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
+                                    {hasOverride && ` ✓ ${overrides.get(p.paqueteId)?.repartidorNombre}`}
+                                  </Typography>
+                                </Stack>
+                              )
+                            })}
                           </Stack>
                         </Box>
                       ))}
@@ -1001,6 +1103,68 @@ export default function CalendarizarPage() {
             color="secondary"
             disabled={!reassignDialog?.selectedRepartidorId || !reassignDialog?.selectedFecha}
             onClick={confirmReassign}
+          >
+            Confirmar ajuste
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: reasignación masiva de sin-asignar */}
+      <Dialog open={bulkSinAsignarOpen} onClose={() => setBulkSinAsignarOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <SwapHorizIcon color="secondary" fontSize="small" />
+            <span>Reasignar {selectedSinAsignar.size} envío{selectedSinAsignar.size !== 1 ? 's' : ''} sin asignar</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mt: 0.5 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Repartidor destino</InputLabel>
+              <Select
+                value={bulkSinAsignarRepartidorId}
+                label="Repartidor destino"
+                onChange={(e) => setBulkSinAsignarRepartidorId(e.target.value)}
+              >
+                {repartidoresActivos.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>
+                    {r.nombre} {r.apellido}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small" label="Fecha de entrega" type="date"
+              value={bulkSinAsignarFecha}
+              onChange={(e) => setBulkSinAsignarFecha(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ min: new Date().toISOString().slice(0, 10) }}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkSinAsignarOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained" color="secondary"
+            disabled={!bulkSinAsignarRepartidorId || !bulkSinAsignarFecha}
+            onClick={() => {
+              const rep = repartidoresActivos.find(r => r.id === bulkSinAsignarRepartidorId)
+              if (!rep) return
+              setOverrides(prev => {
+                const next = new Map(prev)
+                for (const paqueteId of selectedSinAsignar) {
+                  next.set(paqueteId, {
+                    repartidorId: bulkSinAsignarRepartidorId,
+                    repartidorNombre: `${rep.nombre} ${rep.apellido}`,
+                    fecha: bulkSinAsignarFecha,
+                  })
+                }
+                return next
+              })
+              setSelectedSinAsignar(new Set())
+              setBulkSinAsignarOpen(false)
+            }}
           >
             Confirmar ajuste
           </Button>
@@ -1110,10 +1274,11 @@ export default function CalendarizarPage() {
             </Box>
           )}
 
-          {exec?.ok && resultado && resultado.resumenPorDia.length > 0 && (
+          {exec?.ok && resultado && (resultado.resumenPorDia.length > 0 || (appliedOverrides && appliedOverrides.size > 0)) && (
             <Box sx={{ mt: 3 }}>
               <Alert severity="success" sx={{ mb: 2 }}>
                 Calendarización completada · {resultado.totalCalendarizados} envíos asignados a {new Set(resultado.resumenPorDia.flatMap((d) => d.repartidores.map((r) => r.repartidorId))).size} repartidores
+                {appliedOverrides && appliedOverrides.size > 0 && ` · ${appliedOverrides.size} reasignado${appliedOverrides.size > 1 ? 's' : ''} manualmente`}
               </Alert>
               <Table size="small">
                 <TableHead>
@@ -1144,6 +1309,31 @@ export default function CalendarizarPage() {
                       </TableRow>
                     )),
                   )}
+                  {appliedOverrides && (() => {
+                    const grouped = new Map<string, { repartidorNombre: string; fecha: string; count: number }>()
+                    for (const ov of appliedOverrides.values()) {
+                      const key = `${ov.repartidorId}__${ov.fecha}`
+                      const prev = grouped.get(key)
+                      grouped.set(key, { repartidorNombre: ov.repartidorNombre, fecha: ov.fecha, count: (prev?.count ?? 0) + 1 })
+                    }
+                    return Array.from(grouped.entries()).map(([key, ov]) => (
+                      <TableRow key={`manual-${key}`} sx={{ bgcolor: 'rgba(46,125,50,0.08)' }}>
+                        <TableCell>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Avatar sx={{ bgcolor: '#2e7d32', width: 24, height: 24, fontSize: 11 }}>
+                              {ov.repartidorNombre.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                            </Avatar>
+                            {ov.repartidorNombre}
+                            <Chip label="Manual" size="small" color="success" sx={{ fontSize: 10, height: 18 }} />
+                          </Stack>
+                        </TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>—</TableCell>
+                        <TableCell>{formatDateOnlyEs(ov.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}</TableCell>
+                        <TableCell align="right">{ov.count}</TableCell>
+                        <TableCell align="right" sx={{ color: 'text.secondary' }}>—</TableCell>
+                      </TableRow>
+                    ))
+                  })()}
                 </TableBody>
               </Table>
             </Box>

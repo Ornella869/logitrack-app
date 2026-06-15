@@ -738,6 +738,7 @@ export interface DiaResumen {
 }
 
 export interface PaqueteSinAsignarResumen {
+  paqueteId: string
   codigoSeguimiento: string
   peso: number
   motivo: string

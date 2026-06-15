@@ -20,8 +20,15 @@ import {
   Select,
   Stack,
   Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material'
@@ -48,6 +55,8 @@ import ListAltIcon from '@mui/icons-material/ListAlt'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import BrokenImageIcon from '@mui/icons-material/BrokenImage'
 import MarkUnreadChatAltIcon from '@mui/icons-material/MarkUnreadChatAlt'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import GridOnIcon from '@mui/icons-material/GridOn'
 import {
   incidenciaService,
   type EstadoIncidencia,
@@ -122,6 +131,35 @@ function formatMinutosResolucion(minutos?: number | null): string {
   const horas = Math.floor(minutos / 60)
   const resto = minutos % 60
   return resto ? `${horas} h ${resto} min` : `${horas} h`
+}
+
+interface PanelCruzadoRepartidor {
+  repartidorId: string
+  repartidorNombre: string
+  total: number
+  porTipo: Record<string, number>
+}
+interface PanelCruzadoData {
+  tipos: string[]
+  repartidores: PanelCruzadoRepartidor[]
+  promedios: Record<string, number>
+}
+interface DetalleIncidenciaCruzado {
+  id: string
+  tipo: string
+  tipoLabel: string
+  descripcion: string
+  estado: string
+  fechaReporte: string
+  severidad: string
+  repartidorNombre: string
+  codigoSeguimiento: string
+}
+
+const ESTADO_COLOR_CRUZADO: Record<string, string> = {
+  Abierta: '#c62828',
+  'En Revisión': '#e65100',
+  Resuelta: '#2e7d32',
 }
 
 interface DetalleDialogProps {
@@ -766,17 +804,23 @@ export default function IncidenciasPage() {
   const isDark = theme.palette.mode === 'dark'
 
   const [incidencias, setIncidencias] = useState<Incidencia[]>([])
-  const [tabVista, setTabVista] = useState<'repartidores' | 'clientes' | 'panel'>('repartidores')
+  const [tabVista, setTabVista] = useState<'repartidores' | 'clientes' | 'cruzado'>('repartidores')
   const [filtroEstado, setFiltroEstado] = useState<EstadoIncidencia | 'Todas'>('Todas')
   const [filtroSeveridad, setFiltroSeveridad] = useState<SeveridadIncidencia | 'Todas'>('Todas')
   const [soloSlaVencido, setSoloSlaVencido] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
   const [rankingZonas, setRankingZonas] = useState<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number; severidadPredominante: string; tipoPredominante: string }>>([])
-  const [panel, setPanel] = useState<{
-    porTipo: Array<{ tipo: string; tipoLabel: string; total: number; abiertas: number; slaVencidas: number }>
-    porRepartidor: Array<{ repartidorId: string; repartidorNombre: string; total: number; abiertas: number; tipoPredominante: string }>
-  } | null>(null)
+  const [panelCruzado, setPanelCruzado] = useState<PanelCruzadoData | null>(null)
+  const [cruzadoLoading, setCruzadoLoading] = useState(false)
+  const [cruzadoError, setCruzadoError] = useState('')
+  const [cruzadoDesde, setCruzadoDesde] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+  })
+  const [cruzadoHasta, setCruzadoHasta] = useState(() => new Date().toISOString().slice(0, 10))
+  const [drillCell, setDrillCell] = useState<{ repartidorId: string; repartidorNombre: string; tipo: string } | null>(null)
+  const [drillItems, setDrillItems] = useState<DetalleIncidenciaCruzado[]>([])
+  const [drillLoading, setDrillLoading] = useState(false)
 
   const cargar = async () => {
     setIncidencias(await incidenciaService.getAll())
@@ -784,12 +828,6 @@ export default function IncidenciasPage() {
       setRankingZonas(await incidenciaService.rankingZonas())
     } catch {
       setRankingZonas([])
-    }
-    try {
-      const resp = await import('../services/api').then(m => m.default.get('/incidencias/panel-tipo-repartidor'))
-      setPanel(resp.data)
-    } catch {
-      setPanel(null)
     }
   }
 
@@ -810,6 +848,37 @@ export default function IncidenciasPage() {
     )
   }
 
+  const cargarCruzado = async (desde = cruzadoDesde, hasta = cruzadoHasta) => {
+    setCruzadoLoading(true)
+    setCruzadoError('')
+    try {
+      const apiModule = await import('../services/api')
+      const res = await apiModule.default.get('/incidencias/panel-cruzado', { params: { desde, hasta } })
+      setPanelCruzado(res.data)
+    } catch {
+      setCruzadoError('No se pudo cargar el panel cruzado.')
+    } finally {
+      setCruzadoLoading(false)
+    }
+  }
+
+  const openDrillCruzado = async (rep: PanelCruzadoRepartidor, tipo: string) => {
+    const count = rep.porTipo[tipo] ?? 0
+    if (count === 0) return
+    setDrillCell({ repartidorId: rep.repartidorId ?? '', repartidorNombre: rep.repartidorNombre, tipo })
+    setDrillLoading(true)
+    setDrillItems([])
+    try {
+      const apiModule = await import('../services/api')
+      const res = await apiModule.default.get('/incidencias/panel-detalle', {
+        params: { repartidorId: rep.repartidorId, tipo, desde: cruzadoDesde, hasta: cruzadoHasta },
+      })
+      setDrillItems(res.data)
+    } finally {
+      setDrillLoading(false)
+    }
+  }
+
   useEffect(() => {
     void cargar()
     const handler = () => void cargar()
@@ -822,6 +891,12 @@ export default function IncidenciasPage() {
     const poll = setInterval(() => void refreshChats(), 5000)
     return () => clearInterval(poll)
   }, [])
+
+  useEffect(() => {
+    if (tabVista === 'cruzado' && !panelCruzado && !cruzadoLoading) {
+      void cargarCruzado()
+    }
+  }, [tabVista])
 
   const incidenciasDeRepartidor = incidencias.filter((i) => i.origen !== 'cliente')
   const incidenciasDeCliente = incidencias.filter((i) => i.origen === 'cliente')
@@ -872,7 +947,7 @@ export default function IncidenciasPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs
           value={tabVista}
-          onChange={(_, v: 'repartidores' | 'clientes' | 'panel') => { setTabVista(v); setFiltroEstado('Todas'); setFiltroSeveridad('Todas'); setSoloSlaVencido(false); setBusqueda('') }}
+          onChange={(_, v: 'repartidores' | 'clientes' | 'cruzado') => { setTabVista(v); setFiltroEstado('Todas'); setFiltroSeveridad('Todas'); setSoloSlaVencido(false); setBusqueda('') }}
         >
           <Tab
             value="repartidores"
@@ -908,74 +983,197 @@ export default function IncidenciasPage() {
               </Stack>
             }
           />
-          <Tab value="panel" label="Panel Agregado" />
+          <Tab value="cruzado" label={<Stack direction="row" alignItems="center" spacing={0.6}><GridOnIcon sx={{ fontSize: 16 }} /><span>Panel Cruzado</span></Stack>} />
         </Tabs>
       </Box>
 
-      {tabVista === 'panel' && (
+      {tabVista === 'cruzado' && (
         <Box>
-          {!panel ? (
-            <CircularProgress />
+          {/* Filtros panel cruzado */}
+          <Card variant="outlined" sx={{ mb: 3 }}>
+            <CardContent>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-end" flexWrap="wrap">
+                <TextField
+                  size="small" label="Desde" type="date"
+                  value={cruzadoDesde}
+                  onChange={e => setCruzadoDesde(e.target.value)}
+                  InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }}
+                />
+                <TextField
+                  size="small" label="Hasta" type="date"
+                  value={cruzadoHasta}
+                  onChange={e => setCruzadoHasta(e.target.value)}
+                  InputLabelProps={{ shrink: true }} inputProps={{ min: cruzadoDesde }} sx={{ minWidth: 150 }}
+                />
+                <Button variant="contained" disabled={cruzadoLoading}
+                  onClick={() => cargarCruzado()} sx={{ minWidth: 100 }}>
+                  {cruzadoLoading ? <CircularProgress size={18} color="inherit" /> : 'Filtrar'}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {cruzadoError && <Alert severity="error" sx={{ mb: 2 }}>{cruzadoError}</Alert>}
+
+          {cruzadoLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
+          ) : !panelCruzado || panelCruzado.repartidores.length === 0 ? (
+            <Alert severity="info">No hay incidencias con repartidor asignado en el período seleccionado.</Alert>
           ) : (
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>Incidencias por tipo</Typography>
-                    <Stack spacing={1}>
-                      {panel.porTipo.map((t) => {
-                        const info = TIPO_INFO[t.tipo] ?? TIPO_INFO.otro!
-                        const maxTotal = Math.max(...panel.porTipo.map((x) => x.total), 1)
-                        return (
-                          <Box key={t.tipo}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.3 }}>
-                              <Typography variant="body2" fontWeight={600}>
-                                {t.tipoLabel}
-                              </Typography>
-                              <Stack direction="row" spacing={0.8}>
-                                <Chip size="small" label={`${t.total} total`} sx={{ fontSize: 10, height: 20 }} />
-                                {t.abiertas > 0 && <Chip size="small" label={`${t.abiertas} abierta${t.abiertas > 1 ? 's' : ''}`} color="error" sx={{ fontSize: 10, height: 20 }} />}
-                                {t.slaVencidas > 0 && <Chip size="small" label={`${t.slaVencidas} SLA`} sx={{ fontSize: 10, height: 20, bgcolor: '#b71c1c', color: 'white' }} />}
-                              </Stack>
-                            </Stack>
-                            <Box sx={{ bgcolor: 'action.hover', borderRadius: 0.5, height: 6, overflow: 'hidden' }}>
-                              <Box sx={{ height: '100%', width: `${(t.total / maxTotal) * 100}%`, bgcolor: info.color, borderRadius: 0.5, transition: 'width 0.4s' }} />
-                            </Box>
-                          </Box>
-                        )
-                      })}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>Top repartidores con incidencias</Typography>
-                    <Stack spacing={0.8}>
-                      {panel.porRepartidor.map((r, i) => (
-                        <Stack key={r.repartidorId} direction="row" justifyContent="space-between" alignItems="center"
-                          sx={{ p: 1, bgcolor: i === 0 ? '#fdecea' : 'transparent', borderRadius: 1, border: '1px solid', borderColor: i === 0 ? '#c62828' : 'divider' }}>
-                          <Box>
-                            <Typography variant="body2" fontWeight={600}>{i + 1}. {r.repartidorNombre}</Typography>
-                            <Typography variant="caption" color="text.secondary">Predomina: {r.tipoPredominante || '—'}</Typography>
-                          </Box>
-                          <Stack direction="row" spacing={0.8}>
-                            <Chip size="small" label={`${r.total} total`} sx={{ fontSize: 10, height: 20 }} />
-                            {r.abiertas > 0 && <Chip size="small" label={`${r.abiertas} abierta${r.abiertas > 1 ? 's' : ''}`} color="error" sx={{ fontSize: 10, height: 20 }} />}
-                          </Stack>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
+            <>
+              {panelCruzado.repartidores.some(r => panelCruzado.tipos.some(t => {
+                const avg = panelCruzado.promedios[t] ?? 0
+                return avg > 0 && (r.porTipo[t] ?? 0) > avg * 2
+              })) && (
+                <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
+                  Algunas celdas resaltadas en rojo tienen más del doble del promedio del equipo. Revisá esos repartidores para identificar causas recurrentes.
+                </Alert>
+              )}
+
+              <Card variant="outlined">
+                <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                  <TableContainer>
+                    <Table size="small" sx={{ minWidth: 600 }}>
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f5f5f5' }}>
+                          <TableCell sx={{ fontWeight: 700, minWidth: 180, position: 'sticky', left: 0, bgcolor: isDark ? '#1e1e1e' : '#f5f5f5', zIndex: 1 }}>
+                            Repartidor
+                          </TableCell>
+                          {panelCruzado.tipos.map(t => (
+                            <TableCell key={t} align="center" sx={{ fontWeight: 700, minWidth: 90 }}>
+                              <Tooltip title={`Promedio equipo: ${panelCruzado!.promedios[t]}`}>
+                                <Box>
+                                  <Typography variant="caption" fontWeight={700}
+                                    sx={{ color: TIPO_INFO[t]?.color ?? '#555', display: 'block' }}>
+                                    {TIPO_INFO[t]?.label ?? t}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+                                    prom. {panelCruzado.promedios[t]}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                          ))}
+                          <TableCell align="center" sx={{ fontWeight: 700, minWidth: 70 }}>Total</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {panelCruzado.repartidores.map(rep => (
+                          <TableRow key={rep.repartidorId} hover>
+                            <TableCell sx={{
+                              fontWeight: 600, position: 'sticky', left: 0,
+                              bgcolor: isDark ? '#1e1e1e' : '#fff', zIndex: 1,
+                              borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e0e0e0'}`,
+                            }}>
+                              {rep.repartidorNombre}
+                            </TableCell>
+                            {panelCruzado.tipos.map(t => {
+                              const val = rep.porTipo[t] ?? 0
+                              const avg = panelCruzado!.promedios[t] ?? 0
+                              const atipico = avg > 0 && val > avg * 2
+                              return (
+                                <TableCell key={t} align="center"
+                                  onClick={() => openDrillCruzado(rep, t)}
+                                  sx={{
+                                    cursor: val > 0 ? 'pointer' : 'default',
+                                    bgcolor: atipico
+                                      ? (isDark ? 'rgba(198,40,40,0.25)' : '#fdecea')
+                                      : val > 0 ? (isDark ? 'rgba(255,255,255,0.03)' : '#fafafa') : 'inherit',
+                                    '&:hover': val > 0 ? { bgcolor: isDark ? 'rgba(255,255,255,0.1)' : '#f0f0f0' } : {},
+                                    border: atipico ? `1px solid #c62828` : undefined,
+                                  }}>
+                                  {val === 0 ? (
+                                    <Typography variant="caption" color="text.disabled">—</Typography>
+                                  ) : (
+                                    <Stack direction="row" spacing={0.4} justifyContent="center" alignItems="center">
+                                      {atipico && <WarningAmberIcon sx={{ fontSize: 13, color: 'error.main' }} />}
+                                      <Typography variant="body2"
+                                        fontWeight={atipico ? 800 : 600}
+                                        sx={{ color: atipico ? 'error.main' : (TIPO_INFO[t]?.color ?? '#555') }}>
+                                        {val}
+                                      </Typography>
+                                    </Stack>
+                                  )}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell align="center">
+                              <Chip label={rep.total} size="small" sx={{
+                                fontWeight: 700,
+                                bgcolor: rep.total > 5
+                                  ? (isDark ? 'rgba(198,40,40,0.2)' : '#fdecea')
+                                  : isDark ? 'rgba(255,255,255,0.08)' : '#f5f5f5',
+                                color: rep.total > 5 ? 'error.main' : 'text.primary',
+                              }} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+
+              <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap">
+                {panelCruzado.tipos.map(t => (
+                  <Chip key={t} size="small"
+                    label={`${TIPO_INFO[t]?.label ?? t}: prom. ${panelCruzado!.promedios[t]}`}
+                    sx={{ fontSize: 11, color: TIPO_INFO[t]?.color ?? '#555', borderColor: TIPO_INFO[t]?.color ?? '#555' }}
+                    variant="outlined" />
+                ))}
+              </Stack>
+            </>
           )}
+
+          {/* Drill-down dialog */}
+          <Dialog open={!!drillCell} onClose={() => setDrillCell(null)} maxWidth="sm" fullWidth>
+            <DialogTitle>
+              <Typography variant="subtitle1" fontWeight={700}>
+                {drillCell?.repartidorNombre} · {drillCell ? (TIPO_INFO[drillCell.tipo]?.label ?? drillCell.tipo) : ''}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">{cruzadoDesde} – {cruzadoHasta}</Typography>
+            </DialogTitle>
+            <DialogContent dividers>
+              {drillLoading ? (
+                <Box display="flex" justifyContent="center" py={3}><CircularProgress /></Box>
+              ) : drillItems.length === 0 ? (
+                <Alert severity="info">Sin incidencias para esta combinación.</Alert>
+              ) : (
+                <Stack spacing={1.5}>
+                  {drillItems.map(inc => (
+                    <Card key={inc.id} variant="outlined">
+                      <CardContent sx={{ py: 1.5 }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
+                          <Box flex={1}>
+                            <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+                              <Chip label={inc.estado} size="small" variant="outlined"
+                                sx={{ fontSize: 10, color: ESTADO_COLOR_CRUZADO[inc.estado] ?? '#555', borderColor: ESTADO_COLOR_CRUZADO[inc.estado] ?? '#555' }} />
+                              {inc.severidad === 'Alta' && (
+                                <Chip label="Alta severidad" size="small" color="error" sx={{ fontSize: 10 }} />
+                              )}
+                              {inc.codigoSeguimiento && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                  {inc.codigoSeguimiento}
+                                </Typography>
+                              )}
+                            </Stack>
+                            <Typography variant="body2">{inc.descripcion || 'Sin descripción.'}</Typography>
+                          </Box>
+                          <Typography variant="caption" color="text.secondary" whiteSpace="nowrap">
+                            {new Date(inc.fechaReporte).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </Typography>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </DialogContent>
+          </Dialog>
         </Box>
       )}
 
-      {tabVista !== 'panel' && <>
+      {tabVista !== 'cruzado' && <>
 
       {/* KPIs */}
       <Grid container spacing={2} sx={{ mb: 3 }}>

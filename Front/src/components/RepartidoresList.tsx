@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -105,6 +105,9 @@ function toDateInputValue(value?: string | null): string {
 
 function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const highlightId = searchParams.get('highlight')
+  const highlightRef = useRef<HTMLDivElement | null>(null)
   const [repartidores, setRepartidores] = useState<RepartidorListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -124,6 +127,12 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   useEffect(() => {
     void loadRepartidores()
   }, [page, rowsPerPage, search, estadoFilters, jornadaFilter])
+
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      setTimeout(() => highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400)
+    }
+  }, [highlightId, repartidores])
 
   useEffect(() => {
     void empresaService.getConfiguracionLicencias().then((config) => setUrgenteDias(config?.urgenteDias ?? 7)).catch(() => setUrgenteDias(7))
@@ -404,8 +413,9 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
               const licenciaUrgente = diasLicencia !== null && diasLicencia <= urgenteDias
               const operativoActivo = (repartidor.estado ?? 'Activo') === 'Activo'
 
+              const isHighlighted = highlightId === repartidor.id
               return (
-                <Grid item xs={12} sm={6} md={4} lg={3} key={repartidor.id}>
+                <Grid item xs={12} sm={6} md={4} lg={3} key={repartidor.id} ref={isHighlighted ? highlightRef : undefined}>
                   <Card
                     onClick={() => navigate(`/repartidor/${repartidor.id}/rendimiento`)}
                     sx={{
@@ -413,6 +423,15 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                       height: '100%',
                       transition: 'all .15s',
                       '&:hover': { boxShadow: 3, transform: 'translateY(-2px)' },
+                      ...(isHighlighted && {
+                        border: '2px solid #ed6c02',
+                        boxShadow: '0 0 16px rgba(237,108,2,0.4)',
+                        animation: 'pulse-warn 1.5s ease infinite',
+                        '@keyframes pulse-warn': {
+                          '0%,100%': { boxShadow: '0 0 16px rgba(237,108,2,0.4)' },
+                          '50%': { boxShadow: '0 0 28px rgba(237,108,2,0.8)' },
+                        },
+                      }),
                     }}
                   >
                     <CardContent>

@@ -1,8 +1,9 @@
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppBar,
   Badge,
   Box,
+  Breadcrumbs,
   BottomNavigation,
   BottomNavigationAction,
   Chip,
@@ -59,7 +60,6 @@ import SecurityIcon from '@mui/icons-material/Security'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import PsychologyIcon from '@mui/icons-material/Psychology'
 import AssessmentIcon from '@mui/icons-material/Assessment'
-import GridOnIcon from '@mui/icons-material/GridOn'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
 import { alertService } from '../services/alertService'
@@ -413,7 +413,6 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     if (pathname.startsWith('/permisos')) return '/permisos'
     if (pathname.startsWith('/admin/ml-metricas')) return '/admin/ml-metricas'
     if (pathname.startsWith('/reporte-demanda-capacidad')) return '/reporte-demanda-capacidad'
-    if (pathname.startsWith('/panel-incidencias')) return '/panel-incidencias'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
     if (pathname.startsWith('/pickups')) return '/pickups'
@@ -433,7 +432,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
       { path: '/tarifas',             label: 'Tarifas',             icon: <PriceChangeIcon fontSize="small" /> },
       { path: '/ojo-patron',          label: 'Ojo del Patrón',      icon: <GraphicEqIcon fontSize="small" /> },
       { path: '/reportes',                      label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
-      { path: '/reporte-demanda-capacidad',     label: 'Demanda vs Capacidad', icon: <AssessmentIcon fontSize="small" /> },
+      { path: '/reporte-demanda-capacidad',     label: 'Métricas de Personal', icon: <AssessmentIcon fontSize="small" /> },
       { path: '/satisfaccion',                  label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
       { path: '/plantillas-email',              label: 'Plantillas de Email',  icon: <EmailIcon fontSize="small" /> },
     ] :
@@ -446,7 +445,6 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
       { path: '/rutas-activas',       label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
       { path: '/alertas',             label: 'Alertas',              icon: <WarningAmberIcon fontSize="small" />, badge: alertasCount },
       { path: '/incidencias',         label: 'Incidencias',          icon: <ReportProblemIcon fontSize="small" />, badge: incidenciasCount },
-      { path: '/panel-incidencias',   label: 'Panel Incidencias',    icon: <GridOnIcon fontSize="small" /> },
       { path: '/reportes',            label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
       { path: '/satisfaccion',        label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
       { path: '/auditoria',           label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
@@ -1058,12 +1056,120 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
                 </Box>
               )}
               <Box sx={{ maxWidth: 1400, mx: 'auto', width: '100%' }}>
+                <AppBreadcrumbs />
                 <Outlet context={user} />
               </Box>
             </Box>
           </Box>
         )}
       </ThemeProvider>
+    </Box>
+  )
+}
+
+const ROUTE_LABELS: Record<string, string> = {
+  '/app': 'Dashboard',
+  '/envios': 'Envíos',
+  '/calendarizar': 'Calendarizar',
+  '/calendario': 'Calendario Operativo',
+  '/repartidores': 'Repartidores',
+  '/incidencias': 'Incidencias',
+  '/alertas': 'Alertas',
+  '/auditoria': 'Auditoría',
+  '/auditoria-notificaciones': 'Auditoría de Notificaciones',
+  '/satisfaccion': 'Satisfacción',
+  '/satisfaccion/metricas': 'Métricas de Satisfacción',
+  '/reportes': 'Reportes',
+  '/rutas-activas': 'Rutas Activas',
+  '/pickups': 'PickUps',
+  '/sucursales': 'Sucursales',
+  '/tarifas': 'Tarifas',
+  '/ojo-patron': 'Ojo del Patrón',
+  '/proyeccion-personal': 'Proyección Personal',
+  '/reporte-demanda-capacidad': 'Métricas de Personal',
+  '/permisos': 'Permisos',
+  '/admin/ml-metricas': 'Métricas ML',
+  '/mi-plan': 'Mi Plan',
+  '/plantillas-email': 'Plantillas de Email',
+  '/pickup-historial': 'Historial PickUp',
+  '/pickup-operacion': 'Operación PickUp',
+}
+
+function AppBreadcrumbs() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
+  // Construir la cadena de migas
+  const segments: { label: string; path: string }[] = [{ label: 'Inicio', path: '/app' }]
+
+  // Buscar coincidencia exacta primero
+  const matched = ROUTE_LABELS[location.pathname]
+  if (matched && location.pathname !== '/app') {
+    // Para rutas anidadas como /satisfaccion/metricas, agregar el padre también
+    const parts = location.pathname.split('/').filter(Boolean)
+    if (parts.length >= 2) {
+      const parentPath = '/' + parts[0]
+      const parentLabel = ROUTE_LABELS[parentPath]
+      if (parentLabel && parentPath !== location.pathname) {
+        segments.push({ label: parentLabel, path: parentPath })
+      }
+    }
+    segments.push({ label: matched, path: location.pathname })
+  } else if (location.pathname !== '/app') {
+    // Rutas con parámetros: /repartidor/:id/rendimiento, /shipment/:id, etc.
+    if (location.pathname.startsWith('/repartidor/')) {
+      segments.push({ label: 'Repartidores', path: '/repartidores' })
+      segments.push({ label: 'Perfil de rendimiento', path: location.pathname })
+    } else if (location.pathname.startsWith('/shipment/') || location.pathname.startsWith('/envios/')) {
+      segments.push({ label: 'Envíos', path: '/envios' })
+      segments.push({ label: 'Detalle de envío', path: location.pathname })
+    } else if (location.pathname.startsWith('/admin/')) {
+      segments.push({ label: matched ?? location.pathname.replace('/admin/', ''), path: location.pathname })
+    }
+  }
+
+  // Solo mostrar si hay más de 1 segmento (no mostrar solo "Inicio")
+  if (segments.length <= 1) return null
+
+  return (
+    <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box
+        component="button"
+        onClick={() => navigate(-1)}
+        sx={{
+          display: 'inline-flex', alignItems: 'center', gap: 0.5,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: isDark ? 'rgba(255,255,255,0.5)' : 'text.secondary',
+          fontSize: 13, fontWeight: 600, px: 0, py: 0,
+          '&:hover': { color: 'primary.main' }, transition: 'color 0.15s',
+        }}
+      >
+        ← Atrás
+      </Box>
+      <Typography sx={{ color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)', fontSize: 13 }}>|</Typography>
+      <Breadcrumbs
+        separator={<Typography sx={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)', fontSize: 13 }}>/</Typography>}
+        sx={{ '& .MuiBreadcrumbs-separator': { mx: 0.5 } }}
+      >
+        {segments.map((seg, i) => {
+          const isLast = i === segments.length - 1
+          return isLast ? (
+            <Typography key={seg.path} sx={{ fontSize: 13, fontWeight: 700, color: 'primary.main' }}>
+              {seg.label}
+            </Typography>
+          ) : (
+            <Link
+              key={seg.path}
+              to={seg.path}
+              style={{ textDecoration: 'none', fontSize: 13, color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)', fontWeight: 500 }}
+            >
+              {seg.label}
+            </Link>
+          )
+        })}
+      </Breadcrumbs>
     </Box>
   )
 }
