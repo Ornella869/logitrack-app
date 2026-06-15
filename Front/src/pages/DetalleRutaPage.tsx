@@ -19,7 +19,6 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import RouteIcon from '@mui/icons-material/Route'
 import MapIcon from '@mui/icons-material/Map'
 import NavigationIcon from '@mui/icons-material/Navigation'
@@ -205,12 +204,6 @@ export default function DetalleRutaPage() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/rutas-activas')} size="small">
-          Volver a Rutas Activas
-        </Button>
-      </Stack>
-
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
         <Avatar sx={{ bgcolor: '#1976d2', width: 48, height: 48 }}>{initials}</Avatar>
         <Box>

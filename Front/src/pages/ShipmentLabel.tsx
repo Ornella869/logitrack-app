@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -9,7 +9,6 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PrintIcon from '@mui/icons-material/Print'
 import { shipmentService, type EtiquetaResponse } from '../services/shipmentService'
 
@@ -18,7 +17,6 @@ import { shipmentService, type EtiquetaResponse } from '../services/shipmentServ
 
 export default function ShipmentLabel() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const [data, setData] = useState<EtiquetaResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -49,9 +47,6 @@ export default function ShipmentLabel() {
     return (
       <Box>
         <Alert severity="error">{error || 'Etiqueta no encontrada'}</Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mt: 2 }}>
-          Volver
-        </Button>
       </Box>
     )
   }
@@ -65,9 +60,6 @@ export default function ShipmentLabel() {
         sx={{ mb: 3, displayPrint: 'none' }}
         className="no-print"
       >
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
-          Volver
-        </Button>
         <Button variant="contained" startIcon={<PrintIcon />} onClick={() => window.print()}>
           Imprimir
         </Button>

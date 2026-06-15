@@ -27,7 +27,6 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
 import CancelIcon from '@mui/icons-material/Cancel'
 import HistoryIcon from '@mui/icons-material/History'
@@ -506,14 +505,6 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
     }
   }
 
-  const handleBack = () => {
-    if (isRepartidor) {
-      navigate('/repartidor')
-    } else {
-      navigate('/envios', { state: { forceReload: Date.now() } })
-    }
-  }
-
   const statusColor = (status: string) => {
     switch (status) {
       case 'Pendiente de calendarización':
@@ -544,9 +535,6 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
     return (
       <Box>
         <Alert severity="error">{error || 'Envío no encontrado'}</Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={handleBack} sx={{ mt: 2 }}>
-          Volver
-        </Button>
       </Box>
     )
   }
@@ -556,11 +544,8 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        sx={{ mb: 2, justifyContent: 'space-between' }}
+        sx={{ mb: 2, justifyContent: 'flex-end' }}
       >
-        <Button startIcon={<ArrowBackIcon />} onClick={handleBack}>
-          Volver
-        </Button>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {/* G1L-28 + G1L-32: Etiqueta con QR (Operador, Supervisor, Admin — no Repartidor) */}
           {(isOperador || isSupervisor || isAdmin) && permissions.has('envios_ver') && (

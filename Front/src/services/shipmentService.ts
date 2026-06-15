@@ -509,6 +509,16 @@ export const shipmentService = {
     }
   },
 
+  getMyShipments: async (): Promise<Shipment[]> => {
+    try {
+      const response = await api.get('/envios/mis-envios')
+      return response.data.map(mapToShipment)
+    } catch (error) {
+      console.error('Get my shipments error:', error)
+      return []
+    }
+  },
+
   // Buscar por tracking ID (código de seguimiento)
   searchByTrackingId: async (trackingId: string): Promise<Shipment | null> => {
     try {

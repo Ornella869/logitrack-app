@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useOutletContext, useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -36,7 +36,6 @@ import HistoryIcon from '@mui/icons-material/History'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import TransferWithinAStationIcon from '@mui/icons-material/TransferWithinAStation'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PersonIcon from '@mui/icons-material/Person'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
@@ -115,7 +114,6 @@ const validateDateRangeForRender = (from: string, to: string) => (
 )
 
 export default function PerfilRendimientoPage({ permissions }: { permissions: Set<string> }) {
-  const navigate = useNavigate()
   const user = useOutletContext<User>()
   const { repartidorId } = useParams<{ repartidorId: string }>()
   const [from, setFrom] = useState<string>(daysAgo(30))
@@ -301,10 +299,6 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="small">Volver</Button>
-      </Stack>
-
       {data && (
         <Stack spacing={2} sx={{ mb: 3 }}>
           <Stack direction="row" spacing={2} alignItems="center">

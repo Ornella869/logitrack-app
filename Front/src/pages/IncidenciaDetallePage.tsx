@@ -27,7 +27,6 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CancelIcon from '@mui/icons-material/Cancel'
 import ChatIcon from '@mui/icons-material/Chat'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -266,7 +265,6 @@ export default function IncidenciaDetallePage() {
   if (error || !inc) {
     return (
       <Stack spacing={2}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/incidencias')} sx={{ alignSelf: 'flex-start' }}>Volver a incidencias</Button>
         <Alert severity="error">{error || 'No se encontró la incidencia solicitada.'}</Alert>
       </Stack>
     )
@@ -278,7 +276,6 @@ export default function IncidenciaDetallePage() {
   return (
     <Box>
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/incidencias')} size="small">Volver a incidencias</Button>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <SeveridadChip severidad={inc.severidad} vencido={inc.slaVencido} />
           <EstadoChip estado={inc.estado} />

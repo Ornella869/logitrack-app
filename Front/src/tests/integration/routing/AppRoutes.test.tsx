@@ -1,6 +1,10 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { getMine } = vi.hoisted(() => ({
+  getMine: vi.fn(),
+}))
+
 vi.mock('../../../pages/landing/LandingPage', () => ({ default: () => <div>LANDING_PAGE</div> }))
 vi.mock('../../../pages/LoginPage', () => ({ default: () => <div>LOGIN_PAGE</div> }))
 vi.mock('../../../pages/RegisterPage', () => ({ default: () => <div>REGISTER_PAGE</div> }))
@@ -13,12 +17,20 @@ vi.mock('../../../components/Layout', () => ({
   default: () => <div>LAYOUT_WRAPPER</div>,
 }))
 
+vi.mock('../../../services/permissionService', () => ({
+  permissionService: {
+    getMine,
+  },
+}))
+
 import App from '../../../App'
 
 describe('App route guards', () => {
   beforeEach(() => {
     localStorage.clear()
     window.history.pushState({}, '', '/app')
+    getMine.mockReset()
+    getMine.mockResolvedValue(['dashboard'])
   })
 
   afterEach(() => {
@@ -32,7 +44,7 @@ describe('App route guards', () => {
   })
 
   it('CP-12 expira sesion por inactividad y obliga a volver a iniciar sesion', async () => {
-    vi.useFakeTimers()
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
 
     localStorage.setItem('authToken', 'jwt-token')
     localStorage.setItem(
@@ -49,17 +61,17 @@ describe('App route guards', () => {
 
     render(<App />)
 
-    await act(async () => {
-      await Promise.resolve()
-    })
+    expect(await screen.findByText('LAYOUT_WRAPPER')).toBeInTheDocument()
 
-    expect(screen.getByText('LAYOUT_WRAPPER')).toBeInTheDocument()
+    const inactivityCall = setTimeoutSpy.mock.calls.find(([, delay]) => delay === 15 * 60 * 1000)
+    const timeoutCallback = inactivityCall?.[0]
+    expect(timeoutCallback).toBeTypeOf('function')
 
     act(() => {
-      vi.advanceTimersByTime(15 * 60 * 1000 + 1)
+      ;(timeoutCallback as TimerHandler)()
     })
 
-    expect(screen.getByText('LOGIN_PAGE')).toBeInTheDocument()
+    expect(await screen.findByText('LOGIN_PAGE')).toBeInTheDocument()
     expect(localStorage.getItem('authToken')).toBeNull()
     expect(localStorage.getItem('user')).toBeNull()
   })

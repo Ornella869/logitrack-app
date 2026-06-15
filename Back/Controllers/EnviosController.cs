@@ -600,7 +600,7 @@ namespace Back.Controllers
 
         /// <summary>Detalle del paquete por ID (incluye flag isEditable).</summary>
         [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
-        [RequirePermission("envios_ver")]
+        [RequirePermission("envios_detalle")]
         [HttpGet("paquete/{paqueteId:guid}")]
         public async Task<ActionResult<Paquete>> GetPaquete(Guid paqueteId)
         {
@@ -608,6 +608,19 @@ namespace Back.Controllers
             if (paquete is null) return NotFound();
             if (!await PuedeVerPaqueteAsync(paquete)) return Forbid();
             return Ok(paquete);
+        }
+
+        /// <summary>Historial de envíos asignados al repartidor logueado.</summary>
+        [Authorize(Roles = Roles.Repartidor)]
+        [RequirePermission("historial_repartidor")]
+        [HttpGet("mis-envios")]
+        public async Task<ActionResult<List<Paquete>>> GetMisEnvios()
+        {
+            var userId = CurrentUserId();
+            if (userId is null) return Unauthorized();
+
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidor(userId.Value);
+            return Ok(paquetes.OrderByDescending(p => p.CreadoEn).ToList());
         }
 
         // ============== G1L-12: Edición de envío ==============
@@ -758,7 +771,7 @@ namespace Back.Controllers
 
         /// <summary>Historial cronológico (descendente) de cambios de estado del paquete.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
-        [RequirePermission("envios_ver")]
+        [RequirePermission("envios_detalle")]
         [HttpGet("paquete/{paqueteId:guid}/historial")]
         public async Task<ActionResult<List<HistorialEstadoEnvioDto>>> GetHistorial(Guid paqueteId)
         {
@@ -772,7 +785,7 @@ namespace Back.Controllers
         // ============== G1L-32: QR ==============
 
         [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
-        [RequirePermission("envios_ver")]
+        [RequirePermission("envios_detalle")]
         [HttpGet("paquete/{paqueteId:guid}/tramos")]
         public async Task<ActionResult> GetTramos(Guid paqueteId)
         {

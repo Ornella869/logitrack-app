@@ -271,26 +271,26 @@ function App() {
 
           {/* Rutas comunes — el componente decide qué hacer según rol */}
           <Route path="/perfil" element={<ProfilePage />} />
-          <Route path="/shipment/:id" element={<ShipmentDetail permissions={permissions} />} />
-          <Route path="/shipment/:id/etiqueta" element={<ShipmentLabel />} />
+          <Route path="/shipment/:id" element={permitted('envios_detalle', <ShipmentDetail permissions={permissions} />)} />
+          <Route path="/shipment/:id/etiqueta" element={permitted('envios_ver', <ShipmentLabel />)} />
 
           {/* Repartidor */}
           <Route
             path="/repartidor"
             element={
-              permitted('ruta_repartidor', <RepartidorDashboard />)
+              permitted('ruta_repartidor', <RepartidorDashboard permissions={permissions} />)
             }
           />
           <Route
             path="/repartidor/paradas"
             element={
-              permitted('ruta_repartidor', <RepartidorDashboard />)
+              permitted('ruta_repartidor', <RepartidorDashboard permissions={permissions} />)
             }
           />
           <Route
             path="/repartidor/historial"
             element={
-              permitted('historial_repartidor', <RepartidorHistorialPage />)
+              permitted('historial_repartidor', <RepartidorHistorialPage permissions={permissions} />)
             }
           />
 

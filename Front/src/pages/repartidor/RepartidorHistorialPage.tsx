@@ -8,7 +8,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  IconButton,
   Paper,
   Stack,
   Table,
@@ -18,11 +17,9 @@ import {
   TableHead,
   TableRow,
   Typography,
-  Tooltip,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import HistoryIcon from '@mui/icons-material/History'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -36,7 +33,7 @@ const isFinal = (shipment: Shipment) => shipment.status === 'Entregado' || shipm
 const scheduledDate = (shipment: Shipment) =>
   shipment.fechaCalendarizada ? dateOnly(shipment.fechaCalendarizada) : null
 
-export default function RepartidorHistorialPage() {
+export default function RepartidorHistorialPage({ permissions }: { permissions: Set<string> }) {
   const navigate = useNavigate()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -48,7 +45,7 @@ export default function RepartidorHistorialPage() {
     setLoading(true)
     setError('')
     try {
-      setShipments(await shipmentService.getAllShipments())
+      setShipments(await shipmentService.getMyShipments())
     } catch {
       setError('No se pudieron cargar los envios anteriores.')
     } finally {
@@ -73,6 +70,7 @@ export default function RepartidorHistorialPage() {
         return fb.localeCompare(fa)
       })
   }, [shipments])
+  const canViewDetail = permissions.has('envios_detalle')
 
   const hoyFinalizados = historial.filter((shipment) => scheduledDate(shipment) === formatArgentinaDateInput() && isFinal(shipment)).length
   const diasAnteriores = historial.filter((shipment) => {
@@ -88,28 +86,8 @@ export default function RepartidorHistorialPage() {
             display: 'flex',
             alignItems: 'flex-start',
             width: '100%',
-            position: 'relative',
-            pl: { md: 0 },
           }}
         >
-          <Tooltip title="Volver a mi ruta">
-            <IconButton
-              onClick={() => navigate('/repartidor')}
-              sx={{
-                mt: 0.25,
-                position: { md: 'absolute' },
-                left: { md: -64 },
-                top: 0,
-                bgcolor: '#eaf4ff',
-                color: '#1976d2',
-                border: '1px solid #cfe3fb',
-                borderRadius: 2,
-                '&:hover': { bgcolor: '#dcecff' },
-              }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-          </Tooltip>
           <Box sx={{ width: '100%' }}>
             <Typography variant="h4" fontWeight={700}>
               <HistoryIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
@@ -196,14 +174,16 @@ export default function RepartidorHistorialPage() {
                     <Chip size="small" label={`${shipment.weight} kg`} variant="outlined" />
                   </Stack>
 
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<OpenInNewIcon />}
-                    onClick={() => navigate(`/shipment/${shipment.id}`)}
-                  >
-                    Ver detalle
-                  </Button>
+                  {canViewDetail && (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<OpenInNewIcon />}
+                      onClick={() => navigate(`/shipment/${shipment.id}`)}
+                    >
+                      Ver detalle
+                    </Button>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
@@ -240,9 +220,11 @@ export default function RepartidorHistorialPage() {
                   <TableCell>{shipment.weight} kg</TableCell>
                   <TableCell><StatusBadge status={shipment.status} /></TableCell>
                   <TableCell align="right">
-                    <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/shipment/${shipment.id}`)}>
-                      Ver detalle
-                    </Button>
+                    {canViewDetail && (
+                      <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/shipment/${shipment.id}`)}>
+                        Ver detalle
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

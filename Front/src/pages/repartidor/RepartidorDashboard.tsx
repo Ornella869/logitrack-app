@@ -147,7 +147,7 @@ function getParadaTone(status: Shipment['status'], isCurrent: boolean, isDark: b
   return { accent: '#1976d2', bg: isDark ? '#162032' : '#ffffff', soft: isDark ? 'rgba(25,118,210,0.2)' : '#e3f2fd', label: 'Pendiente' }
 }
 
-export default function RepartidorDashboard() {
+export default function RepartidorDashboard({ permissions }: { permissions: Set<string> }) {
   const navigate = useNavigate()
   const location = useLocation()
   const user = useOutletContext<User>()
@@ -166,6 +166,7 @@ export default function RepartidorDashboard() {
   const [ubicacionReal, setUbicacionReal] = useState<{ latitud: number; longitud: number } | null>(null)
   const [ubicacionLive, setUbicacionLive] = useState<UbicacionVisual | null>(null)
   const [ubicacionMsg, setUbicacionMsg] = useState<{ severity: 'success' | 'info' | 'warning' | 'error'; message: string } | null>(null)
+  const canViewShipmentDetail = permissions.has('envios_detalle')
 
   // Fase A: estado de jornada (Disponible / EnRuta / Retornando)
   const [estadoJornada, setEstadoJornada] = useState('Disponible')
@@ -710,7 +711,7 @@ export default function RepartidorDashboard() {
       // En tránsito: vamos directo a la ficha de gestión.
       setOpenQr(false)
       setQrCode('')
-      navigate(`/shipment/${result.data.paqueteId}`)
+      if (canViewShipmentDetail) navigate(`/shipment/${result.data.paqueteId}`)
       return
     }
     // UH-96: notificación in-app por parada entregada vía QR
@@ -969,9 +970,11 @@ export default function RepartidorDashboard() {
           severity="info"
           sx={{ mb: 2 }}
           action={
-            <Button color="inherit" size="small" onClick={() => navigate(`/shipment/${paradaEnCurso.id}`)}>
-              Ir a la entrega
-            </Button>
+            canViewShipmentDetail ? (
+              <Button color="inherit" size="small" onClick={() => navigate(`/shipment/${paradaEnCurso.id}`)}>
+                Ir a la entrega
+              </Button>
+            ) : undefined
           }
         >
           Ruta en curso · Próxima parada: <strong>{paradaEnCurso.address}</strong> · {paradaEnCurso.name}
@@ -1483,17 +1486,19 @@ export default function RepartidorDashboard() {
                             >
                               Gestionar parada
                             </Button>
-                            <Button
-                              variant="outlined"
-                              size={isMobile ? 'medium' : 'small'}
-                              fullWidth={isMobile}
-                              onClick={() => navigate(`/shipment/${p.id}`)}
-                            >
-                              Ver detalle
-                            </Button>
+                            {canViewShipmentDetail && (
+                              <Button
+                                variant="outlined"
+                                size={isMobile ? 'medium' : 'small'}
+                                fullWidth={isMobile}
+                                onClick={() => navigate(`/shipment/${p.id}`)}
+                              >
+                                Ver detalle
+                              </Button>
+                            )}
                           </Stack>
                         )}
-                        {!isCurrent && !isCompleted && (
+                        {!isCurrent && !isCompleted && canViewShipmentDetail && (
                           <Button size={isMobile ? 'medium' : 'small'} fullWidth={isMobile} sx={{ mt: 1 }} onClick={() => navigate(`/shipment/${p.id}`)}>
                             Ver detalle
                           </Button>

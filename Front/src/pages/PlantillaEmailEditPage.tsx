@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  IconButton,
   Paper,
   Popover,
   Stack,
@@ -19,7 +18,6 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import SaveIcon from '@mui/icons-material/Save'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import RestoreIcon from '@mui/icons-material/Restore'
@@ -56,7 +54,6 @@ function insertarEnCursor(ref: React.RefObject<HTMLTextAreaElement>, texto: stri
 
 export default function PlantillaEmailEditPage() {
   const { evento } = useParams<{ evento: string }>()
-  const navigate = useNavigate()
   const [plantilla, setPlantilla] = useState<PlantillaEmail | null>(null)
   const [asunto, setAsunto] = useState('')
   const [cuerpo, setCuerpo] = useState('')
@@ -163,9 +160,6 @@ export default function PlantillaEmailEditPage() {
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 900, mx: 'auto' }}>
       <Stack spacing={3}>
         <Stack direction="row" spacing={1} alignItems="center">
-          <IconButton onClick={() => navigate('/plantillas-email')} size="small">
-            <ArrowBackIcon />
-          </IconButton>
           <Box>
             <Typography variant="h5" fontWeight={800}>{plantilla?.eventoNombre ?? 'Plantilla'}</Typography>
             <Typography variant="body2" color="text.secondary">

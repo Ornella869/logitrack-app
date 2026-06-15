@@ -37,7 +37,7 @@ describe('shipmentService', () => {
       origin: 'Buenos Aires',
       destination: 'Cordoba',
     })
-    expect(mockedApi.get).toHaveBeenCalledWith('/envios/paquetes')
+    expect(mockedApi.get).toHaveBeenCalledWith('/envios/paquetes?page=1&pageSize=100')
   })
 
   it('devuelve lista vacia cuando falla obtener envios', async () => {
@@ -54,7 +54,7 @@ describe('shipmentService', () => {
     const result = await shipmentService.changeShipmentStatus('shipment-1', 'Rechazado')
 
     expect(result).toEqual({ success: true })
-    expect(mockedApi.post).toHaveBeenCalledWith('/envios/cambiar-estado-paquete/shipment-1/estado/Cancelado')
+    expect(mockedApi.post).toHaveBeenCalledWith('/envios/cambiar-estado-paquete/shipment-1/estado/PendienteDeCalendarizacion')
   })
 
   it('retorna error de backend cuando cambio de estado falla', async () => {
@@ -75,6 +75,7 @@ describe('shipmentService', () => {
     expect(result).toEqual({ success: true })
     expect(mockedApi.post).toHaveBeenCalledWith('/envios/cancelar-paquete/shipment-1', {
       Motivo: 'Cliente no disponible',
+      Mode: 'Definitivo',
     })
   })
 
@@ -119,13 +120,19 @@ describe('shipmentService', () => {
 
     expect(mockedApi.post).toHaveBeenCalledWith('/envios/registrar-paquete', {
       Peso: 7,
+      TipoEnvio: 'Comun',
+      TipoPaquete: 'Comun',
       Comentarios: 'Caja pequena',
+      PuntoPickUpId: null,
       Remitente: {
         Nombre: 'Pedro',
         Apellido: 'Sosa',
         Direccion: 'Mitre 450',
         Localidad: 'Santa Fe',
         CP: '3000',
+        Provincia: undefined,
+        Telefono: undefined,
+        Email: null,
       },
       Destinatario: {
         Nombre: 'Ana',
@@ -133,6 +140,9 @@ describe('shipmentService', () => {
         Direccion: 'Belgrano 123',
         Localidad: 'Rosario',
         CP: '2000',
+        Provincia: undefined,
+        Telefono: undefined,
+        Email: null,
       },
     })
 

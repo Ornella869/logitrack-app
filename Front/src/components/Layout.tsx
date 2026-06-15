@@ -1056,7 +1056,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
                 </Box>
               )}
               <Box sx={{ maxWidth: 1400, mx: 'auto', width: '100%' }}>
-                <AppBreadcrumbs />
+                <AppBreadcrumbs user={user} permissions={permissions} />
                 <Outlet context={user} />
               </Box>
             </Box>
@@ -1070,6 +1070,9 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
 const ROUTE_LABELS: Record<string, string> = {
   '/app': 'Dashboard',
   '/envios': 'Envíos',
+  '/repartidor': 'Mi ruta',
+  '/repartidor/paradas': 'Mis paradas',
+  '/repartidor/historial': 'Envíos pasados',
   '/calendarizar': 'Calendarizar',
   '/calendario': 'Calendario Operativo',
   '/repartidores': 'Repartidores',
@@ -1095,43 +1098,113 @@ const ROUTE_LABELS: Record<string, string> = {
   '/pickup-operacion': 'Operación PickUp',
 }
 
-function AppBreadcrumbs() {
+function AppBreadcrumbs({ user, permissions }: { user: User; permissions: Set<string> }) {
   const location = useLocation()
   const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
+  const isPathAccessible = (path: string) => {
+    if (path === '/app') return permissions.has('dashboard')
+    if (path === '/envios') return permissions.has('envios_ver')
+    if (path === '/calendarizar') return permissions.has('calendarizacion')
+    if (path === '/repartidores') return permissions.has('repartidores')
+    if (path === '/calendario') return permissions.has('calendario')
+    if (path === '/rutas-activas') return permissions.has('rutas_activas')
+    if (path === '/incidencias') return permissions.has('incidencias')
+    if (path === '/alertas') return permissions.has('alertas')
+    if (path === '/reportes') return permissions.has('reportes')
+    if (path === '/auditoria') return permissions.has('auditoria')
+    if (path === '/auditoria-notificaciones') return permissions.has('auditoria_notificaciones')
+    if (path === '/satisfaccion') return permissions.has('satisfaccion')
+    if (path === '/sucursales') return permissions.has('sucursales')
+    if (path === '/pickups') return permissions.has('pickups')
+    if (path === '/tarifas') return permissions.has('tarifas')
+    if (path === '/ojo-patron') return permissions.has('ojo_patron')
+    if (path === '/plantillas-email') return permissions.has('plantillas_email')
+    if (path === '/permisos') return permissions.has('gestionar_permisos')
+    if (path === '/mi-plan') return permissions.has('mi_plan')
+    if (path === '/repartidor') return permissions.has('ruta_repartidor')
+    if (path === '/repartidor/paradas') return permissions.has('ruta_repartidor')
+    if (path === '/repartidor/historial') return permissions.has('historial_repartidor')
+    if (path === '/pickup-operacion') return permissions.has('pickup_operacion')
+    if (path === '/pickup-historial') return permissions.has('pickup_historial')
+    return false
+  }
+
+  const buildDetailParent = () => {
+    if (user.role === 'repartidor') {
+      if (permissions.has('ruta_repartidor')) {
+        return { label: 'Mi ruta', path: '/repartidor', clickable: true }
+      }
+      if (permissions.has('historial_repartidor')) {
+        return { label: 'Envíos pasados', path: '/repartidor/historial', clickable: true }
+      }
+      return null
+    }
+
+    if (permissions.has('envios_ver')) {
+      return { label: 'Envíos', path: '/envios', clickable: true }
+    }
+
+    return null
+  }
+
   // Construir la cadena de migas
-  const segments: { label: string; path: string }[] = [{ label: 'Inicio', path: '/app' }]
+  const segments: Array<{ label: string; path: string; clickable: boolean }> = []
 
   // Buscar coincidencia exacta primero
   const matched = ROUTE_LABELS[location.pathname]
-  if (matched && location.pathname !== '/app') {
+  if (matched) {
     // Para rutas anidadas como /satisfaccion/metricas, agregar el padre también
     const parts = location.pathname.split('/').filter(Boolean)
     if (parts.length >= 2) {
       const parentPath = '/' + parts[0]
       const parentLabel = ROUTE_LABELS[parentPath]
       if (parentLabel && parentPath !== location.pathname) {
-        segments.push({ label: parentLabel, path: parentPath })
+        segments.push({ label: parentLabel, path: parentPath, clickable: isPathAccessible(parentPath) })
       }
     }
-    segments.push({ label: matched, path: location.pathname })
-  } else if (location.pathname !== '/app') {
+    if (segments.length > 0) {
+      segments.push({ label: matched, path: location.pathname, clickable: false })
+    }
+  } else {
     // Rutas con parámetros: /repartidor/:id/rendimiento, /shipment/:id, etc.
-    if (location.pathname.startsWith('/repartidor/')) {
-      segments.push({ label: 'Repartidores', path: '/repartidores' })
-      segments.push({ label: 'Perfil de rendimiento', path: location.pathname })
+    if (/^\/repartidor\/[^/]+\/rendimiento$/i.test(location.pathname)) {
+      segments.push({ label: 'Repartidores', path: '/repartidores', clickable: isPathAccessible('/repartidores') })
+      segments.push({ label: 'Perfil de rendimiento', path: location.pathname, clickable: false })
+    } else if (/^\/rutas-activas\/[^/]+$/i.test(location.pathname)) {
+      segments.push({ label: 'Rutas Activas', path: '/rutas-activas', clickable: isPathAccessible('/rutas-activas') })
+      segments.push({ label: 'Detalle de ruta', path: location.pathname, clickable: false })
+    } else if (/^\/incidencias\/[^/]+$/i.test(location.pathname)) {
+      segments.push({ label: 'Incidencias', path: '/incidencias', clickable: isPathAccessible('/incidencias') })
+      segments.push({ label: 'Detalle de incidencia', path: location.pathname, clickable: false })
+    } else if (/^\/plantillas-email\/[^/]+$/i.test(location.pathname)) {
+      segments.push({ label: 'Plantillas de Email', path: '/plantillas-email', clickable: isPathAccessible('/plantillas-email') })
+      segments.push({ label: 'Editar plantilla', path: location.pathname, clickable: false })
+    } else if (/^\/shipment\/[^/]+\/etiqueta$/i.test(location.pathname)) {
+      const parent = buildDetailParent()
+      if (parent) {
+        segments.push(parent)
+      }
+      segments.push({ label: 'Etiqueta de envío', path: location.pathname, clickable: false })
     } else if (location.pathname.startsWith('/shipment/') || location.pathname.startsWith('/envios/')) {
-      segments.push({ label: 'Envíos', path: '/envios' })
-      segments.push({ label: 'Detalle de envío', path: location.pathname })
+      const parent = buildDetailParent()
+      if (parent) {
+        segments.push(parent)
+      }
+      segments.push({ label: 'Detalle de envío', path: location.pathname, clickable: false })
     } else if (location.pathname.startsWith('/admin/')) {
-      segments.push({ label: matched ?? location.pathname.replace('/admin/', ''), path: location.pathname })
+      segments.push({ label: matched ?? location.pathname.replace('/admin/', ''), path: location.pathname, clickable: false })
     }
   }
 
+  const normalizedSegments = segments.filter((segment, index, current) =>
+    index === 0 || current[index - 1].path !== segment.path,
+  )
+
   // Solo mostrar si hay más de 1 segmento (no mostrar solo "Inicio")
-  if (segments.length <= 1) return null
+  if (normalizedSegments.length <= 1) return null
 
   return (
     <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1153,10 +1226,14 @@ function AppBreadcrumbs() {
         separator={<Typography sx={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)', fontSize: 13 }}>/</Typography>}
         sx={{ '& .MuiBreadcrumbs-separator': { mx: 0.5 } }}
       >
-        {segments.map((seg, i) => {
-          const isLast = i === segments.length - 1
+        {normalizedSegments.map((seg, i) => {
+          const isLast = i === normalizedSegments.length - 1
           return isLast ? (
             <Typography key={seg.path} sx={{ fontSize: 13, fontWeight: 700, color: 'primary.main' }}>
+              {seg.label}
+            </Typography>
+          ) : !seg.clickable ? (
+            <Typography key={seg.path} sx={{ fontSize: 13, fontWeight: 500, color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)' }}>
               {seg.label}
             </Typography>
           ) : (
