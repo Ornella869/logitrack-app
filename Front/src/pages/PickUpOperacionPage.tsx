@@ -42,7 +42,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import EditIcon from '@mui/icons-material/Edit'
 import { pickupOperacionService, type PickUpInventario, type PickUpPaquete } from '../services/pickupOperacionService'
-import { pickupService, type ResumenCalificaciones } from '../services/pickupService'
+import { pickupService, type ResumenCalificaciones, type HorarioPickUpItem } from '../services/pickupService'
 import StarIcon from '@mui/icons-material/Star'
 import StarHalfIcon from '@mui/icons-material/StarHalf'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
@@ -297,6 +297,42 @@ export default function PickUpOperacionPage() {
   const [configError, setConfigError] = useState<string | null>(null)
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' })
 
+  // G1L-152: Horarios estructurados por día
+  const [horariosOpen, setHorariosOpen] = useState(false)
+  const [horariosDia, setHorariosDia] = useState<HorarioPickUpItem[]>([])
+  const [savingHorarios, setSavingHorarios] = useState(false)
+
+  const DIA_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+  const openHorarios = async () => {
+    if (!data) return
+    const saved = await pickupService.getHorarios(data.punto.id)
+    const full: HorarioPickUpItem[] = Array.from({ length: 7 }, (_, i) => {
+      const existing = saved.find(h => h.diaSemana === i)
+      return existing ?? { diaSemana: i, apertura: '09:00:00', cierre: '18:00:00', cerrado: i === 0 }
+    })
+    setHorariosDia(full)
+    setHorariosOpen(true)
+  }
+
+  const updateHorario = (dia: number, field: keyof HorarioPickUpItem, value: unknown) => {
+    setHorariosDia(prev => prev.map(h => h.diaSemana === dia ? { ...h, [field]: value } : h))
+  }
+
+  const saveHorarios = async () => {
+    if (!data) return
+    setSavingHorarios(true)
+    try {
+      await pickupService.setHorarios(data.punto.id, horariosDia)
+      setHorariosOpen(false)
+      setSnackbar({ open: true, msg: 'Horarios guardados correctamente.', severity: 'success' })
+    } catch {
+      setSnackbar({ open: true, msg: 'No se pudieron guardar los horarios.', severity: 'error' })
+    } finally {
+      setSavingHorarios(false)
+    }
+  }
+
   const load = async () => {
     setLoading(true)
     try {
@@ -467,6 +503,11 @@ export default function PickUpOperacionPage() {
                 <Tooltip title="Editar horarios y capacidad">
                   <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={openConfig}>
                     Configurar
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Gestionar horarios por día (G1L-152)">
+                  <Button size="small" variant="outlined" color="secondary" onClick={openHorarios}>
+                    Horarios detallados
                   </Button>
                 </Tooltip>
               </Stack>
@@ -869,6 +910,66 @@ export default function PickUpOperacionPage() {
           <Button onClick={() => setConfigOpen(false)} disabled={savingConfig}>Cancelar</Button>
           <Button onClick={onSaveConfig} variant="contained" disabled={savingConfig}>
             {savingConfig ? <CircularProgress size={18} /> : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* G1L-152: Dialog de horarios detallados por día */}
+      <Dialog open={horariosOpen} onClose={() => { if (!savingHorarios) setHorariosOpen(false) }} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>Horarios por día de la semana</DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            Configurá el horario de apertura y cierre de cada día. Los días marcados como "Cerrado" no recibirán envíos calendarizados automáticamente.
+          </Typography>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Día</TableCell>
+                <TableCell align="center">Cerrado</TableCell>
+                <TableCell>Apertura</TableCell>
+                <TableCell>Cierre</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {horariosDia.map((h) => (
+                <TableRow key={h.diaSemana} sx={{ opacity: h.cerrado ? 0.5 : 1 }}>
+                  <TableCell><Typography variant="body2" fontWeight={600}>{DIA_LABELS[h.diaSemana]}</Typography></TableCell>
+                  <TableCell align="center">
+                    <input
+                      type="checkbox"
+                      checked={h.cerrado}
+                      onChange={(e) => updateHorario(h.diaSemana, 'cerrado', e.target.checked)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <TextField
+                      type="time"
+                      size="small"
+                      value={h.apertura?.slice(0, 5) ?? '09:00'}
+                      disabled={h.cerrado}
+                      onChange={(e) => updateHorario(h.diaSemana, 'apertura', `${e.target.value}:00`)}
+                      inputProps={{ style: { fontSize: 13 } }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <TextField
+                      type="time"
+                      size="small"
+                      value={h.cierre?.slice(0, 5) ?? '18:00'}
+                      disabled={h.cerrado}
+                      onChange={(e) => updateHorario(h.diaSemana, 'cierre', `${e.target.value}:00`)}
+                      inputProps={{ style: { fontSize: 13 } }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHorariosOpen(false)} disabled={savingHorarios}>Cancelar</Button>
+          <Button onClick={saveHorarios} variant="contained" disabled={savingHorarios}>
+            {savingHorarios ? <CircularProgress size={18} /> : 'Guardar horarios'}
           </Button>
         </DialogActions>
       </Dialog>

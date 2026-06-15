@@ -29,10 +29,11 @@ import {
 } from '@mui/material'
 import BoltIcon from '@mui/icons-material/Bolt'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import PreviewIcon from '@mui/icons-material/Visibility'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
-import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo } from '../services/shipmentService'
+import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo, type PaquetePendienteReagendamiento } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
@@ -61,8 +62,11 @@ export default function CalendarizarPage() {
   const [error, setError] = useState('')
   const [repartidorSearch, setRepartidorSearch] = useState('')
   const [visibleRepartidores, setVisibleRepartidores] = useState(8)
-  // Modal de confirmación previa (G1L-54 AC "Confirmación Previa")
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  // G1L-150: Vista previa
+  const [previewing, setPreviewing] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewResultado, setPreviewResultado] = useState<CalendarizacionResultado | null>(null)
+  const [previewError, setPreviewError] = useState('')
 
   // Modal de proceso
   const [modalOpen, setModalOpen] = useState(false)
@@ -72,6 +76,8 @@ export default function CalendarizarPage() {
 
   const [estadoActual, setEstadoActual] = useState<DiaResumen[]>([])
   const [calendarData, setCalendarData] = useState<CalendarioOperativo | null>(null)
+  const [pendientesReagendamiento, setPendientesReagendamiento] = useState<PaquetePendienteReagendamiento[]>([])
+  const [reagendandoId, setReagendandoId] = useState<string | null>(null)
 
   useEffect(() => {
     void loadAll()
@@ -81,15 +87,17 @@ export default function CalendarizarPage() {
     setLoading(true)
     setError('')
     try {
-      const [pend, reps, estado, cal] = await Promise.all([
+      const [pend, reps, estado, cal, reagendar] = await Promise.all([
         shipmentService.getPendingShipments(),
         authService.getRepartidores(),
         calendarizacionService.getEstadoActual(),
         calendarizacionService.getCalendario(30),
+        calendarizacionService.getPendientesReagendamiento(),
       ])
       setPendientes(pend)
       setEstadoActual(estado)
       setCalendarData(cal)
+      setPendientesReagendamiento(reagendar)
       setRepartidores(
         (reps as any[]).map((r) => ({
           id: r.id,
@@ -191,8 +199,26 @@ export default function CalendarizarPage() {
     return { prio, comm, peso, cps, capacidad }
   }, [pendientes, repartidoresActivos])
 
+  if (user.role !== 'supervisor') {
+    return <Alert severity="warning">Solo el Supervisor puede acceder a esta pantalla.</Alert>
+  }
+
+  const handlePreview = async () => {
+    setPreviewing(true)
+    setPreviewError('')
+    const res = await calendarizacionService.preview()
+    setPreviewing(false)
+    if (!res.success) {
+      setPreviewError(res.error ?? 'No se pudo simular la calendarización')
+      return
+    }
+    setPreviewResultado(res.data ?? null)
+    setPreviewOpen(true)
+  }
+
+
   const ejecutar = async () => {
-    setConfirmOpen(false)
+    setPreviewOpen(false)
     setModalOpen(true)
     setStepIdx(0)
     setResultado(null)
@@ -337,18 +363,30 @@ export default function CalendarizarPage() {
                 </Table>
 
                 <Box sx={{ textAlign: 'center', mt: 3, pt: 3, borderTop: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #eee' }}>
+                  {previewError && <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>{previewError}</Alert>}
+                  <Button
+                    size="large"
+                    variant="outlined"
+                    color="primary"
+                    startIcon={previewing ? <CircularProgress size={18} /> : <PreviewIcon />}
+                    onClick={handlePreview}
+                    disabled={pendientes.length === 0 || repartidoresActivos.length === 0 || previewing}
+                    sx={{ px: 4, py: 1.5, fontSize: 14, mr: 2 }}
+                  >
+                    {previewing ? 'Simulando...' : 'Vista Previa'}
+                  </Button>
                   <Button
                     size="large"
                     variant="contained"
                     startIcon={<BoltIcon />}
-                    onClick={() => setConfirmOpen(true)}
+                    onClick={ejecutar}
                     disabled={pendientes.length === 0 || repartidoresActivos.length === 0}
                     sx={{ px: 4, py: 1.5, fontSize: 14 }}
                   >
-                    Ejecutar Calendarización Automática
+                    Ejecutar
                   </Button>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                    Esta acción asignará repartidor y fecha a los {pendientes.length} envíos
+                    Usá "Vista Previa" para ver la distribución estimada antes de confirmar
                   </Typography>
                 </Box>
               </CardContent>
@@ -446,36 +484,152 @@ export default function CalendarizarPage() {
       )}
 
 
-      {/* G1L-54 AC "Confirmación Previa": modal con la cantidad antes de disparar el proceso. */}
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+      {/* G1L-147: Reagendamiento de envíos no entregados */}
+      {pendientesReagendamiento.length > 0 && (
+        <Card variant="outlined" sx={{ mt: 3, borderLeft: '4px solid #e65100' }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 1, color: '#e65100' }}>
+              Envíos pendientes de reagendamiento ({pendientesReagendamiento.length})
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+              Estos envíos están en tránsito o demorados. Podés liberarlos para que vuelvan a la cola de calendarización.
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Código</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell>Fecha calendarizada</TableCell>
+                  <TableCell align="right">Peso</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pendientesReagendamiento.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{p.codigoSeguimiento}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={p.status} sx={{ fontSize: 11 }} color={p.status === 'Demorado' ? 'warning' : 'default'} />
+                    </TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>
+                      {p.fechaCalendarizada ? formatDateOnlyEs(p.fechaCalendarizada.slice(0, 10), { day: '2-digit', month: 'short' }) : '—'}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12 }}>{p.peso.toFixed(0)} kg</TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        disabled={reagendandoId === p.id}
+                        onClick={async () => {
+                          setReagendandoId(p.id)
+                          const result = await calendarizacionService.reagendar(p.id)
+                          setReagendandoId(null)
+                          if (result.success) {
+                            setPendientesReagendamiento((prev) => prev.filter((x) => x.id !== p.id))
+                            setPendientes((prev) => [...prev, { id: p.id, codigoSeguimiento: p.codigoSeguimiento } as any])
+                          }
+                        }}
+                        sx={{ textTransform: 'none', fontSize: 12 }}
+                      >
+                        {reagendandoId === p.id ? <CircularProgress size={16} /> : 'Reagendar'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* G1L-150: Dialog de vista previa */}
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Stack direction="row" spacing={1} alignItems="center">
-            <BoltIcon color="primary" /> <span>Confirmar calendarización</span>
+            <PreviewIcon color="primary" /> <span>Vista Previa — Calendarización estimada</span>
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Vas a calendarizar <strong>{pendientes.length} envío{pendientes.length === 1 ? '' : 's'}</strong> pendiente{pendientes.length === 1 ? '' : 's'}.
-          </Typography>
-          <Stack spacing={1} sx={{ pl: 1, borderLeft: '3px solid #1976d2', py: 0.5 }}>
-            <Typography variant="body2">
-              <strong>{summary.prio}</strong> prioritario{summary.prio === 1 ? '' : 's'} · <strong>{summary.comm}</strong> común{summary.comm === 1 ? '' : 'es'}
-            </Typography>
-            <Typography variant="body2">
-              Peso total: <strong>{summary.peso.toFixed(0)} kg</strong>
-            </Typography>
-            <Typography variant="body2">
-              Repartidores activos: <strong>{repartidoresActivos.length}</strong> (capacidad {summary.capacidad.toLocaleString('es-AR')} kg)
-            </Typography>
-          </Stack>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-            El sistema asignará automáticamente repartidor y fecha siguiendo las reglas operativas. Esta acción no se puede deshacer.
-          </Typography>
+          {previewResultado && (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Simulación completada · <strong>{previewResultado.totalCalendarizados}</strong> envíos serán asignados a {new Set(previewResultado.resumenPorDia.flatMap((d) => d.repartidores.map((r) => r.repartidorId))).size} repartidores
+                {previewResultado.totalSinAsignar > 0 && ` · ${previewResultado.totalSinAsignar} sin asignar`}
+              </Alert>
+
+              {previewResultado.paquetesSinAsignar && previewResultado.paquetesSinAsignar.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Alert severity="warning" sx={{ mb: 1 }}>
+                    {previewResultado.totalSinAsignar} envío{previewResultado.totalSinAsignar > 1 ? 's' : ''} no podrán asignarse
+                    {' '}({((previewResultado.totalSinAsignar / previewResultado.totalPendientes) * 100).toFixed(1)}% del total)
+                  </Alert>
+                  {Object.entries(
+                    previewResultado.paquetesSinAsignar.reduce<Record<string, typeof previewResultado.paquetesSinAsignar>>((acc, p) => {
+                      acc[p.motivo] = [...(acc[p.motivo] ?? []), p]
+                      return acc
+                    }, {})
+                  ).map(([motivo, items]) => (
+                    <Box key={motivo} sx={{ mb: 1 }}>
+                      <Typography variant="caption" fontWeight={700} color="warning.main" display="block">
+                        {motivo} ({items.length})
+                      </Typography>
+                      <Stack spacing={0.3}>
+                        {items.map((p) => (
+                          <Typography key={p.codigoSeguimiento} variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                            · {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              {previewResultado.resumenPorDia.length > 0 && (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Repartidor</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Día estimado</TableCell>
+                      <TableCell align="right">Envíos</TableCell>
+                      <TableCell align="right">Peso estimado</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {previewResultado.resumenPorDia.flatMap((dia) =>
+                      dia.repartidores.map((r) => (
+                        <TableRow key={`${dia.fecha}-${r.repartidorId}`}>
+                          <TableCell>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Avatar sx={{ bgcolor: '#7b1fa2', width: 24, height: 24, fontSize: 11 }}>
+                                {r.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+                              </Avatar>
+                              {r.nombre}
+                            </Stack>
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.email}</TableCell>
+                          <TableCell>{formatDateOnlyEs(dia.fecha, { weekday: 'short', day: '2-digit', month: 'short' })}</TableCell>
+                          <TableCell align="right">{r.cantidad}</TableCell>
+                          <TableCell align="right">{r.pesoTotal.toFixed(0)} / 500 kg</TableCell>
+                        </TableRow>
+                      )),
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                Esta es una estimación. Los resultados reales pueden variar si cambia el estado de los envíos o repartidores antes de ejecutar.
+              </Typography>
+            </>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={ejecutar} startIcon={<BoltIcon />}>
-            Sí, calendarizar
+          <Button onClick={() => setPreviewOpen(false)}>Cancelar</Button>
+          <Button variant="contained" color="primary" startIcon={<BoltIcon />} onClick={ejecutar}>
+            Confirmar y ejecutar
           </Button>
         </DialogActions>
       </Dialog>
@@ -554,6 +708,34 @@ export default function CalendarizarPage() {
               )
             })}
           </Stack>
+
+          {exec?.ok && resultado && resultado.paquetesSinAsignar && resultado.paquetesSinAsignar.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                {resultado.totalSinAsignar} envío{resultado.totalSinAsignar > 1 ? 's' : ''} sin asignar
+                {' '}({((resultado.totalSinAsignar / resultado.totalPendientes) * 100).toFixed(1)}% del total)
+              </Alert>
+              {Object.entries(
+                resultado.paquetesSinAsignar.reduce<Record<string, typeof resultado.paquetesSinAsignar>>((acc, p) => {
+                  acc[p.motivo] = [...(acc[p.motivo] ?? []), p]
+                  return acc
+                }, {})
+              ).map(([motivo, items]) => (
+                <Box key={motivo} sx={{ mb: 1.5 }}>
+                  <Typography variant="caption" fontWeight={700} color="warning.main" display="block" sx={{ mb: 0.5 }}>
+                    {motivo} ({items.length})
+                  </Typography>
+                  <Stack spacing={0.4}>
+                    {items.map((p) => (
+                      <Typography key={p.codigoSeguimiento} variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                        · {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              ))}
+            </Box>
+          )}
 
           {exec?.ok && resultado && resultado.resumenPorDia.length > 0 && (
             <Box sx={{ mt: 3 }}>

@@ -55,6 +55,8 @@ import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
+import SecurityIcon from '@mui/icons-material/Security'
+import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
 import { alertService } from '../services/alertService'
@@ -84,6 +86,13 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => localStorage.getItem('miPlanTipo') === 'Premium')
   const [repartidorNavAnchor, setRepartidorNavAnchor] = useState<null | HTMLElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  const [showWelcomeBanner, setShowWelcomeBanner] = useState(() => {
+    const key = `lt_welcomed_${user.id}`
+    if (sessionStorage.getItem(key)) return false
+    sessionStorage.setItem(key, '1')
+    return true
+  })
 
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
@@ -279,6 +288,23 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     return () => window.removeEventListener('logitrack:avatarChange', handler)
   }, [user.id])
 
+  useEffect(() => {
+    if (!showWelcomeBanner) return
+    const t = setTimeout(() => setShowWelcomeBanner(false), 3800)
+    return () => clearTimeout(t)
+  }, [showWelcomeBanner])
+
+  const welcomeConfig: Record<string, { label: string; sub: string; color: string; bg: string }> = {
+    supervisor:     { label: `Bienvenido, ${user.name}`, sub: 'Tu turno está activo · Supervisá el flujo de hoy', color: '#FF6B6B', bg: 'linear-gradient(90deg,#7B0000,#C62828,#E53935)' },
+    gerente:        { label: `Hola, ${user.name}`, sub: 'Panel de Gerencia · Revisá el rendimiento de la provincia', color: '#FFD54F', bg: 'linear-gradient(90deg,#4A3000,#F57F17,#FFB300)' },
+    administrador:  { label: `Bienvenido, ${user.name}`, sub: 'Panel de Administración · Controlá el sistema', color: '#CE93D8', bg: 'linear-gradient(90deg,#2D0045,#6A1B9A,#8E24AA)' },
+    operador:       { label: `Listo para operar, ${user.name}`, sub: 'Gestioná los envíos del día', color: '#81D4FA', bg: 'linear-gradient(90deg,#003059,#0277BD,#0288D1)' },
+    repartidor:     { label: `¡A repartir, ${user.name}!`, sub: 'Tu ruta está esperando · Buen trabajo hoy', color: '#A5D6A7', bg: 'linear-gradient(90deg,#003300,#1B5E20,#2E7D32)' },
+    socio_pickup:   { label: `Bienvenido, ${user.name}`, sub: 'Tu punto Pick Up está activo', color: '#80DEEA', bg: 'linear-gradient(90deg,#002233,#00838F,#0097A7)' },
+    cliente:        { label: `Hola, ${user.name}`, sub: 'Seguí tus envíos en tiempo real', color: '#B2EBF2', bg: 'linear-gradient(90deg,#001A1F,#00696F,#00796B)' },
+  }
+  const wc = welcomeConfig[user.role]
+
   const toggleDarkPremium = () => {
     const next = !isDarkPremium
     setIsDarkPremium(next)
@@ -381,6 +407,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     if (pathname.startsWith('/plantillas-email')) return '/plantillas-email'
     if (pathname.startsWith('/auditoria-notificaciones')) return '/auditoria-notificaciones'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
+    if (pathname.startsWith('/permisos')) return '/permisos'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/permisos')) return '/permisos'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
@@ -396,33 +423,35 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
   const hasSidebar = (user.role !== 'repartidor' || !isMobile) && user.role !== 'socio_pickup' && user.role !== 'cliente'
   const sidebarNavItems: Array<{ path: string; label: string; icon: React.ReactNode; badge?: number }> =
     user.role === 'gerente' ? [
-      { path: '/sucursales',       label: 'Sucursales',          icon: <StoreIcon fontSize="small" /> },
-      { path: '/pickups',          label: 'PickUps',             icon: <PlaceIcon fontSize="small" /> },
-      { path: '/tarifas',          label: 'Tarifas',             icon: <PriceChangeIcon fontSize="small" /> },
-      { path: '/ojo-patron',       label: 'Ojo del Patrón',      icon: <GraphicEqIcon fontSize="small" /> },
-      { path: '/reportes',         label: 'Reportes',            icon: <BarChartIcon fontSize="small" /> },
-      { path: '/satisfaccion',     label: 'Satisfacción',        icon: <StarBorderIcon fontSize="small" /> },
-      { path: '/plantillas-email', label: 'Plantillas de Email', icon: <EmailIcon fontSize="small" /> },
+      { path: '/sucursales',          label: 'Sucursales',          icon: <StoreIcon fontSize="small" /> },
+      { path: '/pickups',             label: 'PickUps',             icon: <PlaceIcon fontSize="small" /> },
+      { path: '/tarifas',             label: 'Tarifas',             icon: <PriceChangeIcon fontSize="small" /> },
+      { path: '/ojo-patron',          label: 'Ojo del Patrón',      icon: <GraphicEqIcon fontSize="small" /> },
+      { path: '/reportes',            label: 'Reportes',            icon: <BarChartIcon fontSize="small" /> },
+      { path: '/satisfaccion',        label: 'Satisfacción',        icon: <StarBorderIcon fontSize="small" /> },
+      { path: '/plantillas-email',    label: 'Plantillas de Email', icon: <EmailIcon fontSize="small" /> },
     ] :
     user.role === 'supervisor' ? [
-      { path: '/app',              label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
-      { path: '/envios',           label: 'Envíos',               icon: <Inventory2Icon fontSize="small" /> },
-      { path: '/calendarizar',     label: 'Calendarizar',         icon: <BoltIcon fontSize="small" /> },
-      { path: '/repartidores',     label: 'Repartidores',         icon: <GroupIcon fontSize="small" /> },
-      { path: '/calendario',       label: 'Calendario Operativo', icon: <CalendarMonthIcon fontSize="small" /> },
-      { path: '/rutas-activas',    label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
-      { path: '/alertas',          label: 'Alertas',              icon: <WarningAmberIcon fontSize="small" />, badge: alertasCount },
-      { path: '/incidencias',      label: 'Incidencias',          icon: <ReportProblemIcon fontSize="small" />, badge: incidenciasCount },
-      { path: '/reportes',         label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
-      { path: '/satisfaccion',     label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
-      { path: '/auditoria',        label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
-      { path: '/ojo-patron',       label: 'Ojo del Patrón',       icon: <GraphicEqIcon fontSize="small" /> },
+      { path: '/app',                 label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
+      { path: '/envios',              label: 'Envíos',               icon: <Inventory2Icon fontSize="small" /> },
+      { path: '/calendarizar',        label: 'Calendarizar',         icon: <BoltIcon fontSize="small" /> },
+      { path: '/repartidores',        label: 'Repartidores',         icon: <GroupIcon fontSize="small" /> },
+      { path: '/calendario',          label: 'Calendario Operativo', icon: <CalendarMonthIcon fontSize="small" /> },
+      { path: '/rutas-activas',       label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
+      { path: '/alertas',             label: 'Alertas',              icon: <WarningAmberIcon fontSize="small" />, badge: alertasCount },
+      { path: '/incidencias',         label: 'Incidencias',          icon: <ReportProblemIcon fontSize="small" />, badge: incidenciasCount },
+      { path: '/reportes',            label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
+      { path: '/satisfaccion',        label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
+      { path: '/auditoria',           label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
+      { path: '/ojo-patron',          label: 'Ojo del Patrón',       icon: <GraphicEqIcon fontSize="small" /> },
+      { path: '/proyeccion-personal', label: 'Proyección Personal',  icon: <TrendingUpIcon fontSize="small" /> },
     ] :
     user.role === 'administrador' ? [
       { path: '/app',                      label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
       { path: '/satisfaccion',             label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
       { path: '/auditoria',                label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
       { path: '/auditoria-notificaciones', label: 'Notif. Auditoría',     icon: <NotificationsActiveIcon fontSize="small" /> },
+      { path: '/permisos',                 label: 'Permisos',             icon: <SecurityIcon fontSize="small" /> },
       { path: '/mi-plan',                  label: 'Mi Plan',              icon: <WorkspacePremiumIcon fontSize="small" /> },
     ] : []
 
@@ -741,9 +770,9 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
           left: 0,
           top: 64,
           bottom: 0,
-          width: sidebarOpen ? 240 : 0,
+          width: sidebarOpen ? 240 : 64,
           overflowX: 'hidden',
-          transition: 'width 0.25s ease',
+          transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
           bgcolor: isDarkPremium ? 'transparent' : '#FAFAFA',
           backdropFilter: isDarkPremium ? 'blur(20px)' : undefined,
           background: isDarkPremium ? 'rgba(6,4,15,0.6)' : '#FAFAFA',
@@ -752,7 +781,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          {user.role === 'gerente' && (
+          {user.role === 'gerente' && sidebarOpen && (
             <>
               <Box sx={{ px: 2.5, pt: 2.5, pb: 1.5, whiteSpace: 'nowrap' }}>
                 <Typography variant="caption" fontWeight={700} sx={{ letterSpacing: '0.08em', color: isDarkPremium ? 'rgba(255,255,255,0.4)' : 'text.disabled' }}>PROVINCIA</Typography>
@@ -763,7 +792,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
               <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
             </>
           )}
-          {(user.role === 'supervisor' || user.role === 'administrador') && (
+          {(user.role === 'supervisor' || user.role === 'administrador') && sidebarOpen && (
             <>
               <Box sx={{ px: 2.5, pt: 2.5, pb: 1.5, whiteSpace: 'nowrap' }}>
                 <Typography variant="caption" fontWeight={700} sx={{ letterSpacing: '0.08em', color: isDarkPremium ? 'rgba(255,255,255,0.4)' : 'text.disabled' }}>
@@ -773,10 +802,14 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
               <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
             </>
           )}
-          <List dense sx={{ pt: 1, px: 1, overflowY: 'auto', flex: 1 }}>
+          {!sidebarOpen && <Box sx={{ height: 16 }} />}
+          <List dense sx={{ pt: 0, px: sidebarOpen ? 1 : 0.5, overflowY: 'auto', flex: 1 }}>
             {sidebarNavItems.map((item) => {
               const active = selectedTab === item.path
-              return (
+              const iconEl = (item.badge ?? 0) > 0 ? (
+                <Badge badgeContent={item.badge} color="error" max={9}>{item.icon}</Badge>
+              ) : item.icon
+              return sidebarOpen ? (
                 <ListItemButton
                   key={item.path}
                   selected={active}
@@ -792,18 +825,33 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
                     } : {}),
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 34, color: 'inherit' }}>
-                    {(item.badge ?? 0) > 0 ? (
-                      <Badge badgeContent={item.badge} color="error" max={9}>
-                        {item.icon}
-                      </Badge>
-                    ) : item.icon}
-                  </ListItemIcon>
+                  <ListItemIcon sx={{ minWidth: 34, color: 'inherit' }}>{iconEl}</ListItemIcon>
                   <ListItemText
                     primary={item.label}
                     primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: active ? 700 : 400, color: 'inherit' }}
                   />
                 </ListItemButton>
+              ) : (
+                <Tooltip key={item.path} title={item.label} placement="right" arrow>
+                  <ListItemButton
+                    selected={active}
+                    onClick={() => navigate(item.path)}
+                    sx={{
+                      borderRadius: '8px',
+                      mb: 0.5,
+                      justifyContent: 'center',
+                      px: 0,
+                      minHeight: 40,
+                      color: isDarkPremium ? (active ? '#42A5F5' : 'rgba(255,255,255,0.75)') : undefined,
+                      ...(active ? {
+                        bgcolor: isDarkPremium ? 'rgba(66,165,245,0.15) !important' : 'rgba(25,118,210,0.08) !important',
+                        color: isDarkPremium ? '#42A5F5' : 'primary.main',
+                      } : {}),
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>{iconEl}</ListItemIcon>
+                  </ListItemButton>
+                </Tooltip>
               )
             })}
           </List>
@@ -946,7 +994,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
           <Outlet context={user} />
         ) : (
           <Box sx={{ display: 'flex' }}>
-            {hasSidebar && !isAccessDeniedPage && <Box sx={{ width: sidebarOpen ? 240 : 0, flexShrink: 0, transition: 'width 0.25s ease' }} />}
+            {hasSidebar && !isAccessDeniedPage && <Box sx={{ width: sidebarOpen ? 240 : 64, flexShrink: 0, transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)' }} />}
             <Box
               sx={{
                 flex: 1,
@@ -957,6 +1005,50 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
                 color: isDarkPremium ? 'rgba(255,255,255,0.92)' : undefined,
               }}
             >
+              {showWelcomeBanner && wc && (
+                <Box
+                  sx={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: 2,
+                    mb: 2.5,
+                    background: wc.bg,
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.28)',
+                    animation: 'ltWelcomeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards, ltWelcomeFade 0.6s ease 3.2s forwards',
+                    '@keyframes ltWelcomeIn': {
+                      '0%': { opacity: 0, transform: 'translateY(-18px) scaleX(0.92)' },
+                      '100%': { opacity: 1, transform: 'translateY(0) scaleX(1)' },
+                    },
+                    '@keyframes ltWelcomeFade': {
+                      '0%': { opacity: 1, transform: 'translateY(0)' },
+                      '100%': { opacity: 0, transform: 'translateY(-10px)', pointerEvents: 'none' },
+                    },
+                  }}
+                >
+                  {/* Sweep shimmer */}
+                  <Box sx={{
+                    position: 'absolute', inset: 0, pointerEvents: 'none',
+                    background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.14) 50%, transparent 70%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'ltShimmer 1.8s ease 0.3s forwards',
+                    '@keyframes ltShimmer': {
+                      '0%': { backgroundPosition: '-100% 0' },
+                      '100%': { backgroundPosition: '200% 0' },
+                    },
+                  }} />
+                  <Box sx={{ px: { xs: 2.5, sm: 3.5 }, py: 1.8, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <LocalShippingRoundedIcon sx={{ color: wc.color, fontSize: 28, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#fff', lineHeight: 1.2 }}>
+                        {wc.label}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>
+                        {wc.sub}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
               <Box sx={{ maxWidth: 1400, mx: 'auto', width: '100%' }}>
                 <Outlet context={user} />
               </Box>

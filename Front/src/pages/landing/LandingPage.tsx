@@ -50,7 +50,7 @@ import DirectionsCarFilledRoundedIcon from '@mui/icons-material/DirectionsCarFil
 import warehouseImage from '../../assets/warehouse.jpg'
 import { empresaService } from '../../services/empresaService'
 import { leadService, type PlanInteres } from '../../services/leadService'
-import { RevealBox } from './landingUtils'
+import { RevealBox, useReveal } from './landingUtils'
 
 type ReviewCategory = 'entrega' | 'vehiculo' | 'general'
 
@@ -303,6 +303,7 @@ export default function LandingPage() {
   const [facturacion, setFacturacion] = useState<'mensual' | 'anual'>('mensual')
   const selectedCountry = COUNTRIES[0]
   const [truckFlying, setTruckFlying] = useState(false)
+  const { ref: plansRevealRef, visible: plansVisible } = useReveal(0)
   const [reviewsAnimated, setReviewsAnimated] = useState(false)
   const [animatedRating, setAnimatedRating] = useState(0)
   const reviewsRevealRef = useRef<HTMLDivElement>(null)
@@ -562,6 +563,14 @@ export default function LandingPage() {
   ]
 
   const plansSection = (
+    <Box
+      ref={plansRevealRef}
+      sx={{
+        opacity: plansVisible ? 1 : 0,
+        transform: plansVisible ? 'translateY(0)' : 'translateY(36px)',
+        transition: 'opacity 0.75s ease, transform 0.75s ease',
+      }}
+    >
     <Box component="section" ref={plansRef} sx={{ pt: { xs: 8, md: 10 }, pb: { xs: 12, md: 16 }, bgcolor: '#071D31' }}>
       <Container maxWidth="lg">
         <Stack spacing={1.25} sx={{ mb: 4 }}>
@@ -750,6 +759,7 @@ export default function LandingPage() {
         </Grid>
       </Container>
     </Box>
+    </Box>
   )
 
   return (
@@ -915,7 +925,7 @@ export default function LandingPage() {
             position: 'absolute',
             bottom: { xs: '8%', md: '12%' },
             left: '-120px',
-            animation: 'truckRun 18s linear infinite',
+            animation: 'truckRun 18s linear 1.2s infinite',
             '@keyframes truckRun': {
               '0%': { transform: 'translateX(0)', opacity: 0 },
               '5%': { opacity: 0.18 },

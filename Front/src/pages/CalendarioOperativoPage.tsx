@@ -15,6 +15,8 @@ import {
   IconButton,
   InputAdornment,
   LinearProgress,
+  Menu,
+  MenuItem,
   Stack,
   TextField,
   Tooltip,
@@ -28,8 +30,47 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SearchIcon from '@mui/icons-material/Search'
 import RepeatIcon from '@mui/icons-material/Repeat'
+import DownloadIcon from '@mui/icons-material/Download'
 import api from '../services/api'
 import { dateOnlyForDisplay, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
+
+async function exportToExcel(data: CalendarioOperativo) {
+  const { utils, writeFile } = await import('xlsx')
+  const rows: (string | number)[][] = []
+  const header = ['Repartidor', 'Email', ...data.dias]
+  rows.push(header)
+  for (const rep of data.repartidores) {
+    const row: (string | number)[] = [rep.nombre, rep.email]
+    for (const celda of rep.celdas) {
+      row.push(celda.paquetes.length === 0 ? '' : `${celda.paquetes.length} envíos · ${celda.pesoTotal.toFixed(0)} kg`)
+    }
+    rows.push(row)
+  }
+  const ws = utils.aoa_to_sheet(rows)
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Calendario')
+  writeFile(wb, `calendario-operativo-${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
+async function exportToPdf(data: CalendarioOperativo) {
+  const { default: jsPDF } = await import('jspdf')
+  const { default: autoTable } = await import('jspdf-autotable')
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  doc.setFontSize(14)
+  doc.text('Calendario Operativo', 14, 14)
+  doc.setFontSize(9)
+  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 20)
+  const head = [['Repartidor', ...data.dias.map((d) => {
+    const date = dateOnlyForDisplay(d)
+    return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+  })]]
+  const body = data.repartidores.map((rep) => [
+    rep.nombre,
+    ...rep.celdas.map((c) => c.paquetes.length === 0 ? '—' : `${c.paquetes.length}p · ${c.pesoTotal.toFixed(0)}kg`),
+  ])
+  autoTable(doc, { head, body, startY: 25, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] } })
+  doc.save(`calendario-operativo-${new Date().toISOString().slice(0, 10)}.pdf`)
+}
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
 
@@ -82,6 +123,8 @@ export default function CalendarioOperativoPage({ permissions }: { permissions: 
   const [pageOffset, setPageOffset] = useState(0)
   const [detalleCelda, setDetalleCelda] = useState<CalendarioCelda | null>(null)
   const [searchRepartidor, setSearchRepartidor] = useState('')
+  const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     void load()
@@ -135,11 +178,43 @@ export default function CalendarioOperativoPage({ permissions }: { permissions: 
             Vista de solo lectura — Envíos asignados por día y repartidor.
           </Typography>
         </Box>
-        {canCreateCalendarizacion && (
-          <Button variant="outlined" startIcon={<BoltIcon />} onClick={() => navigate('/calendarizar')}>
-            Nueva Calendarización
-          </Button>
-        )}
+        <Stack direction="row" spacing={1}>
+          {data && (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                disabled={exporting}
+                onClick={(e) => setExportAnchor(e.currentTarget)}
+              >
+                Exportar
+              </Button>
+              <Menu anchorEl={exportAnchor} open={Boolean(exportAnchor)} onClose={() => setExportAnchor(null)}>
+                <MenuItem onClick={async () => {
+                  setExportAnchor(null)
+                  setExporting(true)
+                  await exportToExcel(data)
+                  setExporting(false)
+                }}>
+                  Excel (.xlsx)
+                </MenuItem>
+                <MenuItem onClick={async () => {
+                  setExportAnchor(null)
+                  setExporting(true)
+                  await exportToPdf(data)
+                  setExporting(false)
+                }}>
+                  PDF (.pdf)
+                </MenuItem>
+              </Menu>
+            </>
+          )}
+          {canCreateCalendarizacion && (
+            <Button variant="outlined" startIcon={<BoltIcon />} onClick={() => navigate('/calendarizar')}>
+              Nueva Calendarización
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

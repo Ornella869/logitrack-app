@@ -766,13 +766,17 @@ export default function IncidenciasPage() {
   const isDark = theme.palette.mode === 'dark'
 
   const [incidencias, setIncidencias] = useState<Incidencia[]>([])
-  const [tabVista, setTabVista] = useState<'repartidores' | 'clientes'>('repartidores')
+  const [tabVista, setTabVista] = useState<'repartidores' | 'clientes' | 'panel'>('repartidores')
   const [filtroEstado, setFiltroEstado] = useState<EstadoIncidencia | 'Todas'>('Todas')
   const [filtroSeveridad, setFiltroSeveridad] = useState<SeveridadIncidencia | 'Todas'>('Todas')
   const [soloSlaVencido, setSoloSlaVencido] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [activeChats, setActiveChats] = useState<Array<{ incidencia: Incidencia; unread: number }>>([])
   const [rankingZonas, setRankingZonas] = useState<Array<{ provincia: string; localidad: string; total: number; altas: number; vencidas: number; severidadPredominante: string; tipoPredominante: string }>>([])
+  const [panel, setPanel] = useState<{
+    porTipo: Array<{ tipo: string; tipoLabel: string; total: number; abiertas: number; slaVencidas: number }>
+    porRepartidor: Array<{ repartidorId: string; repartidorNombre: string; total: number; abiertas: number; tipoPredominante: string }>
+  } | null>(null)
 
   const cargar = async () => {
     setIncidencias(await incidenciaService.getAll())
@@ -780,6 +784,12 @@ export default function IncidenciasPage() {
       setRankingZonas(await incidenciaService.rankingZonas())
     } catch {
       setRankingZonas([])
+    }
+    try {
+      const resp = await import('../services/api').then(m => m.default.get('/incidencias/panel-tipo-repartidor'))
+      setPanel(resp.data)
+    } catch {
+      setPanel(null)
     }
   }
 
@@ -862,7 +872,7 @@ export default function IncidenciasPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs
           value={tabVista}
-          onChange={(_, v: 'repartidores' | 'clientes') => { setTabVista(v); setFiltroEstado('Todas'); setFiltroSeveridad('Todas'); setSoloSlaVencido(false); setBusqueda('') }}
+          onChange={(_, v: 'repartidores' | 'clientes' | 'panel') => { setTabVista(v); setFiltroEstado('Todas'); setFiltroSeveridad('Todas'); setSoloSlaVencido(false); setBusqueda('') }}
         >
           <Tab
             value="repartidores"
@@ -898,8 +908,74 @@ export default function IncidenciasPage() {
               </Stack>
             }
           />
+          <Tab value="panel" label="Panel Agregado" />
         </Tabs>
       </Box>
+
+      {tabVista === 'panel' && (
+        <Box>
+          {!panel ? (
+            <CircularProgress />
+          ) : (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>Incidencias por tipo</Typography>
+                    <Stack spacing={1}>
+                      {panel.porTipo.map((t) => {
+                        const info = TIPO_INFO[t.tipo] ?? TIPO_INFO.otro!
+                        const maxTotal = Math.max(...panel.porTipo.map((x) => x.total), 1)
+                        return (
+                          <Box key={t.tipo}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.3 }}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {t.tipoLabel}
+                              </Typography>
+                              <Stack direction="row" spacing={0.8}>
+                                <Chip size="small" label={`${t.total} total`} sx={{ fontSize: 10, height: 20 }} />
+                                {t.abiertas > 0 && <Chip size="small" label={`${t.abiertas} abierta${t.abiertas > 1 ? 's' : ''}`} color="error" sx={{ fontSize: 10, height: 20 }} />}
+                                {t.slaVencidas > 0 && <Chip size="small" label={`${t.slaVencidas} SLA`} sx={{ fontSize: 10, height: 20, bgcolor: '#b71c1c', color: 'white' }} />}
+                              </Stack>
+                            </Stack>
+                            <Box sx={{ bgcolor: 'action.hover', borderRadius: 0.5, height: 6, overflow: 'hidden' }}>
+                              <Box sx={{ height: '100%', width: `${(t.total / maxTotal) * 100}%`, bgcolor: info.color, borderRadius: 0.5, transition: 'width 0.4s' }} />
+                            </Box>
+                          </Box>
+                        )
+                      })}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>Top repartidores con incidencias</Typography>
+                    <Stack spacing={0.8}>
+                      {panel.porRepartidor.map((r, i) => (
+                        <Stack key={r.repartidorId} direction="row" justifyContent="space-between" alignItems="center"
+                          sx={{ p: 1, bgcolor: i === 0 ? '#fdecea' : 'transparent', borderRadius: 1, border: '1px solid', borderColor: i === 0 ? '#c62828' : 'divider' }}>
+                          <Box>
+                            <Typography variant="body2" fontWeight={600}>{i + 1}. {r.repartidorNombre}</Typography>
+                            <Typography variant="caption" color="text.secondary">Predomina: {r.tipoPredominante || '—'}</Typography>
+                          </Box>
+                          <Stack direction="row" spacing={0.8}>
+                            <Chip size="small" label={`${r.total} total`} sx={{ fontSize: 10, height: 20 }} />
+                            {r.abiertas > 0 && <Chip size="small" label={`${r.abiertas} abierta${r.abiertas > 1 ? 's' : ''}`} color="error" sx={{ fontSize: 10, height: 20 }} />}
+                          </Stack>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+        </Box>
+      )}
+
+      {tabVista !== 'panel' && <>
 
       {/* KPIs */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1103,6 +1179,7 @@ export default function IncidenciasPage() {
           })}
         </Stack>
       )}
+      </>}
 
       {/* Solapas de chat flotantes — una por incidente con mensajes activos */}
       {activeChats.length > 0 && (

@@ -41,6 +41,14 @@ export interface LicenciaPorVencerItem {
   urgente: boolean
 }
 
+export interface HistorialJornadaItem {
+  id: string
+  timestamp: string
+  descripcion: string
+  usuarioNombre: string
+  contexto?: string
+}
+
 const mapRepartidor = (t: any): User => ({
   id: t.id,
   name: t.nombre,
@@ -56,6 +64,9 @@ const mapRepartidor = (t: any): User => ({
   horasTrabajo: t.horasTrabajo ?? 8,
   tipoJornada: (t.tipoJornada as 'Part Time' | 'Full Time') ?? 'Full Time',
   capacidadCargaKg: Number(t.capacidadCargaKg ?? t.CapacidadCargaKg ?? 500),
+  vencimientoLicencia: t.vencimientoLicencia ?? null,
+  licenciaVencida: t.licenciaVencida ?? false,
+  licenciaProximaAVencer: t.licenciaProximaAVencer ?? false,
 })
 
 const mapRepartidorListItem = (t: any): RepartidorListItem => ({
@@ -354,6 +365,40 @@ export const authService = {
     } catch (error) {
       console.error('Update repartidor capacidad carga error:', error)
       return null
+    }
+  },
+
+  cambiarSucursalRepartidor: async (repartidorId: string, sucursalId: string | null): Promise<User | null> => {
+    try {
+      const response = await api.put(`/auth/repartidores/${repartidorId}/sucursal`, {
+        SucursalId: sucursalId,
+      })
+      return mapRepartidor(response.data)
+    } catch (error) {
+      console.error('Cambiar sucursal repartidor error:', error)
+      return null
+    }
+  },
+
+  updateVencimientoLicencia: async (repartidorId: string, vencimientoLicencia: string | null): Promise<User | null> => {
+    try {
+      const response = await api.put(`/auth/repartidores/${repartidorId}/vencimiento-licencia`, {
+        VencimientoLicencia: vencimientoLicencia,
+      })
+      return mapRepartidor(response.data)
+    } catch (error) {
+      console.error('Update vencimiento licencia error:', error)
+      return null
+    }
+  },
+
+  getHistorialJornada: async (repartidorId: string): Promise<HistorialJornadaItem[]> => {
+    try {
+      const response = await api.get(`/auth/repartidores/${repartidorId}/historial-jornada`)
+      return response.data as HistorialJornadaItem[]
+    } catch (error) {
+      console.error('Get historial jornada error:', error)
+      return []
     }
   },
 

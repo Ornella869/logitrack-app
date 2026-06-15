@@ -6,12 +6,19 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Grid,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material'
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import PrintIcon from '@mui/icons-material/Print'
 import InventoryIcon from '@mui/icons-material/Inventory2'
@@ -22,8 +29,20 @@ import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { reportService, type ReporteVolumen } from '../services/reportService'
 import { incidenciaService, type RankingZonaIncidencia } from '../services/incidenciaService'
+import api from '../services/api'
 import type { User } from '../types'
 import { addArgentinaDays, formatArgentinaDateInput } from '../utils/argentinaDate'
+
+interface ComparativoSucursal {
+  sucursalId: string
+  nombre: string
+  provincia: string
+  total: number
+  entregados: number
+  cancelados: number
+  demorados: number
+  pesoTotal: number
+}
 
 const today = () => formatArgentinaDateInput()
 const daysAgo = (n: number) => addArgentinaDays(-n)
@@ -35,6 +54,7 @@ export default function ReportesPage() {
   const [dateError, setDateError] = useState('')
   const [data, setData] = useState<ReporteVolumen | null>(null)
   const [rankingZonas, setRankingZonas] = useState<RankingZonaIncidencia[]>([])
+  const [comparativo, setComparativo] = useState<ComparativoSucursal[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -57,13 +77,17 @@ export default function ReportesPage() {
     setLoading(true)
     setError('')
     try {
-      const [result, ranking] = await Promise.all([
+      const [result, ranking, comp] = await Promise.all([
         reportService.getVolumen(from, to),
         incidenciaService.rankingZonas(from, to).catch(() => []),
+        user.role === 'gerente' || user.role === 'administrador'
+          ? api.get('/reportes/comparativo-sucursales', { params: { desde: from, hasta: to } }).then(r => r.data as ComparativoSucursal[]).catch(() => null)
+          : Promise.resolve(null),
       ])
       if (result) setData(result)
       else setError('No se pudo cargar el reporte')
       setRankingZonas(ranking)
+      setComparativo(comp)
     } finally {
       setLoading(false)
     }
@@ -147,8 +171,52 @@ export default function ReportesPage() {
             <Stack spacing={2}>
               <VolumeChart data={data} />
               <HomeDeliveryReport data={data} />
-              {user.role === 'gerente' && (
+              {(user.role === 'gerente' || user.role === 'administrador') && (
                 <RankingIncidenciasGerente data={rankingZonas} />
+              )}
+              {comparativo && comparativo.length > 0 && (
+                <Card variant="outlined">
+                  <CardContent>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                      <CompareArrowsIcon color="primary" />
+                      <Typography variant="subtitle1" fontWeight={700}>Comparativo por sucursal</Typography>
+                    </Stack>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Sucursal</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Provincia</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>Entregados</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>Cancelados</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>Demorados</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>Efectividad</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>Peso (kg)</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {comparativo.map((suc) => {
+                          const efectividad = suc.total > 0 ? ((suc.entregados / suc.total) * 100).toFixed(1) : '0.0'
+                          const color = parseFloat(efectividad) >= 80 ? '#2e7d32' : parseFloat(efectividad) >= 60 ? '#e65100' : '#c62828'
+                          return (
+                            <TableRow key={suc.sucursalId}>
+                              <TableCell sx={{ fontWeight: 600 }}>{suc.nombre}</TableCell>
+                              <TableCell>
+                                <Chip size="small" label={suc.provincia} sx={{ fontSize: 11, height: 20 }} />
+                              </TableCell>
+                              <TableCell align="right">{suc.total}</TableCell>
+                              <TableCell align="right" sx={{ color: '#2e7d32', fontWeight: 600 }}>{suc.entregados}</TableCell>
+                              <TableCell align="right" sx={{ color: '#c62828' }}>{suc.cancelados}</TableCell>
+                              <TableCell align="right" sx={{ color: '#e65100' }}>{suc.demorados}</TableCell>
+                              <TableCell align="right" sx={{ color, fontWeight: 700 }}>{efectividad}%</TableCell>
+                              <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{suc.pesoTotal.toFixed(0)}</TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               )}
             </Stack>
           )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -10,15 +10,32 @@ import {
   Chip,
   CircularProgress,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  FormControl,
   Grid,
+  InputLabel,
   LinearProgress,
+  MenuItem,
+  Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material'
+import HistoryIcon from '@mui/icons-material/History'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import TransferWithinAStationIcon from '@mui/icons-material/TransferWithinAStation'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PersonIcon from '@mui/icons-material/Person'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -26,10 +43,10 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import api from '../services/api'
-import { authService } from '../services/authService'
+import { authService, type HistorialJornadaItem } from '../services/authService'
+import { branchService } from '../services/branchService'
+import type { Branch, User } from '../types'
 import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs, formatInstantArgentinaDate, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
 type Rendimiento = {
@@ -48,6 +65,10 @@ type Rendimiento = {
   tipoJornada: string
   capacidadCargaKg: number
   fotoPerfil?: string | null
+  vencimientoLicencia?: string | null
+  licenciaVencida?: boolean
+  licenciaProximaAVencer?: boolean
+  sucursalId?: string | null
 }
 
 type JornadaLaboralHistorial = {
@@ -95,6 +116,7 @@ const validateDateRangeForRender = (from: string, to: string) => (
 
 export default function PerfilRendimientoPage({ permissions }: { permissions: Set<string> }) {
   const navigate = useNavigate()
+  const user = useOutletContext<User>()
   const { repartidorId } = useParams<{ repartidorId: string }>()
   const [from, setFrom] = useState<string>(daysAgo(30))
   const [to, setTo] = useState<string>(today())
@@ -114,11 +136,24 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
   const [savingCapacidad, setSavingCapacidad] = useState(false)
   const [capacidadError, setCapacidadError] = useState('')
   const [capacidadSuccess, setCapacidadSuccess] = useState('')
+  const [historialJornada, setHistorialJornada] = useState<HistorialJornadaItem[]>([])
+  const [historialExpanded, setHistorialExpanded] = useState(false)
+  const [vencimientoInput, setVencimientoInput] = useState<string>('')
+  const [savingVencimiento, setSavingVencimiento] = useState(false)
+  const [vencimientoError, setVencimientoError] = useState('')
+  const [vencimientoSuccess, setVencimientoSuccess] = useState('')
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [sucursales, setSucursales] = useState<Branch[]>([])
+  const [selectedSucursal, setSelectedSucursal] = useState<string>('')
+  const [transferring, setTransferring] = useState(false)
+  const [transferError, setTransferError] = useState('')
+  const [transferSuccess, setTransferSuccess] = useState('')
 
   useEffect(() => {
     if (!repartidorId) return
     void load()
-  }, [repartidorId])
+    authService.getHistorialJornada(repartidorId).then(setHistorialJornada)
+  }, [repartidorId, user.role])
 
   const validate = (f: string, t: string): boolean => {
     if (!f || !t) { setDateError('Completá ambas fechas para aplicar el rango.'); return false }
@@ -159,6 +194,9 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
       setJornadaHistorialError(jornadaHistorialRes ? '' : 'No se pudo cargar el historial de jornada laboral.')
       if (horasInput === '') setHorasInput(String(res.data?.horasTrabajo ?? 8))
       if (capacidadInput === '') setCapacidadInput(String(res.data?.capacidadCargaKg ?? 500))
+      if (vencimientoInput === '' && res.data?.vencimientoLicencia) {
+        setVencimientoInput(res.data.vencimientoLicencia.slice(0, 10))
+      }
     } catch (e: any) {
       setError(e.response?.data ?? 'No se pudo cargar el rendimiento')
     } finally {
@@ -185,6 +223,7 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
       setData((prev) => prev ? { ...prev, horasTrabajo: result.horasTrabajo ?? horas, tipoJornada: result.tipoJornada ?? (horas <= 6 ? 'Part Time' : 'Full Time') } : prev)
       setHorasSuccess('Jornada actualizada correctamente.')
       void loadJornadaHistorial()
+      if (repartidorId) authService.getHistorialJornada(repartidorId).then(setHistorialJornada)
     }
   }
 
@@ -216,6 +255,37 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
     } else {
       setData((prev) => prev ? { ...prev, capacidadCargaKg: result.capacidadCargaKg ?? capacidad } : prev)
       setCapacidadSuccess('Capacidad actualizada correctamente.')
+    }
+  }
+
+  const handleTransfer = async () => {
+    if (!repartidorId || !selectedSucursal) return
+    setTransferring(true)
+    setTransferError('')
+    const result = await authService.cambiarSucursalRepartidor(repartidorId, selectedSucursal || null)
+    setTransferring(false)
+    if (!result) {
+      setTransferError('No se pudo transferir. Intentá de nuevo.')
+    } else {
+      setTransferSuccess('Repartidor transferido correctamente.')
+      setTransferDialogOpen(false)
+      setData((prev) => prev ? { ...prev } : prev)
+    }
+  }
+
+  const handleSaveVencimiento = async () => {
+    if (!repartidorId) return
+    setSavingVencimiento(true)
+    setVencimientoError('')
+    setVencimientoSuccess('')
+    const isoValue = vencimientoInput ? `${vencimientoInput}T00:00:00.000Z` : null
+    const result = await authService.updateVencimientoLicencia(repartidorId, isoValue)
+    setSavingVencimiento(false)
+    if (!result) {
+      setVencimientoError('No se pudo actualizar. Intentá de nuevo.')
+    } else {
+      setData((prev) => prev ? { ...prev, vencimientoLicencia: result.vencimientoLicencia, licenciaVencida: result.licenciaVencida, licenciaProximaAVencer: result.licenciaProximaAVencer } : prev)
+      setVencimientoSuccess('Vencimiento actualizado correctamente.')
     }
   }
 
@@ -383,6 +453,113 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
               </CardContent>
             </Card>
           )}
+
+          {(user.role === 'supervisor' || user.role === 'administrador') && (
+            <Card variant="outlined" sx={{ borderLeft: data?.licenciaVencida ? '4px solid #c62828' : data?.licenciaProximaAVencer ? '4px solid #e65100' : '4px solid #bdbdbd' }}>
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Typography variant="subtitle2" gutterBottom>Vencimiento de licencia</Typography>
+                {data?.licenciaVencida && <Alert severity="error" sx={{ mb: 1, py: 0 }}>Licencia vencida — el repartidor no puede operar.</Alert>}
+                {data?.licenciaProximaAVencer && !data?.licenciaVencida && <Alert severity="warning" sx={{ mb: 1, py: 0 }}>Licencia próxima a vencer (dentro de 30 días).</Alert>}
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <TextField
+                    size="small"
+                    label="Fecha de vencimiento"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                    value={vencimientoInput}
+                    onChange={(e) => { setVencimientoInput(e.target.value); setVencimientoError(''); setVencimientoSuccess('') }}
+                    sx={{ maxWidth: 200 }}
+                  />
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => void handleSaveVencimiento()}
+                    disabled={savingVencimiento}
+                  >
+                    {savingVencimiento ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
+                  </Button>
+                  {vencimientoInput && (
+                    <Button size="small" variant="text" color="error" onClick={() => { setVencimientoInput(''); void handleSaveVencimiento() }}>
+                      Borrar
+                    </Button>
+                  )}
+                </Stack>
+                {vencimientoError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{vencimientoError}</Alert>}
+                {vencimientoSuccess && <Alert severity="success" sx={{ mt: 1, py: 0 }}>{vencimientoSuccess}</Alert>}
+              </CardContent>
+            </Card>
+          )}
+
+          {user.role === 'administrador' && (
+            <Card variant="outlined">
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Typography variant="subtitle2" gutterBottom>Transferir a otra sucursal</Typography>
+                {transferSuccess && <Alert severity="success" sx={{ mb: 1, py: 0 }}>{transferSuccess}</Alert>}
+                {transferError && <Alert severity="error" sx={{ mb: 1, py: 0 }}>{transferError}</Alert>}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<TransferWithinAStationIcon />}
+                  onClick={async () => {
+                    const branches = await branchService.getAllBranches()
+                    setSucursales(branches)
+                    setSelectedSucursal(data?.sucursalId ?? '')
+                    setTransferDialogOpen(true)
+                  }}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Cambiar sucursal
+                </Button>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  Los envíos pendientes de asignación se liberarán automáticamente.
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
+
+          {historialJornada.length > 0 && (
+            <Card variant="outlined">
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <HistoryIcon fontSize="small" color="action" />
+                    <Typography variant="subtitle2">Historial de cambios de jornada</Typography>
+                    <Chip label={historialJornada.length} size="small" />
+                  </Stack>
+                  <Button
+                    size="small"
+                    onClick={() => setHistorialExpanded((v) => !v)}
+                    endIcon={historialExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    sx={{ textTransform: 'none', fontSize: 12 }}
+                  >
+                    {historialExpanded ? 'Ocultar' : 'Ver historial'}
+                  </Button>
+                </Stack>
+                <Collapse in={historialExpanded}>
+                  <Table size="small" sx={{ mt: 1.5 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>Fecha</TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>Descripción</TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>Realizado por</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {historialJornada.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell sx={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {new Date(item.timestamp).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{item.descripcion}</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{item.usuarioNombre}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Collapse>
+              </CardContent>
+            </Card>
+          )}
         </Stack>
       )}
 
@@ -517,6 +694,35 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
           )}
         </>
       )}
+
+      {/* Transfer dialog */}
+      <Dialog open={transferDialogOpen} onClose={() => setTransferDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Transferir repartidor a otra sucursal</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Los envíos pendientes de salida se liberarán y vuelven a la cola de calendarización.
+          </Typography>
+          <FormControl fullWidth size="small">
+            <InputLabel>Sucursal destino</InputLabel>
+            <Select
+              value={selectedSucursal}
+              label="Sucursal destino"
+              onChange={(e) => setSelectedSucursal(e.target.value)}
+            >
+              {sucursales.map((s) => (
+                <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {transferError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{transferError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferDialogOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={() => void handleTransfer()} disabled={transferring || !selectedSucursal}>
+            {transferring ? <CircularProgress size={18} color="inherit" /> : 'Transferir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

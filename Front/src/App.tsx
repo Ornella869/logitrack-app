@@ -23,6 +23,8 @@ import PickUpOperacionPage from './pages/PickUpOperacionPage'
 import PickUpHistorialPage from './pages/PickUpHistorialPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
+import PermisosPage from './pages/PermisosPage'
+import ProyeccionPersonalPage from './pages/ProyeccionPersonalPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
 import TrackingPublicPage from './pages/TrackingPublicPage'
@@ -31,7 +33,6 @@ import SatisfaccionPage from './pages/SatisfaccionPage'
 import SatisfaccionMetricasPage from './pages/SatisfaccionMetricasPage'
 import PlantillasEmailPage from './pages/PlantillasEmailPage'
 import PlantillaEmailEditPage from './pages/PlantillaEmailEditPage'
-import PermisosPage from './pages/PermisosPage'
 import Layout from './components/Layout'
 import RepartidorDashboard from './pages/repartidor/RepartidorDashboard'
 import RepartidorHistorialPage from './pages/repartidor/RepartidorHistorialPage'
@@ -469,6 +470,15 @@ function App() {
             }
           />
           <Route path="/permisos" element={permitted('gestionar_permisos', <PermisosPage />)} />
+
+          <Route
+            path="/proyeccion-personal"
+            element={
+              user && (user.role === 'supervisor' || user.role === 'administrador')
+                ? <ProyeccionPersonalPage />
+                : <Navigate to="/access-denied" replace />
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to={user ? homePath : '/login'} />} />

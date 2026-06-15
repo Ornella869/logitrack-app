@@ -98,6 +98,18 @@ export const pickupService = {
     const r = await api.get('/pickup-operacion/calificaciones')
     return r.data
   },
+
+  // G1L-152: Horarios estructurados
+  async getHorarios(pickupId: string): Promise<HorarioPickUpItem[]> {
+    try {
+      const r = await api.get(`/pickups/${pickupId}/horarios`)
+      return r.data ?? []
+    } catch { return [] }
+  },
+
+  async setHorarios(pickupId: string, horarios: HorarioPickUpItem[]): Promise<void> {
+    await api.put(`/pickups/${pickupId}/horarios`, horarios)
+  },
 }
 
 export interface ResumenCalificaciones {
@@ -114,4 +126,11 @@ export interface CalificacionPickUpItem {
   autorNombre?: string | null
   creadoEn: string
   trackingCode: string
+}
+
+export interface HorarioPickUpItem {
+  diaSemana: number  // 0=Dom, 1=Lun, ..., 6=Sáb
+  apertura: string | null  // "HH:mm:ss" or null
+  cierre: string | null
+  cerrado: boolean
 }

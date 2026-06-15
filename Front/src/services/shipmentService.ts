@@ -726,11 +726,18 @@ export interface DiaResumen {
   repartidores: RepartidorResumen[]
 }
 
+export interface PaqueteSinAsignarResumen {
+  codigoSeguimiento: string
+  peso: number
+  motivo: string
+}
+
 export interface CalendarizacionResultado {
   totalPendientes: number
   totalCalendarizados: number
   totalSinAsignar: number
   resumenPorDia: DiaResumen[]
+  paquetesSinAsignar?: PaqueteSinAsignarResumen[]
 }
 
 export const calendarizacionService = {
@@ -741,6 +748,17 @@ export const calendarizacionService = {
     } catch (error) {
       console.error('Contar pendientes error:', error)
       return 0
+    }
+  },
+
+  // G1L-150: simula sin persistir
+  preview: async (): Promise<{ success: boolean; data?: CalendarizacionResultado; error?: string }> => {
+    try {
+      const response = await api.post('/calendarizacion/preview')
+      return { success: true, data: response.data }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message ?? error.response?.data ?? 'No se pudo simular la calendarización'
+      return { success: false, error: typeof errorMessage === 'string' ? errorMessage : 'Error desconocido' }
     }
   },
 
@@ -775,6 +793,26 @@ export const calendarizacionService = {
     }
   },
 
+  getPendientesReagendamiento: async (): Promise<PaquetePendienteReagendamiento[]> => {
+    try {
+      const response = await api.get('/calendarizacion/pendientes-reagendamiento')
+      return response.data as PaquetePendienteReagendamiento[]
+    } catch (error) {
+      console.error('Get pendientes reagendamiento error:', error)
+      return []
+    }
+  },
+
+  reagendar: async (paqueteId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.post(`/calendarizacion/${paqueteId}/reagendar`)
+      return { success: true }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message ?? 'No se pudo reagendar el envío'
+      return { success: false, error: typeof errorMessage === 'string' ? errorMessage : 'Error desconocido' }
+    }
+  },
+
   // G1L-83: precalendarización manual.
   precalendarizar: async (
     paqueteId: string,
@@ -793,6 +831,14 @@ export const calendarizacionService = {
       return { success: false, error: typeof errorMessage === 'string' ? errorMessage : 'Error desconocido' }
     }
   },
+}
+
+export interface PaquetePendienteReagendamiento {
+  id: string
+  codigoSeguimiento: string
+  status: string
+  fechaCalendarizada?: string | null
+  peso: number
 }
 
 // G1L-83: tipos del calendario operativo y la precalendarización.

@@ -31,6 +31,9 @@ export interface User {
   tipoJornada?: 'Part Time' | 'Full Time'
   capacidadCargaKg?: number
   fotoPerfil?: string | null
+  vencimientoLicencia?: string | null
+  licenciaVencida?: boolean
+  licenciaProximaAVencer?: boolean
 }
 
 export interface CreateRepartidorData {

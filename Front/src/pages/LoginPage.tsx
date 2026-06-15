@@ -147,6 +147,110 @@ function AnimatedBrand() {
   )
 }
 
+function AnimatedRoad() {
+  const roadPath = 'M -50,85 C 150,30 350,110 600,65 S 900,15 1250,70'
+  const cycle = 9
+  const milestones = [
+    { cx: 120, cy: 58, t: 1.2 },
+    { cx: 370, cy: 95, t: 2.9 },
+    { cx: 600, cy: 65, t: 4.5 },
+    { cx: 870, cy: 28, t: 6.5 },
+    { cx: 1120, cy: 62, t: 8.2 },
+  ]
+  const beginTimes = (t: number) =>
+    Array.from({ length: 10 }, (_el, i) => `${(t + i * cycle).toFixed(1)}s`).join(';')
+  const pinD = (cx: number, cy: number) =>
+    `M ${cx},${cy + 2} C ${cx - 5},${cy - 4} ${cx - 8},${cy - 9} ${cx - 8},${cy - 13} ` +
+    `C ${cx - 8},${cy - 18} ${cx - 4},${cy - 21} ${cx},${cy - 21} ` +
+    `C ${cx + 4},${cy - 21} ${cx + 8},${cy - 18} ${cx + 8},${cy - 13} ` +
+    `C ${cx + 8},${cy - 9} ${cx + 5},${cy - 4} ${cx},${cy + 2} Z`
+
+  return (
+    <Box
+      sx={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: 130,
+        zIndex: 0, pointerEvents: 'none', overflow: 'hidden',
+        opacity: 0,
+        animation: 'roadIn 1s ease 0.7s forwards',
+        '@keyframes roadIn': { from: { opacity: 0 }, to: { opacity: 1 } },
+      }}
+    >
+      <svg viewBox="0 0 1200 120" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%' }}>
+        <defs>
+          <path id="lt-road" d={roadPath} />
+          <filter id="neonRoadGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="pinGlowF" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        {/* Outer glow of road */}
+        <path d={roadPath} fill="none" stroke="rgba(0,229,255,0.12)" strokeWidth="14" strokeLinecap="round" />
+        {/* Road shadow */}
+        <path d={roadPath} fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth="5" strokeLinecap="round" transform="translate(0,3)" />
+        {/* Main neon road */}
+        <path d={roadPath} fill="none" stroke="#00E5FF" strokeWidth="2.5" strokeLinecap="round" filter="url(#neonRoadGlow)" opacity="0.9" />
+        {/* Center dashes */}
+        <path d={roadPath} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="10 8" strokeLinecap="round" />
+
+        {/* Location pins in neon violet */}
+        {milestones.map((m, i) => (
+          <g key={i}>
+            {/* Outer pulse ring */}
+            <circle cx={m.cx} cy={m.cy - 13} r="4" fill="none" stroke="#E040FB" strokeWidth="1.5" opacity="0">
+              <animate attributeName="r" values="4;22;4" dur="1s" begin={beginTimes(m.t)} />
+              <animate attributeName="opacity" values="0.85;0;0" dur="1s" begin={beginTimes(m.t)} />
+            </circle>
+            {/* Inner pulse ring */}
+            <circle cx={m.cx} cy={m.cy - 13} r="4" fill="none" stroke="#CE93D8" strokeWidth="1" opacity="0">
+              <animate attributeName="r" values="4;13;4" dur="0.75s" begin={beginTimes(m.t + 0.12)} />
+              <animate attributeName="opacity" values="0.65;0;0" dur="0.75s" begin={beginTimes(m.t + 0.12)} />
+            </circle>
+            {/* Pin body */}
+            <path d={pinD(m.cx, m.cy)} fill="rgba(156,39,176,0.88)" stroke="#E040FB" strokeWidth="1.2" filter="url(#pinGlowF)" />
+            {/* Pin inner dot */}
+            <circle cx={m.cx} cy={m.cy - 13} r="2.5" fill="#EA80FC" />
+          </g>
+        ))}
+
+        {/* Destination flag */}
+        <g transform="translate(1120, 40)">
+          <line x1="0" y1="0" x2="0" y2="28" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
+          <polygon points="0,0 16,5 0,10" fill="#00E5FF" opacity="0.85" />
+        </g>
+
+        {/* Animated truck */}
+        <g filter="url(#neonRoadGlow)" style={{ willChange: 'transform' }}>
+          <animateMotion dur="9s" repeatCount="indefinite" rotate="auto" begin="0.7s">
+            <mpath href="#lt-road" />
+          </animateMotion>
+          {/* Cab */}
+          <rect x="-23" y="-7" width="12" height="13" rx="2.5" fill="#1565C0" stroke="#4FC3F7" strokeWidth="0.8" />
+          {/* Windshield */}
+          <rect x="-22" y="-6" width="7" height="6" rx="1" fill="rgba(157,231,255,0.82)" />
+          {/* Headlight */}
+          <ellipse cx="-22" cy="3.5" rx="1.2" ry="1.5" fill="#FFF176" />
+          {/* Cargo body */}
+          <rect x="-11" y="-8" width="24" height="15" rx="2" fill="#0D47A1" stroke="#29B6F6" strokeWidth="0.8" />
+          {/* Cargo ribs */}
+          <line x1="-3" y1="-7" x2="-3" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
+          <line x1="4" y1="-7" x2="4" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
+          <line x1="10" y1="-7" x2="10" y2="6" stroke="rgba(79,195,247,0.3)" strokeWidth="0.8" />
+          {/* Wheels */}
+          <circle cx="-14" cy="8" r="4" fill="#060F1A" stroke="#4FC3F7" strokeWidth="1" />
+          <circle cx="-14" cy="8" r="1.5" fill="#29B6F6" />
+          <circle cx="8" cy="8" r="4" fill="#060F1A" stroke="#4FC3F7" strokeWidth="1" />
+          <circle cx="8" cy="8" r="1.5" fill="#29B6F6" />
+        </g>
+      </svg>
+    </Box>
+  )
+}
+
 function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
   const showDemoUsers = import.meta.env.VITE_SHOW_DEMO_USERS === 'true'
   const showAdminDemo = import.meta.env.VITE_ADMIN_DEMO === 'true' || import.meta.env.VITE_ADMIN_DEMO === '1'
@@ -220,6 +324,8 @@ function LoginPage({ onLogin, sessionExpired = false }: LoginPageProps) {
         py: 4,
       }}
     >
+      <AnimatedRoad />
+
       {/* Blobs decorativos azul profundo */}
       {[
         { s: 500, top: '-18%', left: '-12%', color: 'rgba(2,60,130,0.3)', d: 22, dl: 0 },
