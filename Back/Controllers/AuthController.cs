@@ -525,7 +525,30 @@ namespace Back.Controllers
                     }
                 }
 
+                var tramos = await _context.TramosEnvio
+                    .Where(t => t.RepartidorId == repartidorId
+                        && (t.Estado == TramoEnvioStatus.Asignado || t.Estado == TramoEnvioStatus.PendienteDeCalendarizacion))
+                    .ToListAsync();
+
+                foreach (var tramo in tramos)
+                {
+                    tramo.VolverAPendiente();
+                }
+
+                var sucursalAnterior = rep.SucursalId;
                 rep.AsignarSucursal(request.SucursalId);
+                
+                await _auditoria.RegistrarAsync(
+                    TipoAccion.Otro,
+                    $"Transferencia de sucursal del repartidor {rep.Nombre} {rep.Apellido}",
+                    rep.Id.ToString(),
+                    JsonSerializer.Serialize(new
+                    {
+                        RepartidorId = rep.Id,
+                        SucursalAnterior = sucursalAnterior,
+                        NuevaSucursal = request.SucursalId
+                    }));
+
                 await _context.SaveChangesAsync();
 
                 return Ok(new { repartidor = MapRepartidor(rep), paquetesLiberados = liberados });
