@@ -384,6 +384,11 @@ namespace Back.Application.Services
                 throw new InvalidOperationException("Repartidor no encontrado.");
 
             repartidor.ActualizarLicencia(licencia, fechaVencimientoLicencia);
+            if (repartidor.FechaVencimientoLicencia.HasValue
+                && repartidor.FechaVencimientoLicencia.Value.Date <= OperationalClock.TodayUtcDate)
+            {
+                repartidor.SuspenderPorLicenciaVencida();
+            }
             return repartidor;
         }
 
@@ -392,6 +397,13 @@ namespace Back.Application.Services
             var user = await _userRepository.GetUsuarioById(repartidorId);
             if (user is not Repartidor repartidor)
                 throw new InvalidOperationException("Repartidor no encontrado.");
+
+            if (estado == EstadoRepartidor.Activo
+                && repartidor.FechaVencimientoLicencia.HasValue
+                && repartidor.FechaVencimientoLicencia.Value.Date <= OperationalClock.TodayUtcDate)
+            {
+                throw new InvalidOperationException("No se puede reactivar al repartidor mientras la licencia siga vencida.");
+            }
 
             repartidor.CambiarEstado(estado);
             return repartidor;

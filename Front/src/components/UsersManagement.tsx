@@ -237,6 +237,7 @@ export default function UsersManagement({
   const [showResetSection, setShowResetSection] = useState(false)
   const [resetPassValue, setResetPassValue] = useState('')
   const [showResetPassValue, setShowResetPassValue] = useState(false)
+  const [reactivatingOperativo, setReactivatingOperativo] = useState(false)
   const [resetPassSubmitting, setResetPassSubmitting] = useState(false)
 
   // Solicitudes pendientes de restablecimiento de contraseña
@@ -430,6 +431,22 @@ export default function UsersManagement({
       )
     } else {
       showToast(result.error ?? 'Error al resetear la contraseña', 'error')
+    }
+  }
+
+  const handleReactivarEstadoOperativo = async () => {
+    if (!selectedUser || selectedUser.role !== 'repartidor') return
+    setReactivatingOperativo(true)
+    try {
+      const updated = await authService.updateRepartidorEstado(selectedUser.id, 'Activo')
+      if (!updated) throw new Error('No se pudo reactivar al repartidor')
+      setSelectedUser(updated)
+      await loadUsers()
+      showToast('Repartidor reactivado correctamente', 'success')
+    } catch (err: any) {
+      setFormError(err?.message ?? 'No se pudo reactivar al repartidor')
+    } finally {
+      setReactivatingOperativo(false)
     }
   }
 
@@ -1048,7 +1065,14 @@ export default function UsersManagement({
                         <Typography variant="body2" color="text.disabled" sx={{ fontSize: '0.8rem' }}>—</Typography>
                       )}
                     </TableCell>
-                    <TableCell><EstadoChip activo={user.activo} estado={user.estado} /></TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        <EstadoChip activo={user.activo} estado={user.estado} />
+                        {user.role === 'repartidor' && user.estado && user.estado !== 'Activo' && (
+                          <Chip label={`Operativo: ${user.estado}`} size="small" color="warning" />
+                        )}
+                      </Stack>
+                    </TableCell>
                     <TableCell align="center">
                       {selectionMode ? (
                         <Button
@@ -1487,8 +1511,21 @@ export default function UsersManagement({
                     InputLabelProps={{ shrink: true }}
                     helperText="Actualizar esta fecha no reactiva automáticamente una suspensión existente"
                   />
+                  <Alert severity={(selectedUser.estado ?? 'Activo') === 'Activo' ? 'success' : 'warning'}>
+                    Estado operativo: {selectedUser.estado ?? 'Activo'}
+                  </Alert>
                   {selectedUser.motivoSuspension && (
                     <Alert severity="warning">Motivo de suspensión: {selectedUser.motivoSuspension}</Alert>
+                  )}
+                  {(selectedUser.estado ?? 'Activo') !== 'Activo' && (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={handleReactivarEstadoOperativo}
+                      disabled={reactivatingOperativo}
+                    >
+                      {reactivatingOperativo ? 'Reactivando…' : 'Reactivar repartidor'}
+                    </Button>
                   )}
                 </Stack>
               </Box>
@@ -1566,8 +1603,8 @@ export default function UsersManagement({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenEdit(false)} disabled={submitting || resetPassSubmitting}>Cancelar</Button>
-          <Button onClick={handleEdit} variant="contained" disabled={submitting || resetPassSubmitting}>
+          <Button onClick={() => setOpenEdit(false)} disabled={submitting || resetPassSubmitting || reactivatingOperativo}>Cancelar</Button>
+          <Button onClick={handleEdit} variant="contained" disabled={submitting || resetPassSubmitting || reactivatingOperativo}>
             {submitting ? 'Guardando…' : 'Guardar cambios'}
           </Button>
         </DialogActions>

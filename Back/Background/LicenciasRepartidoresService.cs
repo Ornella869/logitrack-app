@@ -18,18 +18,34 @@ namespace Back.Background
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await EjecutarPasoAsync(stoppingToken);
+
             while (!stoppingToken.IsCancellationRequested)
             {
-                try
-                {
-                    await SuspenderLicenciasVencidasAsync(stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error al suspender repartidores con licencia vencida.");
-                }
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var context = scope.ServiceProvider.GetRequiredService<LogiTrackDbContext>();
+                var empresa = await context.Empresas.FirstOrDefaultAsync(stoppingToken);
+                var minutos = empresa?.LicenciasHoraProcesoMinutos ?? 5;
+                var horaEjecucionDiaria = TimeSpan.FromMinutes(minutos);
+                var ahora = OperationalClock.Now;
+                var proxima = ahora.Date.Add(horaEjecucionDiaria);
+                if (proxima <= ahora)
+                    proxima = proxima.AddDays(1);
 
-                await Task.Delay(TimeSpan.FromDays(1), stoppingToken);
+                await Task.Delay(proxima - ahora, stoppingToken);
+                await EjecutarPasoAsync(stoppingToken);
+            }
+        }
+
+        private async Task EjecutarPasoAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                await SuspenderLicenciasVencidasAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al suspender repartidores con licencia vencida.");
             }
         }
 

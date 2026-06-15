@@ -21,6 +21,9 @@ namespace Back.Domain.Models
         public EstadoEmpresa Estado { get; private set; } = EstadoEmpresa.Activa;
         public DateTime CreadoEn { get; private set; } = DateTime.UtcNow;
         public DateTime ActualizadoEn { get; private set; } = DateTime.UtcNow;
+        public int LicenciasAlertaDias { get; private set; } = 30;
+        public int LicenciasUrgenteDias { get; private set; } = 7;
+        public int LicenciasHoraProcesoMinutos { get; private set; } = 5;
 
         // Para flujo de cambio de plan con código de verificación (G1L-63).
         public string? CodigoCambioPendiente { get; private set; }
@@ -88,6 +91,21 @@ namespace Back.Domain.Models
         public void Reactivar()
         {
             Estado = EstadoEmpresa.Activa;
+            ActualizadoEn = DateTime.UtcNow;
+        }
+
+        public void ActualizarConfiguracionLicencias(int alertaDias, int urgenteDias, int horaProcesoMinutos)
+        {
+            if (alertaDias < 1 || alertaDias > 365)
+                throw new InvalidOperationException("Los días de alerta deben estar entre 1 y 365.");
+            if (urgenteDias < 1 || urgenteDias > alertaDias)
+                throw new InvalidOperationException("Los días de alerta urgente deben estar entre 1 y el umbral de alerta general.");
+            if (horaProcesoMinutos < 0 || horaProcesoMinutos > 1439)
+                throw new InvalidOperationException("La hora del proceso diario no es válida.");
+
+            LicenciasAlertaDias = alertaDias;
+            LicenciasUrgenteDias = urgenteDias;
+            LicenciasHoraProcesoMinutos = horaProcesoMinutos;
             ActualizadoEn = DateTime.UtcNow;
         }
 

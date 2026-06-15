@@ -31,7 +31,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew'
 import WbSunnyIcon from '@mui/icons-material/WbSunny'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
-import { empresaService, type MiPlanResponse, type PlanCatalogo, type PlanEmpresa } from '../services/empresaService'
+import { empresaService, type ConfiguracionLicencias, type MiPlanResponse, type PlanCatalogo, type PlanEmpresa } from '../services/empresaService'
 import { authService } from '../services/authService'
 import type { User } from '../types'
 
@@ -150,6 +150,12 @@ function Confetti() {
   )
 }
 
+function formatHoraProceso(minutos: number): string {
+  const horas = String(Math.floor(minutos / 60)).padStart(2, '0')
+  const mins = String(minutos % 60).padStart(2, '0')
+  return `${horas}:${mins}`
+}
+
 export default function MiPlanPage() {
   const user = useOutletContext<User>()
   const [plan, setPlan] = useState<MiPlanResponse | null>(null)
@@ -177,6 +183,9 @@ export default function MiPlanPage() {
   const [openSuspendDialog, setOpenSuspendDialog] = useState(false)
   const [openBajaDialog, setOpenBajaDialog] = useState(false)
   const [snack, setSnack] = useState<{ open: boolean; msg: string; sev: 'success' | 'info' | 'error' | 'warning' }>({ open: false, msg: '', sev: 'success' })
+  const [configLicencias, setConfigLicencias] = useState<ConfiguracionLicencias | null>(null)
+  const [configLicenciasForm, setConfigLicenciasForm] = useState<ConfiguracionLicencias>({ alertaDias: 30, urgenteDias: 7, horaProcesoMinutos: 5 })
+  const [savingConfigLicencias, setSavingConfigLicencias] = useState(false)
 
   useEffect(() => {
     if (user.role !== 'administrador') return
@@ -187,13 +196,18 @@ export default function MiPlanPage() {
     setLoading(true)
     setError('')
     try {
-      const [p, c, supRes, opRes, repRes] = await Promise.all([
+      const [p, c, config, supRes, opRes, repRes] = await Promise.all([
         empresaService.miPlan(),
         empresaService.catalogo(),
+        empresaService.getConfiguracionLicencias(),
         authService.getUsuariosPage({ page: 1, pageSize: 1, role: 'supervisor', active: true }),
         authService.getUsuariosPage({ page: 1, pageSize: 1, role: 'operador', active: true }),
         authService.getUsuariosPage({ page: 1, pageSize: 1, role: 'repartidor', active: true }),
       ])
+      if (config) {
+        setConfigLicencias(config)
+        setConfigLicenciasForm(config)
+      }
       setPlan(p)
       setCatalogo(c)
       setRoleCounts({
@@ -300,6 +314,19 @@ export default function MiPlanPage() {
       setSnack({ open: true, msg: 'Empresa reactivada', sev: 'success' })
       void load()
     }
+  }
+
+  const guardarConfiguracionLicencias = async () => {
+    setSavingConfigLicencias(true)
+    const result = await empresaService.actualizarConfiguracionLicencias(configLicenciasForm)
+    setSavingConfigLicencias(false)
+    if (!result.success || !result.data) {
+      setSnack({ open: true, msg: result.error ?? 'No se pudo guardar la configuración', sev: 'error' })
+      return
+    }
+    setConfigLicencias(result.data)
+    setConfigLicenciasForm(result.data)
+    setSnack({ open: true, msg: 'Configuración de licencias actualizada', sev: 'success' })
   }
 
   return (
@@ -443,6 +470,74 @@ export default function MiPlanPage() {
             </Grid>
 
           </Grid>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ mb: 3, bgcolor: cardBg, borderColor: borderCol, transition: 'all 0.5s ease' }}>
+        <CardContent>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 2, gap: 1.5 }}>
+            <Box>
+              <Typography variant="h6" color={textColor}>Licencias de repartidores</Typography>
+              <Typography variant="body2" color={subColor}>
+                Configurá la hora del proceso diario y las ventanas de alerta operativa.
+              </Typography>
+            </Box>
+            {configLicencias && (
+              <Chip
+                label={`Proceso diario: ${formatHoraProceso(configLicencias.horaProcesoMinutos)}`}
+                size="small"
+                sx={{ bgcolor: '#E3F2FD', color: '#1565C0', fontWeight: 700 }}
+              />
+            )}
+          </Stack>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                label="Días alerta"
+                type="number"
+                fullWidth
+                value={configLicenciasForm.alertaDias}
+                onChange={(e) => setConfigLicenciasForm((prev) => ({ ...prev, alertaDias: Number(e.target.value) }))}
+                inputProps={{ min: 1, max: 365 }}
+                helperText="Licencias vencidas o por vencer que aparecen en el dashboard"
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                label="Días alerta urgente"
+                type="number"
+                fullWidth
+                value={configLicenciasForm.urgenteDias}
+                onChange={(e) => setConfigLicenciasForm((prev) => ({ ...prev, urgenteDias: Number(e.target.value) }))}
+                inputProps={{ min: 1, max: configLicenciasForm.alertaDias || 365 }}
+                helperText="Umbral del badge rojo en tarjetas de repartidores"
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                label="Hora del proceso diario"
+                type="time"
+                fullWidth
+                value={formatHoraProceso(configLicenciasForm.horaProcesoMinutos)}
+                onChange={(e) => {
+                  const [hh, mm] = e.target.value.split(':').map(Number)
+                  setConfigLicenciasForm((prev) => ({ ...prev, horaProcesoMinutos: ((hh || 0) * 60) + (mm || 0) }))
+                }}
+                InputLabelProps={{ shrink: true }}
+                helperText="Hora Argentina en la que se ejecuta la suspensión automática"
+              />
+            </Grid>
+          </Grid>
+
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mt: 2, gap: 1.5 }}>
+            <Typography variant="caption" color={subColor}>
+              La suspensión automática sigue siendo obligatoria; esta configuración solo ajusta cuándo se ejecuta y cuándo se alerta.
+            </Typography>
+            <Button variant="contained" onClick={guardarConfiguracionLicencias} disabled={savingConfigLicencias}>
+              {savingConfigLicencias ? 'Guardando…' : 'Guardar configuración'}
+            </Button>
+          </Stack>
         </CardContent>
       </Card>
 

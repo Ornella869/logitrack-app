@@ -28,6 +28,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import EditIcon from '@mui/icons-material/Edit'
 
 import { authService, type RepartidorListItem } from '../services/authService'
+import { empresaService } from '../services/empresaService'
 import SearchBar from './SearchBar'
 
 interface RepartidoresListProps {
@@ -114,11 +115,17 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const [editing, setEditing] = useState<RepartidorListItem | null>(null)
   const [licenciaForm, setLicenciaForm] = useState({ licencia: '', fechaVencimientoLicencia: '' })
   const [savingLicencia, setSavingLicencia] = useState(false)
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
+  const [urgenteDias, setUrgenteDias] = useState(7)
 
   useEffect(() => {
     void loadRepartidores()
   }, [page, rowsPerPage, search, estadoFilters, jornadaFilter])
+
+  useEffect(() => {
+    void empresaService.getConfiguracionLicencias().then((config) => setUrgenteDias(config?.urgenteDias ?? 7)).catch(() => setUrgenteDias(7))
+  }, [])
 
   const loadRepartidores = async () => {
     setLoading(true)
@@ -230,6 +237,19 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
       setFormError(err?.message ?? 'No se pudo actualizar la licencia.')
     } finally {
       setSavingLicencia(false)
+    }
+  }
+
+  const reactivateRepartidor = async (repartidor: RepartidorListItem) => {
+    setReactivatingId(repartidor.id)
+    try {
+      const updated = await authService.updateRepartidorEstado(repartidor.id, 'Activo')
+      if (!updated) throw new Error('No se pudo reactivar al repartidor.')
+      await loadRepartidores()
+    } catch (err: any) {
+      setError(err?.message ?? 'No se pudo reactivar al repartidor.')
+    } finally {
+      setReactivatingId(null)
     }
   }
 
@@ -373,7 +393,8 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
               const accountStatus = getAccountStatus(repartidor)
               const initials = `${repartidor.name.charAt(0)}${repartidor.lastname.charAt(0)}`.toUpperCase()
               const diasLicencia = daysUntil(repartidor.fechaVencimientoLicencia)
-              const licenciaUrgente = diasLicencia !== null && diasLicencia <= 7
+              const licenciaUrgente = diasLicencia !== null && diasLicencia <= urgenteDias
+              const operativoActivo = (repartidor.estado ?? 'Activo') === 'Activo'
 
               return (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={repartidor.id}>
@@ -450,6 +471,12 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                             icon={<VerifiedUserIcon />}
                           />
                           <Chip
+                            label={`Operativo: ${repartidor.estado ?? 'Activo'}`}
+                            color={operativoActivo ? 'success' : 'warning'}
+                            size="small"
+                            variant="filled"
+                          />
+                          <Chip
                             label={routeStatus.label}
                             color={routeStatus.color}
                             size="small"
@@ -498,7 +525,22 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                           sx={{ textTransform: 'none', fontSize: 12 }}
                         >
                           Editar licencia
-                        </Button>
+                          </Button>
+                        {!operativoActivo && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            disabled={reactivatingId === repartidor.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void reactivateRepartidor(repartidor)
+                            }}
+                            sx={{ textTransform: 'none', fontSize: 12 }}
+                          >
+                            Reactivar
+                          </Button>
+                        )}
                       </Stack>
                     </CardContent>
                   </Card>
@@ -530,9 +572,19 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
           <Stack spacing={2} sx={{ mt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
             {editing && (
-              <Typography variant="body2" color="text.secondary">
-                {editing.name} {editing.lastname} · DNI {editing.dni}
-              </Typography>
+              <Stack spacing={0.5}>
+                <Typography variant="body2" color="text.secondary">
+                  {editing.name} {editing.lastname} · DNI {editing.dni}
+                </Typography>
+                <Typography variant="caption" color={(editing.estado ?? 'Activo') === 'Activo' ? 'success.main' : 'warning.main'}>
+                  Estado operativo actual: {editing.estado ?? 'Activo'}
+                </Typography>
+                {editing.motivoSuspension && (
+                  <Typography variant="caption" color="warning.main">
+                    Motivo: {editing.motivoSuspension}
+                  </Typography>
+                )}
+              </Stack>
             )}
             <TextField
               label="Licencia *"

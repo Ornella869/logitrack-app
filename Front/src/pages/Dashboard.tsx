@@ -60,7 +60,7 @@ function Dashboard() {
 
   useEffect(() => {
     if (!isSupervisor && !isAdmin) return
-    void authService.getLicenciasPorVencer(30).then(setLicenciasPorVencer).catch(() => setLicenciasPorVencer([]))
+    void authService.getLicenciasPorVencer().then(setLicenciasPorVencer).catch(() => setLicenciasPorVencer([]))
   }, [isSupervisor, isAdmin])
 
   useEffect(() => {

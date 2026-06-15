@@ -44,6 +44,7 @@ import { normalizeUserRole } from './utils/roleUtils'
 import { permissionService } from './services/permissionService'
 
 const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
+const PERMISSIONS_STORAGE_KEY = 'userPermissions'
 const LOGOUT_EVENT_NAME = 'logitrack:logout'
 const DEFAULT_SESSION_TIMEOUT_MS = 15 * 60 * 1000
 const parsedSessionTimeout = Number(import.meta.env.VITE_SESSION_TIMEOUT_MS)
@@ -55,17 +56,32 @@ const clearStoredSession = () => {
   localStorage.removeItem('user')
   localStorage.removeItem('authToken')
   localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY)
+  localStorage.removeItem(PERMISSIONS_STORAGE_KEY)
 }
 
 const touchSessionActivity = () => {
   localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, Date.now().toString())
 }
 
+const readStoredPermissions = (): Set<string> => {
+  try {
+    const storedPermissions = localStorage.getItem(PERMISSIONS_STORAGE_KEY)
+    const parsedPermissions = storedPermissions ? JSON.parse(storedPermissions) : []
+    return new Set(Array.isArray(parsedPermissions) ? parsedPermissions.filter((item): item is string => typeof item === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+const storePermissions = (items: Iterable<string>) => {
+  localStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(Array.from(items)))
+}
+
 function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
-  const [permissions, setPermissions] = useState<Set<string>>(new Set())
+  const [permissions, setPermissions] = useState<Set<string>>(() => readStoredPermissions())
   const [permissionsLoading, setPermissionsLoading] = useState(false)
 
   useEffect(() => {
@@ -124,16 +140,23 @@ function App() {
   useEffect(() => {
     if (!user) {
       setPermissions(new Set())
-      setPermissionsLoading(false)
+      if (!loading) {
+        setPermissionsLoading(false)
+      }
       return
     }
 
     const loadPermissions = (showLoading = false) => {
       if (showLoading) setPermissionsLoading(true)
       void permissionService.getMine()
-        .then((items) => setPermissions(new Set(items)))
-        .catch(() => setPermissions(new Set()))
-        .finally(() => {
+        .then((items) => {
+          const nextPermissions = new Set(items)
+          setPermissions(nextPermissions)
+          storePermissions(nextPermissions)
+          if (showLoading) setPermissionsLoading(false)
+        })
+        .catch(() => {
+          setPermissions(readStoredPermissions())
           if (showLoading) setPermissionsLoading(false)
         })
     }
@@ -142,7 +165,7 @@ function App() {
     const handlePermissionsChanged = () => loadPermissions()
     window.addEventListener('logitrack:permissions', handlePermissionsChanged)
     return () => window.removeEventListener('logitrack:permissions', handlePermissionsChanged)
-  }, [user])
+  }, [loading, user])
 
   useEffect(() => {
     const handler = () => {

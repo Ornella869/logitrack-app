@@ -28,6 +28,13 @@ namespace Back.Application.Services
         public required List<string> Funcionalidades { get; init; }
     }
 
+    public class ConfiguracionLicenciasResponse
+    {
+        public required int AlertaDias { get; init; }
+        public required int UrgenteDias { get; init; }
+        public required int HoraProcesoMinutos { get; init; }
+    }
+
     public class EmpresaService
     {
         private readonly LogiTrackDbContext _context;
@@ -170,6 +177,29 @@ namespace Back.Application.Services
                 Domain.Models.TipoAccion.Otro,
                 "Empresa reactivada");
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<ConfiguracionLicenciasResponse> GetConfiguracionLicenciasAsync()
+        {
+            var empresa = await GetOrCreateSingletonAsync();
+            return new ConfiguracionLicenciasResponse
+            {
+                AlertaDias = empresa.LicenciasAlertaDias,
+                UrgenteDias = empresa.LicenciasUrgenteDias,
+                HoraProcesoMinutos = empresa.LicenciasHoraProcesoMinutos,
+            };
+        }
+
+        public async Task<ConfiguracionLicenciasResponse> ActualizarConfiguracionLicenciasAsync(int alertaDias, int urgenteDias, int horaProcesoMinutos)
+        {
+            var empresa = await GetOrCreateSingletonAsync();
+            empresa.ActualizarConfiguracionLicencias(alertaDias, urgenteDias, horaProcesoMinutos);
+            await _auditoria.RegistrarAsync(
+                Domain.Models.TipoAccion.Otro,
+                "Configuración de licencias actualizada",
+                contexto: $"Alerta: {alertaDias} días; Urgente: {urgenteDias} días; Hora proceso: {horaProcesoMinutos} min");
+            await _context.SaveChangesAsync();
+            return await GetConfiguracionLicenciasAsync();
         }
     }
 }

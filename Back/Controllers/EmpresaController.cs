@@ -82,6 +82,27 @@ namespace Back.Controllers
             await _service.ReactivarAsync();
             return Ok();
         }
+
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpGet("configuracion-licencias")]
+        public async Task<ActionResult<ConfiguracionLicenciasResponse>> GetConfiguracionLicencias()
+        {
+            return Ok(await _service.GetConfiguracionLicenciasAsync());
+        }
+
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpPut("configuracion-licencias")]
+        public async Task<ActionResult<ConfiguracionLicenciasResponse>> ActualizarConfiguracionLicencias([FromBody] ConfiguracionLicenciasRequest request)
+        {
+            try
+            {
+                return Ok(await _service.ActualizarConfiguracionLicenciasAsync(request.AlertaDias, request.UrgenteDias, request.HoraProcesoMinutos));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 
     public class CambioPlanRequest
@@ -92,5 +113,12 @@ namespace Back.Controllers
     public class ConfirmarCambioRequest
     {
         public string Codigo { get; set; } = string.Empty;
+    }
+
+    public class ConfiguracionLicenciasRequest
+    {
+        public int AlertaDias { get; set; }
+        public int UrgenteDias { get; set; }
+        public int HoraProcesoMinutos { get; set; }
     }
 }

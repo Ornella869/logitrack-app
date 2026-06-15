@@ -24,6 +24,12 @@ export interface PlanCatalogo {
   funcionalidades: string[]
 }
 
+export interface ConfiguracionLicencias {
+  alertaDias: number
+  urgenteDias: number
+  horaProcesoMinutos: number
+}
+
 export const empresaService = {
   miPlan: async (): Promise<MiPlanResponse | null> => {
     try {
@@ -62,5 +68,21 @@ export const empresaService = {
   },
   reactivar: async (): Promise<boolean> => {
     try { await api.post('/empresa/reactivar'); return true } catch { return false }
+  },
+  getConfiguracionLicencias: async (): Promise<ConfiguracionLicencias | null> => {
+    try {
+      const r = await api.get('/empresa/configuracion-licencias')
+      return r.data
+    } catch {
+      return null
+    }
+  },
+  actualizarConfiguracionLicencias: async (config: ConfiguracionLicencias): Promise<{ success: boolean; data?: ConfiguracionLicencias; error?: string }> => {
+    try {
+      const r = await api.put('/empresa/configuracion-licencias', config)
+      return { success: true, data: r.data }
+    } catch (e: any) {
+      return { success: false, error: e.response?.data?.message ?? 'No se pudo guardar la configuración' }
+    }
   },
 }

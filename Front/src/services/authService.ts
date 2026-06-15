@@ -13,6 +13,7 @@ import api from './api'
 import { normalizeUserRole } from '../utils/roleUtils'
 
 const LAST_ACTIVITY_STORAGE_KEY = 'sessionLastActivityAt'
+const PERMISSIONS_STORAGE_KEY = 'userPermissions'
 const LOGOUT_EVENT_NAME = 'logitrack:logout'
 
 interface CreateRepartidorResult {
@@ -217,6 +218,7 @@ export const authService = {
     localStorage.removeItem('user')
     localStorage.removeItem('authToken')
     localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY)
+    localStorage.removeItem(PERMISSIONS_STORAGE_KEY)
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(LOGOUT_EVENT_NAME))
@@ -367,9 +369,9 @@ export const authService = {
     }
   },
 
-  getLicenciasPorVencer: async (dias = 30): Promise<LicenciaPorVencerItem[]> => {
+  getLicenciasPorVencer: async (dias?: number): Promise<LicenciaPorVencerItem[]> => {
     try {
-      const response = await api.get(`/auth/repartidores/licencias-por-vencer?dias=${dias}`)
+      const response = await api.get(dias ? `/auth/repartidores/licencias-por-vencer?dias=${dias}` : '/auth/repartidores/licencias-por-vencer')
       return Array.isArray(response.data)
         ? response.data.map((item: any) => ({
           repartidorId: item.repartidorId ?? item.RepartidorId ?? '',

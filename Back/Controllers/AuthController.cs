@@ -27,6 +27,7 @@ namespace Back.Controllers
         private readonly LogiTrackDbContext _context;
         private readonly IRecaptchaValidationService _recaptchaValidationService;
         private readonly AuditoriaService _auditoria;
+        private readonly EmpresaService _empresaService;
 
         public AuthController(
             AuthService authService,
@@ -34,7 +35,8 @@ namespace Back.Controllers
             IEnviosRepository enviosRepository,
             LogiTrackDbContext context,
             IRecaptchaValidationService recaptchaValidationService,
-            AuditoriaService auditoria)
+            AuditoriaService auditoria,
+            EmpresaService empresaService)
         {
             _authService = authService;
             _userRepository = userRepository;
@@ -42,6 +44,7 @@ namespace Back.Controllers
             _context = context;
             _recaptchaValidationService = recaptchaValidationService;
             _auditoria = auditoria;
+            _empresaService = empresaService;
         }
 
         private Guid? CurrentUserId()
@@ -378,9 +381,10 @@ namespace Back.Controllers
         [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpGet("repartidores/licencias-por-vencer")]
-        public async Task<ActionResult<List<LicenciaPorVencerResponse>>> GetLicenciasPorVencer([FromQuery] int dias = 30)
+        public async Task<ActionResult<List<LicenciaPorVencerResponse>>> GetLicenciasPorVencer([FromQuery] int? dias)
         {
-            var diasNormalizados = Math.Clamp(dias, 1, 365);
+            var config = await _empresaService.GetConfiguracionLicenciasAsync();
+            var diasNormalizados = Math.Clamp(dias.GetValueOrDefault() > 0 ? dias.Value : config.AlertaDias, 1, 365);
             var currentUser = await CurrentUserAsync();
             Guid? sucursalScope = User.IsInRole(Roles.Administrador)
                 ? null
@@ -405,7 +409,7 @@ namespace Back.Controllers
                     Licencia = r.Licencia,
                     FechaVencimientoLicencia = r.FechaVencimientoLicencia!.Value,
                     DiasRestantes = (int)(r.FechaVencimientoLicencia.Value.Date - hoy).TotalDays,
-                    Urgente = (r.FechaVencimientoLicencia.Value.Date - hoy).TotalDays <= 7,
+                    Urgente = (r.FechaVencimientoLicencia.Value.Date - hoy).TotalDays <= config.UrgenteDias,
                 })
                 .ToList();
 
