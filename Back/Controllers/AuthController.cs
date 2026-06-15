@@ -490,6 +490,52 @@ namespace Back.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpPut("repartidores/{repartidorId:guid}/sucursal")]
+        public async Task<ActionResult> CambiarSucursalRepartidor(Guid repartidorId, [FromBody] CambiarSucursalRepartidorRequest request)
+        {
+            try
+            {
+                var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
+                    ?? throw new InvalidOperationException("Repartidor no encontrado.");
+
+                if (request.SucursalId.HasValue && request.SucursalId == rep.SucursalId)
+                    return BadRequest("El repartidor ya pertenece a esa sucursal.");
+
+                if (rep.EstadoJornada == EstadoJornadaRepartidor.EnRuta)
+                    throw new InvalidOperationException(
+                        "El repartidor está actualmente en viaje (tiene una ruta activa). " +
+                        "Esperá a que finalice la entrega y cierre su jornada antes de transferirlo.");
+
+                if (rep.EstadoJornada == EstadoJornadaRepartidor.Retornando)
+                    throw new InvalidOperationException(
+                        "El repartidor está retornando a la sucursal. " +
+                        "Esperá a que cierre su jornada antes de transferirlo.");
+
+                var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidor(repartidorId);
+                var liberados = 0;
+                foreach (var paquete in paquetes)
+                {
+                    if (paquete.Status == PaqueteStatus.AsignadoAVehiculo
+                        || paquete.Status == PaqueteStatus.CargadoEnVehiculo
+                        || paquete.Status == PaqueteStatus.ListoParaSalir)
+                    {
+                        paquete.LiberarAsignacion();
+                        liberados++;
+                    }
+                }
+
+                rep.AsignarSucursal(request.SucursalId);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { repartidor = MapRepartidor(rep), paquetesLiberados = liberados });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         // ============== G1L-30 / G1L-47: CRUD Usuarios + credenciales (Administrador) ==============
 
         /// <summary>Listado de usuarios con búsqueda parcial por nombre, apellido, email o DNI.</summary>
@@ -905,6 +951,11 @@ namespace Back.Controllers
     public class CambiarEstadoRepartidorRequest
     {
         [Required] public EstadoRepartidor Estado { get; set; }
+    }
+
+    public class CambiarSucursalRepartidorRequest
+    {
+        public Guid? SucursalId { get; set; }
     }
 
     public class CambiarPasswordRequest

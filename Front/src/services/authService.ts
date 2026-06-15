@@ -368,15 +368,16 @@ export const authService = {
     }
   },
 
-  cambiarSucursalRepartidor: async (repartidorId: string, sucursalId: string | null): Promise<User | null> => {
+  cambiarSucursalRepartidor: async (
+    repartidorId: string,
+    sucursalId: string | null,
+  ): Promise<{ user: User; paquetesLiberados: number } | { error: string }> => {
     try {
-      const response = await api.put(`/auth/repartidores/${repartidorId}/sucursal`, {
-        SucursalId: sucursalId,
-      })
-      return mapRepartidor(response.data)
-    } catch (error) {
-      console.error('Cambiar sucursal repartidor error:', error)
-      return null
+      const response = await api.put(`/auth/repartidores/${repartidorId}/sucursal`, { SucursalId: sucursalId })
+      return { user: mapRepartidor(response.data.repartidor), paquetesLiberados: response.data.paquetesLiberados ?? 0 }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: unknown } })?.response?.data
+      return { error: typeof msg === 'string' && msg.length > 0 ? msg : 'No se pudo transferir. Intentá de nuevo.' }
     }
   },
 

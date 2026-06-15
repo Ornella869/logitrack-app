@@ -264,12 +264,14 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
     setTransferError('')
     const result = await authService.cambiarSucursalRepartidor(repartidorId, selectedSucursal || null)
     setTransferring(false)
-    if (!result) {
-      setTransferError('No se pudo transferir. Intentá de nuevo.')
+    if ('error' in result) {
+      setTransferError(result.error)
     } else {
-      setTransferSuccess('Repartidor transferido correctamente.')
+      const liberados = result.paquetesLiberados
+      const extra = liberados > 0 ? ` Se liberaron ${liberados} envío${liberados === 1 ? '' : 's'} a la cola de calendarización.` : ''
+      setTransferSuccess(`Repartidor transferido correctamente.${extra}`)
       setTransferDialogOpen(false)
-      setData((prev) => prev ? { ...prev } : prev)
+      setData((prev) => prev ? { ...prev, sucursalId: result.user.sucursalId } : prev)
     }
   }
 
