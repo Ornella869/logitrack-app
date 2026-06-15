@@ -32,6 +32,10 @@ namespace Back.Application.Services
         public required int HorasTrabajo { get; init; }
         public required string TipoJornada { get; init; }
         public required double CapacidadCargaKg { get; init; }
+        public DateTime? VencimientoLicencia { get; init; }
+        // Hoy (diasRestantes = 0) cuenta como vencida, igual que el servicio de suspensión.
+        public bool LicenciaVencida { get; init; }
+        public bool LicenciaProximaAVencer { get; init; }
     }
 
     public class RepartidoresMetricsService
@@ -153,6 +157,11 @@ namespace Back.Application.Services
             var efectividad = totalEntregas == 0 ? 0 : (double)onTime / totalEntregas * 100;
             var incidencias = totalAsignados == 0 ? 0 : (double)totalCancelaciones / totalAsignados * 100;
 
+            var hoy = OperationalClock.TodayUtcDate;
+            var vencimiento = rep.FechaVencimientoLicencia.HasValue
+                ? DateTime.SpecifyKind(rep.FechaVencimientoLicencia.Value.Date, DateTimeKind.Utc)
+                : (DateTime?)null;
+
             return new RendimientoRepartidor
             {
                 RepartidorId = rep.Id,
@@ -170,6 +179,9 @@ namespace Back.Application.Services
                 TipoJornada = rep.TipoJornada,
                 CapacidadCargaKg = rep.CapacidadCargaKg,
                 FotoPerfil = rep.FotoPerfil,
+                VencimientoLicencia = vencimiento,
+                LicenciaVencida = vencimiento.HasValue && vencimiento.Value.Date <= hoy,
+                LicenciaProximaAVencer = vencimiento.HasValue && vencimiento.Value.Date > hoy && vencimiento.Value.Date <= hoy.AddDays(30),
             };
         }
     }

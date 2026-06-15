@@ -36,6 +36,8 @@ namespace Back.Infrastructure.Database
         public DbSet<PlantillaEmail> PlantillasEmail { get; set; }
         public DbSet<PermisoRol> PermisosRol { get; set; }
         public DbSet<PermisoUsuario> PermisosUsuario { get; set; }
+        public DbSet<DatoEntrenamientoTramo> DatosEntrenamientoTramo { get; set; }
+        public DbSet<AlertaRiesgoDemoraMl> AlertasRiesgoDemoraMl { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {

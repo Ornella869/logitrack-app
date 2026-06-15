@@ -19,6 +19,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import ClearAllIcon from '@mui/icons-material/ClearAll'
@@ -26,6 +27,7 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 import BarChartIcon from '@mui/icons-material/BarChart'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import EditIcon from '@mui/icons-material/Edit'
+import BlockIcon from '@mui/icons-material/Block'
 
 import { authService, type RepartidorListItem } from '../services/authService'
 import { empresaService } from '../services/empresaService'
@@ -225,6 +227,13 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
       setFormError('El vencimiento de licencia es obligatorio.')
       return
     }
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const selectedDate = new Date(licenciaForm.fechaVencimientoLicencia + 'T00:00:00')
+    if (selectedDate <= today) {
+      setFormError('La fecha de vencimiento debe ser una fecha futura (mínimo mañana).')
+      return
+    }
 
     setSavingLicencia(true)
     setFormError('')
@@ -243,8 +252,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const reactivateRepartidor = async (repartidor: RepartidorListItem) => {
     setReactivatingId(repartidor.id)
     try {
-      const updated = await authService.updateRepartidorEstado(repartidor.id, 'Activo')
-      if (!updated) throw new Error('No se pudo reactivar al repartidor.')
+      await authService.updateRepartidorEstado(repartidor.id, 'Activo')
       await loadRepartidores()
     } catch (err: any) {
       setError(err?.message ?? 'No se pudo reactivar al repartidor.')
@@ -493,7 +501,7 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                           />
                           {licenciaUrgente && (
                             <Chip
-                              label={diasLicencia! < 0 ? 'Licencia vencida' : diasLicencia === 0 ? 'Licencia vence hoy' : `Licencia vence en ${diasLicencia} días`}
+                              label={diasLicencia! <= 0 ? 'Licencia vencida' : `Licencia vence en ${diasLicencia} días`}
                               color="error"
                               size="small"
                               variant="filled"
@@ -526,21 +534,42 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                         >
                           Editar licencia
                           </Button>
-                        {!operativoActivo && (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="success"
-                            disabled={reactivatingId === repartidor.id}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void reactivateRepartidor(repartidor)
-                            }}
-                            sx={{ textTransform: 'none', fontSize: 12 }}
-                          >
-                            Reactivar
-                          </Button>
-                        )}
+                        {!operativoActivo && (() => {
+                          const licenciaVencida = diasLicencia !== null && diasLicencia <= 0
+                          if (licenciaVencida) {
+                            return (
+                              <Tooltip title="No se puede reactivar: la licencia está vencida. Actualizá la fecha de vencimiento primero.">
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="error"
+                                    disabled
+                                    startIcon={<BlockIcon />}
+                                    sx={{ textTransform: 'none', fontSize: 12 }}
+                                  >
+                                    No reactivable (licencia vencida)
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                            )
+                          }
+                          return (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="success"
+                              disabled={reactivatingId === repartidor.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void reactivateRepartidor(repartidor)
+                              }}
+                              sx={{ textTransform: 'none', fontSize: 12 }}
+                            >
+                              {reactivatingId === repartidor.id ? 'Reactivando...' : 'Reactivar'}
+                            </Button>
+                          )
+                        })()}
                       </Stack>
                     </CardContent>
                   </Card>
@@ -601,6 +630,8 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
               onChange={(e) => setLicenciaForm((prev) => ({ ...prev, fechaVencimientoLicencia: e.target.value }))}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              inputProps={{ min: (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })() }}
+              helperText="Debe ser una fecha futura (mínimo mañana)"
             />
           </Stack>
         </DialogContent>

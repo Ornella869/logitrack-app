@@ -57,6 +57,7 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import SecurityIcon from '@mui/icons-material/Security'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
+import PsychologyIcon from '@mui/icons-material/Psychology'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
 import { alertService } from '../services/alertService'
@@ -408,8 +409,8 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     if (pathname.startsWith('/auditoria-notificaciones')) return '/auditoria-notificaciones'
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/permisos')) return '/permisos'
+    if (pathname.startsWith('/admin/ml-metricas')) return '/admin/ml-metricas'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
-    if (pathname.startsWith('/permisos')) return '/permisos'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
     if (pathname.startsWith('/pickups')) return '/pickups'
     if (pathname.startsWith('/pickup-historial')) return '/pickup-historial'
@@ -452,6 +453,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
       { path: '/auditoria',                label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },
       { path: '/auditoria-notificaciones', label: 'Notif. Auditoría',     icon: <NotificationsActiveIcon fontSize="small" /> },
       { path: '/permisos',                 label: 'Permisos',             icon: <SecurityIcon fontSize="small" /> },
+      { path: '/admin/ml-metricas',        label: 'Métricas ML',          icon: <PsychologyIcon fontSize="small" /> },
       { path: '/mi-plan',                  label: 'Mi Plan',              icon: <WorkspacePremiumIcon fontSize="small" /> },
     ] : []
 

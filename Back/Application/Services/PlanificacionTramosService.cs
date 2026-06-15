@@ -11,11 +11,13 @@ namespace Back.Application.Services
         private const double MaxDesvioPorcentaje = 0.30d;
         private readonly LogiTrackDbContext _context;
         private readonly GeocodingService _geocoding;
+        private readonly EstimacionEntregaService _estimacion;
 
-        public PlanificacionTramosService(LogiTrackDbContext context, GeocodingService geocoding)
+        public PlanificacionTramosService(LogiTrackDbContext context, GeocodingService geocoding, EstimacionEntregaService estimacion)
         {
             _context = context;
             _geocoding = geocoding;
+            _estimacion = estimacion;
         }
 
         public async Task PlanificarAsync(Paquete paquete, Guid sucursalOrigenId)
@@ -408,6 +410,11 @@ namespace Back.Application.Services
 
             var repartidorAnterior = paquete.RepartidorAsignadoId;
             tramo.RecibirEnSucursal();
+
+            var llegadaEn = DateTime.UtcNow;
+            await _estimacion.RegistrarDatoTramoAsync(paquete, tramo, llegadaEn);
+            await _estimacion.ReestimarYActualizarAsync(paquete, tramo);
+
             var siguiente = await _context.TramosEnvio
                 .Where(t => t.PaqueteId == paquete.Id && t.Orden == tramo.Orden + 1)
                 .SingleAsync();

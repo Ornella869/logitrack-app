@@ -402,15 +402,16 @@ export const authService = {
     }
   },
 
-  updateRepartidorEstado: async (repartidorId: string, estado: RepartidorEstado): Promise<User | null> => {
+  updateRepartidorEstado: async (repartidorId: string, estado: RepartidorEstado): Promise<User> => {
     try {
       const response = await api.put(`/auth/repartidores/${repartidorId}/estado`, {
         Estado: estado,
       })
       return mapRepartidor(response.data)
-    } catch (error) {
-      console.error('Update repartidor estado error:', error)
-      return null
+    } catch (error: any) {
+      const raw = error?.response?.data
+      const msg = typeof raw === 'string' ? raw : (raw?.message ?? error?.message ?? 'No se pudo actualizar el estado.')
+      throw new Error(msg)
     }
   },
 

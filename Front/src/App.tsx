@@ -24,6 +24,7 @@ import PickUpHistorialPage from './pages/PickUpHistorialPage'
 import RepartidoresPage from './pages/RepartidoresPage'
 import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import PermisosPage from './pages/PermisosPage'
+import MlMetricasPage from './pages/MlMetricasPage'
 import ProyeccionPersonalPage from './pages/ProyeccionPersonalPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
@@ -470,6 +471,12 @@ function App() {
             }
           />
           <Route path="/permisos" element={permitted('gestionar_permisos', <PermisosPage />)} />
+          <Route
+            path="/admin/ml-metricas"
+            element={
+              permitted('auditoria', <MlMetricasPage />)
+            }
+          />
 
           <Route
             path="/proyeccion-personal"

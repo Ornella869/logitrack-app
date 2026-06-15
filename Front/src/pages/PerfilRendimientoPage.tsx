@@ -468,7 +468,9 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
                     InputLabelProps={{ shrink: true }}
                     value={vencimientoInput}
                     onChange={(e) => { setVencimientoInput(e.target.value); setVencimientoError(''); setVencimientoSuccess('') }}
+                    inputProps={{ min: (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })() }}
                     sx={{ maxWidth: 200 }}
+                    helperText="Mínimo mañana"
                   />
                   <Button
                     size="small"

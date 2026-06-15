@@ -100,7 +100,7 @@ function Dashboard() {
       <Stack spacing={0.5} sx={{ mt: 0.5 }}>
         {licenciasPorVencer.slice(0, 5).map((item) => (
           <Typography key={item.repartidorId} variant="body2">
-            {[`${item.nombre} ${item.apellido}`, item.dni ? `DNI ${item.dni}` : null, item.email || null, `Lic. ${item.licencia}`].filter(Boolean).join(' · ')}: {item.diasRestantes < 0 ? 'venció' : 'vence'} el {formatDateOnlyEs(item.fechaVencimientoLicencia)}{item.diasRestantes <= 7 ? ' (urgente)' : ''}
+            {[`${item.nombre} ${item.apellido}`, item.dni ? `DNI ${item.dni}` : null, item.email || null, `Lic. ${item.licencia}`].filter(Boolean).join(' · ')}: {item.diasRestantes <= 0 ? 'venció' : 'vence'} el {formatDateOnlyEs(item.fechaVencimientoLicencia)}{item.diasRestantes === 0 ? ' (hoy)' : item.diasRestantes < 0 ? '' : item.diasRestantes <= 7 ? ' (urgente)' : ''}
           </Typography>
         ))}
         {licenciasPorVencer.length > 5 && (

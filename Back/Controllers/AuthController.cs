@@ -780,25 +780,35 @@ namespace Back.Controllers
             }
         };
 
-        private static UserInfoResponse MapRepartidor(Repartidor r) => new()
+        private static UserInfoResponse MapRepartidor(Repartidor r)
         {
-            Id = r.Id.ToString(),
-            Nombre = r.Nombre,
-            Apellido = r.Apellido,
-            Email = r.Email,
-            DNI = r.DNI,
-            Activo = r.Activo,
-            Role = Roles.Repartidor,
-            Licencia = r.Licencia,
-            FechaVencimientoLicencia = r.FechaVencimientoLicencia,
-            Estado = r.EstadoLabel,
-            MotivoSuspension = r.MotivoSuspension,
-            SucursalId = r.SucursalId?.ToString(),
-            HorasTrabajo = r.HorasTrabajo,
-            TipoJornada = r.TipoJornada,
-            CapacidadCargaKg = r.CapacidadCargaKg,
-            FotoPerfil = r.FotoPerfil,
-        };
+            var hoy = OperationalClock.TodayUtcDate;
+            var venc = r.FechaVencimientoLicencia.HasValue
+                ? r.FechaVencimientoLicencia.Value.Date
+                : (DateTime?)null;
+            return new()
+            {
+                Id = r.Id.ToString(),
+                Nombre = r.Nombre,
+                Apellido = r.Apellido,
+                Email = r.Email,
+                DNI = r.DNI,
+                Activo = r.Activo,
+                Role = Roles.Repartidor,
+                Licencia = r.Licencia,
+                FechaVencimientoLicencia = r.FechaVencimientoLicencia,
+                Estado = r.EstadoLabel,
+                MotivoSuspension = r.MotivoSuspension,
+                SucursalId = r.SucursalId?.ToString(),
+                HorasTrabajo = r.HorasTrabajo,
+                TipoJornada = r.TipoJornada,
+                CapacidadCargaKg = r.CapacidadCargaKg,
+                FotoPerfil = r.FotoPerfil,
+                // Hoy (diasRestantes = 0) cuenta como vencida.
+                LicenciaVencida = venc.HasValue && venc.Value <= hoy,
+                LicenciaProximaAVencer = venc.HasValue && venc.Value > hoy && venc.Value <= hoy.AddDays(30),
+            };
+        }
     }
 
     public class UserInfoResponse
@@ -824,6 +834,8 @@ namespace Back.Controllers
         public string? TipoJornada { get; set; }
         public double? CapacidadCargaKg { get; set; }
         public string? FotoPerfil { get; set; }
+        public bool LicenciaVencida { get; set; }
+        public bool LicenciaProximaAVencer { get; set; }
     }
 
     public class RepartidorListadoResponse : UserInfoResponse

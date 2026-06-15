@@ -17,9 +17,14 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   Grid,
+  IconButton,
   InputAdornment,
+  InputLabel,
   LinearProgress,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -27,6 +32,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material'
@@ -36,8 +42,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import PreviewIcon from '@mui/icons-material/Visibility'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
-import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo, type PaquetePendienteReagendamiento } from '../services/shipmentService'
+import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo, type PaquetePendienteReagendamiento, type PaquetePreview } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
@@ -82,6 +89,15 @@ export default function CalendarizarPage() {
   const [calendarData, setCalendarData] = useState<CalendarioOperativo | null>(null)
   const [pendientesReagendamiento, setPendientesReagendamiento] = useState<PaquetePendienteReagendamiento[]>([])
   const [reagendandoId, setReagendandoId] = useState<string | null>(null)
+
+  // Ajustes manuales sobre el preview antes de ejecutar
+  const [overrides, setOverrides] = useState<Map<string, { repartidorId: string; repartidorNombre: string; fecha: string }>>(new Map())
+  const [reassignDialog, setReassignDialog] = useState<{
+    paqueteId: string
+    codigoSeguimiento: string
+    selectedRepartidorId: string
+    selectedFecha: string
+  } | null>(null)
 
   useEffect(() => {
     void loadAll()
@@ -207,7 +223,38 @@ export default function CalendarizarPage() {
     return <Alert severity="warning">Solo el Supervisor puede acceder a esta pantalla.</Alert>
   }
 
+  const openReassign = (paquete: PaquetePreview, diaFecha: string) => {
+    const existing = overrides.get(paquete.paqueteId)
+    setReassignDialog({
+      paqueteId: paquete.paqueteId,
+      codigoSeguimiento: paquete.codigoSeguimiento,
+      selectedRepartidorId: existing?.repartidorId ?? '',
+      selectedFecha: existing?.fecha ?? diaFecha.slice(0, 10),
+    })
+  }
+
+  const confirmReassign = () => {
+    if (!reassignDialog?.selectedRepartidorId || !reassignDialog?.selectedFecha) return
+    const rep = repartidoresActivos.find((r) => r.id === reassignDialog.selectedRepartidorId)
+    if (!rep) return
+    setOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(reassignDialog.paqueteId, {
+        repartidorId: reassignDialog.selectedRepartidorId,
+        repartidorNombre: `${rep.nombre} ${rep.apellido}`,
+        fecha: reassignDialog.selectedFecha,
+      })
+      return next
+    })
+    setReassignDialog(null)
+  }
+
+  const removeOverride = (paqueteId: string) => {
+    setOverrides((prev) => { const next = new Map(prev); next.delete(paqueteId); return next })
+  }
+
   const handlePreview = async () => {
+    setOverrides(new Map())
     setPreviewing(true)
     setPreviewError('')
     const res = await calendarizacionService.preview()
@@ -242,6 +289,13 @@ export default function CalendarizarPage() {
       setExec({ ok: false, error: res.error ?? 'No se pudo ejecutar la calendarización' })
       return
     }
+
+    // Aplicar ajustes manuales del preview
+    for (const [paqueteId, ov] of overrides) {
+      await calendarizacionService.precalendarizar(paqueteId, ov.repartidorId, ov.fecha)
+    }
+    setOverrides(new Map())
+
     const resultado = res.data ?? null
     setResultado(resultado)
     setExec({ ok: true })
@@ -539,9 +593,19 @@ export default function CalendarizarPage() {
       {/* G1L-150: Dialog de vista previa */}
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <PreviewIcon color="primary" />
-            <span>Vista Previa — Calendarización estimada</span>
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <PreviewIcon color="primary" />
+              <span>Vista Previa — Calendarización estimada</span>
+            </Stack>
+            {overrides.size > 0 && (
+              <Chip
+                size="small"
+                label={`${overrides.size} ajuste${overrides.size !== 1 ? 's' : ''} manual${overrides.size !== 1 ? 'es' : ''}`}
+                color="secondary"
+                sx={{ fontWeight: 700 }}
+              />
+            )}
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
@@ -682,21 +746,46 @@ export default function CalendarizarPage() {
                                         <TableCell>CP destino</TableCell>
                                         <TableCell align="right">Peso</TableCell>
                                         <TableCell align="right">Tipo</TableCell>
+                                        <TableCell align="right" sx={{ width: 90 }}>Ajuste</TableCell>
                                       </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                      {dia.paquetes.map((p) => (
-                                        <TableRow key={p.paqueteId}>
-                                          <TableCell sx={{ fontFamily: 'monospace' }}>{p.codigoSeguimiento}</TableCell>
-                                          <TableCell>{p.cpDestino}</TableCell>
-                                          <TableCell align="right">{p.peso.toFixed(0)} kg</TableCell>
-                                          <TableCell align="right">
-                                            {p.esPrioritario
-                                              ? <Chip size="small" label="Prioritario" color="error" sx={{ fontSize: 9, height: 18 }} />
-                                              : <Typography variant="caption" color="text.secondary">Común</Typography>}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
+                                      {dia.paquetes.map((p) => {
+                                        const ov = overrides.get(p.paqueteId)
+                                        return (
+                                          <TableRow key={p.paqueteId} sx={ov ? { bgcolor: isDark ? 'rgba(156,39,176,0.12)' : '#f3e5f5' } : undefined}>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{p.codigoSeguimiento}</TableCell>
+                                            <TableCell>{p.cpDestino}</TableCell>
+                                            <TableCell align="right">{p.peso.toFixed(0)} kg</TableCell>
+                                            <TableCell align="right">
+                                              {p.esPrioritario
+                                                ? <Chip size="small" label="Prioritario" color="error" sx={{ fontSize: 9, height: 18 }} />
+                                                : <Typography variant="caption" color="text.secondary">Común</Typography>}
+                                            </TableCell>
+                                            <TableCell align="right">
+                                              {ov ? (
+                                                <Tooltip title={`→ ${ov.repartidorNombre} · ${ov.fecha} · Click para editar`}>
+                                                  <Chip
+                                                    size="small"
+                                                    label="Ajustado"
+                                                    color="secondary"
+                                                    variant="outlined"
+                                                    onClick={() => openReassign(p, dia.fecha)}
+                                                    onDelete={() => removeOverride(p.paqueteId)}
+                                                    sx={{ fontSize: 9, height: 18, cursor: 'pointer' }}
+                                                  />
+                                                </Tooltip>
+                                              ) : (
+                                                <Tooltip title="Reasignar a otro repartidor">
+                                                  <IconButton size="small" onClick={() => openReassign(p, dia.fecha)} sx={{ p: 0.25 }}>
+                                                    <SwapHorizIcon sx={{ fontSize: 14 }} />
+                                                  </IconButton>
+                                                </Tooltip>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        )
+                                      })}
                                     </TableBody>
                                   </Table>
                                 ) : (
@@ -764,6 +853,63 @@ export default function CalendarizarPage() {
           <Button onClick={() => setPreviewOpen(false)}>Cancelar</Button>
           <Button variant="contained" color="primary" startIcon={<BoltIcon />} onClick={ejecutar}>
             Confirmar y ejecutar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: reasignación manual de un paquete del preview */}
+      <Dialog open={!!reassignDialog} onClose={() => setReassignDialog(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <SwapHorizIcon color="secondary" fontSize="small" />
+            <span>Reasignar manualmente</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            Envío: <strong style={{ fontFamily: 'monospace' }}>{reassignDialog?.codigoSeguimiento}</strong>
+          </Typography>
+          <Stack spacing={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Repartidor destino</InputLabel>
+              <Select
+                value={reassignDialog?.selectedRepartidorId ?? ''}
+                label="Repartidor destino"
+                onChange={(e) => setReassignDialog((prev) => prev ? { ...prev, selectedRepartidorId: e.target.value } : null)}
+              >
+                {repartidoresActivos.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>
+                    {r.nombre} {r.apellido}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="Fecha de entrega"
+              type="date"
+              value={reassignDialog?.selectedFecha ?? ''}
+              onChange={(e) => setReassignDialog((prev) => prev ? { ...prev, selectedFecha: e.target.value } : null)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ min: new Date().toISOString().slice(0, 10) }}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReassignDialog(null)}>Cancelar</Button>
+          {reassignDialog && overrides.has(reassignDialog.paqueteId) && (
+            <Button color="error" onClick={() => { removeOverride(reassignDialog.paqueteId); setReassignDialog(null) }}>
+              Quitar ajuste
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled={!reassignDialog?.selectedRepartidorId || !reassignDialog?.selectedFecha}
+            onClick={confirmReassign}
+          >
+            Confirmar ajuste
           </Button>
         </DialogActions>
       </Dialog>

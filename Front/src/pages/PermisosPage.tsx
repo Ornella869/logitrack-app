@@ -6,11 +6,15 @@ import {
   Box,
   Chip,
   CircularProgress,
+  Divider,
+  Drawer,
   Fade,
   FormControl,
+  IconButton,
   MenuItem,
   Paper,
   Select,
+  Snackbar,
   Stack,
   Switch,
   Tab,
@@ -24,6 +28,7 @@ import { keyframes } from '@mui/material/styles'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import BlockIcon from '@mui/icons-material/Block'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CloseIcon from '@mui/icons-material/Close'
 import GroupsIcon from '@mui/icons-material/Groups'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import LockOpenIcon from '@mui/icons-material/LockOpen'
@@ -77,10 +82,12 @@ export default function PermisosPage() {
   const [selectedRole, setSelectedRole] = useState('')
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([])
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [userPermissions, setUserPermissions] = useState<UserPermission[]>([])
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState('')
   const [error, setError] = useState('')
+  const [savedSnackbar, setSavedSnackbar] = useState('')
 
   useEffect(() => {
     void permissionService.getRoles()
@@ -125,6 +132,7 @@ export default function PermisosPage() {
       setRolePermissions((current) => current.map((item) =>
         item.clave === permission.clave ? { ...item, habilitado: enabled } : item))
       window.dispatchEvent(new Event('logitrack:permissions'))
+      setSavedSnackbar(`Permiso actualizado para ${roleLabels[selectedRole] ?? selectedRole}`)
     } catch {
       setError('No se pudo guardar el permiso del rol.')
     } finally {
@@ -280,84 +288,125 @@ export default function PermisosPage() {
             <SectionHeading
               icon={<ManageAccountsIcon />}
               title="Excepciones individuales"
-              description="Seleccioná un usuario usando la misma grilla del Dashboard. Los cambios solo afectan a esa persona."
+              description="Hacé click en 'Configurar' para abrir el panel de permisos de ese usuario. Los cambios solo afectan a esa persona."
             />
 
             <UsersManagement
               mode="select"
               selectedUserId={selectedUser?.id}
-              onSelectUser={setSelectedUser}
+              onSelectUser={(user) => { setSelectedUser(user); setDrawerOpen(true) }}
               title="Seleccionar usuario"
               subtitle="Buscá por nombre, email o DNI y combiná filtros de rol, estado y sucursal."
             />
 
-            {!selectedUser ? (
-              <Box
-                sx={{
-                  mt: 3,
-                  py: 5,
-                  px: 2,
-                  textAlign: 'center',
-                  border: '1px dashed',
-                  borderColor: 'divider',
-                  borderRadius: 2,
-                  bgcolor: 'action.hover',
-                }}
-              >
-                <PersonSearchIcon color="disabled" sx={{ fontSize: 38, mb: 1 }} />
-                <Typography fontWeight={750}>Elegí un usuario para configurar sus accesos</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  La selección queda activa aunque cambies filtros o navegues entre páginas.
-                </Typography>
-              </Box>
-            ) : (
-              <Box sx={{ mt: 3, animation: `${reveal} 360ms cubic-bezier(.2,.8,.2,1) both` }}>
-                <SelectedUserHeader user={selectedUser} exceptions={userExceptions} />
-
-                <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 2 }}>
-                  <strong>Usar permiso del rol</strong> mantiene la configuración general.
-                  Las opciones permitir o denegar reemplazan esa base únicamente para este usuario.
-                </Alert>
-
-                {loading ? <Loading /> : (
-                  <PermissionGrid key={selectedUser.id}>
-                    {Object.entries(groupedUserPermissions).map(([group, permissions], index) => (
-                      <PermissionGroup key={group} title={group} delay={index * 45}>
-                        {permissions.map((permission) => (
-                          <PermissionRow
-                            key={permission.clave}
-                            name={permission.nombre}
-                            status={!permission.compatible
-                              ? 'No compatible con este rol'
-                              : permission.habilitadoEfectivo ? 'Acceso efectivo' : 'Sin acceso'}
-                            enabled={permission.habilitadoEfectivo}
-                            compatible={permission.compatible}
-                            saving={savingKey === permission.clave}
-                            control={(
-                              <FormControl size="small" sx={{ width: { xs: 190, sm: 230 } }}>
-                                <Select
-                                  value={permission.estado}
-                                  disabled={!permission.compatible || permission.obligatorio || savingKey === permission.clave}
-                                  onChange={(event) => void updateUser(permission, event.target.value as UserPermissionState)}
-                                  inputProps={{ 'aria-label': `Excepción para ${permission.nombre}` }}
-                                >
-                                  {(Object.keys(stateLabels) as UserPermissionState[]).map((state) => (
-                                    <MenuItem key={state} value={state}>{stateLabels[state]}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            )}
-                          />
-                        ))}
-                      </PermissionGroup>
-                    ))}
-                  </PermissionGrid>
-                )}
-              </Box>
-            )}
+            <Box
+              sx={{
+                mt: 3,
+                py: 4,
+                px: 2,
+                textAlign: 'center',
+                border: '1px dashed',
+                borderColor: 'divider',
+                borderRadius: 2,
+                bgcolor: 'action.hover',
+              }}
+            >
+              <PersonSearchIcon color="disabled" sx={{ fontSize: 38, mb: 1 }} />
+              <Typography fontWeight={750}>
+                {selectedUser ? `${selectedUser.name} ${selectedUser.lastname} seleccionado/a` : 'Elegí un usuario para configurar sus accesos'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {selectedUser
+                  ? <Box component="span" sx={{ color: 'primary.main', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setDrawerOpen(true)}>Abrir panel de permisos</Box>
+                  : 'Hacé click en "Configurar" en la tabla de arriba.'}
+              </Typography>
+            </Box>
           </Box>
         )}
       </Paper>
+
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100vw', sm: 520, md: 600 }, display: 'flex', flexDirection: 'column' } }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 3, pt: 2, pb: 1, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TuneIcon color="primary" fontSize="small" />
+            <Typography fontWeight={800} variant="subtitle1">Configurar permisos</Typography>
+          </Stack>
+          <IconButton onClick={() => setDrawerOpen(false)} size="small" aria-label="Cerrar panel">
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+
+        {selectedUser && (
+          <Box sx={{ px: 3, pt: 1.5, pb: 0.5, flexShrink: 0 }}>
+            <SelectedUserHeader user={selectedUser} exceptions={userExceptions} />
+          </Box>
+        )}
+
+        <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
+          <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 2 }}>
+            <strong>Usar permiso del rol</strong> mantiene la configuración general.
+            Las opciones permitir o denegar aplican solo a este usuario.
+          </Alert>
+
+          {loading ? <Loading /> : (
+            <Stack spacing={2}>
+              {Object.entries(groupedUserPermissions).map(([group, permissions], index) => (
+                <PermissionGroup key={group} title={group} delay={index * 30}>
+                  {permissions.map((permission) => (
+                    <PermissionRow
+                      key={permission.clave}
+                      name={permission.nombre}
+                      status={!permission.compatible
+                        ? 'No compatible con este rol'
+                        : permission.habilitadoEfectivo ? 'Acceso efectivo' : 'Sin acceso'}
+                      enabled={permission.habilitadoEfectivo}
+                      compatible={permission.compatible}
+                      saving={savingKey === permission.clave}
+                      control={(
+                        <FormControl size="small" sx={{ width: { xs: 170, sm: 210 } }}>
+                          <Select
+                            value={permission.estado}
+                            disabled={!permission.compatible || permission.obligatorio || savingKey === permission.clave}
+                            onChange={(event) => void updateUser(permission, event.target.value as UserPermissionState)}
+                            inputProps={{ 'aria-label': `Excepción para ${permission.nombre}` }}
+                          >
+                            {(Object.keys(stateLabels) as UserPermissionState[]).map((state) => (
+                              <MenuItem key={state} value={state}>{stateLabels[state]}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    />
+                  ))}
+                </PermissionGroup>
+              ))}
+            </Stack>
+          )}
+        </Box>
+
+        <Divider />
+        <Box sx={{ px: 3, py: 1.5, flexShrink: 0 }}>
+          <Typography variant="caption" color="text.secondary">
+            Los cambios se guardan automáticamente al seleccionar una opción.
+          </Typography>
+        </Box>
+      </Drawer>
+
+      <Snackbar
+        open={!!savedSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setSavedSnackbar('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" onClose={() => setSavedSnackbar('')} icon={<CheckCircleIcon />}>
+          {savedSnackbar}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }

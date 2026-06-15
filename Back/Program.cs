@@ -72,6 +72,7 @@ builder.Services.AddScoped<AlertasService>();
 builder.Services.AddScoped<EmpresaService>();
 builder.Services.AddScoped<HistorialEstadoEnvioService>();
 builder.Services.AddScoped<PermisosService>();
+builder.Services.AddScoped<EstimacionEntregaService>();
 builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, PermissionAuthorizationResultHandler>();
 builder.Services.AddSingleton<QrService>();
 builder.Services.AddScoped<DatabaseSeeder>();

@@ -1529,6 +1529,55 @@ namespace Back.Infrastructure.Database
                 {
                     b.Navigation("Paquetes");
                 });
+
+            modelBuilder.Entity("Back.Domain.Models.DatoEntrenamientoTramo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+                    b.Property<Guid>("PaqueteId").HasColumnType("uuid");
+                    b.Property<Guid?>("TramoId").HasColumnType("uuid");
+                    b.Property<Guid>("SucursalOrigenId").HasColumnType("uuid");
+                    b.Property<Guid>("SucursalDestinoId").HasColumnType("uuid");
+                    b.Property<DateTime>("FechaSalida").HasColumnType("timestamp with time zone");
+                    b.Property<DateTime>("FechaLlegada").HasColumnType("timestamp with time zone");
+                    b.Property<double>("TiempoRealHoras").HasColumnType("double precision");
+                    b.Property<double>("PesoKg").HasColumnType("double precision");
+                    b.Property<string>("TipoEnvio").HasMaxLength(40).HasColumnType("character varying(40)").IsRequired();
+                    b.Property<bool>("EsPrioritario").HasColumnType("boolean");
+                    b.Property<int>("DiaSemana").HasColumnType("integer");
+                    b.Property<int>("HoraSalida").HasColumnType("integer");
+                    b.Property<int>("CargaSucursalOrigen").HasColumnType("integer");
+                    b.Property<int>("RepartidoresActivosDestino").HasColumnType("integer");
+                    b.Property<bool>("TuvoDemora").HasColumnType("boolean");
+                    b.Property<double?>("EstimacionPreviaHoras").HasColumnType("double precision");
+                    b.Property<double?>("ErrorAbsolutoHoras").HasColumnType("double precision");
+                    b.Property<DateTime>("RegistradoEn").HasColumnType("timestamp with time zone");
+                    b.HasKey("Id");
+                    b.HasIndex("SucursalOrigenId", "SucursalDestinoId").HasDatabaseName("IX_DatosEntrenamientoTramo_SucursalOrigen_Destino");
+                    b.ToTable("DatosEntrenamientoTramo");
+                });
+
+            modelBuilder.Entity("Back.Domain.Models.AlertaRiesgoDemoraMl", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+                    b.Property<Guid>("PaqueteId").HasColumnType("uuid");
+                    b.Property<string>("CodigoSeguimiento").HasMaxLength(20).HasColumnType("character varying(20)").IsRequired();
+                    b.Property<float>("ProbabilidadDemora").HasColumnType("real");
+                    b.Property<string>("CausaPrincipal").HasMaxLength(500).HasColumnType("character varying(500)").IsRequired();
+                    b.Property<Guid>("SucursalId").HasColumnType("uuid");
+                    b.Property<DateTime>("GeneradaEn").HasColumnType("timestamp with time zone");
+                    b.Property<bool>("Gestionada").HasColumnType("boolean");
+                    b.Property<DateTime?>("GestionadaEn").HasColumnType("timestamp with time zone");
+                    b.Property<Guid?>("SupervisorId").HasColumnType("uuid");
+                    b.Property<bool?>("LlegoATiempo").HasColumnType("boolean");
+                    b.HasKey("Id");
+                    b.HasIndex("PaqueteId").HasDatabaseName("IX_AlertasRiesgoDemoraMl_PaqueteId");
+                    b.ToTable("AlertasRiesgoDemoraMl");
+                });
+
 #pragma warning restore 612, 618
         }
     }
