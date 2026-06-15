@@ -58,6 +58,8 @@ import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import SecurityIcon from '@mui/icons-material/Security'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import PsychologyIcon from '@mui/icons-material/Psychology'
+import AssessmentIcon from '@mui/icons-material/Assessment'
+import GridOnIcon from '@mui/icons-material/GridOn'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { notificationService, type AppNotification } from '../services/notificationService'
 import { alertService } from '../services/alertService'
@@ -410,6 +412,8 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     if (pathname.startsWith('/auditoria')) return '/auditoria'
     if (pathname.startsWith('/permisos')) return '/permisos'
     if (pathname.startsWith('/admin/ml-metricas')) return '/admin/ml-metricas'
+    if (pathname.startsWith('/reporte-demanda-capacidad')) return '/reporte-demanda-capacidad'
+    if (pathname.startsWith('/panel-incidencias')) return '/panel-incidencias'
     if (pathname.startsWith('/mi-plan')) return '/mi-plan'
     if (pathname.startsWith('/sucursales')) return '/sucursales'
     if (pathname.startsWith('/pickups')) return '/pickups'
@@ -428,9 +432,10 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
       { path: '/pickups',             label: 'PickUps',             icon: <PlaceIcon fontSize="small" /> },
       { path: '/tarifas',             label: 'Tarifas',             icon: <PriceChangeIcon fontSize="small" /> },
       { path: '/ojo-patron',          label: 'Ojo del Patrón',      icon: <GraphicEqIcon fontSize="small" /> },
-      { path: '/reportes',            label: 'Reportes',            icon: <BarChartIcon fontSize="small" /> },
-      { path: '/satisfaccion',        label: 'Satisfacción',        icon: <StarBorderIcon fontSize="small" /> },
-      { path: '/plantillas-email',    label: 'Plantillas de Email', icon: <EmailIcon fontSize="small" /> },
+      { path: '/reportes',                      label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
+      { path: '/reporte-demanda-capacidad',     label: 'Demanda vs Capacidad', icon: <AssessmentIcon fontSize="small" /> },
+      { path: '/satisfaccion',                  label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
+      { path: '/plantillas-email',              label: 'Plantillas de Email',  icon: <EmailIcon fontSize="small" /> },
     ] :
     user.role === 'supervisor' ? [
       { path: '/app',                 label: 'Dashboard',            icon: <DashboardIcon fontSize="small" /> },
@@ -441,6 +446,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
       { path: '/rutas-activas',       label: 'Rutas Activas',        icon: <RouteIcon fontSize="small" /> },
       { path: '/alertas',             label: 'Alertas',              icon: <WarningAmberIcon fontSize="small" />, badge: alertasCount },
       { path: '/incidencias',         label: 'Incidencias',          icon: <ReportProblemIcon fontSize="small" />, badge: incidenciasCount },
+      { path: '/panel-incidencias',   label: 'Panel Incidencias',    icon: <GridOnIcon fontSize="small" /> },
       { path: '/reportes',            label: 'Reportes',             icon: <BarChartIcon fontSize="small" /> },
       { path: '/satisfaccion',        label: 'Satisfacción',         icon: <StarBorderIcon fontSize="small" /> },
       { path: '/auditoria',           label: 'Auditoría',            icon: <HistoryIcon fontSize="small" /> },

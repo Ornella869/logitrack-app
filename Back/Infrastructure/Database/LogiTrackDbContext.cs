@@ -160,6 +160,23 @@ namespace Back.Infrastructure.Database
                 p.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId).OnDelete(DeleteBehavior.Cascade);
             });
 
+            modelBuilder.Entity<DatoEntrenamientoTramo>(d =>
+            {
+                d.HasKey(x => x.Id);
+                d.Property(x => x.TipoEnvio).HasMaxLength(40).IsRequired();
+                d.HasIndex(x => new { x.SucursalOrigenId, x.SucursalDestinoId })
+                    .HasDatabaseName("IX_DatosEntrenamientoTramo_SucursalOrigen_Destino");
+            });
+
+            modelBuilder.Entity<AlertaRiesgoDemoraMl>(a =>
+            {
+                a.HasKey(x => x.Id);
+                a.Property(x => x.CodigoSeguimiento).HasMaxLength(20).IsRequired();
+                a.Property(x => x.CausaPrincipal).HasMaxLength(500).IsRequired();
+                a.HasIndex(x => x.PaqueteId)
+                    .HasDatabaseName("IX_AlertasRiesgoDemoraMl_PaqueteId");
+            });
+
             modelBuilder.Entity<SolicitudComercial>(s =>
             {
                 s.HasKey(x => x.Id);

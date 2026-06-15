@@ -26,6 +26,8 @@ import PerfilRendimientoPage from './pages/PerfilRendimientoPage'
 import PermisosPage from './pages/PermisosPage'
 import MlMetricasPage from './pages/MlMetricasPage'
 import ProyeccionPersonalPage from './pages/ProyeccionPersonalPage'
+import ReporteDemandaCapacidadPage from './pages/ReporteDemandaCapacidadPage'
+import PanelIncidenciasPage from './pages/PanelIncidenciasPage'
 import ShipmentDetail from './pages/ShipmentDetail'
 import ShipmentLabel from './pages/ShipmentLabel'
 import TrackingPublicPage from './pages/TrackingPublicPage'
@@ -476,6 +478,14 @@ function App() {
             element={
               permitted('auditoria', <MlMetricasPage />)
             }
+          />
+          <Route
+            path="/reporte-demanda-capacidad"
+            element={permitted('reportes', <ReporteDemandaCapacidadPage />)}
+          />
+          <Route
+            path="/panel-incidencias"
+            element={permitted('incidencias', <PanelIncidenciasPage />)}
           />
 
           <Route

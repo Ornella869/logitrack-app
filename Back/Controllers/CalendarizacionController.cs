@@ -1,8 +1,10 @@
 using Back.Application.Common;
 using Back.Application.Services;
+using Back.Domain.Models;
 using Back.Infrastructure.Database;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Back.Controllers
 {
@@ -13,11 +15,13 @@ namespace Back.Controllers
     {
         private readonly CalendarizacionService _service;
         private readonly LogiTrackDbContext _context;
+        private readonly EmailNotificacionService _email;
 
-        public CalendarizacionController(CalendarizacionService service, LogiTrackDbContext context)
+        public CalendarizacionController(CalendarizacionService service, LogiTrackDbContext context, EmailNotificacionService email)
         {
             _service = service;
             _context = context;
+            _email = email;
         }
 
         private Guid? CurrentUserId()
@@ -113,6 +117,99 @@ namespace Back.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        /// <summary>Envíos no entregados (Demorado / RetornadoASucursal) pendientes de reagendamiento.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [HttpGet("pendientes-reagendamiento")]
+        public async Task<IActionResult> GetPendientesReagendamiento()
+        {
+            var sucursalId = await CurrentSucursalIdAsync();
+
+            IQueryable<Paquete> query = _context.Paquetes.Where(p =>
+                p.Status == PaqueteStatus.Demorado || p.Status == PaqueteStatus.RetornadoASucursal);
+
+            if (sucursalId.HasValue && sucursalId.Value != Guid.Empty)
+            {
+                var repIds = await _context.Usuarios.OfType<Repartidor>()
+                    .Where(r => r.SucursalId == sucursalId.Value)
+                    .Select(r => r.Id)
+                    .ToListAsync();
+                query = query.Where(p => p.RepartidorAsignadoId.HasValue && repIds.Contains(p.RepartidorAsignadoId.Value));
+            }
+
+            var items = await query
+                .OrderBy(p => p.FechaCalendarizada)
+                .Select(p => new
+                {
+                    id = p.Id,
+                    codigoSeguimiento = p.CodigoSeguimiento,
+                    status = p.Status.ToString(),
+                    peso = p.Peso,
+                    fechaCalendarizada = p.FechaCalendarizada,
+                })
+                .ToListAsync();
+
+            return Ok(items);
+        }
+
+        /// <summary>Reagenda un envío devolviendo a la cola de calendarización y notifica al destinatario.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [HttpPost("{paqueteId:guid}/reagendar")]
+        public async Task<IActionResult> Reagendar(Guid paqueteId)
+        {
+            var paquete = await _context.Paquetes.FindAsync(paqueteId);
+            if (paquete is null) return NotFound();
+
+            try
+            {
+                paquete.LiberarAsignacion();
+                await _context.SaveChangesAsync();
+                _ = _email.NotificarReagendamientoAsync(paquete).ContinueWith(_ => { });
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Reagenda masivamente una lista de envíos.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [HttpPost("reagendar-masivo")]
+        public async Task<IActionResult> ReagendarMasivo([FromBody] ReagendarMasivoRequest body)
+        {
+            if (body.PaqueteIds == null || body.PaqueteIds.Count == 0)
+                return BadRequest("Debe indicar al menos un paquete.");
+
+            var paquetes = await _context.Paquetes
+                .Where(p => body.PaqueteIds.Contains(p.Id))
+                .ToListAsync();
+
+            int reagendados = 0;
+            int sinCambio = 0;
+
+            foreach (var paquete in paquetes)
+            {
+                try
+                {
+                    paquete.LiberarAsignacion();
+                    reagendados++;
+                    _ = _email.NotificarReagendamientoAsync(paquete).ContinueWith(_ => { });
+                }
+                catch
+                {
+                    sinCambio++;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { reagendados, sinFechaDisponible = sinCambio });
+        }
+    }
+
+    public class ReagendarMasivoRequest
+    {
+        public List<Guid> PaqueteIds { get; set; } = [];
     }
 
     // G1L-83

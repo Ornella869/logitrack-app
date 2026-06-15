@@ -4,6 +4,7 @@ import {
   Alert,
   Avatar,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Divider,
@@ -31,11 +32,14 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CloseIcon from '@mui/icons-material/Close'
 import GroupsIcon from '@mui/icons-material/Groups'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import LockOpenIcon from '@mui/icons-material/LockOpen'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import PersonSearchIcon from '@mui/icons-material/PersonSearch'
+import SaveIcon from '@mui/icons-material/Save'
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined'
 import TuneIcon from '@mui/icons-material/Tune'
+import UndoIcon from '@mui/icons-material/Undo'
 import UsersManagement from '../components/UsersManagement'
 import type { User } from '../types'
 import {
@@ -53,6 +57,18 @@ const reveal = keyframes`
 const savingPulse = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: .45; }
+`
+
+const truckDrive = keyframes`
+  0%   { transform: translateX(-80px) scaleX(1); opacity: 0; }
+  12%  { transform: translateX(0px) scaleX(1);   opacity: 1; }
+  82%  { transform: translateX(0px) scaleX(1);   opacity: 1; }
+  100% { transform: translateX(80px) scaleX(1);  opacity: 0; }
+`
+
+const pendingPulse = keyframes`
+  0%, 100% { background-color: rgba(237,108,2,0.06); }
+  50%       { background-color: rgba(237,108,2,0.13); }
 `
 
 const stateLabels: Record<UserPermissionState, string> = {
@@ -81,6 +97,8 @@ export default function PermisosPage() {
   const [roles, setRoles] = useState<string[]>([])
   const [selectedRole, setSelectedRole] = useState('')
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([])
+  const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, boolean>>(new Map())
+  const [savingAll, setSavingAll] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [userPermissions, setUserPermissions] = useState<UserPermission[]>([])
@@ -103,6 +121,7 @@ export default function PermisosPage() {
     if (!selectedRole) return
     setLoading(true)
     setError('')
+    setPendingRoleChanges(new Map())
     void permissionService.getRolePermissions(selectedRole)
       .then(setRolePermissions)
       .catch(() => setError('No se pudieron cargar los permisos del rol.'))
@@ -124,21 +143,40 @@ export default function PermisosPage() {
   const roleEnabled = rolePermissions.filter((item) => item.habilitado).length
   const userExceptions = userPermissions.filter((item) => item.estado !== 'SinExcepcion').length
 
-  const updateRole = async (permission: RolePermission, enabled: boolean) => {
-    setSavingKey(permission.clave)
+  const onRoleToggle = (permission: RolePermission, checked: boolean) => {
+    setPendingRoleChanges((prev) => {
+      const next = new Map(prev)
+      if (checked === permission.habilitado) {
+        next.delete(permission.clave)
+      } else {
+        next.set(permission.clave, checked)
+      }
+      return next
+    })
+  }
+
+  const saveRoleChanges = async () => {
+    setSavingAll(true)
     setError('')
     try {
-      await permissionService.setRolePermission(selectedRole, permission.clave, enabled)
-      setRolePermissions((current) => current.map((item) =>
-        item.clave === permission.clave ? { ...item, habilitado: enabled } : item))
+      const entries = Array.from(pendingRoleChanges.entries())
+      await Promise.all(entries.map(([clave, enabled]) =>
+        permissionService.setRolePermission(selectedRole, clave, enabled),
+      ))
+      setRolePermissions((current) => current.map((p) =>
+        pendingRoleChanges.has(p.clave) ? { ...p, habilitado: pendingRoleChanges.get(p.clave)! } : p,
+      ))
+      setPendingRoleChanges(new Map())
       window.dispatchEvent(new Event('logitrack:permissions'))
-      setSavedSnackbar(`Permiso actualizado para ${roleLabels[selectedRole] ?? selectedRole}`)
+      setSavedSnackbar(`Cambios guardados para ${roleLabels[selectedRole] ?? selectedRole}`)
     } catch {
-      setError('No se pudo guardar el permiso del rol.')
+      setError('No se pudieron guardar los cambios del rol.')
     } finally {
-      setSavingKey('')
+      setSavingAll(false)
     }
   }
+
+  const discardRoleChanges = () => setPendingRoleChanges(new Map())
 
   const updateUser = async (permission: UserPermission, estado: UserPermissionState) => {
     if (!selectedUser) return
@@ -148,6 +186,7 @@ export default function PermisosPage() {
       await permissionService.setUserPermission(selectedUser.id, permission.clave, estado)
       setUserPermissions(await permissionService.getUserPermissions(selectedUser.id))
       window.dispatchEvent(new Event('logitrack:permissions'))
+      setSavedSnackbar(`Excepción guardada para ${selectedUser.name}`)
     } catch {
       setError('No se pudo guardar la excepción del usuario.')
     } finally {
@@ -203,7 +242,7 @@ export default function PermisosPage() {
       >
         <Tabs
           value={tab}
-          onChange={(_, value) => setTab(value)}
+          onChange={(_, value) => { setTab(value); setPendingRoleChanges(new Map()) }}
           variant="fullWidth"
           sx={{
             minHeight: 58,
@@ -254,34 +293,93 @@ export default function PermisosPage() {
               <PermissionGrid key={selectedRole}>
                 {Object.entries(groupedRolePermissions).map(([group, permissions], index) => (
                   <PermissionGroup key={group} title={group} delay={index * 45}>
-                    {permissions.map((permission) => (
-                      <PermissionRow
-                        key={permission.clave}
-                        name={permission.nombre}
-                        status={!permission.compatible
-                          ? 'No compatible con este rol'
-                          : permission.habilitado ? 'Permitido' : 'Denegado'}
-                        enabled={permission.habilitado}
-                        compatible={permission.compatible}
-                        saving={savingKey === permission.clave}
-                        control={(
-                          <Tooltip title={permission.obligatorio ? 'Este permiso es obligatorio' : ''}>
-                            <span>
-                              <Switch
-                                checked={permission.habilitado}
-                                disabled={!permission.compatible || permission.obligatorio || savingKey === permission.clave}
-                                onChange={(_, checked) => void updateRole(permission, checked)}
-                                inputProps={{ 'aria-label': `Permiso ${permission.nombre}` }}
-                              />
-                            </span>
-                          </Tooltip>
-                        )}
-                      />
-                    ))}
+                    {permissions.map((permission) => {
+                      const hasPending = pendingRoleChanges.has(permission.clave)
+                      const pendingValue = hasPending ? pendingRoleChanges.get(permission.clave)! : permission.habilitado
+                      return (
+                        <PermissionRow
+                          key={permission.clave}
+                          name={permission.nombre}
+                          status={!permission.compatible
+                            ? 'No compatible con este rol'
+                            : hasPending
+                              ? 'Pendiente de guardar'
+                              : pendingValue ? 'Permitido' : 'Denegado'}
+                          enabled={pendingValue}
+                          compatible={permission.compatible}
+                          saving={savingAll && hasPending}
+                          pending={hasPending}
+                          control={(
+                            <Tooltip title={permission.obligatorio ? 'Este permiso es obligatorio' : ''}>
+                              <span>
+                                <Switch
+                                  checked={pendingValue}
+                                  disabled={!permission.compatible || permission.obligatorio || savingAll}
+                                  onChange={(_, checked) => onRoleToggle(permission, checked)}
+                                  inputProps={{ 'aria-label': `Permiso ${permission.nombre}` }}
+                                />
+                              </span>
+                            </Tooltip>
+                          )}
+                        />
+                      )
+                    })}
                   </PermissionGroup>
                 ))}
               </PermissionGrid>
             )}
+
+            {/* Barra de guardar cambios pendientes */}
+            <Fade in={pendingRoleChanges.size > 0}>
+              <Box
+                sx={{
+                  position: 'sticky',
+                  bottom: 16,
+                  mt: 3,
+                  mx: { xs: -2, md: -3 },
+                  px: { xs: 2, md: 3 },
+                  py: 1.5,
+                  bgcolor: 'warning.main',
+                  color: 'warning.contrastText',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 1.5,
+                  zIndex: 10,
+                  boxShadow: '0 -4px 20px rgba(237,108,2,0.22)',
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <SaveIcon fontSize="small" />
+                  <Typography fontWeight={700} variant="body2">
+                    {pendingRoleChanges.size} {pendingRoleChanges.size === 1 ? 'cambio pendiente' : 'cambios pendientes'} para {roleLabels[selectedRole] ?? selectedRole}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<UndoIcon />}
+                    onClick={discardRoleChanges}
+                    disabled={savingAll}
+                    sx={{ color: 'warning.contrastText', borderColor: 'rgba(255,255,255,0.5)', '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}
+                  >
+                    Descartar
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={savingAll ? <CircularProgress size={14} color="inherit" /> : <SaveIcon />}
+                    onClick={() => void saveRoleChanges()}
+                    disabled={savingAll}
+                    sx={{ bgcolor: 'rgba(0,0,0,0.25)', '&:hover': { bgcolor: 'rgba(0,0,0,0.38)' }, fontWeight: 700 }}
+                  >
+                    {savingAll ? 'Guardando...' : 'Guardar cambios'}
+                  </Button>
+                </Stack>
+              </Box>
+            </Fade>
           </Box>
         ) : (
           <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -306,18 +404,21 @@ export default function PermisosPage() {
                 px: 2,
                 textAlign: 'center',
                 border: '1px dashed',
-                borderColor: 'divider',
+                borderColor: selectedUser ? 'primary.light' : 'divider',
                 borderRadius: 2,
-                bgcolor: 'action.hover',
+                bgcolor: selectedUser ? 'rgba(25,118,210,0.04)' : 'action.hover',
+                transition: 'all 0.2s ease',
               }}
             >
-              <PersonSearchIcon color="disabled" sx={{ fontSize: 38, mb: 1 }} />
+              <PersonSearchIcon color={selectedUser ? 'primary' : 'disabled'} sx={{ fontSize: 38, mb: 1 }} />
               <Typography fontWeight={750}>
-                {selectedUser ? `${selectedUser.name} ${selectedUser.lastname} seleccionado/a` : 'Elegí un usuario para configurar sus accesos'}
+                {selectedUser
+                  ? `${selectedUser.name} ${selectedUser.lastname} — permisos personalizados`
+                  : 'Elegí un usuario para configurar sus accesos'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {selectedUser
-                  ? <Box component="span" sx={{ color: 'primary.main', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setDrawerOpen(true)}>Abrir panel de permisos</Box>
+                  ? <Box component="span" sx={{ color: 'primary.main', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setDrawerOpen(true)}>Abrir panel de configuración</Box>
                   : 'Hacé click en "Configurar" en la tabla de arriba.'}
               </Typography>
             </Box>
@@ -397,14 +498,42 @@ export default function PermisosPage() {
         </Box>
       </Drawer>
 
+      {/* Snackbar con camioneta animada */}
       <Snackbar
         open={!!savedSnackbar}
-        autoHideDuration={3000}
+        autoHideDuration={3500}
         onClose={() => setSavedSnackbar('')}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity="success" onClose={() => setSavedSnackbar('')} icon={<CheckCircleIcon />}>
-          {savedSnackbar}
+        <Alert
+          severity="success"
+          onClose={() => setSavedSnackbar('')}
+          icon={false}
+          sx={{ alignItems: 'center', pr: 4, overflow: 'hidden', minWidth: 320 }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                animation: `${truckDrive} 3.5s ease forwards`,
+                display: 'flex',
+                alignItems: 'center',
+                color: 'success.dark',
+              }}
+            >
+              <LocalShippingRoundedIcon sx={{ fontSize: 28 }} />
+            </Box>
+            <Stack>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <CheckCircleIcon sx={{ fontSize: 15, color: 'success.main' }} />
+                <Typography variant="body2" fontWeight={700} color="success.dark">
+                  ¡Guardado!
+                </Typography>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                {savedSnackbar}
+              </Typography>
+            </Stack>
+          </Stack>
         </Alert>
       </Snackbar>
     </Box>
@@ -474,7 +603,7 @@ function SelectedUserHeader({ user, exceptions }: { user: User; exceptions: numb
         <Chip size="small" label={roleLabels[user.role] ?? user.role} variant="outlined" />
         <Chip
           size="small"
-          label={`${exceptions} ${exceptions === 1 ? 'excepción' : 'excepciones'}`}
+          label={exceptions > 0 ? `${exceptions} ${exceptions === 1 ? 'excepción activa' : 'excepciones activas'}` : 'Sin excepciones'}
           color={exceptions > 0 ? 'primary' : 'default'}
         />
       </Stack>
@@ -523,6 +652,7 @@ function PermissionRow({
   enabled,
   compatible,
   saving,
+  pending = false,
   control,
 }: {
   name: string
@@ -530,6 +660,7 @@ function PermissionRow({
   enabled: boolean
   compatible: boolean
   saving: boolean
+  pending?: boolean
   control: ReactNode
 }) {
   return (
@@ -546,17 +677,20 @@ function PermissionRow({
         transition: 'background-color 160ms ease',
         '& + &': { borderTop: 1, borderColor: 'divider' },
         '&:hover': { bgcolor: compatible ? 'action.hover' : undefined },
+        ...(pending && { animation: `${pendingPulse} 1.8s ease infinite` }),
       }}
     >
       <Box sx={{ minWidth: 0 }}>
         <Typography fontWeight={700} noWrap title={name}>{name}</Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.6 }}>
-          {enabled
-            ? <CheckCircleIcon color="success" sx={{ fontSize: 16 }} />
-            : <BlockIcon color={compatible ? 'action' : 'disabled'} sx={{ fontSize: 16 }} />}
+          {pending
+            ? <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'warning.main', flexShrink: 0 }} />
+            : enabled
+              ? <CheckCircleIcon color="success" sx={{ fontSize: 16 }} />
+              : <BlockIcon color={compatible ? 'action' : 'disabled'} sx={{ fontSize: 16 }} />}
           <Typography
             variant="caption"
-            color={enabled ? 'success.main' : 'text.secondary'}
+            color={pending ? 'warning.main' : enabled ? 'success.main' : 'text.secondary'}
             sx={{ fontWeight: 700, animation: saving ? `${savingPulse} 900ms ease infinite` : undefined }}
           >
             {saving ? 'Guardando...' : status}

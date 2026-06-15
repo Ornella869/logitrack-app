@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -25,6 +26,7 @@ import {
   LinearProgress,
   MenuItem,
   Select,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -89,6 +91,9 @@ export default function CalendarizarPage() {
   const [calendarData, setCalendarData] = useState<CalendarioOperativo | null>(null)
   const [pendientesReagendamiento, setPendientesReagendamiento] = useState<PaquetePendienteReagendamiento[]>([])
   const [reagendandoId, setReagendandoId] = useState<string | null>(null)
+  const [selectedReagendar, setSelectedReagendar] = useState<Set<string>>(new Set())
+  const [reagendandoMasivo, setReagendandoMasivo] = useState(false)
+  const [reagendarMasivoResult, setReagendarMasivoResult] = useState<{ reagendados: number; sinFechaDisponible: number } | null>(null)
 
   // Ajustes manuales sobre el preview antes de ejecutar
   const [overrides, setOverrides] = useState<Map<string, { repartidorId: string; repartidorNombre: string; fecha: string }>>(new Map())
@@ -535,15 +540,57 @@ export default function CalendarizarPage() {
       {pendientesReagendamiento.length > 0 && (
         <Card variant="outlined" sx={{ mt: 3, borderLeft: '4px solid #e65100' }}>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 1, color: '#e65100' }}>
-              Envíos pendientes de reagendamiento ({pendientesReagendamiento.length})
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-              Estos envíos están en tránsito o demorados. Podés liberarlos para que vuelvan a la cola de calendarización.
-            </Typography>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
+              <Box>
+                <Typography variant="h6" sx={{ color: '#e65100' }}>
+                  Envíos pendientes de reagendamiento ({pendientesReagendamiento.length})
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Estos envíos están demorados o retornados. Liberarlos los devuelve a la cola de calendarización.
+                </Typography>
+              </Box>
+              {selectedReagendar.size > 0 && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  size="small"
+                  disabled={reagendandoMasivo}
+                  startIcon={reagendandoMasivo ? <CircularProgress size={14} color="inherit" /> : undefined}
+                  onClick={async () => {
+                    setReagendandoMasivo(true)
+                    try {
+                      const ids = Array.from(selectedReagendar)
+                      const result = await calendarizacionService.reagendarMasivo(ids)
+                      setReagendarMasivoResult(result)
+                      setPendientesReagendamiento((prev) => prev.filter((x) => !selectedReagendar.has(x.id)))
+                      setSelectedReagendar(new Set())
+                    } finally {
+                      setReagendandoMasivo(false)
+                    }
+                  }}
+                  sx={{ textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap' }}
+                >
+                  Reagendar {selectedReagendar.size} seleccionado{selectedReagendar.size !== 1 ? 's' : ''}
+                </Button>
+              )}
+            </Stack>
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      indeterminate={selectedReagendar.size > 0 && selectedReagendar.size < pendientesReagendamiento.length}
+                      checked={pendientesReagendamiento.length > 0 && selectedReagendar.size === pendientesReagendamiento.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedReagendar(new Set(pendientesReagendamiento.map((p) => p.id)))
+                        } else {
+                          setSelectedReagendar(new Set())
+                        }
+                      }}
+                    />
+                  </TableCell>
                   <TableCell>Código</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell>Fecha calendarizada</TableCell>
@@ -553,7 +600,30 @@ export default function CalendarizarPage() {
               </TableHead>
               <TableBody>
                 {pendientesReagendamiento.map((p) => (
-                  <TableRow key={p.id}>
+                  <TableRow
+                    key={p.id}
+                    selected={selectedReagendar.has(p.id)}
+                    hover
+                    onClick={() => setSelectedReagendar((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(p.id)) next.delete(p.id)
+                      else next.add(p.id)
+                      return next
+                    })}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        size="small"
+                        checked={selectedReagendar.has(p.id)}
+                        onChange={() => setSelectedReagendar((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(p.id)) next.delete(p.id)
+                          else next.add(p.id)
+                          return next
+                        })}
+                      />
+                    </TableCell>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{p.codigoSeguimiento}</TableCell>
                     <TableCell>
                       <Chip size="small" label={p.status} sx={{ fontSize: 11 }} color={p.status === 'Demorado' ? 'warning' : 'default'} />
@@ -562,19 +632,19 @@ export default function CalendarizarPage() {
                       {p.fechaCalendarizada ? formatDateOnlyEs(p.fechaCalendarizada.slice(0, 10), { day: '2-digit', month: 'short' }) : '—'}
                     </TableCell>
                     <TableCell align="right" sx={{ fontSize: 12 }}>{p.peso.toFixed(0)} kg</TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="small"
                         variant="outlined"
                         color="warning"
-                        disabled={reagendandoId === p.id}
+                        disabled={reagendandoId === p.id || reagendandoMasivo}
                         onClick={async () => {
                           setReagendandoId(p.id)
                           const result = await calendarizacionService.reagendar(p.id)
                           setReagendandoId(null)
                           if (result.success) {
                             setPendientesReagendamiento((prev) => prev.filter((x) => x.id !== p.id))
-                            setPendientes((prev) => [...prev, { id: p.id, codigoSeguimiento: p.codigoSeguimiento } as any])
+                            setSelectedReagendar((prev) => { const next = new Set(prev); next.delete(p.id); return next })
                           }
                         }}
                         sx={{ textTransform: 'none', fontSize: 12 }}
@@ -589,6 +659,29 @@ export default function CalendarizarPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Snackbar resultado reagendamiento masivo */}
+      <Snackbar
+        open={!!reagendarMasivoResult}
+        autoHideDuration={6000}
+        onClose={() => setReagendarMasivoResult(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={reagendarMasivoResult?.sinFechaDisponible === 0 ? 'success' : 'warning'}
+          onClose={() => setReagendarMasivoResult(null)}
+          sx={{ minWidth: 320 }}
+        >
+          {reagendarMasivoResult && (
+            <>
+              <strong>{reagendarMasivoResult.reagendados} envío{reagendarMasivoResult.reagendados !== 1 ? 's' : ''} reagendado{reagendarMasivoResult.reagendados !== 1 ? 's' : ''}</strong> exitosamente.
+              {reagendarMasivoResult.sinFechaDisponible > 0 && (
+                <> · {reagendarMasivoResult.sinFechaDisponible} no pudieron reagendarse.</>
+              )}
+            </>
+          )}
+        </Alert>
+      </Snackbar>
 
       {/* G1L-150: Dialog de vista previa */}
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>

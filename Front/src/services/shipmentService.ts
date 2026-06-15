@@ -826,6 +826,11 @@ export const calendarizacionService = {
     }
   },
 
+  reagendarMasivo: async (paqueteIds: string[]): Promise<{ reagendados: number; sinFechaDisponible: number }> => {
+    const res = await api.post('/calendarizacion/reagendar-masivo', { PaqueteIds: paqueteIds })
+    return res.data
+  },
+
   // G1L-83: precalendarización manual.
   precalendarizar: async (
     paqueteId: string,

@@ -10,13 +10,15 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   LinearProgress,
-  Menu,
-  MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Tooltip,
@@ -34,9 +36,12 @@ import DownloadIcon from '@mui/icons-material/Download'
 import api from '../services/api'
 import { dateOnlyForDisplay, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
-async function exportToExcel(data: CalendarioOperativo) {
+async function exportToExcel(data: CalendarioOperativo, desde: string, hasta: string) {
   const { utils, writeFile } = await import('xlsx')
   const rows: (string | number)[][] = []
+  rows.push(['LogiTrack — Calendario Operativo'])
+  rows.push([`Período: ${desde} al ${hasta}`, '', `Generado: ${new Date().toLocaleString('es-AR')}`])
+  rows.push([])
   const header = ['Repartidor', 'Email', ...data.dias]
   rows.push(header)
   for (const rep of data.repartidores) {
@@ -49,17 +54,29 @@ async function exportToExcel(data: CalendarioOperativo) {
   const ws = utils.aoa_to_sheet(rows)
   const wb = utils.book_new()
   utils.book_append_sheet(wb, ws, 'Calendario')
-  writeFile(wb, `calendario-operativo-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  writeFile(wb, `logitrack-calendario-${desde}-${hasta}.xlsx`)
 }
 
-async function exportToPdf(data: CalendarioOperativo) {
+async function exportToPdf(data: CalendarioOperativo, desde: string, hasta: string) {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+  // Header con identidad LogiTrack
+  doc.setFillColor(21, 101, 192)
+  doc.rect(0, 0, 297, 18, 'F')
+  doc.setTextColor(255, 255, 255)
   doc.setFontSize(14)
-  doc.text('Calendario Operativo', 14, 14)
-  doc.setFontSize(9)
-  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 20)
+  doc.setFont('helvetica', 'bold')
+  doc.text('LogiTrack', 14, 11)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Calendario Operativo', 60, 11)
+  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(8)
+  doc.text(`Período: ${desde} al ${hasta}`, 14, 24)
+  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 29)
+
   const head = [['Repartidor', ...data.dias.map((d) => {
     const date = dateOnlyForDisplay(d)
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
@@ -68,8 +85,54 @@ async function exportToPdf(data: CalendarioOperativo) {
     rep.nombre,
     ...rep.celdas.map((c) => c.paquetes.length === 0 ? '—' : `${c.paquetes.length}p · ${c.pesoTotal.toFixed(0)}kg`),
   ])
-  autoTable(doc, { head, body, startY: 25, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] } })
-  doc.save(`calendario-operativo-${new Date().toISOString().slice(0, 10)}.pdf`)
+  autoTable(doc, {
+    head,
+    body,
+    startY: 34,
+    styles: { fontSize: 7 },
+    headStyles: { fillColor: [21, 101, 192] },
+    didDrawPage: (_data: any) => {
+      const pageCount = (doc as any).internal.getNumberOfPages()
+      doc.setFontSize(7)
+      doc.setTextColor(150)
+      doc.text(`LogiTrack · Página ${(doc as any).internal.getCurrentPageInfo().pageNumber} de ${pageCount}`, 14, doc.internal.pageSize.height - 5)
+      doc.setTextColor(0, 0, 0)
+    },
+  })
+  doc.save(`logitrack-calendario-${desde}-${hasta}.pdf`)
+}
+
+function filterCalendarioByRange(data: CalendarioOperativo, desde: string, hasta: string): CalendarioOperativo {
+  const dias = data.dias.filter((d) => d >= desde && d <= hasta)
+  const repartidores = data.repartidores.map((rep) => ({
+    ...rep,
+    celdas: rep.celdas.filter((c) => c.fecha >= desde && c.fecha <= hasta),
+  }))
+  return { dias, repartidores }
+}
+
+function semanaActualRange() {
+  const today = new Date()
+  const day = today.getDay()
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  return {
+    desde: monday.toISOString().slice(0, 10),
+    hasta: sunday.toISOString().slice(0, 10),
+  }
+}
+
+function proximos7Range() {
+  const today = new Date()
+  const from = new Date(today)
+  const to = new Date(today)
+  to.setDate(today.getDate() + 7)
+  return {
+    desde: from.toISOString().slice(0, 10),
+    hasta: to.toISOString().slice(0, 10),
+  }
 }
 
 const AVATAR_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c2185b', '#5e35b1', '#00838f']
@@ -123,8 +186,29 @@ export default function CalendarioOperativoPage({ permissions }: { permissions: 
   const [pageOffset, setPageOffset] = useState(0)
   const [detalleCelda, setDetalleCelda] = useState<CalendarioCelda | null>(null)
   const [searchRepartidor, setSearchRepartidor] = useState('')
-  const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportRangeType, setExportRangeType] = useState<'semanaActual' | 'proximos7' | 'personalizado'>('semanaActual')
+  const [exportFechaDesde, setExportFechaDesde] = useState('')
+  const [exportFechaHasta, setExportFechaHasta] = useState('')
   const [exporting, setExporting] = useState(false)
+
+  const getExportRange = () => {
+    if (exportRangeType === 'semanaActual') return semanaActualRange()
+    if (exportRangeType === 'proximos7') return proximos7Range()
+    return { desde: exportFechaDesde, hasta: exportFechaHasta }
+  }
+
+  const handleExport = async (format: 'excel' | 'pdf') => {
+    if (!data) return
+    const { desde, hasta } = getExportRange()
+    if (!desde || !hasta || desde > hasta) return
+    setExportDialogOpen(false)
+    setExporting(true)
+    const filtered = filterCalendarioByRange(data, desde, hasta)
+    if (format === 'excel') await exportToExcel(filtered, desde, hasta)
+    else await exportToPdf(filtered, desde, hasta)
+    setExporting(false)
+  }
 
   useEffect(() => {
     void load()
@@ -180,34 +264,19 @@ export default function CalendarioOperativoPage({ permissions }: { permissions: 
         </Box>
         <Stack direction="row" spacing={1}>
           {data && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                disabled={exporting}
-                onClick={(e) => setExportAnchor(e.currentTarget)}
-              >
-                Exportar
-              </Button>
-              <Menu anchorEl={exportAnchor} open={Boolean(exportAnchor)} onClose={() => setExportAnchor(null)}>
-                <MenuItem onClick={async () => {
-                  setExportAnchor(null)
-                  setExporting(true)
-                  await exportToExcel(data)
-                  setExporting(false)
-                }}>
-                  Excel (.xlsx)
-                </MenuItem>
-                <MenuItem onClick={async () => {
-                  setExportAnchor(null)
-                  setExporting(true)
-                  await exportToPdf(data)
-                  setExporting(false)
-                }}>
-                  PDF (.pdf)
-                </MenuItem>
-              </Menu>
-            </>
+            <Button
+              variant="outlined"
+              startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
+              disabled={exporting}
+              onClick={() => {
+                setExportRangeType('semanaActual')
+                setExportFechaDesde(new Date().toISOString().slice(0, 10))
+                setExportFechaHasta(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10))
+                setExportDialogOpen(true)
+              }}
+            >
+              {exporting ? 'Exportando...' : 'Exportar'}
+            </Button>
           )}
           {canCreateCalendarizacion && (
             <Button variant="outlined" startIcon={<BoltIcon />} onClick={() => navigate('/calendarizar')}>
@@ -410,6 +479,69 @@ export default function CalendarioOperativoPage({ permissions }: { permissions: 
           </Box>
         </Card>
       )}
+
+      {/* Dialog: configuración de exportación */}
+      <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <DownloadIcon color="primary" fontSize="small" />
+            <span>Exportar calendario</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Seleccioná el período que querés exportar:
+          </Typography>
+          <RadioGroup
+            value={exportRangeType}
+            onChange={(e) => setExportRangeType(e.target.value as typeof exportRangeType)}
+          >
+            <FormControlLabel value="semanaActual" control={<Radio size="small" />} label="Semana actual (lunes a domingo)" />
+            <FormControlLabel value="proximos7" control={<Radio size="small" />} label="Próximos 7 días" />
+            <FormControlLabel value="personalizado" control={<Radio size="small" />} label="Rango personalizado" />
+          </RadioGroup>
+          {exportRangeType === 'personalizado' && (
+            <Stack spacing={2} sx={{ mt: 2 }}>
+              <TextField
+                size="small"
+                label="Fecha desde"
+                type="date"
+                value={exportFechaDesde}
+                onChange={(e) => setExportFechaDesde(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <TextField
+                size="small"
+                label="Fecha hasta"
+                type="date"
+                value={exportFechaHasta}
+                onChange={(e) => setExportFechaHasta(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ min: exportFechaDesde }}
+                fullWidth
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ gap: 1, px: 2, pb: 2 }}>
+          <Button onClick={() => setExportDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="outlined"
+            onClick={() => handleExport('excel')}
+            disabled={exportRangeType === 'personalizado' && (!exportFechaDesde || !exportFechaHasta || exportFechaDesde > exportFechaHasta)}
+          >
+            Excel (.xlsx)
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => handleExport('pdf')}
+            disabled={exportRangeType === 'personalizado' && (!exportFechaDesde || !exportFechaHasta || exportFechaDesde > exportFechaHasta)}
+          >
+            PDF (.pdf)
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Modal detalle de celda */}
       <Dialog open={Boolean(detalleCelda)} onClose={() => setDetalleCelda(null)} maxWidth="sm" fullWidth>

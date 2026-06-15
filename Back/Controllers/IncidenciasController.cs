@@ -389,6 +389,93 @@ namespace Back.Controllers
             return Ok(ToDto(incidencia));
         }
 
+        /// <summary>Panel cruzado: filas=repartidores, columnas=tipos de incidencia.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [RequirePermission("incidencias")]
+        [HttpGet("panel-cruzado")]
+        public async Task<IActionResult> GetPanelCruzado(
+            [FromQuery] DateTime? desde = null,
+            [FromQuery] DateTime? hasta = null,
+            [FromQuery] Guid? sucursalId = null)
+        {
+            var end = (hasta ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+            var start = (desde ?? DateTime.UtcNow.AddDays(-30)).Date;
+
+            var user = await CurrentUserAsync();
+            var scope = User.IsInRole(Roles.Administrador) ? sucursalId : user?.SucursalId;
+
+            var query = _context.Incidencias.AsQueryable()
+                .Where(i => i.FechaReporte >= start && i.FechaReporte <= end && i.RepartidorId.HasValue);
+
+            if (scope.HasValue)
+                query = query.Where(i => i.SucursalId == scope.Value);
+
+            var incidencias = await query
+                .Select(i => new { i.RepartidorId, i.RepartidorNombre, i.Tipo, i.TipoLabel })
+                .ToListAsync();
+
+            var tipos = incidencias.Select(i => i.Tipo).Distinct().OrderBy(t => t).ToList();
+
+            var porRepartidor = incidencias
+                .GroupBy(i => new { i.RepartidorId, Nombre = i.RepartidorNombre ?? "Desconocido" })
+                .Select(g => new
+                {
+                    repartidorId = g.Key.RepartidorId,
+                    repartidorNombre = g.Key.Nombre,
+                    total = g.Count(),
+                    porTipo = tipos.ToDictionary(t => t, t => g.Count(i => i.Tipo == t)),
+                })
+                .OrderByDescending(r => r.total)
+                .ToList();
+
+            var promedios = tipos.ToDictionary(t => t, t =>
+                porRepartidor.Count > 0 ? Math.Round(porRepartidor.Average(r => (double)r.porTipo[t]), 2) : 0.0);
+
+            return Ok(new { tipos, repartidores = porRepartidor, promedios });
+        }
+
+        /// <summary>Drill-down: incidencias para una celda del panel cruzado.</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [RequirePermission("incidencias")]
+        [HttpGet("panel-detalle")]
+        public async Task<IActionResult> GetPanelDetalle(
+            [FromQuery] Guid? repartidorId = null,
+            [FromQuery] string? tipo = null,
+            [FromQuery] DateTime? desde = null,
+            [FromQuery] DateTime? hasta = null)
+        {
+            var end = (hasta ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+            var start = (desde ?? DateTime.UtcNow.AddDays(-30)).Date;
+
+            var user = await CurrentUserAsync();
+            var scope = User.IsInRole(Roles.Administrador) ? (Guid?)null : user?.SucursalId;
+
+            var query = _context.Incidencias.AsQueryable()
+                .Where(i => i.FechaReporte >= start && i.FechaReporte <= end);
+
+            if (scope.HasValue) query = query.Where(i => i.SucursalId == scope.Value);
+            if (repartidorId.HasValue) query = query.Where(i => i.RepartidorId == repartidorId.Value);
+            if (!string.IsNullOrWhiteSpace(tipo)) query = query.Where(i => i.Tipo == tipo);
+
+            var items = await query
+                .OrderByDescending(i => i.FechaReporte)
+                .Select(i => new
+                {
+                    id = i.Id,
+                    i.Tipo,
+                    i.TipoLabel,
+                    i.Descripcion,
+                    i.Estado,
+                    i.FechaReporte,
+                    i.Severidad,
+                    i.RepartidorNombre,
+                    i.CodigoSeguimiento,
+                })
+                .ToListAsync();
+
+            return Ok(items);
+        }
+
         private async Task<Incidencia?> GetIncidenciaSupervisorAsync(Guid id)
         {
             var user = await CurrentUserAsync();

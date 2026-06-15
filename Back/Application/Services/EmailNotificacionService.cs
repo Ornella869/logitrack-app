@@ -208,6 +208,33 @@ namespace Back.Application.Services
                 $"Fecha estimada para tu envio {paquete.CodigoSeguimiento}", cuerpo);
         }
 
+        public async Task NotificarReagendamientoAsync(Paquete paquete)
+        {
+            if (paquete.Destinatario.Email is null) return;
+
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var detalleHtml = $"""
+                <div style="background:#1e293b;border:1px solid #f97316;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
+                  <div style="font-size:15px;font-weight:700;color:#fb923c;">Tu envio fue reagendado</div>
+                  <div style="font-size:13px;color:#94a3b8;margin-top:6px;">Nuestro equipo intentara entregarlo nuevamente en los proximos dias habiles.</div>
+                </div>
+                """;
+
+            var cuerpo = BuildTemplate(
+                "orange",
+                "Nuevo intento de entrega en camino",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                "No pudimos entregarte el paquete en el intento anterior. Lo hemos reagendado y volvera a salir a ruta pronto.",
+                trackingUrl,
+                "Seguir mi envio",
+                detalleHtml);
+
+            await CrearYEnviarAsync(paquete, EventoEmailNotificacion.FechaEstimadaEntrega,
+                $"Nuevo intento de entrega — {paquete.CodigoSeguimiento}", cuerpo);
+        }
+
         public async Task CrearEmailLeadAsync(SolicitudComercial lead)
         {
             var email = new EmailNotificacion(
