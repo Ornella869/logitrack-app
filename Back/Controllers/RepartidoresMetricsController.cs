@@ -52,7 +52,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Proyección de personal para los próximos 30 días basada en histórico de 4 semanas.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [Authorize(Roles = Roles.Supervisor)]
         [HttpGet("proyeccion-personal")]
         public async Task<IActionResult> GetProyeccionPersonal([FromQuery] double? volumenManual = null)
         {
@@ -62,30 +62,38 @@ namespace Back.Controllers
 
             // Paquetes calendarizados en las últimas 4 semanas
             IQueryable<Paquete> paquetesQuery = _context.Paquetes
-                .Where(p => p.FechaCalendarizada >= hace4Semanas && p.FechaCalendarizada <= now);
+                .Where(p => p.CreadoEn >= hace4Semanas && p.CreadoEn <= now);
 
             if (sucursalId.HasValue && sucursalId.Value != Guid.Empty)
             {
-                var repIds = await _context.Usuarios.OfType<Repartidor>()
-                    .Where(r => r.SucursalId == sucursalId.Value)
-                    .Select(r => r.Id)
-                    .ToListAsync();
-                paquetesQuery = paquetesQuery.Where(p => p.RepartidorAsignadoId.HasValue && repIds.Contains(p.RepartidorAsignadoId.Value));
+                paquetesQuery = paquetesQuery.Where(p => p.SucursalId == sucursalId.Value);
             }
 
-            var paquetes = await paquetesQuery.Select(p => new { p.FechaCalendarizada }).ToListAsync();
+            var paquetes = await paquetesQuery.Select(p => new
+            {
+                p.CreadoEn,
+                p.HorasEstimadasRuta,
+                p.RequiereRepartidorFullTime,
+            }).ToListAsync();
 
             // Agrupar por semana (semana 1 = más antigua, semana 4 = más reciente)
             var semanasData = Enumerable.Range(1, 4).Select(s =>
             {
                 var desde = now.AddDays(-s * 7);
                 var hasta = now.AddDays(-(s - 1) * 7);
-                var count = paquetes.Count(p => p.FechaCalendarizada >= desde && p.FechaCalendarizada < hasta);
-                return new { semana = 5 - s, envios = count };
+                var semana = paquetes.Where(p => p.CreadoEn >= desde && p.CreadoEn < hasta).ToList();
+                return new
+                {
+                    semana = 5 - s,
+                    envios = semana.Count,
+                    horas = Math.Round(semana.Sum(p => Math.Max(0.25, p.HorasEstimadasRuta)), 1),
+                };
             }).OrderBy(s => s.semana).ToList();
 
             var totalUltimas4 = semanasData.Sum(s => s.envios);
             var promedioPorSemana = totalUltimas4 / 4.0;
+            var horasUltimas4 = semanasData.Sum(s => s.horas);
+            var promedioHorasPorEnvio = totalUltimas4 > 0 ? horasUltimas4 / totalUltimas4 : 0.5;
 
             // Tendencia lineal (delta por semana entre semana 1 y 4)
             var crecimientoSemanal = semanasData.Count >= 2
@@ -96,7 +104,13 @@ namespace Back.Controllers
             var enviosProyectados = volumenManual ?? Math.Max(0, promedioPorSemana * 4.3 + crecimientoSemanal * 2.15);
 
             // Horas necesarias: ~30 min por entrega promedio
-            var horasNecesarias = enviosProyectados * 0.5;
+            var horasNecesarias = enviosProyectados * promedioHorasPorEnvio;
+            var horasFullTimeHistoricas = paquetes
+                .Where(p => p.RequiereRepartidorFullTime || p.HorasEstimadasRuta > 6f)
+                .Sum(p => Math.Max(0.25, p.HorasEstimadasRuta));
+            var proporcionFullTime = horasUltimas4 > 0 ? horasFullTimeHistoricas / horasUltimas4 : 0;
+            var horasFullTimeNecesarias = horasNecesarias * proporcionFullTime;
+            var horasPartTimeNecesarias = horasNecesarias - horasFullTimeNecesarias;
 
             // Repartidores activos y capacidad
             IQueryable<Repartidor> repsQuery = _context.Usuarios.OfType<Repartidor>()
@@ -108,12 +122,18 @@ namespace Back.Controllers
             var countReps = repartidores.Count;
             // HorasDisponibles: cada repartidor trabaja HorasTrabajo horas/día × 22 días hábiles
             var horasDisponibles = repartidores.Sum(r => (double)r.HorasTrabajo) * 22;
+            var horasFullTimeDisponibles = repartidores.Where(r => !r.EsPartTime).Sum(r => (double)r.HorasTrabajo) * 22;
+            var horasPartTimeDisponibles = repartidores.Where(r => r.EsPartTime).Sum(r => (double)r.HorasTrabajo) * 22;
 
             var brechaHoras = horasNecesarias - horasDisponibles;
             // Repartidores equivalentes = horas_faltantes / (8h × 22 días hábiles)
-            var repartidoresEquivalentes = brechaHoras > 0 ? brechaHoras / (8.0 * 22) : 0;
-            var fullTime = (int)Math.Ceiling(repartidoresEquivalentes * 0.6);
-            var partTime = (int)Math.Ceiling(repartidoresEquivalentes * 0.4);
+            var brechaFullTime = Math.Max(0, horasFullTimeNecesarias - horasFullTimeDisponibles);
+            var capacidadFullTimeSobrante = Math.Max(0, horasFullTimeDisponibles - horasFullTimeNecesarias);
+            var brechaPartTime = Math.Max(0, horasPartTimeNecesarias - horasPartTimeDisponibles - capacidadFullTimeSobrante);
+            var brechaOperativa = Math.Max(0, brechaFullTime + brechaPartTime);
+            var repartidoresEquivalentes = brechaOperativa > 0 ? brechaOperativa / (8.0 * 22) : 0;
+            var fullTime = brechaFullTime > 0 ? (int)Math.Ceiling(brechaFullTime / (8.0 * 22)) : 0;
+            var partTime = brechaPartTime > 0 ? (int)Math.Ceiling(brechaPartTime / (6.0 * 22)) : 0;
 
             var capacidadPct = horasNecesarias > 0
                 ? Math.Min(100, horasDisponibles / horasNecesarias * 100)
@@ -128,6 +148,13 @@ namespace Back.Controllers
                 horasNecesarias = Math.Round(horasNecesarias, 1),
                 horasDisponibles = Math.Round(horasDisponibles, 1),
                 brechaHoras = Math.Round(brechaHoras, 1),
+                horasFullTimeNecesarias = Math.Round(horasFullTimeNecesarias, 1),
+                horasPartTimeNecesarias = Math.Round(horasPartTimeNecesarias, 1),
+                horasFullTimeDisponibles = Math.Round(horasFullTimeDisponibles, 1),
+                horasPartTimeDisponibles = Math.Round(horasPartTimeDisponibles, 1),
+                brechaFullTime = Math.Round(brechaFullTime, 1),
+                brechaPartTime = Math.Round(brechaPartTime, 1),
+                promedioHorasPorEnvio = Math.Round(promedioHorasPorEnvio, 2),
                 repartidoresActivos = countReps,
                 repartidoresEquivalentes = Math.Round(repartidoresEquivalentes, 1),
                 repartidoresFullTimeNecesarios = fullTime,

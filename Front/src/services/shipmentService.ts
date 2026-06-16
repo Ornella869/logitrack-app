@@ -764,6 +764,22 @@ export interface CalendarizacionResultado {
   paquetesSinAsignar?: PaqueteSinAsignarResumen[]
 }
 
+export interface ReagendamientoResultado {
+  paqueteId: string
+  codigoSeguimiento: string
+  asignado: boolean
+  motivo?: string | null
+  fechaAsignada?: string | null
+  repartidorId?: string | null
+  repartidorNombre?: string | null
+}
+
+export interface ReagendamientoMasivoResultado {
+  reagendados: number
+  sinFechaDisponible: number
+  items?: ReagendamientoResultado[]
+}
+
 export const calendarizacionService = {
   contarPendientes: async (): Promise<number> => {
     try {
@@ -827,17 +843,17 @@ export const calendarizacionService = {
     }
   },
 
-  reagendar: async (paqueteId: string): Promise<{ success: boolean; error?: string }> => {
+  reagendar: async (paqueteId: string): Promise<{ success: boolean; data?: ReagendamientoResultado; error?: string }> => {
     try {
-      await api.post(`/calendarizacion/${paqueteId}/reagendar`)
-      return { success: true }
+      const response = await api.post(`/calendarizacion/${paqueteId}/reagendar`)
+      return { success: true, data: response.data as ReagendamientoResultado }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message ?? 'No se pudo reagendar el envío'
       return { success: false, error: typeof errorMessage === 'string' ? errorMessage : 'Error desconocido' }
     }
   },
 
-  reagendarMasivo: async (paqueteIds: string[]): Promise<{ reagendados: number; sinFechaDisponible: number }> => {
+  reagendarMasivo: async (paqueteIds: string[]): Promise<ReagendamientoMasivoResultado> => {
     const res = await api.post('/calendarizacion/reagendar-masivo', { PaqueteIds: paqueteIds })
     return res.data
   },

@@ -33,6 +33,13 @@ interface ProyeccionPersonal {
   horasNecesarias: number
   horasDisponibles: number
   brechaHoras: number
+  horasFullTimeNecesarias: number
+  horasPartTimeNecesarias: number
+  horasFullTimeDisponibles: number
+  horasPartTimeDisponibles: number
+  brechaFullTime: number
+  brechaPartTime: number
+  promedioHorasPorEnvio: number
   repartidoresActivos: number
   repartidoresEquivalentes: number
   repartidoresFullTimeNecesarios: number
@@ -51,8 +58,8 @@ export default function ProyeccionPersonalPage() {
   const [volumenManual, setVolumenManual] = useState<number | null>(null)
   const [inputVolumen, setInputVolumen] = useState('')
 
-  if (user.role !== 'supervisor' && user.role !== 'administrador') {
-    return <Alert severity="warning">Solo Supervisores y Administradores pueden acceder a esta pantalla.</Alert>
+  if (user.role !== 'supervisor') {
+    return <Alert severity="warning">Solo Supervisores pueden acceder a esta pantalla.</Alert>
   }
 
   const load = async (volumen?: number) => {
@@ -157,6 +164,9 @@ export default function ProyeccionPersonalPage() {
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>DEMANDA PROYECTADA</Typography>
                   <Typography variant="h4" fontWeight={800}>{data.enviosProyectados30Dias.toFixed(0)}</Typography>
                   <Typography variant="caption" color="text.secondary">envíos en 30 días · {data.horasNecesarias.toFixed(0)} horas de ruta estimadas</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Promedio real: {data.promedioHorasPorEnvio.toFixed(2)} h/envío
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -248,11 +258,21 @@ export default function ProyeccionPersonalPage() {
                       <TableBody>
                         <TableRow>
                           <TableCell>Repartidores Full Time (8 h/día)</TableCell>
-                          <TableCell align="right"><strong>{data.repartidoresFullTimeNecesarios}</strong></TableCell>
+                          <TableCell align="right">
+                            <strong>{data.repartidoresFullTimeNecesarios}</strong>
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              Déficit: {data.brechaFullTime.toFixed(0)} h
+                            </Typography>
+                          </TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>Repartidores Part Time (≤6 h/día)</TableCell>
-                          <TableCell align="right"><strong>{data.repartidoresPartTimeNecesarios}</strong></TableCell>
+                          <TableCell align="right">
+                            <strong>{data.repartidoresPartTimeNecesarios}</strong>
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              Déficit: {data.brechaPartTime.toFixed(0)} h
+                            </Typography>
+                          </TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>Total repartidores equivalentes</TableCell>
@@ -260,6 +280,9 @@ export default function ProyeccionPersonalPage() {
                         </TableRow>
                       </TableBody>
                     </Table>
+                    <Alert severity="warning" sx={{ mt: 2, fontSize: 12 }}>
+                      Demanda estimada: {data.horasFullTimeNecesarias.toFixed(0)} h Full Time y {data.horasPartTimeNecesarias.toFixed(0)} h compatibles con Part Time. Capacidad actual: {data.horasFullTimeDisponibles.toFixed(0)} h Full Time y {data.horasPartTimeDisponibles.toFixed(0)} h Part Time.
+                    </Alert>
                     <Alert severity="info" sx={{ mt: 2, fontSize: 12 }}>
                       Cálculo basado en promedio de horas de ruta históricas y tendencia de crecimiento de {data.crecimientoSemanal >= 0 ? '+' : ''}{data.crecimientoSemanal} envíos/semana.
                     </Alert>

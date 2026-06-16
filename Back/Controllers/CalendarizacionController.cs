@@ -119,7 +119,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Envíos no entregados (Demorado / RetornadoASucursal) pendientes de reagendamiento.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.Supervisor)]
         [HttpGet("pendientes-reagendamiento")]
         public async Task<IActionResult> GetPendientesReagendamiento()
         {
@@ -130,11 +130,7 @@ namespace Back.Controllers
 
             if (sucursalId.HasValue && sucursalId.Value != Guid.Empty)
             {
-                var repIds = await _context.Usuarios.OfType<Repartidor>()
-                    .Where(r => r.SucursalId == sucursalId.Value)
-                    .Select(r => r.Id)
-                    .ToListAsync();
-                query = query.Where(p => p.RepartidorAsignadoId.HasValue && repIds.Contains(p.RepartidorAsignadoId.Value));
+                query = query.Where(p => p.SucursalId == sucursalId.Value);
             }
 
             var items = await query
@@ -153,57 +149,63 @@ namespace Back.Controllers
         }
 
         /// <summary>Reagenda un envío devolviendo a la cola de calendarización y notifica al destinatario.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.Supervisor)]
         [HttpPost("{paqueteId:guid}/reagendar")]
         public async Task<IActionResult> Reagendar(Guid paqueteId)
         {
-            var paquete = await _context.Paquetes.FindAsync(paqueteId);
-            if (paquete is null) return NotFound();
-
             try
             {
-                paquete.LiberarAsignacion();
+                var resultado = await _service.ReagendarAutomaticamenteAsync(paqueteId, CurrentUserId());
                 await _context.SaveChangesAsync();
-                _ = _email.NotificarReagendamientoAsync(paquete).ContinueWith(_ => { });
-                return Ok(new { success = true });
+                if (resultado.Asignado)
+                {
+                    var paquete = await _context.Paquetes.FindAsync(paqueteId);
+                    if (paquete is not null)
+                        _ = _email.NotificarReagendamientoAsync(paquete).ContinueWith(_ => { });
+                }
+                return Ok(resultado);
             }
-            catch (Exception ex)
+            catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
         }
 
         /// <summary>Reagenda masivamente una lista de envíos.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.Supervisor)]
         [HttpPost("reagendar-masivo")]
         public async Task<IActionResult> ReagendarMasivo([FromBody] ReagendarMasivoRequest body)
         {
             if (body.PaqueteIds == null || body.PaqueteIds.Count == 0)
                 return BadRequest("Debe indicar al menos un paquete.");
 
-            var paquetes = await _context.Paquetes
-                .Where(p => body.PaqueteIds.Contains(p.Id))
-                .ToListAsync();
-
             int reagendados = 0;
-            int sinCambio = 0;
+            int sinFechaDisponible = 0;
+            var items = new List<ReagendamientoResultado>();
 
-            foreach (var paquete in paquetes)
+            foreach (var paqueteId in body.PaqueteIds.Distinct())
             {
                 try
                 {
-                    paquete.LiberarAsignacion();
-                    reagendados++;
-                    _ = _email.NotificarReagendamientoAsync(paquete).ContinueWith(_ => { });
+                    var resultado = await _service.ReagendarAutomaticamenteAsync(paqueteId, CurrentUserId());
+                    items.Add(resultado);
+                    if (resultado.Asignado) reagendados++;
+                    else sinFechaDisponible++;
                 }
                 catch
                 {
-                    sinCambio++;
+                    sinFechaDisponible++;
                 }
             }
 
             await _context.SaveChangesAsync();
-            return Ok(new { reagendados, sinFechaDisponible = sinCambio });
+            foreach (var resultado in items.Where(i => i.Asignado))
+            {
+                var paquete = await _context.Paquetes.FindAsync(resultado.PaqueteId);
+                if (paquete is not null)
+                    _ = _email.NotificarReagendamientoAsync(paquete).ContinueWith(_ => { });
+            }
+            return Ok(new { reagendados, sinFechaDisponible, items });
         }
     }
 

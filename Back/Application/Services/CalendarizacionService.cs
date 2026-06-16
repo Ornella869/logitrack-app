@@ -371,6 +371,77 @@ namespace Back.Application.Services
         }
 
         // G1L-150: simula el algoritmo sin persistir ningún cambio.
+        public async Task<ReagendamientoResultado> ReagendarAutomaticamenteAsync(Guid paqueteId, Guid? supervisorId)
+        {
+            Guid? sucursalId = null;
+            if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
+                sucursalId = sup.SucursalId;
+
+            var paquete = await _enviosRepository.GetPaquete(paqueteId)
+                ?? throw new InvalidOperationException("Paquete no encontrado.");
+
+            if (paquete.Status != PaqueteStatus.Demorado && paquete.Status != PaqueteStatus.RetornadoASucursal)
+                throw new InvalidOperationException("Solo se pueden reagendar envíos demorados o retornados a sucursal.");
+
+            if (sucursalId.HasValue && sucursalId.Value != Guid.Empty && paquete.SucursalId != sucursalId.Value)
+                throw new InvalidOperationException("No podés reagendar envíos de otra sucursal.");
+
+            var todosRepartidores = (await _userRepository.GetRepartidores())
+                .Where(r => !sucursalId.HasValue || sucursalId.Value == Guid.Empty || r.SucursalId == sucursalId.Value)
+                .Where(r => r.Activo && r.PuedeSerAsignado)
+                .Where(r => r.EstadoJornada != Repartidor.EstadoJornadaRepartidor.Retornando)
+                .ToList();
+
+            var repartidores = todosRepartidores
+                .Where(r => !r.EsPartTime || (!paquete.RequiereRepartidorFullTime && paquete.HorasEstimadasRuta <= 6f))
+                .ToList();
+
+            if (repartidores.Count == 0)
+                return ReagendamientoResultado.CrearSinFecha(paquete, "No hay repartidores compatibles con la jornada requerida.");
+
+            var existentes = (await _enviosRepository.GetPaquetesConAsignacionActiva())
+                .Where(p => p.Id != paquete.Id)
+                .Where(p => !sucursalId.HasValue || sucursalId.Value == Guid.Empty || p.SucursalId == sucursalId.Value)
+                .ToList();
+
+            var carga = ConstruirCargaExistente(existentes);
+            var totalHistorico = repartidores.ToDictionary(
+                r => r.Id,
+                r => existentes.Count(p => p.RepartidorAsignadoId == r.Id));
+
+            var hoy = OperationalClock.TodayUtcDate;
+            for (int offset = 1; offset <= MaxDiasParaProgramar; offset++)
+            {
+                var fecha = hoy.AddDays(offset);
+                if (fecha.DayOfWeek == DayOfWeek.Sunday) continue;
+
+                var candidato = repartidores
+                    .Where(r => TieneCapacidadParaRango(r, fecha, paquete, carga))
+                    .OrderBy(r => carga.TryGetValue((r.Id, fecha), out var l) ? l.Count : 0)
+                    .ThenBy(r => totalHistorico[r.Id])
+                    .ThenBy(r => r.Id)
+                    .FirstOrDefault();
+
+                if (candidato is null) continue;
+
+                await _tramos.SincronizarRecalendarizacionAsync(paquete);
+                paquete.LiberarAsignacion();
+                paquete.AsignarParaCalendarizacion(candidato.Id, fecha);
+                await _historial.RegistrarCambioAsync(
+                    paquete.Id,
+                    PaqueteStatus.AsignadoAVehiculo,
+                    supervisorId,
+                    OrigenCambioEstado.Sistema,
+                    "Reagendamiento automático");
+                await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(candidato.Id, fecha);
+                await _tramos.SincronizarAsignacionAsync(paquete);
+
+                return ReagendamientoResultado.CrearAsignado(paquete, candidato, fecha);
+            }
+
+            return ReagendamientoResultado.CrearSinFecha(paquete, "Sin fecha disponible en los próximos 30 días.");
+        }
+
         public async Task<CalendarizacionResultado> PreviewAsync(Guid? supervisorId)
         {
             Guid? sucursalId = null;
@@ -867,5 +938,77 @@ namespace Back.Application.Services
             }
             lista.Add(paquete);
         }
+
+        private static Dictionary<(Guid, DateTime), List<Paquete>> ConstruirCargaExistente(IEnumerable<Paquete> existentes)
+        {
+            var carga = new Dictionary<(Guid, DateTime), List<Paquete>>();
+            foreach (var existente in existentes)
+            {
+                if (!existente.RepartidorAsignadoId.HasValue || !existente.FechaCalendarizada.HasValue) continue;
+                if (existente.Status == PaqueteStatus.EnTransito) continue;
+
+                var current = existente.FechaCalendarizada.Value.Date;
+                int dias = existente.DiasEstimadosEntrega;
+                while (dias > 0)
+                {
+                    AsignarEnMemoria(carga, existente.RepartidorAsignadoId.Value, current, existente);
+                    if (current.DayOfWeek != DayOfWeek.Sunday) dias--;
+                    if (dias > 0) current = current.AddDays(1);
+                }
+            }
+            return carga;
+        }
+
+        private static bool TieneCapacidadParaRango(
+            Repartidor repartidor,
+            DateTime fecha,
+            Paquete paquete,
+            Dictionary<(Guid, DateTime), List<Paquete>> carga)
+        {
+            var current = fecha.Date;
+            int dias = paquete.DiasEstimadosEntrega;
+            while (dias > 0)
+            {
+                if (current.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    var pesoActual = carga.TryGetValue((repartidor.Id, current), out var lista)
+                        ? lista.Sum(p => p.Peso)
+                        : 0;
+                    if (pesoActual + paquete.Peso > repartidor.CapacidadCargaKg) return false;
+                    dias--;
+                }
+                if (dias > 0) current = current.AddDays(1);
+            }
+            return true;
+        }
+    }
+
+    public class ReagendamientoResultado
+    {
+        public required Guid PaqueteId { get; init; }
+        public required string CodigoSeguimiento { get; init; }
+        public required bool Asignado { get; init; }
+        public string? Motivo { get; init; }
+        public DateTime? FechaAsignada { get; init; }
+        public Guid? RepartidorId { get; init; }
+        public string? RepartidorNombre { get; init; }
+
+        public static ReagendamientoResultado CrearAsignado(Paquete paquete, Repartidor repartidor, DateTime fecha) => new()
+        {
+            PaqueteId = paquete.Id,
+            CodigoSeguimiento = paquete.CodigoSeguimiento,
+            Asignado = true,
+            FechaAsignada = fecha,
+            RepartidorId = repartidor.Id,
+            RepartidorNombre = $"{repartidor.Nombre} {repartidor.Apellido}",
+        };
+
+        public static ReagendamientoResultado CrearSinFecha(Paquete paquete, string motivo) => new()
+        {
+            PaqueteId = paquete.Id,
+            CodigoSeguimiento = paquete.CodigoSeguimiento,
+            Asignado = false,
+            Motivo = motivo,
+        };
     }
 }

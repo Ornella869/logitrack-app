@@ -150,6 +150,26 @@ namespace Back.Application.Services
                     await _context.SaveChangesAsync();
                 }
             }
+            else if (paqueteStatus is PaqueteStatus.AsignadoAVehiculo or PaqueteStatus.CargadoEnVehiculo or PaqueteStatus.ListoParaSalir)
+            {
+                var tramoActual = tramos
+                    .Where(t => t.Estado != TramoEnvioStatus.RecibidoEnSucursal
+                        && t.Estado != TramoEnvioStatus.Entregado
+                        && t.Estado != TramoEnvioStatus.Cancelado)
+                    .OrderBy(t => t.Orden)
+                    .FirstOrDefault();
+                if (tramoActual?.Estado == TramoEnvioStatus.EnTransito)
+                {
+                    tramoActual.VolverAPendiente();
+                    var repartidorId = await _context.Paquetes
+                        .Where(p => p.Id == paqueteId)
+                        .Select(p => p.RepartidorAsignadoId)
+                        .SingleOrDefaultAsync();
+                    if (repartidorId.HasValue)
+                        tramoActual.Asignar(repartidorId.Value);
+                    await _context.SaveChangesAsync();
+                }
+            }
 
             return tramos.Select(t => (object)new
             {

@@ -48,7 +48,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
-import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo, type PaquetePendienteReagendamiento, type PaquetePreview } from '../services/shipmentService'
+import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo, type PaquetePendienteReagendamiento, type PaquetePreview, type ReagendamientoMasivoResultado } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
 import type { Shipment, User } from '../types'
@@ -95,7 +95,7 @@ export default function CalendarizarPage() {
   const [reagendandoId, setReagendandoId] = useState<string | null>(null)
   const [selectedReagendar, setSelectedReagendar] = useState<Set<string>>(new Set())
   const [reagendandoMasivo, setReagendandoMasivo] = useState(false)
-  const [reagendarMasivoResult, setReagendarMasivoResult] = useState<{ reagendados: number; sinFechaDisponible: number } | null>(null)
+  const [reagendarMasivoResult, setReagendarMasivoResult] = useState<ReagendamientoMasivoResultado | null>(null)
 
   // Tab principal: automatica | reagendamiento
   const [calTab, setCalTab] = useState<'automatica' | 'reagendamiento'>('automatica')
@@ -597,7 +597,7 @@ export default function CalendarizarPage() {
                   Envíos pendientes de reagendamiento ({pendientesReagendamiento.length})
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Estos envíos están demorados o retornados. Liberarlos los devuelve a la cola de calendarización.
+                  Estos envíos están demorados o retornados. El sistema busca la próxima fecha disponible respetando capacidad, jornada y días hábiles.
                 </Typography>
               </Box>
               {selectedReagendar.size > 0 && (
@@ -613,8 +613,13 @@ export default function CalendarizarPage() {
                       const ids = Array.from(selectedReagendar)
                       const result = await calendarizacionService.reagendarMasivo(ids)
                       setReagendarMasivoResult(result)
-                      setPendientesReagendamiento((prev) => prev.filter((x) => !selectedReagendar.has(x.id)))
-                      setSelectedReagendar(new Set())
+                      const reagendados = new Set((result.items ?? []).filter((x) => x.asignado).map((x) => x.paqueteId))
+                      setPendientesReagendamiento((prev) => prev.filter((x) => !reagendados.has(x.id)))
+                      setSelectedReagendar((prev) => {
+                        const next = new Set(prev)
+                        reagendados.forEach((id) => next.delete(id))
+                        return next
+                      })
                     } finally {
                       setReagendandoMasivo(false)
                     }
@@ -693,9 +698,15 @@ export default function CalendarizarPage() {
                           setReagendandoId(p.id)
                           const result = await calendarizacionService.reagendar(p.id)
                           setReagendandoId(null)
-                          if (result.success) {
+                          if (result.success && result.data?.asignado) {
                             setPendientesReagendamiento((prev) => prev.filter((x) => x.id !== p.id))
                             setSelectedReagendar((prev) => { const next = new Set(prev); next.delete(p.id); return next })
+                          } else if (result.success && result.data && !result.data.asignado) {
+                            setReagendarMasivoResult({
+                              reagendados: 0,
+                              sinFechaDisponible: 1,
+                              items: [result.data],
+                            })
                           }
                         }}
                         sx={{ textTransform: 'none', fontSize: 12 }}
