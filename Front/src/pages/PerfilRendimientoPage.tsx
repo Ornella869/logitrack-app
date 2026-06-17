@@ -488,7 +488,7 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
             </Card>
           )}
 
-          {user.role === 'administrador' && (
+          {user.role === 'gerente' && (
             <Card variant="outlined">
               <CardContent sx={{ pb: '12px !important' }}>
                 <Typography variant="subtitle2" gutterBottom>Transferir a otra sucursal</Typography>
@@ -500,7 +500,11 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
                   startIcon={<TransferWithinAStationIcon />}
                   onClick={async () => {
                     const branches = await branchService.getAllBranches()
-                    setSucursales(branches)
+                    const userProvincias = user.provincias || (user.provincia ? [user.provincia] : [])
+                    const allowedBranches = userProvincias.length > 0 
+                      ? branches.filter(b => b.province && userProvincias.includes(b.province))
+                      : branches
+                    setSucursales(allowedBranches)
                     setSelectedSucursal(data?.sucursalId ?? '')
                     setTransferDialogOpen(true)
                   }}

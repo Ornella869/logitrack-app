@@ -573,9 +573,7 @@ export default function RepartidorDashboard({ permissions }: { permissions: Set<
   const proxima = metrics.proximaIdx >= 0 ? paradas[metrics.proximaIdx] : null
   const paradaParaIncidencia = paradas.find(puedeReportarIncidenciaSobre) ?? null
 
-  const todasFinalizadas =
-    paradas.length > 0 &&
-    paradas.every((p) => isParadaFinalizada(statusRepartidor(p)))
+  const todasFinalizadas = paradas.every((p) => isParadaFinalizada(statusRepartidor(p)))
 
   useEffect(() => {
     if (todasFinalizadas) setParadaEnCurso(null)

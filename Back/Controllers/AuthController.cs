@@ -156,8 +156,8 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>Listado de repartidores (Admin / Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        /// <summary>Listado de repartidores (Admin / Gerente / Supervisor).</summary>
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpGet("repartidores")]
         public async Task<ActionResult<PagedResponse<RepartidorListadoResponse>>> GetRepartidores(
@@ -172,15 +172,38 @@ namespace Back.Controllers
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
 
             var currentUser = await CurrentUserAsync();
-            Guid? sucursalScope = User.IsInRole(Roles.Administrador)
-                ? null
-                : currentUser?.SucursalId ?? Guid.Empty;
-            var repartidores = (await _userRepository.GetRepartidores())
-                .Where(r => sucursalScope == null || r.SucursalId == sucursalScope)
-                .ToList();
-            var asignados = (await _enviosRepository.GetPaquetesConAsignacionActiva())
-                .Where(p => sucursalScope == null || p.SucursalId == sucursalScope)
-                .ToList();
+            
+            var repartidoresQuery = (await _userRepository.GetRepartidores()).AsEnumerable();
+            var asignadosQuery = (await _enviosRepository.GetPaquetesConAsignacionActiva()).AsEnumerable();
+
+            if (!User.IsInRole(Roles.Administrador))
+            {
+                if (currentUser is Gerente g)
+                {
+                    // Eficientemente obtener IDs de sucursales de la provincia del gerente
+                    // para evaluar en memoria (repartidores/paquetes están ya cargados en IEnumerable).
+                    // Lo ideal es filtrar la query SQL, pero _userRepository / _enviosRepository devuelven List.
+                    var provinciasLowerCase = g.ProvinciasAsignadas.Select(p => p.ToLowerInvariant()).ToList();
+                    var sucursalesProvincia = await _context.Sucursales
+                        .ToListAsync();
+                    var idsSucursalesProvincia = sucursalesProvincia
+                        .Where(s => s.Provincia != null && provinciasLowerCase.Contains(s.Provincia.ToLowerInvariant()))
+                        .Select(s => s.Id)
+                        .ToList();
+
+                    repartidoresQuery = repartidoresQuery.Where(r => r.SucursalId.HasValue && idsSucursalesProvincia.Contains(r.SucursalId.Value));
+                    asignadosQuery = asignadosQuery.Where(p => p.SucursalId.HasValue && idsSucursalesProvincia.Contains(p.SucursalId.Value));
+                }
+                else
+                {
+                    Guid sucursalScope = currentUser?.SucursalId ?? Guid.Empty;
+                    repartidoresQuery = repartidoresQuery.Where(r => r.SucursalId == sucursalScope);
+                    asignadosQuery = asignadosQuery.Where(p => p.SucursalId == sucursalScope);
+                }
+            }
+
+            var repartidores = repartidoresQuery.ToList();
+            var asignados = asignadosQuery.ToList();
             var paquetesActivosPorRepartidor = asignados
                 .GroupBy(p => p.RepartidorAsignadoId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
@@ -490,7 +513,7 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Administrador)]
+        [Authorize(Roles = Roles.Gerente)]
         [HttpPut("repartidores/{repartidorId:guid}/sucursal")]
         public async Task<ActionResult> CambiarSucursalRepartidor(Guid repartidorId, [FromBody] CambiarSucursalRepartidorRequest request)
         {
@@ -498,6 +521,28 @@ namespace Back.Controllers
             {
                 var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                     ?? throw new InvalidOperationException("Repartidor no encontrado.");
+
+                var currentUser = await CurrentUserAsync() as Gerente;
+                if (currentUser == null) return Forbid();
+
+                if (rep.SucursalId.HasValue)
+                {
+                    var sucursalAnteriorEntity = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == rep.SucursalId.Value);
+                    if (sucursalAnteriorEntity != null && sucursalAnteriorEntity.Provincia != null && !currentUser.ProvinciasAsignadas.Contains(sucursalAnteriorEntity.Provincia, StringComparer.OrdinalIgnoreCase))
+                    {
+                        return BadRequest("Solo puedes transferir repartidores que ya pertenecen a tu provincia.");
+                    }
+                }
+
+                if (request.SucursalId.HasValue)
+                {
+                    var sucursalNuevaEntity = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == request.SucursalId.Value);
+                    if (sucursalNuevaEntity == null) return BadRequest("Sucursal destino no encontrada.");
+                    if (sucursalNuevaEntity.Provincia != null && !currentUser.ProvinciasAsignadas.Contains(sucursalNuevaEntity.Provincia, StringComparer.OrdinalIgnoreCase))
+                    {
+                        return BadRequest("Solo puedes transferir a sucursales de tu provincia.");
+                    }
+                }
 
                 if (request.SucursalId.HasValue && request.SucursalId == rep.SucursalId)
                     return BadRequest("El repartidor ya pertenece a esa sucursal.");

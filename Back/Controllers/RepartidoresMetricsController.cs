@@ -35,13 +35,34 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-20: Perfil de rendimiento de un repartidor en un período.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("{repartidorId:guid}/rendimiento")]
         public async Task<ActionResult<RendimientoRepartidor>> GetRendimiento(
             Guid repartidorId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         {
             try
             {
+                var repartidor = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
+                if (repartidor == null) return NotFound("Repartidor no encontrado.");
+
+                if (User.IsInRole(Roles.Gerente))
+                {
+                    var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (Guid.TryParse(userIdStr, out var userId))
+                    {
+                        if (await _userRepository.GetUsuarioById(userId) as Gerente is { } gerente)
+                        {
+                            var sucursal = repartidor.SucursalId.HasValue ? await _context.Sucursales.FindAsync(repartidor.SucursalId.Value) : null;
+                            if (sucursal == null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia))
+                            {
+                                return Forbid();
+                            }
+                        }
+                    }
+                    var rg = await _service.GetRendimientoAsync(repartidorId, from, to, null);
+                    return Ok(rg);
+                }
+
                 var r = await _service.GetRendimientoAsync(repartidorId, from, to, await CurrentSucursalScopeAsync());
                 return Ok(r);
             }
@@ -235,15 +256,33 @@ namespace Back.Controllers
             return Ok(semanas);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [HttpGet("{repartidorId:guid}/jornada-historial")]
         public async Task<ActionResult<List<JornadaLaboralHistorialResponse>>> GetHistorialJornada(Guid repartidorId)
         {
             var repartidor = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
             if (repartidor is null) return NotFound("Repartidor no encontrado.");
 
-            var sucursalScope = await CurrentSucursalScopeAsync();
-            if (sucursalScope.HasValue && repartidor.SucursalId != sucursalScope.Value) return Forbid();
+            if (User.IsInRole(Roles.Gerente))
+            {
+                var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (Guid.TryParse(userIdStr, out var userId))
+                {
+                    if (await _userRepository.GetUsuarioById(userId) as Gerente is { } gerente)
+                    {
+                        var sucursal = repartidor.SucursalId.HasValue ? await _context.Sucursales.FindAsync(repartidor.SucursalId.Value) : null;
+                        if (sucursal == null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia))
+                        {
+                            return Forbid();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var sucursalScope = await CurrentSucursalScopeAsync();
+                if (sucursalScope.HasValue && repartidor.SucursalId != sucursalScope.Value) return Forbid();
+            }
 
             var logs = await _context.LogsAuditoria
                 .Where(l => l.Accion == TipoAccion.JornadaLaboral && l.RecursoId == repartidorId.ToString())
