@@ -159,12 +159,25 @@ namespace Back.Application.Services
                 $"Tu paquete {paquete.CodigoSeguimiento} esta listo para retirar", cuerpo);
         }
 
-        public async Task NotificarLlegadaSucursalAsync(Paquete paquete, string nombreSucursal)
+        public async Task NotificarLlegadaSucursalAsync(Paquete paquete, string nombreSucursal, DateTime? fechaEstimadaEntrega = null)
         {
             if (paquete.Destinatario.Email is null) return;
 
             var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
             var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var detalleHtml = "";
+            if (fechaEstimadaEntrega.HasValue)
+            {
+                var fechaStr = fechaEstimadaEntrega.Value.ToString("dd/MM/yyyy");
+                detalleHtml = $"""
+                    <div style="background:#0f172a;border:1px solid #3b82f6;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
+                      <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Nueva fecha estimada de entrega:</div>
+                      <div style="font-size:24px;font-weight:900;color:#60a5fa;">{fechaStr}</div>
+                      <div style="font-size:12px;color:#64748b;margin-top:4px;">Estimaci&oacute;n actualizada en base al recorrido real</div>
+                    </div>
+                    """;
+            }
 
             var cuerpo = BuildTemplate(
                 "blue",
@@ -173,7 +186,7 @@ namespace Back.Application.Services
                 $"Te avisamos que tu envio llego y fue procesado en la {SecurityElement.Escape(nombreSucursal)}.",
                 trackingUrl,
                 "Ver seguimiento",
-                "");
+                detalleHtml);
 
             await CrearYEnviarAsync(paquete, EventoEmailNotificacion.LlegadaSucursalIntermedia,
                 $"Tu envio {paquete.CodigoSeguimiento} llego a {nombreSucursal}", cuerpo);

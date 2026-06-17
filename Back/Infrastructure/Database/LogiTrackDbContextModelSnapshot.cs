@@ -819,6 +819,10 @@ namespace Back.Infrastructure.Database
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<string>("SucursalesPermitidasIds")
+                        .HasColumnName("SucursalesPermitidasIds")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("UsuarioId")
                         .HasColumnType("uuid");
 

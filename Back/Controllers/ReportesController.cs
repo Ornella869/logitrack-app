@@ -44,9 +44,19 @@ namespace Back.Controllers
             [FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {
             var scope = await CurrentScopeAsync();
-            // Obtener provincias visibles del usuario (el servicio puede resolverlas si es necesario)
             var reporte = await _service.GetReporteVolumenAsync(desde, hasta, scope.SucursalId, scope.Provincias);
             return Ok(reporte);
+        }
+
+        /// <summary>Comparativo de rendimiento entre sucursales (Gerente / Administrador).</summary>
+        [Authorize(Roles = Roles.Gerente + "," + Roles.Administrador)]
+        [HttpGet("comparativo-sucursales")]
+        public async Task<ActionResult<List<Back.Application.Services.ComparativoSucursalDto>>> ComparativoSucursales(
+            [FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
+        {
+            var scope = await CurrentScopeAsync();
+            var resultado = await _service.GetComparativoSucursalesAsync(desde, hasta, scope.Provincias);
+            return Ok(resultado);
         }
     }
 }

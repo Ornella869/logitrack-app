@@ -789,7 +789,7 @@ namespace Back.Application.Services
                     var sucursal = sucursales.FirstOrDefault();
                     if (sucursal is not null)
                     {
-                        await _emails.NotificarLlegadaSucursalAsync(paquete, sucursal.Nombre);
+                        await _emails.NotificarLlegadaSucursalAsync(paquete, sucursal.Nombre, paquete.FechaEstimadaEntrega);
                     }
                 }
 

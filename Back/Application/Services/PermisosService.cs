@@ -148,21 +148,24 @@ namespace Back.Application.Services
             if (!RolesConfigurables.Contains(rol))
             {
                 return Catalogo.Select(p => new PermisoUsuarioResponse(
-                    p.Clave, p.Nombre, p.Grupo, "SinExcepcion", false, false, false)).ToList();
+                    p.Clave, p.Nombre, p.Grupo, "SinExcepcion", false, false, false, null)).ToList();
             }
             var rolConfig = (await ObtenerPorRolAsync(rol)).ToDictionary(x => x.Clave);
-            var excepciones = await _context.PermisosUsuario
+            var excepcionesList = await _context.PermisosUsuario
                 .Where(x => x.UsuarioId == usuarioId)
-                .ToDictionaryAsync(x => x.Permiso, x => x.Habilitado);
+                .ToListAsync();
+            var excepcionesBool = excepcionesList.ToDictionary(x => x.Permiso, x => x.Habilitado);
+            var excepcionesSucursales = excepcionesList.ToDictionary(x => x.Permiso, x => x.SucursalesPermitidasIds);
 
             return Catalogo.Select(p =>
             {
                 var compatible = EsRolCompatible(rol, p.Clave);
-                var tieneExcepcion = TryGetConfigurado(excepciones, p.Clave, out var valor);
+                var tieneExcepcion = TryGetConfigurado(excepcionesBool, p.Clave, out var valor);
                 var estado = tieneExcepcion ? (valor ? "Habilitado" : "Deshabilitado") : "SinExcepcion";
                 var efectivo = compatible && (tieneExcepcion ? valor : rolConfig[p.Clave].Habilitado);
                 var obligatorio = p.Clave == PermisoGestionarPermisos && rol == Roles.Administrador;
-                return new PermisoUsuarioResponse(p.Clave, p.Nombre, p.Grupo, estado, efectivo, compatible, obligatorio);
+                excepcionesSucursales.TryGetValue(p.Clave, out var sucursalesIds);
+                return new PermisoUsuarioResponse(p.Clave, p.Nombre, p.Grupo, estado, efectivo, compatible, obligatorio, sucursalesIds);
             }).ToList();
         }
 
@@ -195,7 +198,7 @@ namespace Back.Application.Services
             await _context.SaveChangesAsync();
         }
 
-        public async Task ActualizarUsuarioAsync(Guid usuarioId, string permiso, string estado, Guid administradorId)
+        public async Task ActualizarUsuarioAsync(Guid usuarioId, string permiso, string estado, Guid administradorId, List<Guid>? sucursalesIds = null)
         {
             ValidarPermiso(permiso);
             var usuario = await _context.Usuarios.FindAsync(usuarioId)
@@ -204,6 +207,9 @@ namespace Back.Application.Services
             if (!EsRolCompatible(rol, permiso))
                 throw new InvalidOperationException("Ese permiso no es compatible con el ámbito operativo del usuario.");
             var actual = await _context.PermisosUsuario.SingleOrDefaultAsync(x => x.UsuarioId == usuarioId && x.Permiso == permiso);
+
+            // El scope de sucursales solo aplica cuando el permiso es "sucursales" y está Habilitado
+            var scopeEfectivo = (permiso == "sucursales" && estado == "Habilitado") ? sucursalesIds : null;
 
             if (estado == "SinExcepcion")
             {
@@ -221,9 +227,9 @@ namespace Back.Application.Services
                     throw new InvalidOperationException("No se puede quitar a un Administrador el acceso a la gestión de permisos.");
 
                 if (actual is null)
-                    await _context.PermisosUsuario.AddAsync(new PermisoUsuario(usuarioId, permiso, habilitado, administradorId));
+                    await _context.PermisosUsuario.AddAsync(new PermisoUsuario(usuarioId, permiso, habilitado, administradorId, scopeEfectivo));
                 else
-                    actual.Actualizar(habilitado, administradorId);
+                    actual.Actualizar(habilitado, administradorId, scopeEfectivo);
             }
 
             await _auditoria.RegistrarAsync(TipoAccion.Permisos,
@@ -290,5 +296,6 @@ namespace Back.Application.Services
         string Estado,
         bool HabilitadoEfectivo,
         bool Compatible,
-        bool Obligatorio);
+        bool Obligatorio,
+        List<Guid>? SucursalesPermitidasIds);
 }

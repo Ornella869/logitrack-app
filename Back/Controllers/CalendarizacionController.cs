@@ -72,6 +72,23 @@ namespace Back.Controllers
         [HttpPost("precalendarizar")]
         public async Task<ActionResult<PrecalendarizacionResultado>> Precalendarizar([FromBody] PrecalendarizarRequest request)
         {
+            // Bloqueo US2: si el paquete va a un PuntoPickUp, validar que ese día no esté cerrado.
+            var paqueteCheck = await _context.Paquetes.FindAsync(request.PaqueteId);
+            if (paqueteCheck?.PuntoPickUpId is Guid puntoId)
+            {
+                var diaSemana = (int)request.Fecha.ToUniversalTime().DayOfWeek;
+                var horario = await _context.HorariosPickUp
+                    .FirstOrDefaultAsync(h => h.PuntoPickUpId == puntoId && h.DiaSemana == diaSemana);
+                if (horario?.Cerrado == true)
+                {
+                    var proximaDisponible = await ProximaFechaDisponibleAsync(puntoId, request.Fecha.Date);
+                    var sugerencia = proximaDisponible.HasValue
+                        ? $" Próxima fecha disponible: {proximaDisponible.Value:dd/MM/yyyy}."
+                        : "";
+                    return BadRequest(new { message = $"El punto Pick Up está cerrado ese día.{sugerencia}" });
+                }
+            }
+
             try
             {
                 var resultado = await _service.PrecalendarizarManualAsync(
@@ -83,6 +100,22 @@ namespace Back.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        private async Task<DateTime?> ProximaFechaDisponibleAsync(Guid puntoPickUpId, DateTime desde)
+        {
+            var horarios = await _context.HorariosPickUp
+                .Where(h => h.PuntoPickUpId == puntoPickUpId)
+                .ToListAsync();
+            if (horarios.Count == 0) return null;
+            var candidata = desde.AddDays(1);
+            for (int i = 0; i < 14; i++, candidata = candidata.AddDays(1))
+            {
+                var dia = (int)candidata.DayOfWeek;
+                var h = horarios.FirstOrDefault(h => h.DiaSemana == dia);
+                if (h == null || !h.Cerrado) return candidata;
+            }
+            return null;
         }
 
         /// <summary>G1L-150: Simula la calendarización sin persistir ningún cambio (vista previa).</summary>

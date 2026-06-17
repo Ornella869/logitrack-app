@@ -17,7 +17,7 @@ export default function RepartidoresPage() {
         </Typography>
       </Box>
 
-      <RepartidoresList userRole={user.role} />
+      <RepartidoresList userRole={user.role} canTransfer={user.role === 'gerente'} />
     </Box>
   )
 }

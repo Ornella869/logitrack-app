@@ -92,7 +92,7 @@ namespace Back.Controllers
         {
             try
             {
-                await _service.ActualizarUsuarioAsync(usuarioId, permiso, request.Estado, CurrentUserId());
+                await _service.ActualizarUsuarioAsync(usuarioId, permiso, request.Estado, CurrentUserId(), request.SucursalesIds);
                 return NoContent();
             }
             catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
@@ -107,5 +107,5 @@ namespace Back.Controllers
     }
 
     public record ActualizarPermisoRolRequest(bool Habilitado);
-    public record ActualizarPermisoUsuarioRequest(string Estado);
+    public record ActualizarPermisoUsuarioRequest(string Estado, List<Guid>? SucursalesIds = null);
 }

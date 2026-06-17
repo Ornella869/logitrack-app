@@ -407,12 +407,70 @@ namespace Back.Controllers
             return BadRequest(ex.Message);
         }
     }
+
+    [HttpGet("horarios")]
+    public async Task<ActionResult<List<HorarioPickUpDto>>> GetHorarios()
+    {
+        var socio = await CurrentSocioAsync();
+        if (socio is null) return Forbid();
+
+        var horarios = await _context.HorariosPickUp
+            .Where(h => h.PuntoPickUpId == socio.PuntoPickUpId)
+            .OrderBy(h => h.DiaSemana)
+            .ToListAsync();
+
+        return Ok(horarios.Select(h => new HorarioPickUpDto
+        {
+            DiaSemana = h.DiaSemana,
+            Apertura = h.Apertura?.ToString(@"hh\:mm"),
+            Cierre = h.Cierre?.ToString(@"hh\:mm"),
+            Cerrado = h.Cerrado,
+        }).ToList());
+    }
+
+    [HttpPut("horarios")]
+    public async Task<ActionResult> SetHorarios([FromBody] List<HorarioPickUpDto> request)
+    {
+        var socio = await CurrentSocioAsync();
+        if (socio is null) return Forbid();
+
+        if (request.Count != 7 || request.Any(h => h.DiaSemana < 0 || h.DiaSemana > 6))
+            return BadRequest("Se deben enviar exactamente 7 entradas (una por día, 0=Dom a 6=Sáb).");
+
+        var existentes = await _context.HorariosPickUp
+            .Where(h => h.PuntoPickUpId == socio.PuntoPickUpId)
+            .ToListAsync();
+        _context.HorariosPickUp.RemoveRange(existentes);
+
+        foreach (var dto in request)
+        {
+            TimeSpan? apertura = null;
+            TimeSpan? cierre = null;
+            if (!dto.Cerrado)
+            {
+                if (!string.IsNullOrWhiteSpace(dto.Apertura) && TimeSpan.TryParse(dto.Apertura, out var a)) apertura = a;
+                if (!string.IsNullOrWhiteSpace(dto.Cierre) && TimeSpan.TryParse(dto.Cierre, out var c)) cierre = c;
+            }
+            _context.HorariosPickUp.Add(new HorarioPickUp(socio.PuntoPickUpId, dto.DiaSemana, apertura, cierre, dto.Cerrado));
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok();
+    }
     }
 
     public class ConfiguracionPickUpRequest
     {
         public string Horarios { get; set; } = string.Empty;
         public int CapacidadDiaria { get; set; }
+    }
+
+    public class HorarioPickUpDto
+    {
+        public int DiaSemana { get; set; }
+        public string? Apertura { get; set; }
+        public string? Cierre { get; set; }
+        public bool Cerrado { get; set; }
     }
 
     public class PickUpCodigoRequest

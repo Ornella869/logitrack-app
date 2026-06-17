@@ -25,6 +25,20 @@ namespace Back.Application.Services
         public required int Cantidad { get; init; }
     }
 
+    public class ComparativoSucursalDto
+    {
+        public Guid SucursalId { get; init; }
+        public string Nombre { get; init; } = "";
+        public string Provincia { get; init; } = "";
+        public int Total { get; init; }
+        public int Entregados { get; init; }
+        public int Cancelados { get; init; }
+        public int Demorados { get; init; }
+        public double PesoTotal { get; init; }
+        public double EfectividadPct { get; init; }
+        public double TasaIncidenciasPct { get; init; }
+    }
+
     public class ReportesService
     {
         private readonly LogiTrackDbContext _context;
@@ -32,6 +46,70 @@ namespace Back.Application.Services
         public ReportesService(LogiTrackDbContext context)
         {
             _context = context;
+        }
+
+        public async Task<List<ComparativoSucursalDto>> GetComparativoSucursalesAsync(
+            DateTime? from, DateTime? to, List<string>? provinciasGerente)
+        {
+            var now = OperationalClock.Now;
+            var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
+            var toExclusiveUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1), DateTimeKind.Utc);
+
+            var sucursales = await _context.Sucursales.ToListAsync();
+            if (provinciasGerente != null && provinciasGerente.Count > 0)
+            {
+                var normalized = provinciasGerente.Select(p => p.Trim()).ToList();
+                sucursales = sucursales
+                    .Where(s => normalized.Any(n => string.Equals(n, s.Provincia, StringComparison.OrdinalIgnoreCase))
+                                || (s.ProvinciasCubiertas ?? new List<string>()).Any(pc => normalized.Any(n => string.Equals(n, pc, StringComparison.OrdinalIgnoreCase))))
+                    .ToList();
+            }
+
+            var sucursalIds = sucursales.Select(s => s.Id).ToList();
+
+            var paquetes = await _context.Paquetes
+                .Where(p => p.CreadoEn >= fromUtc
+                            && p.CreadoEn < toExclusiveUtc
+                            && p.SucursalId.HasValue
+                            && sucursalIds.Contains(p.SucursalId.Value))
+                .Select(p => new { p.SucursalId, p.Status, p.Peso })
+                .ToListAsync();
+
+            var incidenciasSucursal = await _context.Incidencias
+                .Where(i => i.FechaReporte >= fromUtc && i.FechaReporte < toExclusiveUtc && i.SucursalId.HasValue && sucursalIds.Contains(i.SucursalId.Value))
+                .GroupBy(i => i.SucursalId!.Value)
+                .Select(g => new { SucursalId = g.Key, Count = g.Count() })
+                .ToListAsync();
+            var incidenciasBySucursal = incidenciasSucursal.ToDictionary(x => x.SucursalId, x => x.Count);
+
+            return sucursales
+                .OrderBy(s => s.Nombre)
+                .Select(s =>
+                {
+                    var grupo = paquetes.Where(p => p.SucursalId == s.Id).ToList();
+                    var total = grupo.Count;
+                    var entregados = grupo.Count(p => p.Status == PaqueteStatus.Entregado);
+                    var cancelados = grupo.Count(p => p.Status == PaqueteStatus.Cancelado);
+                    var demorados = grupo.Count(p => p.Status == PaqueteStatus.Demorado);
+                    var pesoTotal = grupo.Sum(p => p.Peso);
+                    var efectividad = total == 0 ? 0.0 : Math.Round((double)entregados / total * 100, 1);
+                    incidenciasBySucursal.TryGetValue(s.Id, out var incidencias);
+                    var tasaIncidencias = total == 0 ? 0.0 : Math.Round((double)incidencias / total * 100, 1);
+                    return new ComparativoSucursalDto
+                    {
+                        SucursalId = s.Id,
+                        Nombre = s.Nombre,
+                        Provincia = s.Provincia ?? "",
+                        Total = total,
+                        Entregados = entregados,
+                        Cancelados = cancelados,
+                        Demorados = demorados,
+                        PesoTotal = Math.Round(pesoTotal, 1),
+                        EfectividadPct = efectividad,
+                        TasaIncidenciasPct = tasaIncidencias,
+                    };
+                })
+                .ToList();
         }
 
         public async Task<ReporteVolumen> GetReporteVolumenAsync(DateTime? from, DateTime? to, Guid? sucursalId = null, List<string>? provinciasGerente = null)

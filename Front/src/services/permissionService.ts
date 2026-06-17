@@ -19,6 +19,7 @@ export interface UserPermission {
   habilitadoEfectivo: boolean
   compatible: boolean
   obligatorio: boolean
+  sucursalesPermitidasIds: string[] | null
 }
 
 export interface PermissionUser {
@@ -58,7 +59,15 @@ export const permissionService = {
     return response.data
   },
 
-  async setUserPermission(userId: string, permission: string, estado: UserPermissionState): Promise<void> {
-    await api.put(`/permisos/usuarios/${userId}/${permission}`, { estado })
+  async setUserPermission(
+    userId: string,
+    permission: string,
+    estado: UserPermissionState,
+    sucursalesIds?: string[] | null
+  ): Promise<void> {
+    await api.put(`/permisos/usuarios/${userId}/${permission}`, {
+      estado,
+      ...(sucursalesIds !== undefined ? { sucursalesIds } : {}),
+    })
   },
 }

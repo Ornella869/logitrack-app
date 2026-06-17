@@ -306,7 +306,7 @@ export default function PickUpOperacionPage() {
 
   const openHorarios = async () => {
     if (!data) return
-    const saved = await pickupService.getHorarios(data.punto.id)
+    const saved = await pickupService.getMisHorarios()
     const full: HorarioPickUpItem[] = Array.from({ length: 7 }, (_, i) => {
       const existing = saved.find(h => h.diaSemana === i)
       return existing ?? { diaSemana: i, apertura: '09:00:00', cierre: '18:00:00', cerrado: i === 0 }
@@ -320,10 +320,9 @@ export default function PickUpOperacionPage() {
   }
 
   const saveHorarios = async () => {
-    if (!data) return
     setSavingHorarios(true)
     try {
-      await pickupService.setHorarios(data.punto.id, horariosDia)
+      await pickupService.setMisHorarios(horariosDia)
       setHorariosOpen(false)
       setSnackbar({ open: true, msg: 'Horarios guardados correctamente.', severity: 'success' })
     } catch {

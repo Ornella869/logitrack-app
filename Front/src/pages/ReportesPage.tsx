@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
@@ -8,13 +8,18 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Typography,
 } from '@mui/material'
@@ -42,7 +47,11 @@ interface ComparativoSucursal {
   cancelados: number
   demorados: number
   pesoTotal: number
+  efectividadPct: number
+  tasaIncidenciasPct: number
 }
+
+type ComparativoSortKey = keyof Omit<ComparativoSucursal, 'sucursalId'>
 
 const today = () => formatArgentinaDateInput()
 const daysAgo = (n: number) => addArgentinaDays(-n)
@@ -57,8 +66,33 @@ export default function ReportesPage() {
   const [comparativo, setComparativo] = useState<ComparativoSucursal[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [compSortKey, setCompSortKey] = useState<ComparativoSortKey>('efectividadPct')
+  const [compSortDir, setCompSortDir] = useState<'asc' | 'desc'>('desc')
+  const [compProvincia, setCompProvincia] = useState('')
 
   const canAccess = user.role === 'supervisor' || user.role === 'gerente'
+
+  const comparativoProvincias = useMemo(() => {
+    if (!comparativo) return []
+    return Array.from(new Set(comparativo.map(s => s.provincia).filter(Boolean))).sort()
+  }, [comparativo])
+
+  const comparativoFiltrado = useMemo(() => {
+    if (!comparativo) return []
+    const base = compProvincia ? comparativo.filter(s => s.provincia === compProvincia) : comparativo
+    return [...base].sort((a, b) => {
+      const v1 = a[compSortKey]
+      const v2 = b[compSortKey]
+      if (typeof v1 === 'string' && typeof v2 === 'string')
+        return compSortDir === 'asc' ? v1.localeCompare(v2) : v2.localeCompare(v1)
+      return compSortDir === 'asc' ? (v1 as number) - (v2 as number) : (v2 as number) - (v1 as number)
+    })
+  }, [comparativo, compProvincia, compSortKey, compSortDir])
+
+  const handleCompSort = (key: ComparativoSortKey) => {
+    if (compSortKey === key) setCompSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setCompSortKey(key); setCompSortDir('desc') }
+  }
 
   useEffect(() => {
     if (canAccess) void load()
@@ -91,6 +125,20 @@ export default function ReportesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleExportComparativo = () => {
+    if (!comparativoFiltrado.length) return
+    const headers = ['Sucursal', 'Provincia', 'Total', 'Entregados', 'Cancelados', 'Demorados', 'Efectividad (%)', 'Incidencias (%)', 'Peso total (kg)']
+    const rows = comparativoFiltrado.map(s => [s.nombre, s.provincia, s.total, s.entregados, s.cancelados, s.demorados, s.efectividadPct.toFixed(1), s.tasaIncidenciasPct.toFixed(1), s.pesoTotal.toFixed(0)])
+    const csv = '﻿' + [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n')
+    const el = document.createElement('a')
+    el.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv))
+    el.setAttribute('download', `comparativo_sucursales_${from}_${to}.csv`)
+    el.style.display = 'none'
+    document.body.appendChild(el)
+    el.click()
+    document.body.removeChild(el)
   }
 
   const handleExportCsv = () => {
@@ -174,47 +222,148 @@ export default function ReportesPage() {
               {(user.role === 'gerente' || user.role === 'administrador') && (
                 <RankingIncidenciasGerente data={rankingZonas} />
               )}
-              {comparativo && comparativo.length > 0 && (
+              {comparativo && (
                 <Card variant="outlined">
                   <CardContent>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                      <CompareArrowsIcon color="primary" />
-                      <Typography variant="subtitle1" fontWeight={700}>Comparativo por sucursal</Typography>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <CompareArrowsIcon color="primary" />
+                        <Typography variant="subtitle1" fontWeight={700}>Comparativo por sucursal</Typography>
+                        {comparativo.length > 0 && (
+                          <Chip size="small" label={`${comparativoFiltrado.length} sucursales`} sx={{ fontSize: 11 }} />
+                        )}
+                      </Stack>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {comparativoProvincias.length > 1 && (
+                          <FormControl size="small" sx={{ minWidth: 160 }}>
+                            <InputLabel>Provincia</InputLabel>
+                            <Select
+                              value={compProvincia}
+                              label="Provincia"
+                              onChange={(e) => setCompProvincia(e.target.value)}
+                            >
+                              <MenuItem value="">Todas</MenuItem>
+                              {comparativoProvincias.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+                            </Select>
+                          </FormControl>
+                        )}
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<FileDownloadIcon />}
+                          onClick={handleExportComparativo}
+                          disabled={comparativoFiltrado.length === 0}
+                        >
+                          Exportar
+                        </Button>
+                      </Stack>
                     </Stack>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>Sucursal</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>Provincia</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>Entregados</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>Cancelados</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>Demorados</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>Efectividad</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>Peso (kg)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {comparativo.map((suc) => {
-                          const efectividad = suc.total > 0 ? ((suc.entregados / suc.total) * 100).toFixed(1) : '0.0'
-                          const color = parseFloat(efectividad) >= 80 ? '#2e7d32' : parseFloat(efectividad) >= 60 ? '#e65100' : '#c62828'
-                          return (
-                            <TableRow key={suc.sucursalId}>
-                              <TableCell sx={{ fontWeight: 600 }}>{suc.nombre}</TableCell>
+                    {comparativo.length === 0 ? (
+                      <Alert severity="info">No hay datos de sucursales para el período seleccionado.</Alert>
+                    ) : (
+                      <Box sx={{ overflowX: 'auto' }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
                               <TableCell>
-                                <Chip size="small" label={suc.provincia} sx={{ fontSize: 11, height: 20 }} />
+                                <TableSortLabel
+                                  active={compSortKey === 'nombre'}
+                                  direction={compSortKey === 'nombre' ? compSortDir : 'asc'}
+                                  onClick={() => handleCompSort('nombre')}
+                                  sx={{ fontWeight: 700 }}
+                                >Sucursal</TableSortLabel>
                               </TableCell>
-                              <TableCell align="right">{suc.total}</TableCell>
-                              <TableCell align="right" sx={{ color: '#2e7d32', fontWeight: 600 }}>{suc.entregados}</TableCell>
-                              <TableCell align="right" sx={{ color: '#c62828' }}>{suc.cancelados}</TableCell>
-                              <TableCell align="right" sx={{ color: '#e65100' }}>{suc.demorados}</TableCell>
-                              <TableCell align="right" sx={{ color, fontWeight: 700 }}>{efectividad}%</TableCell>
-                              <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{suc.pesoTotal.toFixed(0)}</TableCell>
+                              <TableCell>
+                                <TableSortLabel
+                                  active={compSortKey === 'provincia'}
+                                  direction={compSortKey === 'provincia' ? compSortDir : 'asc'}
+                                  onClick={() => handleCompSort('provincia')}
+                                  sx={{ fontWeight: 700 }}
+                                >Provincia</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'total'}
+                                  direction={compSortKey === 'total' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('total')}
+                                  sx={{ fontWeight: 700 }}
+                                >Total</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'entregados'}
+                                  direction={compSortKey === 'entregados' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('entregados')}
+                                  sx={{ fontWeight: 700 }}
+                                >Entregados</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'cancelados'}
+                                  direction={compSortKey === 'cancelados' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('cancelados')}
+                                  sx={{ fontWeight: 700 }}
+                                >Cancelados</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'demorados'}
+                                  direction={compSortKey === 'demorados' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('demorados')}
+                                  sx={{ fontWeight: 700 }}
+                                >Demorados</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'efectividadPct'}
+                                  direction={compSortKey === 'efectividadPct' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('efectividadPct')}
+                                  sx={{ fontWeight: 700 }}
+                                >Efectividad</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'tasaIncidenciasPct'}
+                                  direction={compSortKey === 'tasaIncidenciasPct' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('tasaIncidenciasPct')}
+                                  sx={{ fontWeight: 700 }}
+                                >Incidencias</TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'pesoTotal'}
+                                  direction={compSortKey === 'pesoTotal' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('pesoTotal')}
+                                  sx={{ fontWeight: 700 }}
+                                >Peso (kg)</TableSortLabel>
+                              </TableCell>
                             </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
+                          </TableHead>
+                          <TableBody>
+                            {comparativoFiltrado.map((suc) => {
+                              const efColor = suc.efectividadPct >= 80 ? '#2e7d32' : suc.efectividadPct >= 60 ? '#e65100' : '#c62828'
+                              return (
+                                <TableRow key={suc.sucursalId} hover>
+                                  <TableCell sx={{ fontWeight: 600 }}>{suc.nombre}</TableCell>
+                                  <TableCell>
+                                    <Chip size="small" label={suc.provincia} sx={{ fontSize: 11, height: 20 }} />
+                                  </TableCell>
+                                  <TableCell align="right">{suc.total}</TableCell>
+                                  <TableCell align="right" sx={{ color: '#2e7d32', fontWeight: 600 }}>{suc.entregados}</TableCell>
+                                  <TableCell align="right" sx={{ color: '#c62828' }}>{suc.cancelados}</TableCell>
+                                  <TableCell align="right" sx={{ color: '#e65100' }}>{suc.demorados}</TableCell>
+                                  <TableCell align="right" sx={{ color: efColor, fontWeight: 700 }}>{suc.efectividadPct.toFixed(1)}%</TableCell>
+                                  <TableCell align="right" sx={{ color: suc.tasaIncidenciasPct > 10 ? '#c62828' : 'text.secondary' }}>
+                                    {suc.tasaIncidenciasPct.toFixed(1)}%
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{suc.pesoTotal.toFixed(0)}</TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </Box>
+                    )}
                   </CardContent>
                 </Card>
               )}

@@ -5,15 +5,27 @@ import {
   Avatar,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   Fade,
   FormControl,
+  FormControlLabel,
   IconButton,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Snackbar,
   Stack,
@@ -38,10 +50,12 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import PersonSearchIcon from '@mui/icons-material/PersonSearch'
 import SaveIcon from '@mui/icons-material/Save'
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined'
+import StoreMallDirectoryIcon from '@mui/icons-material/StoreMallDirectory'
 import TuneIcon from '@mui/icons-material/Tune'
 import UndoIcon from '@mui/icons-material/Undo'
 import UsersManagement from '../components/UsersManagement'
-import type { User } from '../types'
+import type { Branch, User } from '../types'
+import { branchService } from '../services/branchService'
 import {
   permissionService,
   type RolePermission,
@@ -92,6 +106,21 @@ const roleLabels: Record<string, string> = {
   socio_pickup: 'Socio PickUp',
 }
 
+interface BranchScopeState {
+  open: boolean
+  permission: UserPermission | null
+  scopeType: 'all' | 'specific'
+  allBranches: Branch[]
+  selectedBranchIds: string[]
+  loading: boolean
+  saving: boolean
+}
+
+const defaultBranchScope: BranchScopeState = {
+  open: false, permission: null, scopeType: 'all',
+  allBranches: [], selectedBranchIds: [], loading: false, saving: false,
+}
+
 export default function PermisosPage() {
   const [tab, setTab] = useState(0)
   const [roles, setRoles] = useState<string[]>([])
@@ -106,6 +135,7 @@ export default function PermisosPage() {
   const [savingKey, setSavingKey] = useState('')
   const [error, setError] = useState('')
   const [savedSnackbar, setSavedSnackbar] = useState('')
+  const [branchScope, setBranchScope] = useState<BranchScopeState>(defaultBranchScope)
 
   useEffect(() => {
     void permissionService.getRoles()
@@ -180,6 +210,25 @@ export default function PermisosPage() {
 
   const updateUser = async (permission: UserPermission, estado: UserPermissionState) => {
     if (!selectedUser) return
+
+    // Para "sucursales" + "Habilitado", abrir el dialog de scope antes de guardar
+    if (permission.clave === 'sucursales' && estado === 'Habilitado') {
+      const existing = permission.sucursalesPermitidasIds
+      const scopeType: 'all' | 'specific' = existing !== null && existing !== undefined && existing.length > 0 ? 'specific' : 'all'
+      setBranchScope({
+        open: true, permission, scopeType,
+        allBranches: [], selectedBranchIds: existing ?? [],
+        loading: true, saving: false,
+      })
+      try {
+        const branches = await branchService.getAllBranches()
+        setBranchScope(prev => ({ ...prev, allBranches: branches.filter(b => b.status === 'Activa'), loading: false }))
+      } catch {
+        setBranchScope(prev => ({ ...prev, loading: false }))
+      }
+      return
+    }
+
     setSavingKey(permission.clave)
     setError('')
     try {
@@ -192,6 +241,35 @@ export default function PermisosPage() {
     } finally {
       setSavingKey('')
     }
+  }
+
+  const confirmBranchScope = async () => {
+    if (!selectedUser || !branchScope.permission) return
+    const sucursalesIds = branchScope.scopeType === 'all' ? [] : branchScope.selectedBranchIds
+    setBranchScope(prev => ({ ...prev, saving: true }))
+    setError('')
+    try {
+      await permissionService.setUserPermission(selectedUser.id, 'sucursales', 'Habilitado', sucursalesIds)
+      setUserPermissions(await permissionService.getUserPermissions(selectedUser.id))
+      window.dispatchEvent(new Event('logitrack:permissions'))
+      setBranchScope(defaultBranchScope)
+      const label = branchScope.scopeType === 'all'
+        ? 'todas las sucursales de su provincia'
+        : `${sucursalesIds.length} sucursal${sucursalesIds.length !== 1 ? 'es' : ''} específica${sucursalesIds.length !== 1 ? 's' : ''}`
+      setSavedSnackbar(`Acceso a sucursales configurado: ${label}`)
+    } catch {
+      setError('No se pudo guardar el alcance de sucursales.')
+      setBranchScope(prev => ({ ...prev, saving: false }))
+    }
+  }
+
+  const toggleBranchId = (id: string) => {
+    setBranchScope(prev => ({
+      ...prev,
+      selectedBranchIds: prev.selectedBranchIds.includes(id)
+        ? prev.selectedBranchIds.filter(x => x !== id)
+        : [...prev.selectedBranchIds, id],
+    }))
   }
 
   return (
@@ -469,30 +547,50 @@ export default function PermisosPage() {
                 if (visiblePermissions.length === 0) return null
                 return (
                   <PermissionGroup key={group} title={group} delay={index * 30}>
-                    {visiblePermissions.map((permission) => (
-                      <PermissionRow
-                        key={permission.clave}
-                        name={permission.nombre}
-                        status={permission.habilitadoEfectivo ? 'Acceso efectivo' : 'Sin acceso'}
-                        enabled={permission.habilitadoEfectivo}
-                        compatible={true}
-                        saving={savingKey === permission.clave}
-                        control={(
-                          <FormControl size="small" sx={{ width: { xs: 170, sm: 210 } }}>
-                            <Select
-                              value={permission.estado}
-                              disabled={permission.obligatorio || savingKey === permission.clave}
-                              onChange={(event) => void updateUser(permission, event.target.value as UserPermissionState)}
-                              inputProps={{ 'aria-label': `Excepción para ${permission.nombre}` }}
-                            >
-                              {(Object.keys(stateLabels) as UserPermissionState[]).map((state) => (
-                                <MenuItem key={state} value={state}>{stateLabels[state]}</MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                    ))}
+                    {visiblePermissions.map((permission) => {
+                      const scopeLabel = permission.clave === 'sucursales' && permission.estado === 'Habilitado' && permission.sucursalesPermitidasIds !== undefined && permission.sucursalesPermitidasIds !== null
+                        ? permission.sucursalesPermitidasIds.length === 0
+                          ? 'Todas las de su provincia'
+                          : `${permission.sucursalesPermitidasIds.length} específica${permission.sucursalesPermitidasIds.length !== 1 ? 's' : ''}`
+                        : null
+                      return (
+                        <PermissionRow
+                          key={permission.clave}
+                          name={permission.nombre}
+                          status={permission.habilitadoEfectivo ? 'Acceso efectivo' : 'Sin acceso'}
+                          enabled={permission.habilitadoEfectivo}
+                          compatible={true}
+                          saving={savingKey === permission.clave}
+                          control={(
+                            <Stack spacing={0.5} alignItems="flex-end">
+                              <FormControl size="small" sx={{ width: { xs: 170, sm: 210 } }}>
+                                <Select
+                                  value={permission.estado}
+                                  disabled={permission.obligatorio || savingKey === permission.clave}
+                                  onChange={(event) => void updateUser(permission, event.target.value as UserPermissionState)}
+                                  inputProps={{ 'aria-label': `Excepción para ${permission.nombre}` }}
+                                >
+                                  {(Object.keys(stateLabels) as UserPermissionState[]).map((state) => (
+                                    <MenuItem key={state} value={state}>{stateLabels[state]}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                              {scopeLabel && (
+                                <Chip
+                                  size="small"
+                                  icon={<StoreMallDirectoryIcon sx={{ fontSize: '14px !important' }} />}
+                                  label={scopeLabel}
+                                  color="primary"
+                                  variant="outlined"
+                                  onClick={() => void updateUser(permission, 'Habilitado')}
+                                  sx={{ fontSize: 11, height: 22, cursor: 'pointer' }}
+                                />
+                              )}
+                            </Stack>
+                          )}
+                        />
+                      )
+                    })}
                   </PermissionGroup>
                 )
               })}
@@ -507,6 +605,85 @@ export default function PermisosPage() {
           </Typography>
         </Box>
       </Drawer>
+
+      {/* Dialog de alcance de sucursales */}
+      <Dialog
+        open={branchScope.open}
+        onClose={() => !branchScope.saving && setBranchScope(defaultBranchScope)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <StoreMallDirectoryIcon color="primary" />
+          Alcance de sucursales
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Elegí a qué sucursales puede acceder <strong>{selectedUser?.name} {selectedUser?.lastname}</strong> con el permiso Sucursales habilitado.
+          </Typography>
+          <RadioGroup
+            value={branchScope.scopeType}
+            onChange={(_, v) => setBranchScope(prev => ({ ...prev, scopeType: v as 'all' | 'specific' }))}
+          >
+            <FormControlLabel
+              value="all"
+              control={<Radio />}
+              label={<Box><Typography fontWeight={700}>Todas las sucursales de su provincia</Typography><Typography variant="caption" color="text.secondary">El usuario ve todas las sucursales activas de su provincia</Typography></Box>}
+            />
+            <FormControlLabel
+              value="specific"
+              control={<Radio />}
+              label={<Box><Typography fontWeight={700}>Sucursales específicas</Typography><Typography variant="caption" color="text.secondary">Seleccioná una o más sucursales individuales</Typography></Box>}
+            />
+          </RadioGroup>
+          {branchScope.scopeType === 'specific' && (
+            <Box sx={{ mt: 2, border: 1, borderColor: 'divider', borderRadius: 1, maxHeight: 260, overflowY: 'auto' }}>
+              {branchScope.loading ? (
+                <Box display="flex" justifyContent="center" py={3}><CircularProgress size={28} /></Box>
+              ) : branchScope.allBranches.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>No hay sucursales disponibles.</Typography>
+              ) : (
+                <List dense disablePadding>
+                  {branchScope.allBranches.map((branch) => (
+                    <ListItem key={branch.id} disablePadding sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
+                      <ListItemIcon sx={{ minWidth: 36, pl: 0.5 }}>
+                        <Checkbox
+                          edge="start"
+                          checked={branchScope.selectedBranchIds.includes(branch.id)}
+                          onChange={() => toggleBranchId(branch.id)}
+                          size="small"
+                        />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={branch.name}
+                        secondary={branch.province}
+                        primaryTypographyProps={{ fontWeight: 600, variant: 'body2' }}
+                        secondaryTypographyProps={{ variant: 'caption' }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
+          )}
+          {branchScope.scopeType === 'specific' && branchScope.selectedBranchIds.length > 0 && (
+            <Typography variant="caption" color="primary" sx={{ mt: 1, display: 'block' }}>
+              {branchScope.selectedBranchIds.length} sucursal{branchScope.selectedBranchIds.length !== 1 ? 'es' : ''} seleccionada{branchScope.selectedBranchIds.length !== 1 ? 's' : ''}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button onClick={() => setBranchScope(defaultBranchScope)} disabled={branchScope.saving}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => void confirmBranchScope()}
+            disabled={branchScope.saving || (branchScope.scopeType === 'specific' && branchScope.selectedBranchIds.length === 0)}
+            startIcon={branchScope.saving ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            {branchScope.saving ? 'Guardando...' : 'Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar con camioneta animada */}
       <Snackbar

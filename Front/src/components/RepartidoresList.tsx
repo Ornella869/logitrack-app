@@ -13,7 +13,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   TablePagination,
   TextField,
@@ -28,13 +32,17 @@ import BarChartIcon from '@mui/icons-material/BarChart'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import EditIcon from '@mui/icons-material/Edit'
 import BlockIcon from '@mui/icons-material/Block'
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 
 import { authService, type RepartidorListItem } from '../services/authService'
+import { branchService } from '../services/branchService'
 import { empresaService } from '../services/empresaService'
+import type { Branch } from '../types'
 import SearchBar from './SearchBar'
 
 interface RepartidoresListProps {
   userRole?: string
+  canTransfer?: boolean
 }
 
 const FILTER_OPTIONS = [
@@ -103,7 +111,7 @@ function toDateInputValue(value?: string | null): string {
   return value ? value.slice(0, 10) : ''
 }
 
-function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
+function RepartidoresList({ userRole: _userRole, canTransfer = false }: RepartidoresListProps) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const highlightId = searchParams.get('highlight')
@@ -123,6 +131,20 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
   const [reactivatingId, setReactivatingId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
   const [urgenteDias, setUrgenteDias] = useState(7)
+  const [transferDialog, setTransferDialog] = useState<{
+    open: boolean
+    repartidor: RepartidorListItem | null
+    targetSucursalId: string
+    branches: Branch[]
+    loading: boolean
+    loadingBranches: boolean
+    error: string
+    paquetesLiberados: number | null
+    done: boolean
+  }>({
+    open: false, repartidor: null, targetSucursalId: '', branches: [],
+    loading: false, loadingBranches: false, error: '', paquetesLiberados: null, done: false,
+  })
 
   useEffect(() => {
     void loadRepartidores()
@@ -255,6 +277,34 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
       setFormError(err?.message ?? 'No se pudo actualizar la licencia.')
     } finally {
       setSavingLicencia(false)
+    }
+  }
+
+  const openTransferDialog = async (repartidor: RepartidorListItem) => {
+    setTransferDialog(prev => ({ ...prev, open: true, repartidor, targetSucursalId: '', error: '', paquetesLiberados: null, done: false, loadingBranches: true }))
+    try {
+      const branches = await branchService.getAllBranches()
+      const available = branches.filter(b => b.id !== repartidor.sucursalId && b.status === 'Activa')
+      setTransferDialog(prev => ({ ...prev, branches: available, loadingBranches: false }))
+    } catch {
+      setTransferDialog(prev => ({ ...prev, loadingBranches: false, error: 'No se pudo cargar la lista de sucursales.' }))
+    }
+  }
+
+  const closeTransferDialog = () => {
+    if (transferDialog.loading) return
+    if (transferDialog.done) void loadRepartidores()
+    setTransferDialog(prev => ({ ...prev, open: false, repartidor: null }))
+  }
+
+  const confirmTransfer = async () => {
+    if (!transferDialog.repartidor || !transferDialog.targetSucursalId) return
+    setTransferDialog(prev => ({ ...prev, loading: true, error: '' }))
+    const result = await authService.cambiarSucursalRepartidor(transferDialog.repartidor.id, transferDialog.targetSucursalId)
+    if ('error' in result) {
+      setTransferDialog(prev => ({ ...prev, loading: false, error: result.error }))
+    } else {
+      setTransferDialog(prev => ({ ...prev, loading: false, done: true, paquetesLiberados: result.paquetesLiberados }))
     }
   }
 
@@ -552,7 +602,22 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
                           sx={{ textTransform: 'none', fontSize: 12 }}
                         >
                           Editar licencia
+                        </Button>
+                        {canTransfer && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            startIcon={<SwapHorizIcon />}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void openTransferDialog(repartidor)
+                            }}
+                            sx={{ textTransform: 'none', fontSize: 12 }}
+                          >
+                            Transferir sucursal
                           </Button>
+                        )}
                         {!operativoActivo && (() => {
                           const licenciaVencida = diasLicencia !== null && diasLicencia <= 0
                           if (licenciaVencida) {
@@ -613,6 +678,61 @@ function RepartidoresList({ userRole: _userRole }: RepartidoresListProps) {
           />
         )}
       </Box>
+
+      <Dialog open={transferDialog.open} onClose={closeTransferDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Transferir repartidor a otra sucursal</DialogTitle>
+        <DialogContent dividers>
+          {transferDialog.repartidor && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {transferDialog.repartidor.name} {transferDialog.repartidor.lastname} · DNI {transferDialog.repartidor.dni}
+            </Typography>
+          )}
+          {transferDialog.error && <Alert severity="error" sx={{ mb: 2 }}>{transferDialog.error}</Alert>}
+          {transferDialog.done ? (
+            <Alert severity="success">
+              Transferencia realizada correctamente.
+              {(transferDialog.paquetesLiberados ?? 0) > 0 && (
+                <> Se liberaron {transferDialog.paquetesLiberados} paquete(s) de rutas activas.</>
+              )}
+            </Alert>
+          ) : transferDialog.loadingBranches ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={28} /></Box>
+          ) : transferDialog.branches.length === 0 ? (
+            <Alert severity="info">No hay sucursales activas disponibles en tu ámbito para realizar la transferencia.</Alert>
+          ) : (
+            <FormControl fullWidth sx={{ mt: 1 }}>
+              <InputLabel>Sucursal destino *</InputLabel>
+              <Select
+                value={transferDialog.targetSucursalId}
+                label="Sucursal destino *"
+                onChange={(e) => setTransferDialog(prev => ({ ...prev, targetSucursalId: e.target.value }))}
+              >
+                {transferDialog.branches.map(b => (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name}
+                    {b.province ? <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>({b.province})</Typography> : null}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeTransferDialog} disabled={transferDialog.loading}>
+            {transferDialog.done ? 'Cerrar' : 'Cancelar'}
+          </Button>
+          {!transferDialog.done && transferDialog.branches.length > 0 && (
+            <Button
+              onClick={() => void confirmTransfer()}
+              variant="contained"
+              color="info"
+              disabled={transferDialog.loading || !transferDialog.targetSucursalId}
+            >
+              {transferDialog.loading ? 'Transfiriendo...' : 'Confirmar transferencia'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!editing} onClose={() => !savingLicencia && setEditing(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Editar licencia</DialogTitle>

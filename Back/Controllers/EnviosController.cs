@@ -1072,18 +1072,50 @@ namespace Back.Controllers
         public async Task<ActionResult<List<Sucursal>>> GetSucursales()
         {
             var user = await CurrentUserAsync();
-            // Obtener sucursales y, si es Gerente, filtrar por sus provincias asignadas
-            var sucursalIdFilter = user is not null && user is not Gerente && user is not Administrador ? user.SucursalId : null;
-            var all = await _enviosRepository.GetSucursales(null, sucursalIdFilter);
             if (user is Gerente gerente)
             {
+                var all = await _enviosRepository.GetSucursales(null, null);
                 var provincias = await _context.GerentesProvincias.Where(gp => gp.GerenteId == gerente.Id).Select(gp => gp.Provincia).ToListAsync();
                 var filtered = all.Where(s => provincias.Any(p => string.Equals(p, s.Provincia, StringComparison.OrdinalIgnoreCase))
                     || s.ProvinciasCubiertas.Any(pc => provincias.Any(p => string.Equals(p, pc, StringComparison.OrdinalIgnoreCase))))
                     .ToList();
                 return Ok(filtered);
             }
-            return Ok(all);
+            if (user is Administrador)
+            {
+                return Ok(await _enviosRepository.GetSucursales(null, null));
+            }
+            // Supervisor / Operador / Repartidor: verificar si tienen scope de sucursales ampliado
+            if (user is not null)
+            {
+                var permisoSucursales = await _context.PermisosUsuario
+                    .FirstOrDefaultAsync(p => p.UsuarioId == user.Id && p.Permiso == "sucursales" && p.Habilitado);
+                if (permisoSucursales is not null && permisoSucursales.SucursalesPermitidasIds is not null)
+                {
+                    if (permisoSucursales.SucursalesPermitidasIds.Count == 0)
+                    {
+                        // [] = todas las sucursales de la provincia del usuario
+                        var userSucursal = user.SucursalId.HasValue
+                            ? await _context.Sucursales.FindAsync(user.SucursalId.Value)
+                            : null;
+                        if (userSucursal is not null)
+                        {
+                            var all = await _enviosRepository.GetSucursales(null, null);
+                            return Ok(all.Where(s => string.Equals(s.Provincia, userSucursal.Provincia, StringComparison.OrdinalIgnoreCase)).ToList());
+                        }
+                    }
+                    else
+                    {
+                        // [ids] = sucursales específicas
+                        var ids = permisoSucursales.SucursalesPermitidasIds;
+                        var all = await _enviosRepository.GetSucursales(null, null);
+                        return Ok(all.Where(s => ids.Contains(s.Id)).ToList());
+                    }
+                }
+            }
+            // Comportamiento por defecto: solo la propia sucursal
+            var sucursalIdFilter = user?.SucursalId;
+            return Ok(await _enviosRepository.GetSucursales(null, sucursalIdFilter));
         }
 
         // Sucursal de origen con coordenadas (geocodificadas on-the-fly).

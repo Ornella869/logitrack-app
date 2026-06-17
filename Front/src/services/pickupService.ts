@@ -99,7 +99,7 @@ export const pickupService = {
     return r.data
   },
 
-  // G1L-152: Horarios estructurados
+  // G1L-152: Horarios estructurados (admin/gerente — por ID de punto)
   async getHorarios(pickupId: string): Promise<HorarioPickUpItem[]> {
     try {
       const r = await api.get(`/pickups/${pickupId}/horarios`)
@@ -109,6 +109,18 @@ export const pickupService = {
 
   async setHorarios(pickupId: string, horarios: HorarioPickUpItem[]): Promise<void> {
     await api.put(`/pickups/${pickupId}/horarios`, horarios)
+  },
+
+  // G1L-152: Horarios estructurados para SocioPickUp (propio punto)
+  async getMisHorarios(): Promise<HorarioPickUpItem[]> {
+    try {
+      const r = await api.get('/pickup-operacion/horarios')
+      return r.data ?? []
+    } catch { return [] }
+  },
+
+  async setMisHorarios(horarios: HorarioPickUpItem[]): Promise<void> {
+    await api.put('/pickup-operacion/horarios', horarios)
   },
 }
 

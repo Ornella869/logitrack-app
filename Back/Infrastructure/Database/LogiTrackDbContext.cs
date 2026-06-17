@@ -31,6 +31,7 @@ namespace Back.Infrastructure.Database
         public DbSet<OverrideOjoPatron> OverridesOjoPatron { get; set; }
 
         public DbSet<PuntoPickUp> PuntosPickUp { get; set; }
+        public DbSet<HorarioPickUp> HorariosPickUp { get; set; }
         public DbSet<CalificacionPickUp> CalificacionesPickUp { get; set; }
         public DbSet<SatisfaccionEncuesta> SatisfaccionEncuestas { get; set; }
         public DbSet<TramoEnvio> TramosEnvio { get; set; }
@@ -159,6 +160,15 @@ namespace Back.Infrastructure.Database
                 p.Property(x => x.Permiso).HasMaxLength(80).IsRequired();
                 p.HasIndex(x => new { x.UsuarioId, x.Permiso }).IsUnique();
                 p.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+                p.Property(x => x.SucursalesPermitidasIds)
+                    .HasColumnName("SucursalesPermitidasIds")
+                    .HasConversion(
+                        v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                        v => string.IsNullOrWhiteSpace(v) ? null : JsonSerializer.Deserialize<List<Guid>>(v, (JsonSerializerOptions?)null))
+                    .Metadata.SetValueComparer(new ValueComparer<List<Guid>>(
+                        (a, b) => (a == null && b == null) || (a != null && b != null && a.SequenceEqual(b)),
+                        v => v == null ? 0 : v.Aggregate(0, (acc, id) => HashCode.Combine(acc, id.GetHashCode())),
+                        v => v == null ? null : v.ToList()));
             });
 
             modelBuilder.Entity<DatoEntrenamientoTramo>(d =>
@@ -251,6 +261,12 @@ namespace Back.Infrastructure.Database
                 p.Property(x => x.Telefono).HasMaxLength(50);
                 p.HasIndex(x => x.Provincia);
                 p.HasIndex(x => x.Activo);
+            });
+
+            modelBuilder.Entity<HorarioPickUp>(h =>
+            {
+                h.HasKey(x => new { x.PuntoPickUpId, x.DiaSemana });
+                h.HasOne<PuntoPickUp>().WithMany().HasForeignKey(x => x.PuntoPickUpId).OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<SatisfaccionEncuesta>(e =>
