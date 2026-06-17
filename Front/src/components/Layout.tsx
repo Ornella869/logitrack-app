@@ -67,6 +67,7 @@ import { incidenciaService } from '../services/incidenciaService'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import type { User } from '../types'
 import ChangePasswordDialog from './ChangePasswordDialog'
+import GerenteSucursalSelector from './GerenteSucursalSelector'
 
 interface LayoutProps {
   user: User
@@ -794,6 +795,9 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
                 <Typography variant="body2" fontWeight={700} sx={{ mt: 0.3, color: isDarkPremium ? 'rgba(255,255,255,0.85)' : 'text.primary' }}>
                   {(user as any).provincia ?? 'Sin asignar'}
                 </Typography>
+              </Box>
+              <Box sx={{ px: 2, pb: 1.5 }}>
+                <GerenteSucursalSelector isDarkPremium={isDarkPremium} />
               </Box>
               <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
             </>

@@ -291,41 +291,46 @@ export default function PermisosPage() {
 
             {loading ? <Loading /> : (
               <PermissionGrid key={selectedRole}>
-                {Object.entries(groupedRolePermissions).map(([group, permissions], index) => (
-                  <PermissionGroup key={group} title={group} delay={index * 45}>
-                    {permissions.map((permission) => {
-                      const hasPending = pendingRoleChanges.has(permission.clave)
-                      const pendingValue = hasPending ? pendingRoleChanges.get(permission.clave)! : permission.habilitado
-                      return (
-                        <PermissionRow
-                          key={permission.clave}
-                          name={permission.nombre}
-                          status={!permission.compatible
-                            ? 'No compatible con este rol'
-                            : hasPending
+                {Object.entries(groupedRolePermissions).map(([group, permissions], index) => {
+                  // Para roles no-Admin, ocultar permisos incompatibles (en vez de mostrarlos grisados)
+                  const visiblePermissions = selectedRole === 'Administrador'
+                    ? permissions
+                    : permissions.filter((p) => p.compatible)
+                  if (visiblePermissions.length === 0) return null
+                  return (
+                    <PermissionGroup key={group} title={group} delay={index * 45}>
+                      {visiblePermissions.map((permission) => {
+                        const hasPending = pendingRoleChanges.has(permission.clave)
+                        const pendingValue = hasPending ? pendingRoleChanges.get(permission.clave)! : permission.habilitado
+                        return (
+                          <PermissionRow
+                            key={permission.clave}
+                            name={permission.nombre}
+                            status={hasPending
                               ? 'Pendiente de guardar'
                               : pendingValue ? 'Permitido' : 'Denegado'}
-                          enabled={pendingValue}
-                          compatible={permission.compatible}
-                          saving={savingAll && hasPending}
-                          pending={hasPending}
-                          control={(
-                            <Tooltip title={permission.obligatorio ? 'Este permiso es obligatorio' : ''}>
-                              <span>
-                                <Switch
-                                  checked={pendingValue}
-                                  disabled={!permission.compatible || permission.obligatorio || savingAll}
-                                  onChange={(_, checked) => onRoleToggle(permission, checked)}
-                                  inputProps={{ 'aria-label': `Permiso ${permission.nombre}` }}
-                                />
-                              </span>
-                            </Tooltip>
-                          )}
-                        />
-                      )
-                    })}
-                  </PermissionGroup>
-                ))}
+                            enabled={pendingValue}
+                            compatible={true}
+                            saving={savingAll && hasPending}
+                            pending={hasPending}
+                            control={(
+                              <Tooltip title={permission.obligatorio ? 'Este permiso es obligatorio' : ''}>
+                                <span>
+                                  <Switch
+                                    checked={pendingValue}
+                                    disabled={permission.obligatorio || savingAll}
+                                    onChange={(_, checked) => onRoleToggle(permission, checked)}
+                                    inputProps={{ 'aria-label': `Permiso ${permission.nombre}` }}
+                                  />
+                                </span>
+                              </Tooltip>
+                            )}
+                          />
+                        )
+                      })}
+                    </PermissionGroup>
+                  )
+                })}
               </PermissionGrid>
             )}
 
@@ -456,36 +461,41 @@ export default function PermisosPage() {
 
           {loading ? <Loading /> : (
             <Stack spacing={2}>
-              {Object.entries(groupedUserPermissions).map(([group, permissions], index) => (
-                <PermissionGroup key={group} title={group} delay={index * 30}>
-                  {permissions.map((permission) => (
-                    <PermissionRow
-                      key={permission.clave}
-                      name={permission.nombre}
-                      status={!permission.compatible
-                        ? 'No compatible con este rol'
-                        : permission.habilitadoEfectivo ? 'Acceso efectivo' : 'Sin acceso'}
-                      enabled={permission.habilitadoEfectivo}
-                      compatible={permission.compatible}
-                      saving={savingKey === permission.clave}
-                      control={(
-                        <FormControl size="small" sx={{ width: { xs: 170, sm: 210 } }}>
-                          <Select
-                            value={permission.estado}
-                            disabled={!permission.compatible || permission.obligatorio || savingKey === permission.clave}
-                            onChange={(event) => void updateUser(permission, event.target.value as UserPermissionState)}
-                            inputProps={{ 'aria-label': `Excepción para ${permission.nombre}` }}
-                          >
-                            {(Object.keys(stateLabels) as UserPermissionState[]).map((state) => (
-                              <MenuItem key={state} value={state}>{stateLabels[state]}</MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  ))}
-                </PermissionGroup>
-              ))}
+              {Object.entries(groupedUserPermissions).map(([group, permissions], index) => {
+                // Ocultar permisos incompatibles con el rol del usuario (no se puede asignar, no se muestra)
+                const visiblePermissions = selectedUser?.role === 'administrador'
+                  ? permissions
+                  : permissions.filter((p) => p.compatible)
+                if (visiblePermissions.length === 0) return null
+                return (
+                  <PermissionGroup key={group} title={group} delay={index * 30}>
+                    {visiblePermissions.map((permission) => (
+                      <PermissionRow
+                        key={permission.clave}
+                        name={permission.nombre}
+                        status={permission.habilitadoEfectivo ? 'Acceso efectivo' : 'Sin acceso'}
+                        enabled={permission.habilitadoEfectivo}
+                        compatible={true}
+                        saving={savingKey === permission.clave}
+                        control={(
+                          <FormControl size="small" sx={{ width: { xs: 170, sm: 210 } }}>
+                            <Select
+                              value={permission.estado}
+                              disabled={permission.obligatorio || savingKey === permission.clave}
+                              onChange={(event) => void updateUser(permission, event.target.value as UserPermissionState)}
+                              inputProps={{ 'aria-label': `Excepción para ${permission.nombre}` }}
+                            >
+                              {(Object.keys(stateLabels) as UserPermissionState[]).map((state) => (
+                                <MenuItem key={state} value={state}>{stateLabels[state]}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
+                      />
+                    ))}
+                  </PermissionGroup>
+                )
+              })}
             </Stack>
           )}
         </Box>

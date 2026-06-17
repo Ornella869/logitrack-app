@@ -37,8 +37,8 @@ namespace Back.Controllers
             return Ok(await _service.GetConfiguracionAsync(provincia));
         }
 
-        /// <summary>Actualiza los valores base de tarificación de la provincia del Gerente.</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        /// <summary>Actualiza los valores base de tarificación de la provincia del usuario logueado.</summary>
+        [Authorize]
         [RequirePermission("tarifas")]
         [HttpPut("configuracion")]
         public async Task<ActionResult<ConfiguracionTarifa>> ActualizarConfiguracion([FromBody] ConfiguracionTarifaRequest request)
@@ -73,8 +73,8 @@ namespace Back.Controllers
             return Ok(await _service.GetZonasAsync(provincias));
         }
 
-        /// <summary>Crea una zona peligrosa en la provincia del Gerente.</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        /// <summary>Crea una zona peligrosa en la provincia del usuario logueado.</summary>
+        [Authorize]
         [RequirePermission("tarifas")]
         [HttpPost("zonas")]
         public async Task<ActionResult<ZonaPeligrosa>> CrearZona([FromBody] ZonaPeligrosaRequest request)
@@ -95,8 +95,8 @@ namespace Back.Controllers
             }
         }
 
-        /// <summary>Elimina una zona peligrosa (Gerente).</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        /// <summary>Elimina una zona peligrosa.</summary>
+        [Authorize]
         [RequirePermission("tarifas")]
         [HttpDelete("zonas/{id:guid}")]
         public async Task<ActionResult> EliminarZona(Guid id)

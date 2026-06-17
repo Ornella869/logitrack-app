@@ -59,6 +59,25 @@ namespace Back.Controllers
             return userId is null ? null : await _userRepository.GetUsuarioById(userId.Value);
         }
 
+        private async Task<List<string>> ResolverProvinciasTransferenciaAsync(Usuario usuario)
+        {
+            if (usuario is Gerente g)
+                return g.ProvinciasAsignadas.ToList();
+
+            if (usuario.SucursalId is Guid sucId)
+            {
+                var suc = await _context.Sucursales.FindAsync(sucId);
+                if (suc != null)
+                    return new[] { suc.Provincia ?? string.Empty }
+                        .Concat(suc.ProvinciasCubiertas ?? new List<string>())
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+            }
+
+            return new List<string>();
+        }
+
         private async Task<ActionResult?> ValidarRepartidorEnSucursalDelUsuario(Guid repartidorId)
         {
             if (User.IsInRole(Roles.Administrador)) return null;
@@ -513,7 +532,8 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
+        [RequirePermission("transferir_repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/sucursal")]
         public async Task<ActionResult> CambiarSucursalRepartidor(Guid repartidorId, [FromBody] CambiarSucursalRepartidorRequest request)
         {
@@ -522,13 +542,17 @@ namespace Back.Controllers
                 var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                     ?? throw new InvalidOperationException("Repartidor no encontrado.");
 
-                var currentUser = await CurrentUserAsync() as Gerente;
+                var currentUser = await CurrentUserAsync();
                 if (currentUser == null) return Forbid();
+
+                // Resolver provincias permitidas según el rol del usuario actual
+                var provinciasPermitidas = await ResolverProvinciasTransferenciaAsync(currentUser);
 
                 if (rep.SucursalId.HasValue)
                 {
                     var sucursalAnteriorEntity = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == rep.SucursalId.Value);
-                    if (sucursalAnteriorEntity != null && sucursalAnteriorEntity.Provincia != null && !currentUser.ProvinciasAsignadas.Contains(sucursalAnteriorEntity.Provincia, StringComparer.OrdinalIgnoreCase))
+                    if (sucursalAnteriorEntity != null && sucursalAnteriorEntity.Provincia != null
+                        && !provinciasPermitidas.Contains(sucursalAnteriorEntity.Provincia, StringComparer.OrdinalIgnoreCase))
                     {
                         return BadRequest("Solo puedes transferir repartidores que ya pertenecen a tu provincia.");
                     }
@@ -538,9 +562,11 @@ namespace Back.Controllers
                 {
                     var sucursalNuevaEntity = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == request.SucursalId.Value);
                     if (sucursalNuevaEntity == null) return BadRequest("Sucursal destino no encontrada.");
-                    if (sucursalNuevaEntity.Provincia != null && !currentUser.ProvinciasAsignadas.Contains(sucursalNuevaEntity.Provincia, StringComparer.OrdinalIgnoreCase))
+                    if (sucursalNuevaEntity.Provincia != null
+                        && !provinciasPermitidas.Contains(sucursalNuevaEntity.Provincia, StringComparer.OrdinalIgnoreCase)
+                        && !(sucursalNuevaEntity.ProvinciasCubiertas ?? new List<string>()).Any(p => provinciasPermitidas.Contains(p, StringComparer.OrdinalIgnoreCase)))
                     {
-                        return BadRequest("Solo puedes transferir a sucursales de tu provincia.");
+                        return BadRequest("Solo puedes transferir a sucursales de tu provincia o con cobertura en tu zona.");
                     }
                 }
 

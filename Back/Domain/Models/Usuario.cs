@@ -142,6 +142,9 @@ namespace Back.Domain.Models
                 ? Array.Empty<string>()
                 : Provincia.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        /// <summary>Sucursal activa seleccionada por el Gerente para operar en contexto Operador/Supervisor.</summary>
+        public Guid? SucursalActivaId { get; private set; }
+
         public Gerente() { }
 
         public Gerente(string nombre, string apellido, string email, string password, string dni, string provincia)
@@ -164,6 +167,8 @@ namespace Back.Domain.Models
 
         /// <summary>Compatibilidad con asignación de una sola provincia.</summary>
         public void AsignarProvincia(string provincia) => Provincia = provincia;
+
+        public void SetSucursalActiva(Guid? sucursalId) => SucursalActivaId = sucursalId;
     }
 
     // Portal externo: cliente que puede hacer seguimiento y reportar incidencias.

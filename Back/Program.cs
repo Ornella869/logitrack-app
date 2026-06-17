@@ -96,6 +96,7 @@ builder.Services.AddScoped<IRutasRepository, RutasRepository>();
 builder.Services.AddScoped<EmailNotificacionService>();
 builder.Services.AddScoped<EnviosExcelImportService>();
 builder.Services.AddScoped<Back.Domain.Repositories.IGerenteProvinciaRepository, Back.Infrastructure.Database.Repositories.GerenteProvinciaRepository>();
+builder.Services.AddScoped<Back.Domain.Repositories.IGerenteSucursalRepository, Back.Infrastructure.Database.Repositories.GerenteSucursalRepository>();
 
 // Configuración de Autenticación JWT
 var jwtSecretKey = "Grupo8SuperSecretKeyWithAtLeast32Characters";

@@ -51,6 +51,7 @@ import { generateTempPassword } from '../utils/passwordGenerator'
 import type { User, UserRole, UserEstado, Branch } from '../types'
 import { authService } from '../services/authService'
 import { branchService } from '../services/branchService'
+import { gerenteSucursalService } from '../services/gerenteSucursalService'
 import { pickupService, type PuntoPickUp } from '../services/pickupService'
 import { AR_PROVINCIAS } from '../utils/provincias'
 import { formatInstantArgentina } from '../utils/argentinaDate'
@@ -254,6 +255,9 @@ export default function UsersManagement({
     severity: 'success' | 'error' | 'info' | 'warning'
   }>({ open: false, message: '', severity: 'success' })
 
+  // Sucursales habilitadas para el Gerente que se está editando
+  const [sucursalesHabilitadasEdit, setSucursalesHabilitadasEdit] = useState<string[]>([])
+
   const handleCopyEmail = (email: string) => {
     void navigator.clipboard.writeText(email).then(() => {
       showToast('Email copiado al portapapeles', 'info')
@@ -373,6 +377,12 @@ export default function UsersManagement({
       provincia: user.provincias && user.provincias.length > 0 ? user.provincias.join(', ') : (user.provincia ?? ''),
       puntoPickUpId: user.puntoPickUpId ?? '',
     })
+    setSucursalesHabilitadasEdit([])
+    if (user.role === 'gerente') {
+      void gerenteSucursalService.getSucursalesDeGerente(user.id)
+        .then((lista) => setSucursalesHabilitadasEdit(lista.map((s) => s.id)))
+        .catch(() => setSucursalesHabilitadasEdit([]))
+    }
     setFormError('')
     setShowResetSection(false)
     setResetPassValue('')
@@ -394,6 +404,7 @@ export default function UsersManagement({
       if (selectedUser.role === 'gerente' && formData.provincia) {
         const provincias = formData.provincia.split(',').map((s) => s.trim()).filter(Boolean)
         if (provincias.length > 0) await authService.assignProvincias(selectedUser.id, provincias)
+        await gerenteSucursalService.setSucursalesDeGerente(selectedUser.id, sucursalesHabilitadasEdit)
       }
       if (selectedUser.role === 'repartidor') {
         const licenciaActualizada = await authService.updateRepartidorLicencia(selectedUser.id, formData.licencia.trim(), formData.fechaVencimientoLicencia || null)
@@ -1484,6 +1495,51 @@ export default function UsersManagement({
                     )
                   })}
                 </Select>
+              </FormControl>
+            )}
+
+            {/* Sucursales habilitadas para operar (solo Gerente) */}
+            {selectedUser?.role === 'gerente' && (
+              <FormControl fullWidth>
+                <InputLabel>Sucursales habilitadas para operar</InputLabel>
+                <Select
+                  multiple
+                  label="Sucursales habilitadas para operar"
+                  value={sucursalesHabilitadasEdit}
+                  onChange={(e) => setSucursalesHabilitadasEdit(e.target.value as string[])}
+                  renderValue={(selected) => {
+                    const ids = selected as string[]
+                    if (ids.length === 0) return <Typography variant="caption" color="text.secondary">Sin sucursales habilitadas</Typography>
+                    return ids.map((id) => {
+                      const branch = branches.find((b) => b.id === id)
+                      return branch?.name ?? id
+                    }).join(', ')
+                  }}
+                >
+                  {branches
+                    .filter((b) => !formData.provincia || b.province?.toLowerCase() === formData.provincia.toLowerCase())
+                    .map((b) => (
+                      <MenuItem key={b.id} value={b.id}>
+                        <Checkbox checked={sucursalesHabilitadasEdit.includes(b.id)} />
+                        <Box>
+                          <Typography variant="body2">{b.name}</Typography>
+                          {b.province && (
+                            <Typography variant="caption" color="text.secondary">{b.province}</Typography>
+                          )}
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  {branches.filter((b) => !formData.provincia || b.province?.toLowerCase() === formData.provincia.toLowerCase()).length === 0 && (
+                    <MenuItem disabled>
+                      <Typography variant="caption" color="text.secondary">
+                        {formData.provincia ? `No hay sucursales en ${formData.provincia}` : 'Asigná una provincia primero'}
+                      </Typography>
+                    </MenuItem>
+                  )}
+                </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, px: 0.5 }}>
+                  Estas sucursales estarán disponibles para que el Gerente opere como Operador o Supervisor.
+                </Typography>
               </FormControl>
             )}
 
