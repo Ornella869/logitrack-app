@@ -59,6 +59,20 @@ namespace Back.Controllers
             return userId is null ? null : await _userRepository.GetUsuarioById(userId.Value);
         }
 
+        private async Task<Guid?> CurrentSucursalScopeAsync()
+        {
+            if (User.IsInRole(Roles.Administrador)) return null;
+            var usuario = await CurrentUserAsync();
+            if (usuario is Gerente gerente)
+            {
+                if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
+                var habilitada = await _context.GerentesSucursales
+                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
+                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+            }
+            return usuario?.SucursalId ?? Guid.Empty;
+        }
+
         private async Task<List<string>> ResolverProvinciasTransferenciaAsync(Usuario usuario)
         {
             if (usuario is Gerente g)
@@ -81,11 +95,11 @@ namespace Back.Controllers
         private async Task<ActionResult?> ValidarRepartidorEnSucursalDelUsuario(Guid repartidorId)
         {
             if (User.IsInRole(Roles.Administrador)) return null;
-            var usuario = await CurrentUserAsync();
-            if (usuario?.SucursalId is null) return Forbid();
+            var sucursalScope = await CurrentSucursalScopeAsync();
+            if (!sucursalScope.HasValue || sucursalScope.Value == Guid.Empty) return Forbid();
             var repartidor = await _userRepository.GetUsuarioById(repartidorId) as Repartidor;
             if (repartidor is null) return NotFound("Repartidor no encontrado.");
-            return repartidor.SucursalId == usuario.SucursalId ? null : Forbid();
+            return repartidor.SucursalId == sucursalScope ? null : Forbid();
         }
 
         /// <summary>Login con email + contraseña + reCAPTCHA. Devuelve JWT.</summary>
@@ -197,12 +211,13 @@ namespace Back.Controllers
 
             if (!User.IsInRole(Roles.Administrador))
             {
-                if (currentUser is Gerente g)
+                if (currentUser is Gerente)
                 {
                     // Eficientemente obtener IDs de sucursales de la provincia del gerente
                     // para evaluar en memoria (repartidores/paquetes están ya cargados en IEnumerable).
                     // Lo ideal es filtrar la query SQL, pero _userRepository / _enviosRepository devuelven List.
-                    var provinciasLowerCase = g.ProvinciasAsignadas.Select(p => p.ToLowerInvariant()).ToList();
+                    var sucursalScope = await CurrentSucursalScopeAsync();
+                    var provinciasLowerCase = new List<string>();
                     var sucursalesProvincia = await _context.Sucursales
                         .ToListAsync();
                     var idsSucursalesProvincia = sucursalesProvincia
@@ -210,8 +225,8 @@ namespace Back.Controllers
                         .Select(s => s.Id)
                         .ToList();
 
-                    repartidoresQuery = repartidoresQuery.Where(r => r.SucursalId.HasValue && idsSucursalesProvincia.Contains(r.SucursalId.Value));
-                    asignadosQuery = asignadosQuery.Where(p => p.SucursalId.HasValue && idsSucursalesProvincia.Contains(p.SucursalId.Value));
+                    repartidoresQuery = repartidoresQuery.Where(r => r.SucursalId == sucursalScope);
+                    asignadosQuery = asignadosQuery.Where(p => p.SucursalId == sucursalScope);
                 }
                 else
                 {
@@ -347,7 +362,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Alta de Repartidor (genera contraseña temporal).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpPost("repartidores")]
         public async Task<ActionResult<UserInfoResponse>> RegistrarRepartidor([FromBody] RegistrarRepartidorRequest request)
@@ -356,9 +371,9 @@ namespace Back.Controllers
             {
                 if (!User.IsInRole(Roles.Administrador))
                 {
-                    var usuario = await CurrentUserAsync();
-                    if (usuario?.SucursalId is null) return BadRequest("El usuario no tiene sucursal asignada.");
-                    request.SucursalId = usuario.SucursalId;
+                    var sucursalScope = await CurrentSucursalScopeAsync();
+                    if (sucursalScope == Guid.Empty) return BadRequest("Seleccioná una sucursal activa para operar.");
+                    request.SucursalId = sucursalScope;
                 }
                 var result = await _authService.RegistrarRepartidor(request);
                 var repartidor = result.Repartidor;
@@ -401,7 +416,7 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/licencia")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarLicenciaRepartidor(Guid repartidorId, [FromBody] ActualizarLicenciaRepartidorRequest request)
@@ -420,17 +435,16 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpGet("repartidores/licencias-por-vencer")]
         public async Task<ActionResult<List<LicenciaPorVencerResponse>>> GetLicenciasPorVencer([FromQuery] int? dias)
         {
             var config = await _empresaService.GetConfiguracionLicenciasAsync();
             var diasNormalizados = Math.Clamp(dias.GetValueOrDefault() > 0 ? dias.Value : config.AlertaDias, 1, 365);
-            var currentUser = await CurrentUserAsync();
             Guid? sucursalScope = User.IsInRole(Roles.Administrador)
                 ? null
-                : currentUser?.SucursalId ?? Guid.Empty;
+                : await CurrentSucursalScopeAsync();
             var hoy = OperationalClock.TodayUtcDate;
             var hasta = hoy.AddDays(diasNormalizados);
 
@@ -458,7 +472,7 @@ namespace Back.Controllers
             return Ok(repartidores);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/horas-trabajo")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarHorasTrabajoRepartidor(Guid repartidorId, [FromBody] ActualizarHorasTrabajoRequest request)
@@ -492,7 +506,7 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/capacidad-carga")]
         public async Task<ActionResult<UserInfoResponse>> ActualizarCapacidadCargaRepartidor(Guid repartidorId, [FromBody] ActualizarCapacidadCargaRequest request)
@@ -513,7 +527,7 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
         [RequirePermission("repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/estado")]
         public async Task<ActionResult<UserInfoResponse>> CambiarEstadoRepartidor(Guid repartidorId, [FromBody] CambiarEstadoRepartidorRequest request)
@@ -532,7 +546,7 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize]
+        [Authorize(Roles = Roles.Gerente)]
         [RequirePermission("transferir_repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/sucursal")]
         public async Task<ActionResult> CambiarSucursalRepartidor(Guid repartidorId, [FromBody] CambiarSucursalRepartidorRequest request)
@@ -544,17 +558,21 @@ namespace Back.Controllers
 
                 var currentUser = await CurrentUserAsync();
                 if (currentUser == null) return Forbid();
+                if (currentUser is not Gerente gerente) return Forbid();
 
                 // Resolver provincias permitidas según el rol del usuario actual
-                var provinciasPermitidas = await ResolverProvinciasTransferenciaAsync(currentUser);
+                var sucursalesHabilitadas = await _context.GerentesSucursales
+                    .Where(x => x.GerenteId == gerente.Id)
+                    .Select(x => x.SucursalId)
+                    .ToListAsync();
+                if (sucursalesHabilitadas.Count == 0)
+                    return BadRequest("El gerente no tiene sucursales habilitadas para transferir repartidores.");
 
                 if (rep.SucursalId.HasValue)
                 {
-                    var sucursalAnteriorEntity = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == rep.SucursalId.Value);
-                    if (sucursalAnteriorEntity != null && sucursalAnteriorEntity.Provincia != null
-                        && !provinciasPermitidas.Contains(sucursalAnteriorEntity.Provincia, StringComparer.OrdinalIgnoreCase))
+                    if (!sucursalesHabilitadas.Contains(rep.SucursalId.Value))
                     {
-                        return BadRequest("Solo puedes transferir repartidores que ya pertenecen a tu provincia.");
+                        return BadRequest("Solo puedes transferir repartidores de tus sucursales habilitadas.");
                     }
                 }
 
@@ -562,11 +580,9 @@ namespace Back.Controllers
                 {
                     var sucursalNuevaEntity = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == request.SucursalId.Value);
                     if (sucursalNuevaEntity == null) return BadRequest("Sucursal destino no encontrada.");
-                    if (sucursalNuevaEntity.Provincia != null
-                        && !provinciasPermitidas.Contains(sucursalNuevaEntity.Provincia, StringComparer.OrdinalIgnoreCase)
-                        && !(sucursalNuevaEntity.ProvinciasCubiertas ?? new List<string>()).Any(p => provinciasPermitidas.Contains(p, StringComparer.OrdinalIgnoreCase)))
+                    if (!sucursalesHabilitadas.Contains(request.SucursalId.Value))
                     {
-                        return BadRequest("Solo puedes transferir a sucursales de tu provincia o con cobertura en tu zona.");
+                        return BadRequest("Solo puedes transferir a tus sucursales habilitadas.");
                     }
                 }
 

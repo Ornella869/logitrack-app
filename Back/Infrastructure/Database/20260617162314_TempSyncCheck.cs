@@ -1,11 +1,14 @@
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Back.Infrastructure.Database
 {
-    public partial class AddHorariosPickUp : Migration
+    /// <inheritdoc />
+    public partial class TempSyncCheck : Migration
     {
+        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -30,9 +33,11 @@ namespace Back.Infrastructure.Database
                 });
         }
 
+        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(name: "HorariosPickUp");
+            migrationBuilder.DropTable(
+                name: "HorariosPickUp");
         }
     }
 }

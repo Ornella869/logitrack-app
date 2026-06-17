@@ -31,7 +31,15 @@ namespace Back.Controllers
             if (User.IsInRole(Roles.Administrador)) return null;
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdStr, out var userId)) return Guid.Empty;
-            return (await _userRepository.GetUsuarioById(userId))?.SucursalId ?? Guid.Empty;
+            var usuario = await _userRepository.GetUsuarioById(userId);
+            if (usuario is Gerente gerente)
+            {
+                if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
+                var habilitada = await _context.GerentesSucursales
+                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
+                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+            }
+            return usuario?.SucursalId ?? Guid.Empty;
         }
 
         /// <summary>G1L-20: Perfil de rendimiento de un repartidor en un período.</summary>
@@ -47,19 +55,10 @@ namespace Back.Controllers
 
                 if (User.IsInRole(Roles.Gerente))
                 {
-                    var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                    if (Guid.TryParse(userIdStr, out var userId))
-                    {
-                        if (await _userRepository.GetUsuarioById(userId) as Gerente is { } gerente)
-                        {
-                            var sucursal = repartidor.SucursalId.HasValue ? await _context.Sucursales.FindAsync(repartidor.SucursalId.Value) : null;
-                            if (sucursal == null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia))
-                            {
-                                return Forbid();
-                            }
-                        }
-                    }
-                    var rg = await _service.GetRendimientoAsync(repartidorId, from, to, null);
+                    var sucursalScope = await CurrentSucursalScopeAsync();
+                    if (!sucursalScope.HasValue || sucursalScope.Value == Guid.Empty || repartidor.SucursalId != sucursalScope)
+                        return Forbid();
+                    var rg = await _service.GetRendimientoAsync(repartidorId, from, to, sucursalScope);
                     return Ok(rg);
                 }
 
@@ -73,7 +72,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Proyección de personal para los próximos 30 días basada en histórico de 4 semanas.</summary>
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Gerente)]
         [HttpGet("proyeccion-personal")]
         public async Task<IActionResult> GetProyeccionPersonal([FromQuery] double? volumenManual = null)
         {
@@ -265,18 +264,9 @@ namespace Back.Controllers
 
             if (User.IsInRole(Roles.Gerente))
             {
-                var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                if (Guid.TryParse(userIdStr, out var userId))
-                {
-                    if (await _userRepository.GetUsuarioById(userId) as Gerente is { } gerente)
-                    {
-                        var sucursal = repartidor.SucursalId.HasValue ? await _context.Sucursales.FindAsync(repartidor.SucursalId.Value) : null;
-                        if (sucursal == null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia))
-                        {
-                            return Forbid();
-                        }
-                    }
-                }
+                var sucursalScope = await CurrentSucursalScopeAsync();
+                if (!sucursalScope.HasValue || sucursalScope.Value == Guid.Empty || repartidor.SucursalId != sucursalScope)
+                    return Forbid();
             }
             else
             {

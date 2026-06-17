@@ -117,6 +117,8 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
   // Permisos por rol según UH del Sprint 1
   const isOperador = user?.role === 'operador'
   const isSupervisor = user?.role === 'supervisor'
+  const isGerente = user?.role === 'gerente'
+  const isOperativoSucursal = isOperador || isSupervisor || isGerente
   const isAdmin = user?.role === 'administrador'
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
@@ -163,7 +165,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
     : false
   const esUltimaMillaActual = !tramoActual || tramoActual.esUltimaMilla
   const canCancel =
-    ((isOperador || isSupervisor) && permissions.has('envios_cancelar') && puedeGestionarTramo &&
+    (isOperativoSucursal && permissions.has('envios_cancelar') && puedeGestionarTramo &&
       (status === 'Pendiente de calendarización' ||
         status === 'Asignado a vehículo' ||
         status === 'Cargado en vehículo' ||
@@ -171,16 +173,16 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
     // G1L-82: el repartidor cancela desde "En tránsito" o "Demorado" (entrega fallida).
     (isRepartidor && permissions.has('envios_cancelar') && (status === 'En tránsito' || status === 'Demorado'))
   // G1L-12, G1L-41: Editar solo si está pendiente de calendarización (paquete.isEditable)
-  const canEdit = (isOperador || isSupervisor || isRepartidor)
+  const canEdit = (isOperativoSucursal || isRepartidor)
     && permissions.has('envios_editar')
     && puedeGestionarTramo
     && shipment?.isEditable === true
   // G1L-82: marcar como Demorado lo pueden hacer Repartidor o Supervisor sobre un envío En Tránsito.
-  const canMarcarDemorado = (isRepartidor || (isSupervisor && puedeGestionarTramo)) && status === 'En tránsito'
+  const canMarcarDemorado = (isRepartidor || ((isSupervisor || isGerente) && puedeGestionarTramo)) && status === 'En tránsito'
   // G1L-82: continuar ruta tras la demora — solo el repartidor.
   const canContinuarRuta = isRepartidor && status === 'Demorado'
   // G1L-83: el Supervisor asigna manualmente un envío pendiente de calendarización.
-  const canPrecalendarizar = isSupervisor && puedeGestionarTramo && status === 'Pendiente de calendarización'
+  const canPrecalendarizar = (isSupervisor || isGerente) && puedeGestionarTramo && status === 'Pendiente de calendarización'
   const [openPrecalendarizar, setOpenPrecalendarizar] = useState(false)
 
   useEffect(() => {
@@ -189,7 +191,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
   }, [id])
 
   const loadEmails = async (paqueteId: string) => {
-    if (!isSupervisor && !isAdmin) {
+    if (!isSupervisor && !isGerente && !isAdmin) {
       setEmails([])
       return
     }
@@ -217,14 +219,14 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
           setTramos([])
         }
         // G1L-42: cargar repartidor asignado para Supervisor / Admin / Operador
-        if ((isSupervisor || isAdmin || isOperador) && data.id) {
+        if ((isOperativoSucursal || isAdmin) && data.id) {
           const rep = await shipmentService.getRepartidorDePaquete(data.id)
           setRepartidorAsignado(rep)
         }
         // G1L-81: si el envío está "Cargado en Vehículo" o "Listo para Salir",
         // buscamos en el historial el último escaneo que lo marcó como cargado.
         if (
-          (isOperador || isSupervisor || isAdmin) &&
+          (isOperativoSucursal || isAdmin) &&
           (data.status === 'Cargado en vehículo' || data.status === 'Listo para salir')
         ) {
           try {
@@ -548,7 +550,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
       >
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {/* G1L-28 + G1L-32: Etiqueta con QR (Operador, Supervisor, Admin — no Repartidor) */}
-          {(isOperador || isSupervisor || isAdmin) && permissions.has('envios_ver') && (
+          {(isOperativoSucursal || isAdmin) && permissions.has('envios_ver') && (
             <Button
               variant="outlined"
               size="small"
@@ -706,7 +708,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
                 Motivo: {shipment.cancellationReason}
               </Typography>
             )}
-            {(isOperador || isSupervisor) && puedeGestionarTramo && (
+            {isOperativoSucursal && puedeGestionarTramo && (
               <Button
                 variant="contained"
                 size="small"
@@ -780,7 +782,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
           </Grid>
         )}
 
-        {(isOperador || isSupervisor) && tramoDeMiSucursal && (
+        {isOperativoSucursal && tramoDeMiSucursal && (
           <Grid item xs={12}>
             <Card sx={{ borderLeft: '4px solid', borderLeftColor: tramoDeMiSucursal.esTramoActual ? 'primary.main' : 'grey.500' }}>
               <CardContent>
@@ -954,7 +956,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
         </Grid>
 
         {/* G1L-15: Línea de tiempo del historial — solo Operador y Supervisor */}
-        {(isOperador || isSupervisor) && (
+        {isOperativoSucursal && (
           <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 2 : undefined }}>
             <Card>
               <CardContent>
@@ -968,7 +970,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
           </Grid>
         )}
 
-        {(isSupervisor || isAdmin) && (
+        {(isSupervisor || isGerente || isAdmin) && (
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
@@ -1021,7 +1023,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
         )}
 
         {/* G1L-42: Repartidor asignado (Supervisor / Admin / Operador, solo lectura) */}
-        {(isSupervisor || isAdmin || isOperador) && puedeGestionarTramo && repartidorAsignado && (
+        {(isOperativoSucursal || isAdmin) && puedeGestionarTramo && repartidorAsignado && (
           <Grid item xs={12} md={6} sx={{ order: isSupervisor ? 1 : undefined }}>
             <Card>
               <CardContent>
@@ -1034,7 +1036,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
                     {(repartidorAsignado.nombre[0] ?? '').toUpperCase()}{(repartidorAsignado.apellido[0] ?? '').toUpperCase()}
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    {(isSupervisor || isAdmin) ? (
+                    {(isSupervisor || isGerente || isAdmin) ? (
                       <Typography
                         variant="body1"
                         fontWeight={600}
@@ -1054,7 +1056,7 @@ function ShipmentDetail({ permissions }: { permissions: Set<string> }) {
                   </Box>
                   <Chip size="small" label={repartidorAsignado.estado} color={repartidorAsignado.estado === 'Activo' ? 'success' : 'warning'} />
                 </Stack>
-                {(isSupervisor || isAdmin) && (
+                {(isSupervisor || isGerente || isAdmin) && (
                   <Button
                     size="small"
                     sx={{ mt: 2 }}

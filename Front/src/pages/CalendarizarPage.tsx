@@ -238,10 +238,6 @@ export default function CalendarizarPage() {
     return { prio, comm, peso, cps, capacidad }
   }, [pendientes, repartidoresActivos])
 
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo el Supervisor puede acceder a esta pantalla.</Alert>
-  }
-
   const openReassign = (paquete: PaquetePreview, diaFecha: string) => {
     const existing = overrides.get(paquete.paqueteId)
     setReassignDialog({

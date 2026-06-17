@@ -8,12 +8,20 @@ interface UseSucursalActivaResult {
   setSucursalActiva: (id: string | null) => Promise<void>
 }
 
-export function useSucursalActiva(): UseSucursalActivaResult {
+export function useSucursalActiva(enabled = true): UseSucursalActivaResult {
   const [sucursalActiva, setSucursalActivaState] = useState<SucursalActiva | null>(null)
   const [sucursalesHabilitadas, setSucursalesHabilitadas] = useState<SucursalHabilitada[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!enabled) {
+      setSucursalActivaState(null)
+      setSucursalesHabilitadas([])
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
     Promise.all([
       gerenteSucursalService.getSucursalActiva(),
       gerenteSucursalService.getSucursalesHabilitadas(),
@@ -24,7 +32,7 @@ export function useSucursalActiva(): UseSucursalActivaResult {
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [enabled])
 
   const setSucursalActiva = useCallback(async (id: string | null) => {
     await gerenteSucursalService.setSucursalActiva(id)

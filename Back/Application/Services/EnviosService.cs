@@ -109,8 +109,10 @@ namespace Back.Application.Services
             paquete.AsignarCotizacion(cotizacion.Total, cotizacion.CostoRecargo, esPeligrosa);
         }
 
-        private async Task ValidarAccesoPaqueteAsync(Paquete paquete, Guid? usuarioId)
+        private async Task ValidarAccesoPaqueteAsync(Paquete paquete, Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
+            if (sucursalOperativaId.HasValue && paquete.SucursalId != sucursalOperativaId)
+                throw new InvalidOperationException("No podés operar envíos de otra sucursal.");
             if (!usuarioId.HasValue) return;
             var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
             if (usuario is null || usuario is Administrador) return;
@@ -129,10 +131,16 @@ namespace Back.Application.Services
         // Épica D: resuelve la sucursal responsable de un envío por la provincia de destino.
         // Si el operador pertenece a una sucursal, esa sucursal es siempre la responsable
         // (los tramos se encargan del ruteo hacia el destino final).
-        private async Task<Sucursal?> ResolverSucursalDestinoAsync(string? provinciaDestino, Guid? usuarioId, List<Sucursal>? sucursalesPreCargadas = null)
+        private async Task<Sucursal?> ResolverSucursalDestinoAsync(string? provinciaDestino, Guid? usuarioId, List<Sucursal>? sucursalesPreCargadas = null, Guid? sucursalOperativaId = null)
         {
             var sucursales = sucursalesPreCargadas ?? await _enviosRepository.GetSucursales();
             if (sucursales.Count == 0) return null;
+
+            if (sucursalOperativaId.HasValue)
+            {
+                var sucursalActiva = sucursales.FirstOrDefault(s => s.Id == sucursalOperativaId.Value);
+                if (sucursalActiva is not null) return sucursalActiva;
+            }
 
             // Si el operador tiene sucursal asignada, es la responsable del envío sin importar
             // si la sucursal cubre la provincia destino — el sistema de tramos rutea desde ahí.
@@ -163,7 +171,7 @@ namespace Back.Application.Services
             return !sucursales.Any(s => string.Equals(s.Provincia?.Trim(), destino, StringComparison.OrdinalIgnoreCase));
         }
 
-        private async Task<PuntoPickUp?> ResolverPuntoPickUpAsync(Guid? puntoPickUpId, Guid? usuarioId, Guid? paqueteActualId = null)
+        private async Task<PuntoPickUp?> ResolverPuntoPickUpAsync(Guid? puntoPickUpId, Guid? usuarioId, Guid? paqueteActualId = null, Guid? sucursalOperativaId = null)
         {
             if (!puntoPickUpId.HasValue) return null;
 
@@ -171,7 +179,13 @@ namespace Back.Application.Services
             if (punto is null || !punto.Activo)
                 throw new InvalidOperationException("El punto PickUp seleccionado no existe o no esta activo.");
 
-            if (usuarioId.HasValue)
+            if (sucursalOperativaId.HasValue)
+            {
+                var sucursal = (await _enviosRepository.GetSucursales(sucursalId: sucursalOperativaId.Value)).FirstOrDefault();
+                if (sucursal is null || !sucursal.Cubre(punto.Provincia))
+                    throw new InvalidOperationException("El punto PickUp seleccionado no pertenece a la cobertura de tu sucursal activa.");
+            }
+            else if (usuarioId.HasValue)
             {
                 var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
                 if (usuario?.SucursalId is Guid sucursalId)
@@ -194,9 +208,9 @@ namespace Back.Application.Services
         }
 
         // G1L-10
-        public async Task<RegistrarPaqueteResult> RegistrarPaquete(RegistrarPaqueteRequest request, Guid? usuarioId)
+        public async Task<RegistrarPaqueteResult> RegistrarPaquete(RegistrarPaqueteRequest request, Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
-            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId);
+            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId, sucursalOperativaId: sucursalOperativaId);
             if (puntoPickUp is not null)
             {
                 request.Destinatario.Direccion = puntoPickUp.Direccion;
@@ -232,7 +246,7 @@ namespace Back.Application.Services
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
 
             // Épica D: sucursal responsable por provincia de destino + ruteo estricto.
-            var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
+            var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId, sucursalOperativaId: sucursalOperativaId);
 
             var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);
 
@@ -290,16 +304,16 @@ namespace Back.Application.Services
             };
         }
 
-        public async Task<GenerarLoteDemoResult> GenerarLoteDemoAsync(int cantidad, Guid? usuarioId)
+        public async Task<GenerarLoteDemoResult> GenerarLoteDemoAsync(int cantidad, Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
             if (!new[] { 100, 250, 500, 1000 }.Contains(cantidad))
                 throw new InvalidOperationException("La cantidad debe ser 100, 250, 500 o 1000.");
 
-            var direcciones = await ObtenerDireccionesDemoHabilitadasAsync(usuarioId);
+            var direcciones = await ObtenerDireccionesDemoHabilitadasAsync(usuarioId, sucursalOperativaId);
             if (direcciones.Count == 0)
                 throw new InvalidOperationException("No hay direcciones demo para la cobertura de tu sucursal.");
 
-            var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId);
+            var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId, sucursalOperativaId);
             var creados = new List<string>();
             var errores = new List<string>();
             var paquetesAAgregar = new List<Paquete>();
@@ -317,7 +331,7 @@ namespace Back.Application.Services
                     var peso = Math.Round(1.5 + (i * 3.7 % 38), 1);
                     var distancia = DistanciasService.CalcularDistancia(destino.Localidad);
                     var prioridad = await _mlPrioridadPrediction.Predecir((float)peso, distancia);
-                    var sucursalDestino = await ResolverSucursalDestinoAsync(destino.Provincia, usuarioId, todasSucursales);
+                    var sucursalDestino = await ResolverSucursalDestinoAsync(destino.Provincia, usuarioId, todasSucursales, sucursalOperativaId);
                     var esEnvioADomicilio = await EsEnvioADomicilioAsync(destino.Provincia, sucursalDestino, todasSucursales);
 
                     var paquete = new Paquete(
@@ -399,10 +413,10 @@ namespace Back.Application.Services
             };
         }
 
-        public async Task<ImportarEnviosResult> ImportarDesdeExcelAsync(IEnumerable<ImportarEnvioRow> rows, Guid? usuarioId)
+        public async Task<ImportarEnviosResult> ImportarDesdeExcelAsync(IEnumerable<ImportarEnvioRow> rows, Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
             var detalles = new List<ImportarEnvioDetalleResult>();
-            var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId);
+            var sucursalOrigen = await ObtenerSucursalUsuarioAsync(usuarioId, sucursalOperativaId);
             foreach (var row in rows)
             {
                 try
@@ -420,7 +434,7 @@ namespace Back.Application.Services
                             Telefono = sucursalOrigen.Telefono,
                         };
                     }
-                    var creado = await RegistrarPaquete(row.Request, usuarioId);
+                    var creado = await RegistrarPaquete(row.Request, usuarioId, sucursalOperativaId);
                     detalles.Add(new ImportarEnvioDetalleResult(row.Fila, true, creado.CodigoSeguimiento, null));
                 }
                 catch (Exception ex)
@@ -439,10 +453,12 @@ namespace Back.Application.Services
         }
 
         // G1L-12 / G1L-80
-        public async Task EditarPaquete(Guid paqueteId, RegistrarPaqueteRequest request, Guid? usuarioId)
+        public async Task EditarPaquete(Guid paqueteId, RegistrarPaqueteRequest request, Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
+            if (sucursalOperativaId.HasValue && paquete.SucursalId != sucursalOperativaId)
+                throw new InvalidOperationException("No podés editar envíos de otra sucursal.");
             if (usuarioId.HasValue)
             {
                 var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);
@@ -465,7 +481,7 @@ namespace Back.Application.Services
                 throw new InvalidOperationException(mensaje);
             }
 
-            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId, paquete.Id);
+            var puntoPickUp = await ResolverPuntoPickUpAsync(request.PuntoPickUpId, usuarioId, paquete.Id, sucursalOperativaId);
             if (puntoPickUp is not null)
             {
                 request.Destinatario.Direccion = puntoPickUp.Direccion;
@@ -494,7 +510,7 @@ namespace Back.Application.Services
 
             var distancia = DistanciasService.CalcularDistancia(request.Destinatario.Localidad, request.Destinatario.Provincia);
             var prioridad = await _mlPrioridadPrediction.Predecir((float)request.Peso, distancia);
-            var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId);
+            var sucursalDestino = await ResolverSucursalDestinoAsync(request.Destinatario.Provincia, usuarioId, sucursalOperativaId: sucursalOperativaId);
             var esEnvioADomicilio = await EsEnvioADomicilioAsync(request.Destinatario.Provincia, sucursalDestino);
 
             paquete.ActualizarDatos(
@@ -542,14 +558,14 @@ namespace Back.Application.Services
         // G1L-13 + G1L-9. Reglas cruzadas rol/estado:
         //   Operador / Supervisor → solo PendienteDeCalendarizacion o ListoParaSalir.
         //   Repartidor             → solo EnTransito (Entrega Fallida).
-        public async Task CancelarPaquete(Guid paqueteId, string motivo, CancelarEnvioMode mode, Guid? usuarioId, bool esRepartidor)
+        public async Task CancelarPaquete(Guid paqueteId, string motivo, CancelarEnvioMode mode, Guid? usuarioId, bool esRepartidor, Guid? sucursalOperativaId = null)
         {
             if (string.IsNullOrWhiteSpace(motivo))
                 throw new InvalidOperationException("El motivo de cancelación es obligatorio.");
 
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
-            await ValidarAccesoPaqueteAsync(paquete, usuarioId);
+            await ValidarAccesoPaqueteAsync(paquete, usuarioId, sucursalOperativaId);
 
             switch (paquete.Status)
             {
@@ -1073,10 +1089,10 @@ namespace Back.Application.Services
 
         // G1L-80: mensajes específicos según el estado bloqueado.
         // Solo genera hacia provincias cubiertas por sucursales activas en el sistema.
-        private async Task<List<DemoAddress>> ObtenerDireccionesDemoHabilitadasAsync(Guid? usuarioId)
+        private async Task<List<DemoAddress>> ObtenerDireccionesDemoHabilitadasAsync(Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
             var disponibles = DireccionesDemo();
-            var sucursalUsuario = await ObtenerSucursalUsuarioAsync(usuarioId);
+            var sucursalUsuario = await ObtenerSucursalUsuarioAsync(usuarioId, sucursalOperativaId);
             if (sucursalUsuario is not null)
             {
                 return disponibles
@@ -1113,8 +1129,11 @@ namespace Back.Application.Services
             return normalized;
         }
 
-        private async Task<Sucursal?> ObtenerSucursalUsuarioAsync(Guid? usuarioId)
+        private async Task<Sucursal?> ObtenerSucursalUsuarioAsync(Guid? usuarioId, Guid? sucursalOperativaId = null)
         {
+            if (sucursalOperativaId.HasValue)
+                return (await _enviosRepository.GetSucursales()).FirstOrDefault(s => s.Id == sucursalOperativaId.Value);
+
             if (!usuarioId.HasValue) return null;
 
             var usuario = await _userRepository.GetUsuarioById(usuarioId.Value);

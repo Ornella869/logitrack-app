@@ -1,11 +1,11 @@
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Back.Infrastructure.Database
 {
     /// <inheritdoc />
-    public partial class AddSucursalesPermitidasIds : Migration
+    public partial class AddSucursalesPermitidasIdsFix : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

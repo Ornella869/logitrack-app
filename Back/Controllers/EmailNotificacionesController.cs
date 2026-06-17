@@ -23,10 +23,17 @@ namespace Back.Controllers
 
         private async Task<Guid?> CurrentSucursalScopeAsync()
         {
-            if (User.IsInRole(Roles.Administrador) || User.IsInRole(Roles.Gerente)) return null;
+            if (User.IsInRole(Roles.Administrador)) return null;
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdStr, out var userId)) return Guid.Empty;
             var user = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is Gerente gerente)
+            {
+                if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
+                var habilitada = await _context.GerentesSucursales
+                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
+                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+            }
             return user?.SucursalId ?? Guid.Empty;
         }
 
@@ -41,7 +48,7 @@ namespace Back.Controllers
             return Ok(items.Select(ToDto).ToList());
         }
 
-        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Administrador + "," + Roles.Gerente)]
         [HttpPost("{emailId:guid}/reintentar")]
         public async Task<ActionResult<EmailNotificacionDto>> Reintentar(Guid emailId)
         {

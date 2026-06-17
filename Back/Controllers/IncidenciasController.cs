@@ -118,16 +118,17 @@ namespace Back.Controllers
             return Ok(ToDto(incidencia));
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpGet]
         public async Task<ActionResult<List<IncidenciaDto>>> Listar()
         {
             var user = await CurrentUserAsync();
-            if (user?.SucursalId is null) return Ok(new List<IncidenciaDto>());
+            var scope = await CurrentSucursalScopeAsync(user);
+            if (!scope.HasValue || scope.Value == Guid.Empty) return Ok(new List<IncidenciaDto>());
 
             var incidencias = await _context.Incidencias
-                .Where(i => i.SucursalId == user.SucursalId)
+                .Where(i => i.SucursalId == scope)
                 .OrderBy(i => i.Estado == "Resuelta")
                 .ThenByDescending(i => i.Severidad == "Alta")
                 .ThenByDescending(i => i.Severidad == "Media")
@@ -168,7 +169,7 @@ namespace Back.Controllers
             return Ok(count);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpGet("{id:guid}/mensajes")]
         public async Task<ActionResult<List<MensajeIncidenciaDto>>> GetMensajes(Guid id)
         {
@@ -186,7 +187,7 @@ namespace Back.Controllers
             return Ok(mensajes.Select(ToMensajeDto).ToList());
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpPost("{id:guid}/mensajes")]
         public async Task<ActionResult<MensajeIncidenciaDto>> SendMensaje(Guid id, [FromBody] SendMensajeRequest request)
         {
@@ -210,7 +211,7 @@ namespace Back.Controllers
             return Ok(ToMensajeDto(mensaje));
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpPut("{id:guid}/mensajes/marcar-leido")]
         public async Task<IActionResult> MarcarLeido(Guid id)
         {
@@ -238,7 +239,7 @@ namespace Back.Controllers
             return Ok();
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpPut("{id:guid}/estado")]
         public async Task<ActionResult<IncidenciaDto>> CambiarEstado(Guid id, [FromBody] CambiarEstadoIncidenciaRequest request)
@@ -258,7 +259,7 @@ namespace Back.Controllers
             return Ok(ToDto(incidencia));
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpPut("{id:guid}/severidad")]
         public async Task<ActionResult<IncidenciaDto>> CambiarSeveridad(Guid id, [FromBody] CambiarSeveridadIncidenciaRequest request)
@@ -295,10 +296,11 @@ namespace Back.Controllers
                 var hastaUtc = DateTime.SpecifyKind(hasta.Value.Date.AddDays(1), DateTimeKind.Utc);
                 query = query.Where(i => i.FechaReporte < hastaUtc);
             }
-            if (!User.IsInRole(Roles.Gerente) && !User.IsInRole(Roles.Administrador))
+            if (!User.IsInRole(Roles.Administrador))
             {
-                if (user.SucursalId is null) return Ok(new List<RankingZonaIncidenciaDto>());
-                query = query.Where(i => i.SucursalId == user.SucursalId);
+                var scope = await CurrentSucursalScopeAsync(user);
+                if (!scope.HasValue || scope.Value == Guid.Empty) return Ok(new List<RankingZonaIncidenciaDto>());
+                query = query.Where(i => i.SucursalId == scope);
             }
 
             var incidencias = await query.ToListAsync();
@@ -328,18 +330,6 @@ namespace Back.Controllers
                 .Where(x => x.Paquete is not null)
                 .ToList();
 
-            if (User.IsInRole(Roles.Gerente))
-            {
-                var provincias = (user as Gerente)?.ProvinciasAsignadas ?? Array.Empty<string>();
-                data = data
-                    .Where(x =>
-                    {
-                        var provincia = x.Paquete!.ProvinciaDestino ?? x.Paquete.Destinatario.Direccion.Provincia;
-                        return provincias.Any(p => string.Equals(p, provincia, StringComparison.OrdinalIgnoreCase));
-                    })
-                    .ToList();
-            }
-
             var ranking = data
                 .GroupBy(x => new
                 {
@@ -362,7 +352,7 @@ namespace Back.Controllers
             return Ok(ranking);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpPost("{id:guid}/observaciones")]
         public async Task<ActionResult<IncidenciaDto>> AgregarObservacion(Guid id, [FromBody] AgregarObservacionIncidenciaRequest request)
@@ -377,7 +367,7 @@ namespace Back.Controllers
             return Ok(ToDto(incidencia));
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpPut("{id:guid}/finalizar-chat")]
         public async Task<ActionResult<IncidenciaDto>> FinalizarChat(Guid id)
@@ -390,7 +380,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Panel cruzado: filas=repartidores, columnas=tipos de incidencia.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpGet("panel-cruzado")]
         public async Task<IActionResult> GetPanelCruzado(
@@ -402,7 +392,7 @@ namespace Back.Controllers
             var start = (desde ?? DateTime.UtcNow.AddDays(-30)).Date;
 
             var user = await CurrentUserAsync();
-            var scope = User.IsInRole(Roles.Administrador) ? sucursalId : user?.SucursalId;
+            var scope = User.IsInRole(Roles.Administrador) ? sucursalId : await CurrentSucursalScopeAsync(user);
 
             var query = _context.Incidencias.AsQueryable()
                 .Where(i => i.FechaReporte >= start && i.FechaReporte <= end && i.RepartidorId.HasValue);
@@ -435,7 +425,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Drill-down: incidencias para una celda del panel cruzado.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Gerente)]
         [RequirePermission("incidencias")]
         [HttpGet("panel-detalle")]
         public async Task<IActionResult> GetPanelDetalle(
@@ -448,7 +438,7 @@ namespace Back.Controllers
             var start = (desde ?? DateTime.UtcNow.AddDays(-30)).Date;
 
             var user = await CurrentUserAsync();
-            var scope = User.IsInRole(Roles.Administrador) ? (Guid?)null : user?.SucursalId;
+            var scope = User.IsInRole(Roles.Administrador) ? (Guid?)null : await CurrentSucursalScopeAsync(user);
 
             var query = _context.Incidencias.AsQueryable()
                 .Where(i => i.FechaReporte >= start && i.FechaReporte <= end);
@@ -479,15 +469,34 @@ namespace Back.Controllers
         private async Task<Incidencia?> GetIncidenciaSupervisorAsync(Guid id)
         {
             var user = await CurrentUserAsync();
-            if (user?.SucursalId is null) return null;
-            return await _context.Incidencias.FirstOrDefaultAsync(i => i.Id == id && i.SucursalId == user.SucursalId);
+            var scope = await CurrentSucursalScopeAsync(user);
+            if (!scope.HasValue || scope.Value == Guid.Empty) return null;
+            return await _context.Incidencias.FirstOrDefaultAsync(i => i.Id == id && i.SucursalId == scope);
         }
 
         private async Task<Incidencia?> GetIncidenciaAutorizadaAsync(Guid id, Usuario user)
         {
             if (await TieneGestionIncidenciasAsync(user.Id))
-                return await _context.Incidencias.FirstOrDefaultAsync(i => i.Id == id && i.SucursalId == user.SucursalId);
+            {
+                var scope = await CurrentSucursalScopeAsync(user);
+                if (!scope.HasValue || scope.Value == Guid.Empty) return null;
+                return await _context.Incidencias.FirstOrDefaultAsync(i => i.Id == id && i.SucursalId == scope);
+            }
             return await _context.Incidencias.FirstOrDefaultAsync(i => i.Id == id && i.RepartidorId == user.Id);
+        }
+
+        private async Task<Guid?> CurrentSucursalScopeAsync(Usuario? user = null)
+        {
+            if (User.IsInRole(Roles.Administrador)) return null;
+            user ??= await CurrentUserAsync();
+            if (user is Gerente gerente)
+            {
+                if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
+                var habilitada = await _context.GerentesSucursales
+                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
+                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+            }
+            return user?.SucursalId ?? Guid.Empty;
         }
 
         private async Task<bool> TieneGestionIncidenciasAsync(Guid userId)

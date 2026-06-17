@@ -42,6 +42,7 @@ import { postalCodeService } from '../services/postalCodeService'
 import { branchService } from '../services/branchService'
 import { tarifaService, type Cotizacion } from '../services/tarifaService'
 import { pickupService, type PuntoPickUp } from '../services/pickupService'
+import { gerenteSucursalService } from '../services/gerenteSucursalService'
 import { AR_PROVINCIAS, normalizeProvincia } from '../utils/provincias'
 
 interface ShipmentFormProps {
@@ -77,6 +78,14 @@ const cityRegex = /^[A-Za-zÀ-ÿ\s'-]+$/
 const addressRegex = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s.,'-]*\s\d+[A-Za-z]?$/
 const phoneRegex = /^[+\d][\d\s-]{6,19}$/
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function currentUserRole(): string {
+  try {
+    return JSON.parse(localStorage.getItem('user') ?? 'null')?.role ?? ''
+  } catch {
+    return ''
+  }
+}
 
 function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }: ShipmentFormProps) {
   const isEdit = mode === 'edit'
@@ -153,6 +162,21 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   const loadBranches = async () => {
     setLoadingBranches(true)
     try {
+      if (currentUserRole() === 'gerente') {
+        const active = await gerenteSucursalService.getSucursalActiva()
+        if (!active.id) {
+          setBranches([])
+          setSelectedBranchId('')
+          return
+        }
+
+        const branch = await branchService.getBranchById(active.id)
+        const activeBranch = branch && branch.status === 'Activa' ? [branch] : []
+        setBranches(activeBranch)
+        setSelectedBranchId(activeBranch[0]?.id ?? '')
+        return
+      }
+
       const all = await branchService.getAllBranches()
       const active = all.filter((b) => b.status === 'Activa')
       setBranches(active)
@@ -474,8 +498,9 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
 
           {!loadingBranches && branches.length === 0 && (
             <Alert severity="warning">
-              No hay una sucursal activa configurada. Pedile al administrador que cree una desde
-              "Mi sucursal" antes de registrar envíos.
+              {currentUserRole() === 'gerente'
+                ? 'Seleccioná una sucursal activa en el menú lateral antes de registrar envíos.'
+                : 'No hay una sucursal activa configurada. Pedile al administrador que cree una desde "Mi sucursal" antes de registrar envíos.'}
             </Alert>
           )}
 
@@ -491,7 +516,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
             </Alert>
           )}
 
-          {branches.length > 1 && (
+          {branches.length > 1 && currentUserRole() !== 'gerente' && (
             <FormControl fullWidth size="small" sx={{ mb: 1 }}>
               <InputLabel>Sucursal de origen</InputLabel>
               <Select

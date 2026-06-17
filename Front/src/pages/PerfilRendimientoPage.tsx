@@ -44,7 +44,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import api from '../services/api'
 import { authService, type HistorialJornadaItem } from '../services/authService'
-import { branchService } from '../services/branchService'
+import { gerenteSucursalService } from '../services/gerenteSucursalService'
 import type { Branch, User } from '../types'
 import { addArgentinaDays, dateOnlyForDisplay, formatArgentinaDateInput, formatDateOnlyEs, formatInstantArgentinaDate, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
@@ -499,12 +499,19 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
                   variant="outlined"
                   startIcon={<TransferWithinAStationIcon />}
                   onClick={async () => {
-                    const branches = await branchService.getAllBranches()
-                    const userProvincias = user.provincias || (user.provincia ? [user.provincia] : [])
-                    const allowedBranches = userProvincias.length > 0 
-                      ? branches.filter(b => b.province && userProvincias.includes(b.province))
-                      : branches
-                    setSucursales(allowedBranches)
+                    const habilitadas = await gerenteSucursalService.getSucursalesHabilitadas()
+                    setSucursales(habilitadas.map((s) => ({
+                      id: s.id,
+                      name: s.nombre,
+                      address: '',
+                      city: '',
+                      postalCode: '',
+                      province: s.provincia ?? undefined,
+                      coveredProvinces: [],
+                      phone: '',
+                      createdDate: '',
+                      status: 'Activa',
+                    })))
                     setSelectedSucursal(data?.sucursalId ?? '')
                     setTransferDialogOpen(true)
                   }}

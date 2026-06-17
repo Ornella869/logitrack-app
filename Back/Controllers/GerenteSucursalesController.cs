@@ -66,6 +66,10 @@ namespace Back.Controllers
                     .Where(s => request.SucursalIds.Contains(s.Id))
                     .ToListAsync();
 
+                var faltantes = request.SucursalIds.Except(sucursales.Select(s => s.Id)).ToList();
+                if (faltantes.Any())
+                    return BadRequest("Una o más sucursales seleccionadas no existen.");
+
                 var fuera = sucursales
                     .Where(s => !gerente.ProvinciasAsignadas.Contains(s.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
                     .Select(s => s.Nombre)
@@ -104,8 +108,14 @@ namespace Back.Controllers
                 return Ok(new SucursalActivaResponse(null, null, null));
 
             var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
-            if (sucursal == null)
+            var habilitadas = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
+            if (sucursal == null || !habilitadas.Contains(sucursal.Id) ||
+                !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                gerente.SetSucursalActiva(null);
+                await _context.SaveChangesAsync();
                 return Ok(new SucursalActivaResponse(null, null, null));
+            }
 
             return Ok(new SucursalActivaResponse(sucursal.Id, sucursal.Nombre, sucursal.Provincia));
         }
@@ -123,7 +133,8 @@ namespace Back.Controllers
 
             var ids = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
             var sucursales = await _context.Sucursales
-                .Where(s => ids.Contains(s.Id))
+                .Where(s => ids.Contains(s.Id)
+                    && gerente.ProvinciasAsignadas.Contains(s.Provincia ?? string.Empty))
                 .Select(s => new SucursalGerenteResponse(s.Id, s.Nombre, s.Provincia))
                 .ToListAsync();
 
@@ -146,6 +157,10 @@ namespace Back.Controllers
                 var habilitadas = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
                 if (!habilitadas.Contains(request.SucursalId.Value))
                     return BadRequest("Esa sucursal no está habilitada para tu usuario.");
+
+                var sucursal = await _context.Sucursales.FindAsync(request.SucursalId.Value);
+                if (sucursal is null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                    return BadRequest("Esa sucursal no pertenece a la provincia del gerente.");
             }
 
             gerente.SetSucursalActiva(request.SucursalId);

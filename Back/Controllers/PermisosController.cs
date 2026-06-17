@@ -54,6 +54,18 @@ namespace Back.Controllers
         }
 
         [Authorize(Roles = Roles.Administrador)]
+        [HttpDelete("roles/{rol}")]
+        public async Task<ActionResult> RestablecerRol(string rol)
+        {
+            try
+            {
+                await _service.RestablecerRolAsync(rol, CurrentUserId());
+                return NoContent();
+            }
+            catch (InvalidOperationException ex) { return BadRequest(ex.Message); }
+        }
+
+        [Authorize(Roles = Roles.Administrador)]
         [HttpGet("usuarios")]
         public async Task<ActionResult> Usuarios([FromQuery] string? search)
         {
@@ -97,6 +109,18 @@ namespace Back.Controllers
             }
             catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
             catch (InvalidOperationException ex) { return BadRequest(ex.Message); }
+        }
+
+        [Authorize(Roles = Roles.Administrador)]
+        [HttpDelete("usuarios/{usuarioId:guid}")]
+        public async Task<ActionResult> RestablecerUsuario(Guid usuarioId)
+        {
+            try
+            {
+                await _service.RestablecerUsuarioAsync(usuarioId, CurrentUserId());
+                return NoContent();
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
         }
 
         private Guid CurrentUserId()

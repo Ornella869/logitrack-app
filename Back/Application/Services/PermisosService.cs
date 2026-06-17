@@ -94,7 +94,7 @@ namespace Back.Application.Services
                 Roles.Administrador, Roles.Gerente, Roles.Supervisor, Roles.Operador, Roles.Repartidor),
             Definir("transferir_repartidores", "Transferir repartidores entre sucursales", "Operación",
                 new[] { Roles.Gerente },
-                Roles.Gerente, Roles.Supervisor),
+                Roles.Gerente),
             Definir(PermisoGestionarPermisos, "Permisos por rol y usuario", "Administración",
                 new[] { Roles.Administrador }, Roles.Administrador),
         };
@@ -198,6 +198,22 @@ namespace Back.Application.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task RestablecerRolAsync(string rol, Guid administradorId)
+        {
+            rol = NormalizarRol(rol);
+            var configurados = await _context.PermisosRol
+                .Where(x => x.Rol == rol)
+                .ToListAsync();
+
+            if (configurados.Count > 0)
+                _context.PermisosRol.RemoveRange(configurados);
+
+            await _auditoria.RegistrarAsync(TipoAccion.Permisos,
+                $"Permisos del rol {rol} restablecidos a la configuración base.",
+                rol);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task ActualizarUsuarioAsync(Guid usuarioId, string permiso, string estado, Guid administradorId, List<Guid>? sucursalesIds = null)
         {
             ValidarPermiso(permiso);
@@ -234,6 +250,23 @@ namespace Back.Application.Services
 
             await _auditoria.RegistrarAsync(TipoAccion.Permisos,
                 $"Excepción '{estado}' aplicada al permiso '{permiso}' para {usuario.Nombre} {usuario.Apellido}.",
+                usuarioId.ToString());
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task RestablecerUsuarioAsync(Guid usuarioId, Guid administradorId)
+        {
+            var usuario = await _context.Usuarios.FindAsync(usuarioId)
+                ?? throw new KeyNotFoundException("Usuario no encontrado.");
+            var excepciones = await _context.PermisosUsuario
+                .Where(x => x.UsuarioId == usuarioId)
+                .ToListAsync();
+
+            if (excepciones.Count > 0)
+                _context.PermisosUsuario.RemoveRange(excepciones);
+
+            await _auditoria.RegistrarAsync(TipoAccion.Permisos,
+                $"Excepciones de permisos restablecidas para {usuario.Nombre} {usuario.Apellido}.",
                 usuarioId.ToString());
             await _context.SaveChangesAsync();
         }

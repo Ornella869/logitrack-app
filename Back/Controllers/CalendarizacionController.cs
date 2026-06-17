@@ -36,11 +36,18 @@ namespace Back.Controllers
             if (User.IsInRole(Roles.Administrador)) return null;
             if (CurrentUserId() is not Guid uid) return null;
             var u = await _context.Usuarios.FindAsync(uid);
+            if (u is Gerente gerente)
+            {
+                if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
+                var habilitada = await _context.GerentesSucursales
+                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
+                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+            }
             return u?.SucursalId ?? Guid.Empty;
         }
 
         /// <summary>Cantidad de paquetes pendientes de calendarización de la sucursal del usuario.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpGet("pendientes")]
         public async Task<ActionResult<object>> Pendientes()
         {
@@ -49,7 +56,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Estado actual de asignaciones activas de la sucursal, agrupado por día y repartidor.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpGet("estado-actual")]
         public async Task<ActionResult<List<DiaResumen>>> EstadoActual()
         {
@@ -58,7 +65,7 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-55: Calendario operativo grilla repartidor x día (próximos N días, default 14).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpGet("calendario")]
         public async Task<ActionResult<CalendarioOperativo>> Calendario([FromQuery] int dias = 14)
         {
@@ -68,7 +75,7 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-83: Precalendarización manual de un envío a un repartidor y día (Supervisor).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpPost("precalendarizar")]
         public async Task<ActionResult<PrecalendarizacionResultado>> Precalendarizar([FromBody] PrecalendarizarRequest request)
         {
@@ -92,7 +99,7 @@ namespace Back.Controllers
             try
             {
                 var resultado = await _service.PrecalendarizarManualAsync(
-                    request.PaqueteId, request.RepartidorId, request.Fecha, CurrentUserId());
+                    request.PaqueteId, request.RepartidorId, request.Fecha, CurrentUserId(), await CurrentSucursalIdAsync());
                 await _context.SaveChangesAsync();
                 return Ok(resultado);
             }
@@ -119,13 +126,13 @@ namespace Back.Controllers
         }
 
         /// <summary>G1L-150: Simula la calendarización sin persistir ningún cambio (vista previa).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpPost("preview")]
         public async Task<ActionResult<CalendarizacionResultado>> Preview()
         {
             try
             {
-                var resultado = await _service.PreviewAsync(CurrentUserId());
+                var resultado = await _service.PreviewAsync(CurrentUserId(), await CurrentSucursalIdAsync());
                 return Ok(resultado);
             }
             catch (InvalidOperationException ex)
@@ -135,13 +142,13 @@ namespace Back.Controllers
         }
 
         /// <summary>Ejecuta el algoritmo de calendarización automática (G1L-54).</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisor + "," + Roles.Repartidor + "," + Roles.Gerente)]
         [HttpPost("ejecutar")]
         public async Task<ActionResult<CalendarizacionResultado>> Ejecutar()
         {
             try
             {
-                var resultado = await _service.EjecutarAsync(CurrentUserId());
+                var resultado = await _service.EjecutarAsync(CurrentUserId(), await CurrentSucursalIdAsync());
                 await _context.SaveChangesAsync();
                 return Ok(resultado);
             }
@@ -152,7 +159,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Envíos no entregados (Demorado / RetornadoASucursal) pendientes de reagendamiento.</summary>
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Gerente)]
         [HttpGet("pendientes-reagendamiento")]
         public async Task<IActionResult> GetPendientesReagendamiento()
         {
@@ -182,13 +189,13 @@ namespace Back.Controllers
         }
 
         /// <summary>Reagenda un envío devolviendo a la cola de calendarización y notifica al destinatario.</summary>
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Gerente)]
         [HttpPost("{paqueteId:guid}/reagendar")]
         public async Task<IActionResult> Reagendar(Guid paqueteId)
         {
             try
             {
-                var resultado = await _service.ReagendarAutomaticamenteAsync(paqueteId, CurrentUserId());
+                var resultado = await _service.ReagendarAutomaticamenteAsync(paqueteId, CurrentUserId(), await CurrentSucursalIdAsync());
                 await _context.SaveChangesAsync();
                 if (resultado.Asignado)
                 {
@@ -205,7 +212,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Reagenda masivamente una lista de envíos.</summary>
-        [Authorize(Roles = Roles.Supervisor)]
+        [Authorize(Roles = Roles.Supervisor + "," + Roles.Gerente)]
         [HttpPost("reagendar-masivo")]
         public async Task<IActionResult> ReagendarMasivo([FromBody] ReagendarMasivoRequest body)
         {
@@ -220,7 +227,7 @@ namespace Back.Controllers
             {
                 try
                 {
-                    var resultado = await _service.ReagendarAutomaticamenteAsync(paqueteId, CurrentUserId());
+                    var resultado = await _service.ReagendarAutomaticamenteAsync(paqueteId, CurrentUserId(), await CurrentSucursalIdAsync());
                     items.Add(resultado);
                     if (resultado.Asignado) reagendados++;
                     else sinFechaDisponible++;

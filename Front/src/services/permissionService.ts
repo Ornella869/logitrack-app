@@ -49,6 +49,10 @@ export const permissionService = {
     await api.put(`/permisos/roles/${encodeURIComponent(role)}/${permission}`, { habilitado: enabled })
   },
 
+  async resetRolePermissions(role: string): Promise<void> {
+    await api.delete(`/permisos/roles/${encodeURIComponent(role)}`)
+  },
+
   async getUsers(search = ''): Promise<PermissionUser[]> {
     const response = await api.get<PermissionUser[]>('/permisos/usuarios', { params: { search: search || undefined } })
     return response.data
@@ -69,5 +73,9 @@ export const permissionService = {
       estado,
       ...(sucursalesIds !== undefined ? { sucursalesIds } : {}),
     })
+  },
+
+  async resetUserPermissions(userId: string): Promise<void> {
+    await api.delete(`/permisos/usuarios/${userId}`)
   },
 }

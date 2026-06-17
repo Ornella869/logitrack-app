@@ -102,7 +102,7 @@ export default function EnviosPage({ permissions }: { permissions: Set<string> }
         activeFilters.status.length ? activeFilters.status : undefined,
         activeFilters.from || undefined,
         activeFilters.to || undefined,
-        user.role === 'operador' || user.role === 'supervisor' || user.role === 'repartidor',
+        user.role === 'operador' || user.role === 'supervisor' || user.role === 'repartidor' || user.role === 'gerente',
       )
       setShipments(result.items)
       setTotalItems(result.totalItems)

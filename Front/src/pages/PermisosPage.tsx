@@ -56,6 +56,7 @@ import UndoIcon from '@mui/icons-material/Undo'
 import UsersManagement from '../components/UsersManagement'
 import type { Branch, User } from '../types'
 import { branchService } from '../services/branchService'
+import { gerenteSucursalService } from '../services/gerenteSucursalService'
 import {
   permissionService,
   type RolePermission,
@@ -136,6 +137,12 @@ export default function PermisosPage() {
   const [error, setError] = useState('')
   const [savedSnackbar, setSavedSnackbar] = useState('')
   const [branchScope, setBranchScope] = useState<BranchScopeState>(defaultBranchScope)
+  const [gerenteBranches, setGerenteBranches] = useState<{
+    available: Branch[]
+    selectedIds: string[]
+    loading: boolean
+    saving: boolean
+  }>({ available: [], selectedIds: [], loading: false, saving: false })
 
   useEffect(() => {
     void permissionService.getRoles()
@@ -166,6 +173,43 @@ export default function PermisosPage() {
       .then(setUserPermissions)
       .catch(() => setError('No se pudieron cargar los permisos del usuario.'))
       .finally(() => setLoading(false))
+  }, [selectedUser])
+
+  useEffect(() => {
+    if (!selectedUser || selectedUser.role !== 'gerente') {
+      setGerenteBranches({ available: [], selectedIds: [], loading: false, saving: false })
+      return
+    }
+
+    let cancelled = false
+    setGerenteBranches((prev) => ({ ...prev, loading: true, saving: false }))
+    const provincias = getUserProvinces(selectedUser)
+
+    Promise.all([
+      branchService.getAllBranches(),
+      gerenteSucursalService.getSucursalesDeGerente(selectedUser.id),
+    ])
+      .then(([branches, habilitadas]) => {
+        if (cancelled) return
+        const available = branches.filter((branch) =>
+          branch.status === 'Activa'
+          && provincias.some((provincia) => equalsIgnoreCase(branch.province, provincia)))
+        const allowedIds = new Set(available.map((branch) => branch.id))
+        setGerenteBranches({
+          available,
+          selectedIds: habilitadas.map((s) => s.id).filter((id) => allowedIds.has(id)),
+          loading: false,
+          saving: false,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGerenteBranches({ available: [], selectedIds: [], loading: false, saving: false })
+          setError('No se pudieron cargar las sucursales operativas del gerente.')
+        }
+      })
+
+    return () => { cancelled = true }
   }, [selectedUser])
 
   const groupedRolePermissions = useMemo(() => groupByGroup(rolePermissions), [rolePermissions])
@@ -211,24 +255,6 @@ export default function PermisosPage() {
   const updateUser = async (permission: UserPermission, estado: UserPermissionState) => {
     if (!selectedUser) return
 
-    // Para "sucursales" + "Habilitado", abrir el dialog de scope antes de guardar
-    if (permission.clave === 'sucursales' && estado === 'Habilitado') {
-      const existing = permission.sucursalesPermitidasIds
-      const scopeType: 'all' | 'specific' = existing !== null && existing !== undefined && existing.length > 0 ? 'specific' : 'all'
-      setBranchScope({
-        open: true, permission, scopeType,
-        allBranches: [], selectedBranchIds: existing ?? [],
-        loading: true, saving: false,
-      })
-      try {
-        const branches = await branchService.getAllBranches()
-        setBranchScope(prev => ({ ...prev, allBranches: branches.filter(b => b.status === 'Activa'), loading: false }))
-      } catch {
-        setBranchScope(prev => ({ ...prev, loading: false }))
-      }
-      return
-    }
-
     setSavingKey(permission.clave)
     setError('')
     try {
@@ -272,25 +298,61 @@ export default function PermisosPage() {
     }))
   }
 
+  const toggleGerenteBranchId = (id: string) => {
+    setGerenteBranches((prev) => ({
+      ...prev,
+      selectedIds: prev.selectedIds.includes(id)
+        ? prev.selectedIds.filter((value) => value !== id)
+        : [...prev.selectedIds, id],
+    }))
+  }
+
+  const saveGerenteBranches = async () => {
+    if (!selectedUser || selectedUser.role !== 'gerente') return
+    setGerenteBranches((prev) => ({ ...prev, saving: true }))
+    setError('')
+    try {
+      await gerenteSucursalService.setSucursalesDeGerente(selectedUser.id, gerenteBranches.selectedIds)
+      setSavedSnackbar(`Sucursales operativas actualizadas para ${selectedUser.name}`)
+    } catch {
+      setError('No se pudieron guardar las sucursales operativas del gerente.')
+    } finally {
+      setGerenteBranches((prev) => ({ ...prev, saving: false }))
+    }
+  }
+
   return (
-    <Box sx={{ maxWidth: 1440, mx: 'auto', px: { xs: 1.5, md: 3 }, py: { xs: 2, md: 3 } }}>
+    <Box
+      sx={{
+        maxWidth: 1440,
+        mx: 'auto',
+        px: { xs: 1.5, md: 3 },
+        py: { xs: 2, md: 3 },
+      }}
+    >
       <Box
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', md: '1fr auto' },
           gap: 2,
-          alignItems: 'end',
-          mb: 3,
+          alignItems: 'center',
+          mb: 2.5,
+          p: { xs: 2, md: 2.5 },
+          border: '1px solid',
+          borderColor: 'rgba(25,118,210,0.10)',
+          borderRadius: 3,
+          bgcolor: 'rgba(255,255,255,0.72)',
+          boxShadow: '0 10px 30px rgba(20,45,75,0.045)',
           animation: `${reveal} 420ms cubic-bezier(.2,.8,.2,1) both`,
         }}
       >
         <Box>
           <Stack direction="row" spacing={1.5} alignItems="center" mb={1}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 42, height: 42, borderRadius: 2 }}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 46, height: 46, borderRadius: 2, boxShadow: '0 14px 28px rgba(25,118,210,0.26)' }}>
               <AdminPanelSettingsIcon />
             </Avatar>
             <Box>
-              <Typography variant="h4" fontWeight={800}>Permisos de acceso</Typography>
+              <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: 0 }}>Permisos de acceso</Typography>
               <Typography color="text.secondary">
                 Definí la base por rol y ajustá casos particulares sin mezclar ámbitos operativos.
               </Typography>
@@ -313,8 +375,9 @@ export default function PermisosPage() {
         variant="outlined"
         sx={{
           overflow: 'hidden',
-          borderRadius: 2,
-          boxShadow: '0 12px 32px rgba(20, 45, 75, 0.06)',
+          borderRadius: 3,
+          borderColor: 'rgba(25,118,210,0.16)',
+          boxShadow: '0 18px 44px rgba(20, 45, 75, 0.09)',
           animation: `${reveal} 480ms 60ms cubic-bezier(.2,.8,.2,1) both`,
         }}
       >
@@ -326,8 +389,10 @@ export default function PermisosPage() {
             minHeight: 58,
             borderBottom: 1,
             borderColor: 'divider',
-            bgcolor: 'background.paper',
-            '& .MuiTab-root': { minHeight: 58, fontWeight: 750, textTransform: 'none' },
+            bgcolor: 'rgba(255,255,255,0.86)',
+            backdropFilter: 'blur(10px)',
+            '& .MuiTab-root': { minHeight: 58, fontWeight: 800, textTransform: 'none' },
+            '& .MuiTabs-indicator': { height: 3, borderRadius: 999 },
           }}
         >
           <Tab icon={<GroupsIcon />} iconPosition="start" label="Permisos por rol" />
@@ -355,10 +420,20 @@ export default function PermisosPage() {
                 '& .MuiToggleButtonGroup-grouped': {
                   border: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: '6px !important',
+                  borderRadius: '999px !important',
                   px: 2,
+                  py: 0.85,
                   textTransform: 'none',
                   fontWeight: 700,
+                  bgcolor: 'background.paper',
+                  transition: 'all 160ms ease',
+                  '&.Mui-selected': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    borderColor: 'primary.main',
+                    boxShadow: '0 10px 22px rgba(25,118,210,0.22)',
+                    '&:hover': { bgcolor: 'primary.dark' },
+                  },
                 },
               }}
             >
@@ -513,9 +588,31 @@ export default function PermisosPage() {
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        PaperProps={{ sx: { width: { xs: '100vw', sm: 520, md: 600 }, display: 'flex', flexDirection: 'column' } }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100vw', sm: 540, md: 620 },
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#f8fbff',
+            borderLeft: '1px solid rgba(25,118,210,0.12)',
+          },
+        }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 3, pt: 2, pb: 1, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{
+            px: 3,
+            pt: 2,
+            pb: 1.5,
+            borderBottom: 1,
+            borderColor: 'rgba(25,118,210,0.12)',
+            flexShrink: 0,
+            bgcolor: 'rgba(255,255,255,0.9)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
           <Stack direction="row" spacing={1} alignItems="center">
             <TuneIcon color="primary" fontSize="small" />
             <Typography fontWeight={800} variant="subtitle1">Configurar permisos</Typography>
@@ -532,6 +629,80 @@ export default function PermisosPage() {
         )}
 
         <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
+          {selectedUser?.role === 'gerente' && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mb: 2,
+                p: 2,
+                borderRadius: 3,
+                bgcolor: 'linear-gradient(135deg, rgba(25,118,210,0.08), rgba(25,118,210,0.02))',
+                borderColor: 'rgba(25,118,210,0.22)',
+                boxShadow: '0 10px 26px rgba(25,118,210,0.08)',
+              }}
+            >
+              <Stack direction="row" spacing={1} alignItems="flex-start" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <StoreMallDirectoryIcon color="primary" fontSize="small" />
+                    <Typography fontWeight={800}>Sucursales operativas del gerente</Typography>
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary">
+                    Estas son las sucursales donde puede usar permisos de operador/supervisor. Solo se muestran sucursales de {getUserProvinces(selectedUser).join(', ') || 'su provincia'}.
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={gerenteBranches.selectedIds.length > 0 ? 'primary' : 'default'}
+                  label={`${gerenteBranches.selectedIds.length} habilitada${gerenteBranches.selectedIds.length !== 1 ? 's' : ''}`}
+                />
+              </Stack>
+
+              {gerenteBranches.loading ? (
+                <Box display="flex" justifyContent="center" py={2}><CircularProgress size={24} /></Box>
+              ) : gerenteBranches.available.length === 0 ? (
+                <Alert severity="warning" sx={{ py: 0.5 }}>
+                  No hay sucursales activas en la provincia del gerente.
+                </Alert>
+              ) : (
+                <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper' }}>
+                  <List dense disablePadding>
+                    {gerenteBranches.available.map((branch) => (
+                      <ListItem key={branch.id} disablePadding sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
+                        <ListItemIcon sx={{ minWidth: 38, pl: 0.5 }}>
+                          <Checkbox
+                            edge="start"
+                            checked={gerenteBranches.selectedIds.includes(branch.id)}
+                            onChange={() => toggleGerenteBranchId(branch.id)}
+                            size="small"
+                          />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={branch.name}
+                          secondary={`${branch.city || 'Sin ciudad'} · ${branch.province || 'Sin provincia'}`}
+                          primaryTypographyProps={{ fontWeight: 700, variant: 'body2' }}
+                          secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => void saveGerenteBranches()}
+                  disabled={gerenteBranches.loading || gerenteBranches.saving}
+                  startIcon={gerenteBranches.saving ? <CircularProgress size={14} color="inherit" /> : <SaveIcon />}
+                >
+                  {gerenteBranches.saving ? 'Guardando...' : 'Guardar sucursales'}
+                </Button>
+              </Stack>
+            </Paper>
+          )}
+
           <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 2 }}>
             <strong>Usar permiso del rol</strong> mantiene la configuración general.
             Las opciones permitir o denegar aplican solo a este usuario.
@@ -548,11 +719,7 @@ export default function PermisosPage() {
                 return (
                   <PermissionGroup key={group} title={group} delay={index * 30}>
                     {visiblePermissions.map((permission) => {
-                      const scopeLabel = permission.clave === 'sucursales' && permission.estado === 'Habilitado' && permission.sucursalesPermitidasIds !== undefined && permission.sucursalesPermitidasIds !== null
-                        ? permission.sucursalesPermitidasIds.length === 0
-                          ? 'Todas las de su provincia'
-                          : `${permission.sucursalesPermitidasIds.length} específica${permission.sucursalesPermitidasIds.length !== 1 ? 's' : ''}`
-                        : null
+                      const scopeLabel = null
                       return (
                         <PermissionRow
                           key={permission.clave}
@@ -727,6 +894,17 @@ export default function PermisosPage() {
   )
 }
 
+function equalsIgnoreCase(a?: string | null, b?: string | null) {
+  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+}
+
+function getUserProvinces(user?: User | null): string[] {
+  const values = user?.provincias?.length
+    ? user.provincias
+    : (user?.provincia ?? '').split(',')
+  return values.map((value) => value.trim()).filter(Boolean)
+}
+
 function groupByGroup<T extends { grupo: string }>(permissions: T[]): Record<string, T[]> {
   return permissions.reduce<Record<string, T[]>>((groups, permission) => {
     groups[permission.grupo] ??= []
@@ -745,7 +923,13 @@ function SummaryChip({ icon, label }: { icon: ReactNode; label: string }) {
       icon={icon as ReactElement}
       label={label}
       variant="outlined"
-      sx={{ height: 34, fontWeight: 700, bgcolor: 'background.paper' }}
+      sx={{
+        height: 36,
+        fontWeight: 800,
+        bgcolor: 'rgba(255,255,255,0.86)',
+        borderColor: 'rgba(25,118,210,0.18)',
+        boxShadow: '0 8px 20px rgba(20,45,75,0.06)',
+      }}
     />
   )
 }
@@ -753,7 +937,20 @@ function SummaryChip({ icon, label }: { icon: ReactNode; label: string }) {
 function SectionHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
   return (
     <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ mb: 2.5 }}>
-      <Box sx={{ color: 'primary.main', mt: 0.25 }}>{icon}</Box>
+      <Box
+        sx={{
+          color: 'primary.main',
+          mt: 0.1,
+          width: 34,
+          height: 34,
+          borderRadius: 1.5,
+          display: 'grid',
+          placeItems: 'center',
+          bgcolor: 'rgba(25,118,210,0.08)',
+        }}
+      >
+        {icon}
+      </Box>
       <Box>
         <Typography variant="h6" fontWeight={800}>{title}</Typography>
         <Typography variant="body2" color="text.secondary">{description}</Typography>
@@ -802,9 +999,8 @@ function PermissionGrid({ children }: { children: ReactNode }) {
   return (
     <Box
       sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
-        gap: 2,
+        columnCount: { xs: 1, lg: 2 },
+        columnGap: 2,
       }}
     >
       {children}
@@ -818,13 +1014,28 @@ function PermissionGroup({ title, children, delay }: { title: string; children: 
       sx={{
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: 3,
         overflow: 'hidden',
         alignSelf: 'start',
+        bgcolor: 'background.paper',
+        boxShadow: '0 10px 28px rgba(20,45,75,0.06)',
+        breakInside: 'avoid',
+        mb: 2,
         animation: `${reveal} 360ms ${delay}ms cubic-bezier(.2,.8,.2,1) both`,
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2, py: 1.25, bgcolor: 'action.hover' }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{
+          px: 2,
+          py: 1.35,
+          bgcolor: 'rgba(25,118,210,0.045)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
         <LockOpenIcon color="primary" sx={{ fontSize: 19 }} />
         <Typography variant="subtitle2" fontWeight={800}>{title}</Typography>
       </Stack>
@@ -861,9 +1072,9 @@ function PermissionRow({
         px: 2,
         py: 1.25,
         opacity: compatible ? 1 : 0.55,
-        transition: 'background-color 160ms ease',
+        transition: 'background-color 160ms ease, transform 160ms ease',
         '& + &': { borderTop: 1, borderColor: 'divider' },
-        '&:hover': { bgcolor: compatible ? 'action.hover' : undefined },
+        '&:hover': { bgcolor: compatible ? 'rgba(25,118,210,0.035)' : undefined },
         ...(pending && { animation: `${pendingPulse} 1.8s ease infinite` }),
       }}
     >

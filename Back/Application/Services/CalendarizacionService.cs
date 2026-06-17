@@ -256,7 +256,7 @@ namespace Back.Application.Services
 
         // G1L-83: Precalendarización manual de un envío a un repartidor y día específicos.
         public async Task<PrecalendarizacionResultado> PrecalendarizarManualAsync(
-            Guid paqueteId, Guid repartidorId, DateTime fecha, Guid? supervisorId)
+            Guid paqueteId, Guid repartidorId, DateTime fecha, Guid? supervisorId, Guid? sucursalOperativaId = null)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
@@ -266,7 +266,14 @@ namespace Back.Application.Services
 
             var rep = await _userRepository.GetUsuarioById(repartidorId) as Repartidor
                 ?? throw new InvalidOperationException("Repartidor no encontrado.");
-            if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup && sup.SucursalId.HasValue)
+            if (sucursalOperativaId.HasValue)
+            {
+                if (paquete.SucursalId != sucursalOperativaId)
+                    throw new InvalidOperationException("No podés calendarizar envíos de otra sucursal.");
+                if (rep.SucursalId != sucursalOperativaId)
+                    throw new InvalidOperationException("No podés asignar envíos a repartidores de otra sucursal.");
+            }
+            else if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup && sup.SucursalId.HasValue)
             {
                 if (paquete.SucursalId != sup.SucursalId)
                     throw new InvalidOperationException("No podés calendarizar envíos de otra sucursal.");
@@ -371,11 +378,11 @@ namespace Back.Application.Services
         }
 
         // G1L-150: simula el algoritmo sin persistir ningún cambio.
-        public async Task<ReagendamientoResultado> ReagendarAutomaticamenteAsync(Guid paqueteId, Guid? supervisorId)
+        public async Task<ReagendamientoResultado> ReagendarAutomaticamenteAsync(Guid paqueteId, Guid? supervisorId, Guid? sucursalOperativaId = null)
         {
-            Guid? sucursalId = null;
+            Guid? sucursalId = sucursalOperativaId;
             if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
-                sucursalId = sup.SucursalId;
+                sucursalId ??= sup.SucursalId;
 
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
@@ -442,11 +449,11 @@ namespace Back.Application.Services
             return ReagendamientoResultado.CrearSinFecha(paquete, "Sin fecha disponible en los próximos 30 días.");
         }
 
-        public async Task<CalendarizacionResultado> PreviewAsync(Guid? supervisorId)
+        public async Task<CalendarizacionResultado> PreviewAsync(Guid? supervisorId, Guid? sucursalOperativaId = null)
         {
-            Guid? sucursalId = null;
+            Guid? sucursalId = sucursalOperativaId;
             if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
-                sucursalId = sup.SucursalId;
+                sucursalId ??= sup.SucursalId;
 
             var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion(sucursalId);
 
@@ -655,12 +662,12 @@ namespace Back.Application.Services
             }
         }
 
-        public async Task<CalendarizacionResultado> EjecutarAsync(Guid? supervisorId)
+        public async Task<CalendarizacionResultado> EjecutarAsync(Guid? supervisorId, Guid? sucursalOperativaId = null)
         {
             // Épica D: el supervisor calendariza solo su sucursal (envíos y repartidores).
-            Guid? sucursalId = null;
+            Guid? sucursalId = sucursalOperativaId;
             if (supervisorId.HasValue && await _userRepository.GetUsuarioById(supervisorId.Value) is Usuario sup)
-                sucursalId = sup.SucursalId;
+                sucursalId ??= sup.SucursalId;
 
             var pendientes = await _enviosRepository.GetPaquetesPendientesDeCalendarizacion(sucursalId);
 
