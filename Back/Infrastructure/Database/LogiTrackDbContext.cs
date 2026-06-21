@@ -40,6 +40,7 @@ namespace Back.Infrastructure.Database
         public DbSet<PermisoUsuario> PermisosUsuario { get; set; }
         public DbSet<DatoEntrenamientoTramo> DatosEntrenamientoTramo { get; set; }
         public DbSet<AlertaRiesgoDemoraMl> AlertasRiesgoDemoraMl { get; set; }
+        public DbSet<ModeloVersionTramo> ModeloVersionesTramo { get; set; }
 
         public LogiTrackDbContext(DbContextOptions<LogiTrackDbContext> options) : base(options)
         {

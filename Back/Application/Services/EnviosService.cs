@@ -795,6 +795,7 @@ namespace Back.Application.Services
                 };
             }
 
+            var fechaEstimadaAnterior = paquete.FechaEstimadaEntrega;
             if (usuarioId.HasValue
                 && await _tramos.IntentarRecibirEnSucursalAsync(paquete, usuarioId.Value))
             {
@@ -806,6 +807,14 @@ namespace Back.Application.Services
                     if (sucursal is not null)
                     {
                         await _emails.NotificarLlegadaSucursalAsync(paquete, sucursal.Nombre, paquete.FechaEstimadaEntrega);
+                        // A2 / G1L-160: si la reestimación ML adelantó la fecha estimada, avisar al cliente (estilo Temu).
+                        var nuevaFechaEstimada = paquete.FechaEstimadaEntrega;
+                        if (nuevaFechaEstimada.HasValue && fechaEstimadaAnterior.HasValue
+                            && nuevaFechaEstimada.Value.Date < fechaEstimadaAnterior.Value.Date)
+                        {
+                            await _emails.NotificarReestimacionSucursalAsync(
+                                paquete, sucursal.Nombre, fechaEstimadaAnterior, nuevaFechaEstimada.Value);
+                        }
                     }
                 }
 

@@ -9,8 +9,8 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/plantillas-email")]
+    [Authorize]
     [RequirePermission("plantillas_email")]
-    [Authorize(Roles = Roles.Gerente)]
     public class PlantillasEmailController : ControllerBase
     {
         private readonly LogiTrackDbContext _context;
@@ -49,7 +49,15 @@ namespace Back.Controllers
             var userId = CurrentUserId();
             if (userId is null) return null;
             var gp = await _context.GerentesProvincias.FirstOrDefaultAsync(g => g.GerenteId == userId.Value);
-            return gp?.Provincia;
+            if (!string.IsNullOrEmpty(gp?.Provincia)) return gp!.Provincia;
+            // Supervisor/Operador con permiso 'plantillas_email' concedido: provincia de su sucursal.
+            var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value);
+            if (usuario?.SucursalId is Guid sucId)
+            {
+                var suc = await _context.Sucursales.FindAsync(sucId);
+                return suc?.Provincia;
+            }
+            return null;
         }
 
         [HttpGet]

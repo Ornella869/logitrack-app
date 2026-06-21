@@ -1,15 +1,13 @@
 import { useOutletContext } from 'react-router-dom'
-import { Alert, Box, Typography } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import StoreIcon from '@mui/icons-material/Store'
 import BranchManagement from '../components/BranchManagement'
 import type { User } from '../types'
 
 export default function SucursalesPage() {
   const user = useOutletContext<User>()
-
-  if (user.role !== 'gerente') {
-    return <Alert severity="warning">Solo el Gerente puede acceder a esta sección.</Alert>
-  }
+  // El acceso ya está gateado por el permiso 'sucursales' a nivel de ruta (App.tsx → permitted()),
+  // así que un Supervisor/Operador con el permiso concedido por el Admin también puede entrar.
 
   return (
     <Box>

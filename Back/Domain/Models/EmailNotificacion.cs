@@ -20,6 +20,8 @@ namespace Back.Domain.Models
         LlegadaSucursalIntermedia = 8,
         FechaEstimadaEntrega = 9,
         ListoParaRetirar = 10,
+        ReestimacionSucursalIntermedia = 11,
+        AlertaRiesgoDemoraMl = 12,
     }
 
     public class EmailNotificacion

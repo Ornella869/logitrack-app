@@ -33,7 +33,7 @@ namespace Back.Controllers
             return userId is null ? null : await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value);
         }
 
-        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor + "," + Roles.SocioPickUp)]
         [HttpGet]
         public async Task<ActionResult> Listar([FromQuery] bool soloActivos = true)
         {
@@ -89,11 +89,12 @@ namespace Back.Controllers
             return Ok(result);
         }
 
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize]
+        [RequirePermission("pickups")]
         [HttpPost]
         public async Task<ActionResult<PuntoPickUp>> Crear([FromBody] PuntoPickUpRequest request)
         {
-            var error = await ValidarProvinciaGerente(request.Provincia);
+            var error = await ValidarProvinciaUsuario(request.Provincia);
             if (error is not null) return BadRequest(error);
             error = ValidarDatosBasicos(request);
             if (error is not null) return BadRequest(error);
@@ -110,11 +111,12 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize]
+        [RequirePermission("pickups")]
         [HttpPost("geocodificar")]
         public async Task<ActionResult<object>> Geocodificar([FromBody] PuntoPickUpRequest request)
         {
-            var error = await ValidarProvinciaGerente(request.Provincia);
+            var error = await ValidarProvinciaUsuario(request.Provincia);
             if (error is not null) return BadRequest(error);
             error = ValidarDatosBasicos(request);
             if (error is not null) return BadRequest(error);
@@ -145,13 +147,14 @@ namespace Back.Controllers
             });
         }
 
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize]
+        [RequirePermission("pickups")]
         [HttpPut("{id:guid}")]
         public async Task<ActionResult<PuntoPickUp>> Actualizar(Guid id, [FromBody] PuntoPickUpRequest request)
         {
             var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == id);
             if (punto is null) return NotFound();
-            var error = await ValidarProvinciaGerente(punto.Provincia) ?? await ValidarProvinciaGerente(request.Provincia);
+            var error = await ValidarProvinciaUsuario(punto.Provincia) ?? await ValidarProvinciaUsuario(request.Provincia);
             if (error is not null) return BadRequest(error);
             error = ValidarDatosBasicos(request);
             if (error is not null) return BadRequest(error);
@@ -167,13 +170,14 @@ namespace Back.Controllers
             }
         }
 
-        [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [Authorize]
+        [RequirePermission("pickups")]
         [HttpPost("{id:guid}/estado")]
         public async Task<ActionResult> CambiarEstado(Guid id, [FromBody] CambiarEstadoPickUpRequest request)
         {
             var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == id);
             if (punto is null) return NotFound();
-            var error = await ValidarProvinciaGerente(punto.Provincia);
+            var error = await ValidarProvinciaUsuario(punto.Provincia);
             if (error is not null) return BadRequest(error);
             if (request.Activo) punto.Activar(); else punto.Desactivar();
             await _context.SaveChangesAsync();
@@ -203,14 +207,28 @@ namespace Back.Controllers
             return Ok();
         }
 
-        private async Task<string?> ValidarProvinciaGerente(string provincia)
+        // Valida que el usuario pueda gestionar puntos Pick Up de esa provincia.
+        // Admin: sin restricción. Gerente: sus provincias asignadas.
+        // Supervisor/Operador (con permiso 'pickups' concedido por el Admin): la provincia de su sucursal.
+        private async Task<string?> ValidarProvinciaUsuario(string provincia)
         {
-            if (!User.IsInRole(Roles.Gerente)) return null;
             var user = await CurrentUserAsync();
-            if (user is not Gerente gerente) return "Usuario no es Gerente.";
-            return gerente.ProvinciasAsignadas.Contains(provincia)
-                ? null
-                : "No podes gestionar puntos Pick Up fuera de tus provincias asignadas.";
+            if (user is Administrador) return null;
+            if (user is Gerente gerente)
+                return gerente.ProvinciasAsignadas.Contains(provincia)
+                    ? null
+                    : "No podes gestionar puntos Pick Up fuera de tus provincias asignadas.";
+            if (user?.SucursalId is Guid sucId)
+            {
+                var sucursal = await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == sucId);
+                if (sucursal is null) return "No se pudo determinar tu sucursal.";
+                var cubiertas = new[] { sucursal.Provincia ?? string.Empty }
+                    .Concat(sucursal.ProvinciasCubiertas ?? new List<string>());
+                return cubiertas.Contains(provincia, StringComparer.OrdinalIgnoreCase)
+                    ? null
+                    : "No podes gestionar puntos Pick Up fuera de la provincia de tu sucursal.";
+            }
+            return "No tenés una sucursal asignada para gestionar puntos Pick Up.";
         }
 
         private static string? ValidarDatosBasicos(PuntoPickUpRequest request)

@@ -18,8 +18,6 @@ import {
   Paper,
   Avatar,
   Popover,
-  Tab,
-  Tabs,
   Toolbar,
   Tooltip,
   Typography,
@@ -425,7 +423,11 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
   })()
 
   const isAccessDeniedPage = location.pathname === '/access-denied'
-  const hasSidebar = (user.role !== 'repartidor' || !isMobile) && user.role !== 'socio_pickup' && user.role !== 'cliente'
+  const hasSidebar = (user.role !== 'repartidor' || !isMobile) && user.role !== 'cliente'
+  // Socio PickUp con permisos a nivel sucursal: necesita elegir "sucursal activa" (igual que el gerente).
+  const socioConPermisoSucursal = user.role === 'socio_pickup' && (
+    permissions.has('envios_ver') || permissions.has('envios_crear') || permissions.has('calendarizacion')
+    || permissions.has('incidencias') || permissions.has('alertas') || permissions.has('rutas_activas'))
   const sidebarNavItems: Array<{ path: string; label: string; icon: React.ReactNode; badge?: number }> =
     user.role === 'gerente' ? [
       { path: '/sucursales',          label: 'Sucursales',          icon: <StoreIcon fontSize="small" /> },
@@ -482,6 +484,8 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     { path: '/auditoria-notificaciones', label: 'Notif. auditoría', icon: <NotificationsActiveIcon fontSize="small" />, permission: 'auditoria_notificaciones' },
     { path: '/mi-plan', label: 'Mi plan', icon: <WorkspacePremiumIcon fontSize="small" />, permission: 'mi_plan' },
     { path: '/permisos', label: 'Permisos', icon: <AdminPanelSettingsIcon fontSize="small" />, permission: 'gestionar_permisos' },
+    { path: '/pickup-operacion', label: 'Mi PickUp', icon: <StoreIcon fontSize="small" />, permission: 'pickup_operacion' },
+    { path: '/pickup-historial', label: 'Historial PickUp', icon: <HistoryIcon fontSize="small" />, permission: 'pickup_historial' },
   ]
 
   for (const item of permissionNavItems) {
@@ -802,6 +806,14 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
               <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
             </>
           )}
+          {user.role === 'socio_pickup' && sidebarOpen && socioConPermisoSucursal && (
+            <>
+              <Box sx={{ px: 2, pt: 2, pb: 1.5 }}>
+                <GerenteSucursalSelector isDarkPremium={isDarkPremium} />
+              </Box>
+              <Divider sx={{ borderColor: isDarkPremium ? 'rgba(255,255,255,0.08)' : undefined }} />
+            </>
+          )}
           {(user.role === 'supervisor' || user.role === 'administrador') && sidebarOpen && (
             <>
               <Box sx={{ px: 2.5, pt: 2.5, pb: 1.5, whiteSpace: 'nowrap' }}>
@@ -868,40 +880,6 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
         </Box>
       )}
 
-      {/* Tabs nav — solo Operador y Socio PickUp (Gerente/Supervisor/Administrador usan sidebar) */}
-      {!isAccessDeniedPage && user.role === 'socio_pickup' && (
-        <Box sx={{
-          bgcolor: isDarkPremium ? '#1B2D42' : 'white',
-          borderBottom: isDarkPremium ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e0e0e0',
-          px: { xs: 1, sm: 4 },
-          position: 'sticky',
-          top: 64,
-          zIndex: 90,
-          transition: 'background-color 0.5s ease',
-        }}>
-          <Tabs
-            value={selectedTab}
-            onChange={(_, v) => navigate(v)}
-            variant="scrollable"
-            scrollButtons={false}
-            sx={isDarkPremium ? {
-              '& .MuiTab-root': { color: 'rgba(255,255,255,0.85)' },
-              '& .Mui-selected': { color: '#42A5F5' },
-              '& .MuiTabs-indicator': { backgroundColor: '#42A5F5' },
-            } : {}}
-          >
-            {permissions.has('envios_ver') && (
-              <Tab icon={<Inventory2Icon fontSize="small" />} iconPosition="start" label="Envíos" value="/envios" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {permissions.has('pickup_operacion') && (
-              <Tab icon={<StoreIcon fontSize="small" />} iconPosition="start" label="Mi PickUp" value="/pickup-operacion" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-            {permissions.has('pickup_historial') && (
-              <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Historial" value="/pickup-historial" sx={{ minHeight: 48, textTransform: 'none' }} />
-            )}
-          </Tabs>
-        </Box>
-      )}
 
       {isMobile && isRepartidorArea && (
         <>

@@ -78,6 +78,11 @@ namespace Back.Application.Services
                 var provincias = await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id);
                 return provincias.FirstOrDefault() ?? string.Empty;
             }
+            if (usuario is SocioPickUp socio && socio.PuntoPickUpId is Guid pid)
+            {
+                var punto = await _context.PuntosPickUp.FindAsync(pid);
+                return punto?.Provincia ?? string.Empty;
+            }
             if (usuario?.SucursalId is Guid sucId)
             {
                 var suc = await _context.Sucursales.FindAsync(sucId);
@@ -99,6 +104,12 @@ namespace Back.Application.Services
             {
                 var provincias = await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id);
                 return provincias ?? new List<string>();
+            }
+            if (usuario is SocioPickUp socio && socio.PuntoPickUpId is Guid pid)
+            {
+                var punto = await _context.PuntosPickUp.FindAsync(pid);
+                return punto?.Provincia is string prov && !string.IsNullOrWhiteSpace(prov)
+                    ? new List<string> { prov } : new List<string>();
             }
             if (usuario?.SucursalId is Guid sucId)
             {

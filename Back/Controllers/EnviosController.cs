@@ -1064,7 +1064,7 @@ namespace Back.Controllers
             return Ok();
         }
 
-        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor + "," + Roles.Operador + "," + Roles.Gerente)]
+        [Authorize(Roles = Roles.Administrador + "," + Roles.Supervisor + "," + Roles.Operador + "," + Roles.Gerente + "," + Roles.SocioPickUp)]
         [HttpGet("sucursales")]
         public async Task<ActionResult<List<Sucursal>>> GetSucursales()
         {
@@ -1160,7 +1160,8 @@ namespace Back.Controllers
         }
 
         // Épica D: multi-sucursal. El Gerente crea sucursales (idealmente de su provincia).
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
+        [RequirePermission("sucursales")]
         [HttpPost("sucursales/registrar-sucursal")]
         public async Task<ActionResult> RegistrarSucursal([FromBody] RegistarSucursal request)
         {
@@ -1200,31 +1201,38 @@ namespace Back.Controllers
         // Devuelve un mensaje de error si la provincia no coincide; null si es válido (o Admin).
         private async Task<string?> ValidarProvinciaGerente(string? provinciaSucursal)
         {
-            if (!User.IsInRole(Roles.Gerente)) return null; // Admin sin restricción
+            if (User.IsInRole(Roles.Administrador)) return null; // Admin sin restricción
             var userId = CurrentUserId();
             if (userId is null) return "No se pudo identificar al usuario.";
-            var gerente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value) as Gerente;
-            if (gerente is null) return "Usuario no es Gerente.";
-            // Obtener provincias asignadas al gerente
-            var provincias = await _context.GerentesProvincias
-                .Where(gp => gp.GerenteId == gerente.Id)
-                .Select(gp => gp.Provincia)
-                .ToListAsync();
-            if (!provincias.Any()) return "El gerente no tiene provincias asignadas.";
+            var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value);
             var provNorm = provinciaSucursal?.Trim() ?? string.Empty;
-            if (!provincias.Any(p => string.Equals(p.Trim(), provNorm, StringComparison.OrdinalIgnoreCase)))
-                return $"Solo podés gestionar sucursales de tus provincias asignadas ({string.Join(", ", provincias)}).";
-            return null;
+            if (usuario is Gerente gerente)
+            {
+                var provincias = await _context.GerentesProvincias
+                    .Where(gp => gp.GerenteId == gerente.Id)
+                    .Select(gp => gp.Provincia)
+                    .ToListAsync();
+                if (!provincias.Any()) return "El gerente no tiene provincias asignadas.";
+                if (!provincias.Any(p => string.Equals(p.Trim(), provNorm, StringComparison.OrdinalIgnoreCase)))
+                    return $"Solo podés gestionar sucursales de tus provincias asignadas ({string.Join(", ", provincias)}).";
+                return null;
+            }
+            // Supervisor/Operador con permiso 'sucursales' concedido: limitado a la provincia de su sucursal.
+            if (usuario?.SucursalId is Guid sucId)
+            {
+                var suc = await _context.Sucursales.FindAsync(sucId);
+                if (string.IsNullOrWhiteSpace(suc?.Provincia)) return "No se pudo determinar la provincia de tu sucursal.";
+                if (!string.Equals(suc!.Provincia.Trim(), provNorm, StringComparison.OrdinalIgnoreCase))
+                    return $"Solo podés gestionar sucursales de tu provincia ({suc.Provincia}).";
+                return null;
+            }
+            return "No tenés una provincia o sucursal asignada para gestionar sucursales.";
         }
 
         // Valida que las provincias cubiertas no tengan gerente asignado (si el usuario es gerente).
         private async Task<string?> ValidarProvinciasCubiertas(List<string>? provinciasCubiertas)
         {
-            if (!User.IsInRole(Roles.Gerente)) return null; // Admin sin restricción
-            var userId = CurrentUserId();
-            if (userId is null) return "No se pudo identificar al usuario.";
-            var gerente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId.Value) as Gerente;
-            if (gerente is null) return "Usuario no es Gerente.";
+            if (User.IsInRole(Roles.Administrador)) return null; // Admin sin restricción
             var provinciasOcupadas = await _context.GerentesProvincias
                 .Select(gp => gp.Provincia)
                 .ToListAsync();
@@ -1237,7 +1245,8 @@ namespace Back.Controllers
             return null;
         }
 
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
+        [RequirePermission("sucursales")]
         [HttpPut("sucursales/{id:guid}")]
         public async Task<ActionResult> ActualizarSucursal(Guid id, [FromBody] RegistarSucursal request)
         {
@@ -1259,7 +1268,8 @@ namespace Back.Controllers
             return Ok();
         }
 
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
+        [RequirePermission("sucursales")]
         [HttpDelete("sucursales/{id:guid}")]
         public async Task<ActionResult> EliminarSucursal(Guid id)
         {

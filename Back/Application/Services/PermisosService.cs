@@ -310,8 +310,21 @@ namespace Back.Application.Services
             || (permiso.StartsWith("envios_", StringComparison.Ordinal)
                 && configurados.TryGetValue("envios", out valor));
 
-        private static bool EsRolCompatible(string rol, string permiso) =>
-            Catalogo.First(x => x.Clave == permiso).RolesCompatibles.Contains(rol);
+        // Permisos exclusivos del Administrador: ningún otro rol puede recibirlos.
+        private static readonly HashSet<string> PermisosSoloAdmin = new(StringComparer.Ordinal)
+        {
+            PermisoGestionarPermisos, "mi_plan", "auditoria_notificaciones",
+        };
+
+        // RBAC (requisito de cátedra): cualquier rol puede recibir cualquier permiso de cualquier rol,
+        // EXCEPTO los permisos exclusivos del Administrador. El alcance (provincia/sucursal) lo resuelve
+        // cada feature según el rol del usuario al que se le concede.
+        private static bool EsRolCompatible(string rol, string permiso)
+        {
+            if (PermisosSoloAdmin.Contains(permiso)) return rol == Roles.Administrador;
+            if (rol == Roles.Administrador) return true;
+            return RolesConfigurables.Contains(rol);
+        }
     }
 
     public record PermisoRolResponse(

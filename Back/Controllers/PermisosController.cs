@@ -79,6 +79,20 @@ namespace Back.Controllers
             }
 
             var usuarios = await query.OrderBy(x => x.Nombre).ThenBy(x => x.Apellido).Take(100).ToListAsync();
+            // Provincia efectiva por usuario (para acotar el selector de sucursales por-usuario en el front).
+            var gerentesProv = await _context.GerentesProvincias.ToListAsync();
+            var puntos = await _context.PuntosPickUp.ToDictionaryAsync(p => p.Id, p => p.Provincia);
+            var sucs = await _context.Sucursales.ToDictionaryAsync(s => s.Id, s => s.Provincia);
+            string? ProvinciaDe(Back.Domain.Models.Usuario x)
+            {
+                if (x is Back.Domain.Models.Gerente)
+                    return string.Join(",", gerentesProv.Where(gp => gp.GerenteId == x.Id).Select(gp => gp.Provincia));
+                if (x is Back.Domain.Models.SocioPickUp sp && sp.PuntoPickUpId is Guid pid && puntos.TryGetValue(pid, out var pv))
+                    return pv;
+                if (x.SucursalId is Guid sid && sucs.TryGetValue(sid, out var sv))
+                    return sv;
+                return null;
+            }
             return Ok(usuarios
                 .Where(x => PermisosService.RolesConfigurables.Contains(PermisosService.ObtenerRol(x)))
                 .Select(x => new
@@ -87,6 +101,7 @@ namespace Back.Controllers
                 nombre = $"{x.Nombre} {x.Apellido}",
                 x.Email,
                 rol = PermisosService.ObtenerRol(x),
+                provincia = ProvinciaDe(x),
             }));
         }
 

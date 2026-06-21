@@ -28,16 +28,21 @@ namespace Back.Application.Services
                 return;
             }
 
-            if (!authorizeResult.Succeeded)
-            {
-                await _defaultHandler.HandleAsync(next, context, policy, authorizeResult);
-                return;
-            }
-
+            // RBAC: en endpoints con [RequirePermission], el PERMISO EFECTIVO es la única autoridad.
+            // Ignoramos a propósito la lista de roles del [Authorize(Roles=...)] para que cualquier rol
+            // al que el Admin le haya concedido el permiso (por rol o por usuario) pueda usar la pantalla.
             var idValue = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!Guid.TryParse(idValue, out var userId))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+
+            // Administrador: superusuario, tiene acceso a todo lo protegido por permisos
+            // (incluido lo de ámbito provincial, que el Admin ejerce de forma global).
+            if (context.User.IsInRole(Roles.Administrador))
+            {
+                await next(context);
                 return;
             }
 

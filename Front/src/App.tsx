@@ -334,7 +334,7 @@ function App() {
           <Route
             path="/repartidores"
             element={
-              permitted('repartidores', <RepartidoresPage />)
+              permitted('repartidores', <RepartidoresPage permissions={permissions} />)
             }
           />
 

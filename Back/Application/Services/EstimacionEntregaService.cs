@@ -1,5 +1,6 @@
 using Back.Domain.Models;
 using Back.Infrastructure.Database;
+using Back.Ml.Service;
 using Microsoft.EntityFrameworkCore;
 
 namespace Back.Application.Services
@@ -113,6 +114,44 @@ namespace Back.Application.Services
             _context.DatosEntrenamientoTramo.Add(dato);
         }
 
+        // G1L-161: al entregar (última milla), registra el tiempo total real (CreadoEn → EntregadoEn) y la
+        // desviación vs la última estimación. La última milla no tiene sucursal destino (se entrega al cliente):
+        // usamos la sucursal origen del tramo como referencia (origen==destino), por lo que NO interfiere con la
+        // estimación inter-sucursal (que busca pares origen≠destino).
+        public async Task RegistrarDatoUltimaMillaAsync(Paquete paquete, TramoEnvio tramo)
+        {
+            if (!paquete.EntregadoEn.HasValue) return;
+
+            var tiempoReal = (paquete.EntregadoEn.Value - paquete.CreadoEn).TotalHours;
+            double? estimacionPrevia = paquete.FechaEstimadaEntrega.HasValue
+                ? (paquete.FechaEstimadaEntrega.Value - paquete.CreadoEn).TotalHours
+                : null;
+            double? error = estimacionPrevia.HasValue ? Math.Abs(tiempoReal - estimacionPrevia.Value) : null;
+
+            var dato = new DatoEntrenamientoTramo
+            {
+                PaqueteId = paquete.Id,
+                TramoId = tramo.Id,
+                SucursalOrigenId = tramo.SucursalOrigenId,
+                SucursalDestinoId = tramo.SucursalOrigenId,
+                FechaSalida = paquete.CreadoEn,
+                FechaLlegada = paquete.EntregadoEn.Value,
+                TiempoRealHoras = tiempoReal,
+                PesoKg = paquete.Peso,
+                TipoEnvio = paquete.TipoEnvio.ToString(),
+                EsPrioritario = paquete.TipoEnvio == TipoEnvio.Prioritario,
+                DiaSemana = (int)paquete.CreadoEn.DayOfWeek,
+                HoraSalida = paquete.CreadoEn.Hour,
+                CargaSucursalOrigen = 0,
+                RepartidoresActivosDestino = 0,
+                TuvoDemora = estimacionPrevia.HasValue && tiempoReal > estimacionPrevia.Value * 1.5,
+                EstimacionPreviaHoras = estimacionPrevia,
+                ErrorAbsolutoHoras = error,
+            };
+
+            _context.DatosEntrenamientoTramo.Add(dato);
+        }
+
         private async Task GenerarAlertaRiesgoSiCorrespondeAsync(Paquete paquete, TramoEnvio tramoActual)
         {
             var siguienteTramo = await _context.TramosEnvio
@@ -155,6 +194,47 @@ namespace Back.Application.Services
             };
 
             _context.AlertasRiesgoDemoraMl.Add(alerta);
+
+            // G1L-163: notificar a los supervisores activos de la sucursal (queda registrado y visible en notificaciones).
+            var supervisores = await _context.Usuarios.OfType<Supervisor>()
+                .Where(s => s.SucursalId == origenId && s.Activo)
+                .ToListAsync();
+            alerta.SupervisorId = supervisores.FirstOrDefault()?.Id;
+            foreach (var sup in supervisores)
+            {
+                var asunto = $"Riesgo de demora — envío {paquete.CodigoSeguimiento}";
+                var cuerpo = $"El modelo predice alta probabilidad de demora ({(int)(probabilidad * 100)}%). {causa}";
+                _context.EmailNotificaciones.Add(new EmailNotificacion(
+                    paquete.Id, origenId, paquete.CodigoSeguimiento, sup.Email, asunto, cuerpo,
+                    EventoEmailNotificacion.AlertaRiesgoDemoraMl));
+            }
+        }
+
+        // G1L-162: reentrenamiento real del modelo ML sobre los datos históricos + versionado y comparativa.
+        public async Task<ModeloVersionTramo> EntrenarAsync()
+        {
+            var datos = await _context.DatosEntrenamientoTramo.ToListAsync();
+            var conEstimacion = datos.Where(d => d.EstimacionPreviaHoras.HasValue).ToList();
+            var maeHeuristico = conEstimacion.Count > 0 ? conEstimacion.Average(d => d.ErrorAbsolutoHoras ?? 0) : 0;
+
+            var rutaModelo = Path.Combine(AppContext.BaseDirectory, "ML", "Models", "tramo_model.zip");
+            var res = MlTramoTrainer.EntrenarYGuardar(datos, rutaModelo);
+            if (!res.Entrenado)
+                throw new InvalidOperationException(
+                    $"Datos insuficientes para entrenar: se necesitan al menos {MlTramoTrainer.MinimoRegistros} tramos completados (hay {res.Registros}).");
+
+            var nro = await _context.ModeloVersionesTramo.CountAsync() + 1;
+            var version = new ModeloVersionTramo
+            {
+                RegistrosUsados = res.Registros,
+                MaeModelo = res.MaeModelo,
+                MaeHeuristico = Math.Round(maeHeuristico, 2),
+                Algoritmo = "FastTree",
+                Version = $"v{nro}.0",
+            };
+            _context.ModeloVersionesTramo.Add(version);
+            await _context.SaveChangesAsync();
+            return version;
         }
 
         public async Task<MlMetricasDto> ObtenerMetricasAsync()
@@ -218,16 +298,44 @@ namespace Back.Application.Services
 
             var nuevosRegistros30Dias = datos.Count(d => d.RegistradoEn >= hoy.AddDays(-30));
 
+            var versiones = await _context.ModeloVersionesTramo
+                .OrderByDescending(v => v.EntrenadoEn)
+                .Select(v => new ModeloVersionDto
+                {
+                    EntrenadoEn = v.EntrenadoEn,
+                    RegistrosUsados = v.RegistrosUsados,
+                    MaeModelo = v.MaeModelo,
+                    MaeHeuristico = v.MaeHeuristico,
+                    Version = v.Version,
+                    Algoritmo = v.Algoritmo,
+                })
+                .ToListAsync();
+            var ultima = versiones.FirstOrDefault();
+
+            // G1L-163: precisión de las alertas de riesgo ya gestionadas (acertó si el envío NO llegó a tiempo).
+            var alertasEvaluadas = await _context.AlertasRiesgoDemoraMl
+                .Where(a => a.Gestionada && a.LlegoATiempo != null)
+                .ToListAsync();
+            double? precisionAlertas = alertasEvaluadas.Count > 0
+                ? Math.Round(alertasEvaluadas.Count(a => a.LlegoATiempo == false) * 100.0 / alertasEvaluadas.Count, 1)
+                : null;
+
             return new MlMetricasDto
             {
                 TotalRegistros = totalRegistros,
+                PrecisionAlertas = precisionAlertas,
+                AlertasEvaluadas = alertasEvaluadas.Count,
                 MaeModelo = Math.Round(maeModelo, 2),
+                MaeHeuristico = Math.Round(maeModelo, 2),
+                MaeModeloMl = ultima?.MaeModelo,
+                ComparativaDisponible = ultima is not null,
                 NuevosRegistros30Dias = nuevosRegistros30Dias,
                 DistribucionErrores = dist,
                 TramosConMayorError = tramoDificiles,
                 MaeHistorico = maeHistorico,
-                PuedeReentrenar = nuevosRegistros30Dias >= 50,
-                Version = totalRegistros >= 50 ? "v1.0 – Heurística mejorada con historial" : "v0.1 – Heurística base (datos insuficientes)",
+                Versiones = versiones,
+                PuedeReentrenar = totalRegistros >= MlTramoTrainer.MinimoRegistros,
+                Version = ultima?.Version ?? (totalRegistros >= MlTramoTrainer.MinimoRegistros ? "Sin entrenar" : "Datos insuficientes"),
             };
         }
     }
@@ -236,12 +344,28 @@ namespace Back.Application.Services
     {
         public int TotalRegistros { get; set; }
         public double MaeModelo { get; set; }
+        public double MaeHeuristico { get; set; }
+        public double? MaeModeloMl { get; set; }
+        public bool ComparativaDisponible { get; set; }
         public int NuevosRegistros30Dias { get; set; }
         public ErrorDistribucionDto DistribucionErrores { get; set; } = new();
         public List<TramoDificilDto> TramosConMayorError { get; set; } = [];
         public List<PuntoMaeHistoricoDto> MaeHistorico { get; set; } = [];
+        public List<ModeloVersionDto> Versiones { get; set; } = [];
         public bool PuedeReentrenar { get; set; }
         public string Version { get; set; } = string.Empty;
+        public double? PrecisionAlertas { get; set; }
+        public int AlertasEvaluadas { get; set; }
+    }
+
+    public class ModeloVersionDto
+    {
+        public DateTime EntrenadoEn { get; set; }
+        public int RegistrosUsados { get; set; }
+        public double MaeModelo { get; set; }
+        public double MaeHeuristico { get; set; }
+        public string Version { get; set; } = string.Empty;
+        public string Algoritmo { get; set; } = string.Empty;
     }
 
     public class ErrorDistribucionDto

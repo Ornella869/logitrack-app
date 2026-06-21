@@ -48,6 +48,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SearchIcon from '@mui/icons-material/Search'
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
+import PersonSearchIcon from '@mui/icons-material/PersonSearch'
 import { shipmentService, calendarizacionService, type CalendarizacionResultado, type DiaResumen, type CalendarioOperativo, type PaquetePendienteReagendamiento, type PaquetePreview, type ReagendamientoMasivoResultado } from '../services/shipmentService'
 import { authService } from '../services/authService'
 import { notificationService } from '../services/notificationService'
@@ -1008,7 +1009,13 @@ export default function CalendarizarPage() {
                         }, {})
                       ).map(([motivo, items]) => (
                         <Box key={motivo} sx={{ mb: 1.5 }}>
-                          <Typography variant="caption" fontWeight={700} color="warning.main" display="block" sx={{ mb: 0.5 }}>{motivo} ({items.length})</Typography>
+                          <Chip
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            label={`${motivo} (${items.length})`}
+                            sx={{ mb: 0.5, fontWeight: 700, fontSize: 11 }}
+                          />
                           <Stack spacing={0.2}>
                             {items.map((p) => {
                               const isSelected = selectedSinAsignar.has(p.paqueteId)
@@ -1030,10 +1037,23 @@ export default function CalendarizarPage() {
                                   <Checkbox size="small" checked={isSelected} sx={{ p: 0 }}
                                     onChange={() => {}}
                                   />
-                                  <Typography variant="caption" color={hasOverride ? 'success.main' : 'text.secondary'} sx={{ fontFamily: 'monospace' }}>
+                                  <Typography variant="caption" color={hasOverride ? 'success.main' : 'text.secondary'} sx={{ fontFamily: 'monospace', flexShrink: 0 }}>
                                     {p.codigoSeguimiento} — {p.peso.toFixed(0)} kg
                                     {hasOverride && ` ✓ ${overrides.get(p.paqueteId)?.repartidorNombre}`}
                                   </Typography>
+                                  {p.repartidorCercanoId && (
+                                    <Tooltip title="Ver perfil de rendimiento del repartidor más cercano">
+                                      <Button
+                                        size="small"
+                                        variant="text"
+                                        startIcon={<PersonSearchIcon sx={{ fontSize: 14 }} />}
+                                        onClick={(e) => { e.stopPropagation(); navigate(`/repartidor/${p.repartidorCercanoId}/rendimiento`) }}
+                                        sx={{ ml: 'auto', fontSize: 10, textTransform: 'none', py: 0, minWidth: 0 }}
+                                      >
+                                        Ver repartidor más cercano: {p.repartidorCercanoNombre}
+                                      </Button>
+                                    </Tooltip>
+                                  )}
                                 </Stack>
                               )
                             })}

@@ -140,10 +140,13 @@ function RepartidoresList({ userRole: _userRole, canTransfer = false }: Repartid
     loadingBranches: boolean
     error: string
     paquetesLiberados: number | null
+    pendientesPreview: number | null
+    loadingPendientes: boolean
     done: boolean
   }>({
     open: false, repartidor: null, targetSucursalId: '', branches: [],
-    loading: false, loadingBranches: false, error: '', paquetesLiberados: null, done: false,
+    loading: false, loadingBranches: false, error: '', paquetesLiberados: null,
+    pendientesPreview: null, loadingPendientes: false, done: false,
   })
 
   useEffect(() => {
@@ -281,13 +284,19 @@ function RepartidoresList({ userRole: _userRole, canTransfer = false }: Repartid
   }
 
   const openTransferDialog = async (repartidor: RepartidorListItem) => {
-    setTransferDialog(prev => ({ ...prev, open: true, repartidor, targetSucursalId: '', error: '', paquetesLiberados: null, done: false, loadingBranches: true }))
+    setTransferDialog(prev => ({ ...prev, open: true, repartidor, targetSucursalId: '', error: '', paquetesLiberados: null, pendientesPreview: null, loadingPendientes: true, done: false, loadingBranches: true }))
     try {
       const branches = await branchService.getAllBranches()
       const available = branches.filter(b => b.id !== repartidor.sucursalId && b.status === 'Activa')
       setTransferDialog(prev => ({ ...prev, branches: available, loadingBranches: false }))
     } catch {
       setTransferDialog(prev => ({ ...prev, loadingBranches: false, error: 'No se pudo cargar la lista de sucursales.' }))
+    }
+    try {
+      const { pendientes } = await authService.getPaquetesPendientesRepartidor(repartidor.id)
+      setTransferDialog(prev => ({ ...prev, pendientesPreview: pendientes, loadingPendientes: false }))
+    } catch {
+      setTransferDialog(prev => ({ ...prev, loadingPendientes: false }))
     }
   }
 
@@ -688,6 +697,17 @@ function RepartidoresList({ userRole: _userRole, canTransfer = false }: Repartid
             </Typography>
           )}
           {transferDialog.error && <Alert severity="error" sx={{ mb: 2 }}>{transferDialog.error}</Alert>}
+          {!transferDialog.done && (
+            transferDialog.loadingPendientes ? (
+              <Alert severity="info" sx={{ mb: 2 }}>Verificando envíos calendarizados…</Alert>
+            ) : transferDialog.pendientesPreview === null ? null : transferDialog.pendientesPreview > 0 ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                ⚠️ Al transferir se liberarán {transferDialog.pendientesPreview} envío(s) calendarizado(s), que volverán a "Pendiente de calendarización".
+              </Alert>
+            ) : (
+              <Alert severity="info" sx={{ mb: 2 }}>El repartidor no tiene envíos calendarizados que liberar.</Alert>
+            )
+          )}
           {transferDialog.done ? (
             <Alert severity="success">
               Transferencia realizada correctamente.

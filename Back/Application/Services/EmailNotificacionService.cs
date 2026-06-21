@@ -221,6 +221,43 @@ namespace Back.Application.Services
                 $"Fecha estimada para tu envio {paquete.CodigoSeguimiento}", cuerpo);
         }
 
+        // A2 / G1L-160: al pasar por una sucursal intermedia, si la reestimación adelantó la fecha
+        // estimada de entrega, avisamos al cliente (experiencia estilo Temu). Idempotente por sucursal
+        // gracias al asunto, que incluye el nombre de la sucursal.
+        public async Task NotificarReestimacionSucursalAsync(Paquete paquete, string nombreSucursal, DateTime? fechaAnterior, DateTime fechaNueva)
+        {
+            if (paquete.Destinatario.Email is null) return;
+
+            var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
+
+            var nuevaStr = fechaNueva.ToString("dd/MM/yyyy");
+            var anteriorHtml = fechaAnterior.HasValue
+                ? $"""<div style="font-size:13px;color:#94a3b8;text-decoration:line-through;">Antes: {fechaAnterior.Value:dd/MM/yyyy}</div>"""
+                : string.Empty;
+
+            var detalleHtml = $"""
+                <div style="background:#0f172a;border:1px solid #22c55e;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
+                  <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Tu paquete pasó por la {SecurityElement.Escape(nombreSucursal)} y ahora llega antes.</div>
+                  {anteriorHtml}
+                  <div style="font-size:13px;color:#94a3b8;margin-top:6px;">Nueva fecha estimada de entrega:</div>
+                  <div style="font-size:24px;font-weight:900;color:#4ade80;">{nuevaStr}</div>
+                </div>
+                """;
+
+            var cuerpo = BuildTemplate(
+                "green",
+                "¡Tu envio llega antes!",
+                $"Hola {SecurityElement.Escape(paquete.Destinatario.Nombre)},",
+                "Buenas noticias: tu paquete avanzo en su recorrido y actualizamos su fecha estimada de entrega.",
+                trackingUrl,
+                "Ver seguimiento",
+                detalleHtml);
+
+            await CrearYEnviarAsync(paquete, EventoEmailNotificacion.ReestimacionSucursalIntermedia,
+                $"Tu envio {paquete.CodigoSeguimiento} llega antes — actualizado en {nombreSucursal}", cuerpo);
+        }
+
         public async Task NotificarReagendamientoAsync(Paquete paquete)
         {
             if (paquete.Destinatario.Email is null) return;
@@ -228,10 +265,14 @@ namespace Back.Application.Services
             var urlBase = _configuration["PublicTrackingBaseUrl"]?.TrimEnd('/') ?? string.Empty;
             var trackingUrl = string.IsNullOrWhiteSpace(urlBase) ? "#" : $"{urlBase}/{SecurityElement.Escape(paquete.CodigoSeguimiento)}";
 
+            var fechaTxt = paquete.FechaCalendarizada?.ToString("dd/MM/yyyy");
+            var fechaHtml = fechaTxt is not null
+                ? $"""<div style="font-size:13px;color:#94a3b8;margin-top:10px;">Nueva fecha estimada de entrega:</div><div style="font-size:22px;font-weight:900;color:#fb923c;">{fechaTxt}</div>"""
+                : """<div style="font-size:13px;color:#94a3b8;margin-top:6px;">Nuestro equipo intentara entregarlo nuevamente en los proximos dias habiles.</div>""";
             var detalleHtml = $"""
                 <div style="background:#1e293b;border:1px solid #f97316;border-radius:10px;padding:14px 16px;margin:14px 0;text-align:center;">
                   <div style="font-size:15px;font-weight:700;color:#fb923c;">Tu envio fue reagendado</div>
-                  <div style="font-size:13px;color:#94a3b8;margin-top:6px;">Nuestro equipo intentara entregarlo nuevamente en los proximos dias habiles.</div>
+                  {fechaHtml}
                 </div>
                 """;
 

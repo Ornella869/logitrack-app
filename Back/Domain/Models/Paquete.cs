@@ -51,6 +51,8 @@ namespace Back.Domain.Models
         [JsonIgnore]
         public float Prioridad { get; set; }
         public DateTime CreadoEn { get; init; } = DateTime.UtcNow;
+        // G1L-161: momento de entrega final, para calcular el tiempo total real y la desviación.
+        public DateTime? EntregadoEn { get; private set; }
         public PaqueteStatus Status { get; private set; } = PaqueteStatus.PendienteDeCalendarizacion;
         public TipoEnvio TipoEnvio { get; set; } = TipoEnvio.Comun;
         public TipoPaquete TipoPaquete { get; set; } = TipoPaquete.Comun;
@@ -165,6 +167,7 @@ namespace Back.Domain.Models
                 throw new InvalidOperationException("Solo se pueden entregar paquetes que están en tránsito o demorados.");
 
             Status = PaqueteStatus.Entregado;
+            EntregadoEn = DateTime.UtcNow;
             RazonDemora = null;
         }
 

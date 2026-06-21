@@ -39,8 +39,8 @@ namespace Back.Controllers
         [HttpGet("{gerenteId:guid}/sucursales")]
         public async Task<ActionResult<List<SucursalGerenteResponse>>> GetSucursalesDeGerente(Guid gerenteId)
         {
-            var gerente = await _userRepository.GetUsuarioById(gerenteId) as Gerente;
-            if (gerente == null) return NotFound("Gerente no encontrado.");
+            var usuario = await _userRepository.GetUsuarioById(gerenteId);
+            if (usuario is not (Gerente or SocioPickUp)) return NotFound("Usuario no encontrado o sin alcance por sucursal.");
 
             var ids = await _gerenteSucursalRepo.GetSucursalesByGerente(gerenteId);
             var sucursales = await _context.Sucursales
@@ -56,10 +56,17 @@ namespace Back.Controllers
         [HttpPut("{gerenteId:guid}/sucursales")]
         public async Task<ActionResult> SetSucursalesDeGerente(Guid gerenteId, [FromBody] SetSucursalesRequest request)
         {
-            var gerente = await _userRepository.GetUsuarioById(gerenteId) as Gerente;
-            if (gerente == null) return NotFound("Gerente no encontrado.");
+            var usuario = await _userRepository.GetUsuarioById(gerenteId);
+            if (usuario is not (Gerente or SocioPickUp)) return NotFound("Usuario no encontrado o sin alcance por sucursal.");
 
-            // Validar que todas las sucursales pertenezcan a la provincia del gerente
+            // Provincias válidas para este usuario (gerente → asignadas; socio → la de su punto Pick Up).
+            var provinciasValidas = usuario is Gerente g ? g.ProvinciasAsignadas.ToList() : new List<string>();
+            if (usuario is SocioPickUp)
+            {
+                var prov = await ProvinciaSocioAsync(usuario);
+                if (!string.IsNullOrWhiteSpace(prov)) provinciasValidas.Add(prov!);
+            }
+
             if (request.SucursalIds.Any())
             {
                 var sucursales = await _context.Sucursales
@@ -71,21 +78,21 @@ namespace Back.Controllers
                     return BadRequest("Una o más sucursales seleccionadas no existen.");
 
                 var fuera = sucursales
-                    .Where(s => !gerente.ProvinciasAsignadas.Contains(s.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                    .Where(s => !provinciasValidas.Contains(s.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
                     .Select(s => s.Nombre)
                     .ToList();
 
                 if (fuera.Any())
-                    return BadRequest($"Las siguientes sucursales no pertenecen a la provincia del gerente: {string.Join(", ", fuera)}.");
+                    return BadRequest($"Las siguientes sucursales no pertenecen a la provincia del usuario: {string.Join(", ", fuera)}.");
             }
 
             await _gerenteSucursalRepo.AssignSucursales(gerenteId, request.SucursalIds);
 
-            // Si la sucursal activa ya no está en la lista, limpiarla
-            if (gerente.SucursalActivaId.HasValue && !request.SucursalIds.Contains(gerente.SucursalActivaId.Value))
-            {
-                gerente.SetSucursalActiva(null);
-            }
+            // Si la sucursal activa ya no está habilitada, limpiarla.
+            if (usuario is Gerente ger && ger.SucursalActivaId.HasValue && !request.SucursalIds.Contains(ger.SucursalActivaId.Value))
+                ger.SetSucursalActiva(null);
+            if (usuario is SocioPickUp soc && soc.SucursalId.HasValue && request.SucursalIds.Any() && !request.SucursalIds.Contains(soc.SucursalId.Value))
+                soc.AsignarSucursal(null);
 
             await _context.SaveChangesAsync();
             return NoContent();
@@ -94,78 +101,133 @@ namespace Back.Controllers
         // ── Gerente: gestión de su propia sucursal activa ────────────────────
 
         /// <summary>Devuelve la sucursal activa del Gerente autenticado (para operar como Operador/Supervisor).</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        // Provincia operable del Socio PickUp (la de su punto). El Socio opera como un "gerente" de esa provincia.
+        private async Task<string?> ProvinciaSocioAsync(Usuario u)
+        {
+            if (u is SocioPickUp s && s.PuntoPickUpId is Guid pid)
+                return (await _context.PuntosPickUp.FindAsync(pid))?.Provincia;
+            return null;
+        }
+
+        [Authorize]
         [HttpGet("me/sucursal-activa")]
         public async Task<ActionResult<SucursalActivaResponse>> GetSucursalActiva()
         {
             var uid = CurrentUserId();
             if (uid is null) return Forbid();
+            var usuario = await _userRepository.GetUsuarioById(uid.Value);
 
-            var gerente = await _userRepository.GetUsuarioById(uid.Value) as Gerente;
-            if (gerente == null) return Forbid();
-
-            if (gerente.SucursalActivaId is null)
-                return Ok(new SucursalActivaResponse(null, null, null));
-
-            var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
-            var habilitadas = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
-            if (sucursal == null || !habilitadas.Contains(sucursal.Id) ||
-                !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            if (usuario is Gerente gerente)
             {
-                gerente.SetSucursalActiva(null);
-                await _context.SaveChangesAsync();
-                return Ok(new SucursalActivaResponse(null, null, null));
+                if (gerente.SucursalActivaId is null)
+                    return Ok(new SucursalActivaResponse(null, null, null));
+
+                var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
+                var habilitadas = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
+                if (sucursal == null || !habilitadas.Contains(sucursal.Id) ||
+                    !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                {
+                    gerente.SetSucursalActiva(null);
+                    await _context.SaveChangesAsync();
+                    return Ok(new SucursalActivaResponse(null, null, null));
+                }
+                return Ok(new SucursalActivaResponse(sucursal.Id, sucursal.Nombre, sucursal.Provincia));
             }
 
-            return Ok(new SucursalActivaResponse(sucursal.Id, sucursal.Nombre, sucursal.Provincia));
+            // Socio PickUp: la "sucursal activa" se guarda en su SucursalId (lo que resuelve el scope en los controllers).
+            if (usuario is SocioPickUp)
+            {
+                if (usuario.SucursalId is null) return Ok(new SucursalActivaResponse(null, null, null));
+                var suc = await _context.Sucursales.FindAsync(usuario.SucursalId.Value);
+                return suc is null
+                    ? Ok(new SucursalActivaResponse(null, null, null))
+                    : Ok(new SucursalActivaResponse(suc.Id, suc.Nombre, suc.Provincia));
+            }
+
+            return Ok(new SucursalActivaResponse(null, null, null));
         }
 
         /// <summary>Lista las sucursales habilitadas para el Gerente autenticado.</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
         [HttpGet("me/sucursales-habilitadas")]
         public async Task<ActionResult<List<SucursalGerenteResponse>>> GetSucursalesHabilitadas()
         {
             var uid = CurrentUserId();
             if (uid is null) return Forbid();
+            var usuario = await _userRepository.GetUsuarioById(uid.Value);
 
-            var gerente = await _userRepository.GetUsuarioById(uid.Value) as Gerente;
-            if (gerente == null) return Forbid();
+            if (usuario is Gerente gerente)
+            {
+                var ids = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
+                var sucursales = await _context.Sucursales
+                    .Where(s => ids.Contains(s.Id)
+                        && gerente.ProvinciasAsignadas.Contains(s.Provincia ?? string.Empty))
+                    .Select(s => new SucursalGerenteResponse(s.Id, s.Nombre, s.Provincia))
+                    .ToListAsync();
+                return Ok(sucursales);
+            }
 
-            var ids = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
-            var sucursales = await _context.Sucursales
-                .Where(s => ids.Contains(s.Id)
-                    && gerente.ProvinciasAsignadas.Contains(s.Provincia ?? string.Empty))
-                .Select(s => new SucursalGerenteResponse(s.Id, s.Nombre, s.Provincia))
-                .ToListAsync();
+            // Socio PickUp: por defecto (por rol) todas las sucursales de la provincia de su punto;
+            // si el Admin le definió un subconjunto explícito (por usuario), se respeta ese subconjunto.
+            if (usuario is SocioPickUp)
+            {
+                var provincia = await ProvinciaSocioAsync(usuario);
+                if (string.IsNullOrWhiteSpace(provincia)) return Ok(new List<SucursalGerenteResponse>());
+                var explicitos = await _gerenteSucursalRepo.GetSucursalesByGerente(usuario.Id);
+                var query = _context.Sucursales.Where(s => s.Provincia == provincia);
+                if (explicitos.Count > 0) query = query.Where(s => explicitos.Contains(s.Id));
+                return Ok(await query
+                    .Select(s => new SucursalGerenteResponse(s.Id, s.Nombre, s.Provincia))
+                    .ToListAsync());
+            }
 
-            return Ok(sucursales);
+            return Ok(new List<SucursalGerenteResponse>());
         }
 
         /// <summary>Establece la sucursal activa del Gerente autenticado.</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
         [HttpPut("me/sucursal-activa")]
         public async Task<ActionResult> SetSucursalActiva([FromBody] SetSucursalActivaRequest request)
         {
             var uid = CurrentUserId();
             if (uid is null) return Forbid();
+            var usuario = await _userRepository.GetUsuarioById(uid.Value);
 
-            var gerente = await _userRepository.GetUsuarioById(uid.Value) as Gerente;
-            if (gerente == null) return Forbid();
-
-            if (request.SucursalId.HasValue)
+            if (usuario is Gerente gerente)
             {
-                var habilitadas = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
-                if (!habilitadas.Contains(request.SucursalId.Value))
-                    return BadRequest("Esa sucursal no está habilitada para tu usuario.");
-
-                var sucursal = await _context.Sucursales.FindAsync(request.SucursalId.Value);
-                if (sucursal is null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
-                    return BadRequest("Esa sucursal no pertenece a la provincia del gerente.");
+                if (request.SucursalId.HasValue)
+                {
+                    var habilitadas = await _gerenteSucursalRepo.GetSucursalesByGerente(gerente.Id);
+                    if (!habilitadas.Contains(request.SucursalId.Value))
+                        return BadRequest("Esa sucursal no está habilitada para tu usuario.");
+                    var sucursal = await _context.Sucursales.FindAsync(request.SucursalId.Value);
+                    if (sucursal is null || !gerente.ProvinciasAsignadas.Contains(sucursal.Provincia ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                        return BadRequest("Esa sucursal no pertenece a la provincia del gerente.");
+                }
+                gerente.SetSucursalActiva(request.SucursalId);
+                await _context.SaveChangesAsync();
+                return NoContent();
             }
 
-            gerente.SetSucursalActiva(request.SucursalId);
-            await _context.SaveChangesAsync();
-            return NoContent();
+            // Socio PickUp: la sucursal activa se guarda en su SucursalId (validada contra su provincia/subconjunto).
+            if (usuario is SocioPickUp socio)
+            {
+                if (request.SucursalId.HasValue)
+                {
+                    var provincia = await ProvinciaSocioAsync(socio);
+                    var sucursal = await _context.Sucursales.FindAsync(request.SucursalId.Value);
+                    if (sucursal is null || !string.Equals(sucursal.Provincia, provincia, StringComparison.OrdinalIgnoreCase))
+                        return BadRequest("Esa sucursal no pertenece a la provincia de tu punto Pick Up.");
+                    var explicitos = await _gerenteSucursalRepo.GetSucursalesByGerente(socio.Id);
+                    if (explicitos.Count > 0 && !explicitos.Contains(request.SucursalId.Value))
+                        return BadRequest("Esa sucursal no está habilitada para tu usuario.");
+                }
+                socio.AsignarSucursal(request.SucursalId);
+                await _context.SaveChangesAsync();
+                return NoContent();
+            }
+
+            return Forbid();
         }
     }
 

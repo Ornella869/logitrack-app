@@ -37,6 +37,7 @@ namespace Back.Application.Services
         public double PesoTotal { get; init; }
         public double EfectividadPct { get; init; }
         public double TasaIncidenciasPct { get; init; }
+        public double PromedioDiasDemora { get; init; }
     }
 
     public class ReportesService
@@ -49,8 +50,15 @@ namespace Back.Application.Services
         }
 
         public async Task<List<ComparativoSucursalDto>> GetComparativoSucursalesAsync(
-            DateTime? from, DateTime? to, List<string>? provinciasGerente)
+            DateTime? from, DateTime? to, List<string>? provinciasGerente, Guid? sucursalId = null)
         {
+            // Supervisor/Operador con permiso 'reportes' concedido: acotar a la provincia de su sucursal.
+            if ((provinciasGerente == null || provinciasGerente.Count == 0) && sucursalId.HasValue)
+            {
+                var sucUser = await _context.Sucursales.FindAsync(sucursalId.Value);
+                if (!string.IsNullOrWhiteSpace(sucUser?.Provincia))
+                    provinciasGerente = new List<string> { sucUser!.Provincia };
+            }
             var now = OperationalClock.Now;
             var fromUtc = DateTime.SpecifyKind((from ?? now.AddDays(-30)).Date, DateTimeKind.Utc);
             var toExclusiveUtc = DateTime.SpecifyKind((to ?? now).Date.AddDays(1), DateTimeKind.Utc);
@@ -72,7 +80,7 @@ namespace Back.Application.Services
                             && p.CreadoEn < toExclusiveUtc
                             && p.SucursalId.HasValue
                             && sucursalIds.Contains(p.SucursalId.Value))
-                .Select(p => new { p.SucursalId, p.Status, p.Peso })
+                .Select(p => new { p.Id, p.SucursalId, p.Status, p.Peso, p.FechaEstimadaEntrega })
                 .ToListAsync();
 
             var incidenciasSucursal = await _context.Incidencias
@@ -81,6 +89,15 @@ namespace Back.Application.Services
                 .Select(g => new { SucursalId = g.Key, Count = g.Count() })
                 .ToListAsync();
             var incidenciasBySucursal = incidenciasSucursal.ToDictionary(x => x.SucursalId, x => x.Count);
+
+            // G1L-148: fecha real de entrega (último evento Entregado) para el promedio de días de demora.
+            var paqueteIds = paquetes.Select(p => p.Id).ToList();
+            var entregas = await _context.HistorialEstadosEnvio
+                .Where(h => h.EstadoNuevo == PaqueteStatus.Entregado && paqueteIds.Contains(h.PaqueteId))
+                .GroupBy(h => h.PaqueteId)
+                .Select(g => new { PaqueteId = g.Key, FechaEntrega = g.Max(x => x.FechaHora) })
+                .ToListAsync();
+            var entregaByPaquete = entregas.ToDictionary(x => x.PaqueteId, x => x.FechaEntrega);
 
             return sucursales
                 .OrderBy(s => s.Nombre)
@@ -95,6 +112,11 @@ namespace Back.Application.Services
                     var efectividad = total == 0 ? 0.0 : Math.Round((double)entregados / total * 100, 1);
                     incidenciasBySucursal.TryGetValue(s.Id, out var incidencias);
                     var tasaIncidencias = total == 0 ? 0.0 : Math.Round((double)incidencias / total * 100, 1);
+                    var demoras = grupo
+                        .Where(p => p.FechaEstimadaEntrega.HasValue && entregaByPaquete.ContainsKey(p.Id))
+                        .Select(p => Math.Max(0, (entregaByPaquete[p.Id].Date - p.FechaEstimadaEntrega!.Value.Date).Days))
+                        .ToList();
+                    var promedioDiasDemora = demoras.Count == 0 ? 0.0 : Math.Round(demoras.Average(), 1);
                     return new ComparativoSucursalDto
                     {
                         SucursalId = s.Id,
@@ -107,6 +129,7 @@ namespace Back.Application.Services
                         PesoTotal = Math.Round(pesoTotal, 1),
                         EfectividadPct = efectividad,
                         TasaIncidenciasPct = tasaIncidencias,
+                        PromedioDiasDemora = promedioDiasDemora,
                     };
                 })
                 .ToList();

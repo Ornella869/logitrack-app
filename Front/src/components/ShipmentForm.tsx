@@ -162,7 +162,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
   const loadBranches = async () => {
     setLoadingBranches(true)
     try {
-      if (currentUserRole() === 'gerente') {
+      if (currentUserRole() === 'gerente' || currentUserRole() === 'socio_pickup') {
         const active = await gerenteSucursalService.getSucursalActiva()
         if (!active.id) {
           setBranches([])
@@ -498,7 +498,7 @@ function ShipmentForm({ open, onClose, onSubmit, mode = 'create', initialData }:
 
           {!loadingBranches && branches.length === 0 && (
             <Alert severity="warning">
-              {currentUserRole() === 'gerente'
+              {(currentUserRole() === 'gerente' || currentUserRole() === 'socio_pickup')
                 ? 'Seleccioná una sucursal activa en el menú lateral antes de registrar envíos.'
                 : 'No hay una sucursal activa configurada. Pedile al administrador que cree una desde "Mi sucursal" antes de registrar envíos.'}
             </Alert>

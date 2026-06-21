@@ -334,6 +334,14 @@ namespace Back.Infrastructure.Database
                         _context.GerentesProvincias.Add(new Back.Domain.Models.GerenteProvincia(gerenteUsuario.Id, p.provincia));
                         await _context.SaveChangesAsync();
                     }
+                    // Habilitar la sucursal de la provincia al gerente: así puede elegir "sucursal activa"
+                    // y operar las features de sucursal (envíos, calendarización, etc.) que el Admin le conceda.
+                    var existsSuc = await _context.GerentesSucursales.AnyAsync(gs => gs.GerenteId == gerenteUsuario.Id && gs.SucursalId == sucursal.Id);
+                    if (!existsSuc)
+                    {
+                        _context.GerentesSucursales.Add(new Back.Domain.Models.GerenteSucursal(gerenteUsuario.Id, sucursal.Id));
+                        await _context.SaveChangesAsync();
+                    }
                 }
             }
         }
@@ -343,28 +351,50 @@ namespace Back.Infrastructure.Database
         {
             const string email = "gerente.bsas@logitrack.com";
             const string password = "kjkszpj1234";
+            const string provincia = "Buenos Aires";
 
             var existente = await _context.Usuarios.FirstOrDefaultAsync(u => u.Email == email);
-            if (existente is not null)
+            Gerente gerente;
+            if (existente is Gerente g)
             {
                 // Resetea la contraseña demo por si cambió en una versión anterior del seeder.
-                existente.CambiarPassword(PasswordHasher.HashPassword(password));
-                if (!existente.Activo) existente.Activar();
+                gerente = g;
+                gerente.CambiarPassword(PasswordHasher.HashPassword(password));
+                if (!gerente.Activo) gerente.Activar();
                 await _context.SaveChangesAsync();
-                return;
+            }
+            else if (existente is null)
+            {
+                gerente = new Gerente(
+                    "Gerardo", "Buenos Aires", email,
+                    PasswordHasher.HashPassword(password),
+                    "30111222", provincia);
+                _context.Usuarios.Add(gerente);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                return; // existe con ese email pero no es Gerente
             }
 
-            var gerente = new Gerente(
-                "Gerardo", "Buenos Aires", email,
-                PasswordHasher.HashPassword(password),
-                "30111222", "Buenos Aires");
-            _context.Usuarios.Add(gerente);
-            await _context.SaveChangesAsync();
             // Asegurar mapping en GerentesProvincias
-            var exists = await _context.GerentesProvincias.AnyAsync(gp => gp.GerenteId == gerente.Id && gp.Provincia == "Buenos Aires");
-            if (!exists)
+            if (!await _context.GerentesProvincias.AnyAsync(gp => gp.GerenteId == gerente.Id && gp.Provincia == provincia))
             {
-                _context.GerentesProvincias.Add(new Back.Domain.Models.GerenteProvincia(gerente.Id, "Buenos Aires"));
+                _context.GerentesProvincias.Add(new Back.Domain.Models.GerenteProvincia(gerente.Id, provincia));
+                await _context.SaveChangesAsync();
+            }
+
+            // Sucursal de su provincia (crearla si no existe) y habilitársela, para que pueda elegir "sucursal activa".
+            var sucursal = await _context.Sucursales.FirstOrDefaultAsync(s => s.Provincia == provincia);
+            if (sucursal is null)
+            {
+                sucursal = new Sucursal($"Sucursal {provincia}", "Av. Principal 100", "CABA", "1000", "11-4000-0000", provincia);
+                _context.Sucursales.Add(sucursal);
+                await _context.SaveChangesAsync();
+            }
+            if (!await _context.GerentesSucursales.AnyAsync(gs => gs.GerenteId == gerente.Id && gs.SucursalId == sucursal.Id))
+            {
+                _context.GerentesSucursales.Add(new Back.Domain.Models.GerenteSucursal(gerente.Id, sucursal.Id));
                 await _context.SaveChangesAsync();
             }
         }

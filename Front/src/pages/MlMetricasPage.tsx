@@ -56,21 +56,23 @@ export default function MlMetricasPage() {
   const handleReentrenar = async () => {
     setReentrenando(true)
     try {
-      const msg = await mlService.reentrenar()
-      setSnackbar(msg)
+      const res = await mlService.reentrenar()
+      setSnackbar(res.mensaje)
       await cargar()
     } catch (e: any) {
-      setSnackbarError(e?.response?.data ?? 'No se pudo iniciar el reentrenamiento.')
+      setSnackbarError(e?.response?.data?.mensaje ?? 'No se pudo iniciar el reentrenamiento.')
     } finally {
       setReentrenando(false)
     }
   }
 
-  const handleGestionar = async (id: string) => {
+  const handleGestionar = async (id: string, llegoATiempo: boolean) => {
     try {
-      await mlService.gestionarAlerta(id, null)
+      await mlService.gestionarAlerta(id, llegoATiempo)
       setAlerta(id)
-      setSnackbar('Alerta marcada como gestionada.')
+      setSnackbar(llegoATiempo
+        ? 'Alerta gestionada: el envío llegó a tiempo (falsa alarma registrada).'
+        : 'Alerta gestionada: el envío se demoró (acierto registrado).')
     } catch {
       setSnackbarError('No se pudo gestionar la alerta.')
     }
@@ -206,6 +208,67 @@ export default function MlMetricasPage() {
         </CardContent>
       </Card>
 
+      {/* Comparativa Modelo ML vs Heurístico */}
+      <Card variant="outlined" sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700} mb={2}>
+            Comparativa: Modelo ML vs Heurístico
+          </Typography>
+          {metricas?.comparativaDisponible && metricas.maeModeloMl != null ? (
+            <ComparativaMae maeHeuristico={metricas.maeHeuristico} maeModeloMl={metricas.maeModeloMl} />
+          ) : (
+            <Typography color="text.secondary">
+              El modelo aún no fue entrenado. Tocá "Reentrenar modelo" para entrenarlo con los datos actuales.
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Historial de versiones del modelo */}
+      <Card variant="outlined" sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700} mb={2}>
+            Historial de versiones del modelo
+          </Typography>
+          {metricas && metricas.versiones.length > 0 ? (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Versión</TableCell>
+                    <TableCell>Fecha entrenado</TableCell>
+                    <TableCell align="right">Registros usados</TableCell>
+                    <TableCell align="right">MAE modelo</TableCell>
+                    <TableCell align="right">MAE heurístico</TableCell>
+                    <TableCell>Algoritmo</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {metricas.versiones.map((v, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{v.version}</TableCell>
+                      <TableCell>{new Date(v.entrenadoEn).toLocaleString()}</TableCell>
+                      <TableCell align="right">{v.registrosUsados}</TableCell>
+                      <TableCell align="right">
+                        <Chip
+                          label={`${v.maeModelo} h`}
+                          size="small"
+                          color={v.maeModelo <= v.maeHeuristico ? 'success' : 'warning'}
+                        />
+                      </TableCell>
+                      <TableCell align="right">{v.maeHeuristico} h</TableCell>
+                      <TableCell>{v.algoritmo}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Typography color="text.secondary">Todavía no hay versiones entrenadas.</Typography>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Alertas de riesgo */}
       <Card variant="outlined" sx={{ mb: 3 }}>
         <CardContent>
@@ -217,6 +280,11 @@ export default function MlMetricasPage() {
               <Chip label={alertas.length} color="error" size="small" />
             )}
           </Stack>
+          {metricas?.precisionAlertas != null && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Precisión de alertas: {metricas.precisionAlertas}% sobre {metricas.alertasEvaluadas} gestionada(s) — sirve para calibrar el umbral.
+            </Typography>
+          )}
           {alertas.length === 0 ? (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'success.main' }}>
               <CheckCircleIcon fontSize="small" />
@@ -246,16 +314,20 @@ export default function MlMetricasPage() {
                       {a.causaPrincipal}
                     </Typography>
                   </Box>
-                  <Tooltip title="Marcar como gestionada">
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="warning"
-                      onClick={() => handleGestionar(a.id)}
-                    >
-                      Gestionar
-                    </Button>
-                  </Tooltip>
+                  <Stack direction="row" spacing={1}>
+                    <Tooltip title="El envío llegó a tiempo (registra falsa alarma)">
+                      <Button size="small" variant="outlined" color="success"
+                        onClick={() => handleGestionar(a.id, true)}>
+                        Llegó a tiempo
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="El envío se demoró (alerta acertada)">
+                      <Button size="small" variant="outlined" color="warning"
+                        onClick={() => handleGestionar(a.id, false)}>
+                        Se demoró
+                      </Button>
+                    </Tooltip>
+                  </Stack>
                 </Paper>
               ))}
             </Stack>
@@ -327,6 +399,40 @@ function SummaryCard({ label, value, sub, color }: { label: string; value: strin
         <Typography variant="caption" color="text.secondary">{sub}</Typography>
       </CardContent>
     </Card>
+  )
+}
+
+function ComparativaMae({ maeHeuristico, maeModeloMl }: { maeHeuristico: number; maeModeloMl: number }) {
+  const modeloMejor = maeModeloMl <= maeHeuristico
+  return (
+    <Stack spacing={2}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, textAlign: 'center', borderColor: modeloMejor ? 'success.main' : undefined, borderWidth: modeloMejor ? 2 : 1 }}
+        >
+          <Typography variant="body2" fontWeight={600} color="text.secondary">Modelo ML</Typography>
+          <Typography variant="h4" fontWeight={800} sx={{ color: '#7b1fa2' }}>{maeModeloMl} h</Typography>
+          <Typography variant="caption" color="text.secondary">error medio absoluto</Typography>
+        </Paper>
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, textAlign: 'center', borderColor: !modeloMejor ? 'success.main' : undefined, borderWidth: !modeloMejor ? 2 : 1 }}
+        >
+          <Typography variant="body2" fontWeight={600} color="text.secondary">Heurístico</Typography>
+          <Typography variant="h4" fontWeight={800} sx={{ color: '#0288d1' }}>{maeHeuristico} h</Typography>
+          <Typography variant="caption" color="text.secondary">error medio absoluto</Typography>
+        </Paper>
+      </Box>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <CheckCircleIcon fontSize="small" color="success" />
+        <Typography variant="body2">
+          {maeModeloMl === maeHeuristico
+            ? 'Ambos métodos tienen el mismo MAE.'
+            : `Mejor método: ${modeloMejor ? 'Modelo ML' : 'Heurístico'} (menor MAE).`}
+        </Typography>
+      </Stack>
+    </Stack>
   )
 }
 

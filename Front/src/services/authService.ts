@@ -49,6 +49,11 @@ export interface HistorialJornadaItem {
   contexto?: string
 }
 
+export interface PaquetesPendientesRepartidor {
+  pendientes: number
+  codigos: string[]
+}
+
 const mapRepartidor = (t: any): User => ({
   id: t.id,
   name: t.nombre,
@@ -378,6 +383,21 @@ export const authService = {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: unknown } })?.response?.data
       return { error: typeof msg === 'string' && msg.length > 0 ? msg : 'No se pudo transferir. Intentá de nuevo.' }
+    }
+  },
+
+  getPaquetesPendientesRepartidor: async (repartidorId: string): Promise<PaquetesPendientesRepartidor> => {
+    try {
+      const response = await api.get(`/auth/repartidores/${repartidorId}/paquetes-pendientes`)
+      return {
+        pendientes: Number(response.data?.pendientes ?? response.data?.Pendientes ?? 0),
+        codigos: Array.isArray(response.data?.codigos ?? response.data?.Codigos)
+          ? (response.data?.codigos ?? response.data?.Codigos)
+          : [],
+      }
+    } catch (error) {
+      console.error('Get paquetes pendientes repartidor error:', error)
+      return { pendientes: 0, codigos: [] }
     }
   },
 

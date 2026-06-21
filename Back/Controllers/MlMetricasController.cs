@@ -70,14 +70,24 @@ namespace Back.Controllers
         [HttpPost("reentrenar")]
         public async Task<IActionResult> Reentrenar()
         {
-            var hace30Dias = DateTime.UtcNow.AddDays(-30);
-            var nuevos = await _context.DatosEntrenamientoTramo
-                .CountAsync(d => d.RegistradoEn >= hace30Dias);
-
-            if (nuevos < 50)
-                return BadRequest($"Se necesitan al menos 50 registros nuevos en los últimos 30 días. Actualmente hay {nuevos}.");
-
-            return Ok(new { mensaje = $"Reentrenamiento iniciado con {nuevos} registros recientes. El modelo se actualizará en segundo plano." });
+            try
+            {
+                var version = await _estimacionService.EntrenarAsync();
+                return Ok(new
+                {
+                    mensaje = $"Modelo reentrenado ({version.Algoritmo}) con {version.RegistrosUsados} registros. " +
+                              $"MAE modelo {version.MaeModelo} h vs heurística {version.MaeHeuristico} h.",
+                    version.Version,
+                    version.RegistrosUsados,
+                    version.MaeModelo,
+                    version.MaeHeuristico,
+                    version.EntrenadoEn,
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
         }
     }
 

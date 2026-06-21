@@ -49,6 +49,7 @@ interface ComparativoSucursal {
   pesoTotal: number
   efectividadPct: number
   tasaIncidenciasPct: number
+  promedioDiasDemora: number
 }
 
 type ComparativoSortKey = keyof Omit<ComparativoSucursal, 'sucursalId'>
@@ -69,8 +70,6 @@ export default function ReportesPage() {
   const [compSortKey, setCompSortKey] = useState<ComparativoSortKey>('efectividadPct')
   const [compSortDir, setCompSortDir] = useState<'asc' | 'desc'>('desc')
   const [compProvincia, setCompProvincia] = useState('')
-
-  const canAccess = user.role === 'supervisor' || user.role === 'gerente'
 
   const comparativoProvincias = useMemo(() => {
     if (!comparativo) return []
@@ -95,7 +94,7 @@ export default function ReportesPage() {
   }
 
   useEffect(() => {
-    if (canAccess) void load()
+    void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -127,18 +126,25 @@ export default function ReportesPage() {
     }
   }
 
-  const handleExportComparativo = () => {
+  const handleExportComparativo = async () => {
     if (!comparativoFiltrado.length) return
-    const headers = ['Sucursal', 'Provincia', 'Total', 'Entregados', 'Cancelados', 'Demorados', 'Efectividad (%)', 'Incidencias (%)', 'Peso total (kg)']
-    const rows = comparativoFiltrado.map(s => [s.nombre, s.provincia, s.total, s.entregados, s.cancelados, s.demorados, s.efectividadPct.toFixed(1), s.tasaIncidenciasPct.toFixed(1), s.pesoTotal.toFixed(0)])
-    const csv = '﻿' + [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n')
-    const el = document.createElement('a')
-    el.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv))
-    el.setAttribute('download', `comparativo_sucursales_${from}_${to}.csv`)
-    el.style.display = 'none'
-    document.body.appendChild(el)
-    el.click()
-    document.body.removeChild(el)
+    const { utils, writeFile } = await import('xlsx')
+    const rows = comparativoFiltrado.map(s => ({
+      Sucursal: s.nombre,
+      Provincia: s.provincia,
+      Total: s.total,
+      Entregados: s.entregados,
+      Cancelados: s.cancelados,
+      Demorados: s.demorados,
+      'Efectividad (%)': Number(s.efectividadPct.toFixed(1)),
+      'Incidencias (%)': Number(s.tasaIncidenciasPct.toFixed(1)),
+      'Peso total (kg)': Number(s.pesoTotal.toFixed(0)),
+      'Prom. días demora': Number(s.promedioDiasDemora.toFixed(1)),
+    }))
+    const ws = utils.json_to_sheet(rows)
+    const wb = utils.book_new()
+    utils.book_append_sheet(wb, ws, 'Comparativo')
+    writeFile(wb, `logitrack-comparativo-sucursales-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const handleExportCsv = () => {
@@ -154,10 +160,6 @@ export default function ReportesPage() {
     document.body.appendChild(el)
     el.click()
     document.body.removeChild(el)
-  }
-
-  if (!canAccess) {
-    return <Alert severity="warning">Solo Supervisor o Gerente.</Alert>
   }
 
   return (
@@ -337,6 +339,14 @@ export default function ReportesPage() {
                                   sx={{ fontWeight: 700 }}
                                 >Peso (kg)</TableSortLabel>
                               </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={compSortKey === 'promedioDiasDemora'}
+                                  direction={compSortKey === 'promedioDiasDemora' ? compSortDir : 'desc'}
+                                  onClick={() => handleCompSort('promedioDiasDemora')}
+                                  sx={{ fontWeight: 700 }}
+                                >Prom. días demora</TableSortLabel>
+                              </TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -357,6 +367,7 @@ export default function ReportesPage() {
                                     {suc.tasaIncidenciasPct.toFixed(1)}%
                                   </TableCell>
                                   <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{suc.pesoTotal.toFixed(0)}</TableCell>
+                                  <TableCell align="right">{suc.promedioDiasDemora.toFixed(1)}</TableCell>
                                 </TableRow>
                               )
                             })}

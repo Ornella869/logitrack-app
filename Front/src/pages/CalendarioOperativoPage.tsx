@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -34,18 +34,31 @@ import SearchIcon from '@mui/icons-material/Search'
 import RepeatIcon from '@mui/icons-material/Repeat'
 import DownloadIcon from '@mui/icons-material/Download'
 import api from '../services/api'
+import { branchService } from '../services/branchService'
+import type { User } from '../types'
 import { dateOnlyForDisplay, formatDateOnlyEs, isTodayArgentina } from '../utils/argentinaDate'
 
-async function exportToExcel(data: CalendarioOperativo, desde: string, hasta: string) {
+// G1L-144: etiqueta de tipo de jornada. Si el backend ya la manda la usamos tal cual;
+// si no, la derivamos de horasTrabajo (≤6 h = Part Time, ≥7 h = Full Time) y si tampoco
+// está dejamos "—".
+// TODO backend: si en algún momento se deja de exponer tipoJornada en el endpoint de calendario, este fallback queda como red de seguridad.
+function jornadaLabel(rep: CalendarioRepartidor): string {
+  if (rep.tipoJornada) return rep.tipoJornada
+  if (typeof rep.horasTrabajo === 'number') return rep.horasTrabajo <= 6 ? 'Part Time' : 'Full Time'
+  return '—'
+}
+
+async function exportToExcel(data: CalendarioOperativo, desde: string, hasta: string, sucursalNombre: string) {
   const { utils, writeFile } = await import('xlsx')
   const rows: (string | number)[][] = []
   rows.push(['LogiTrack — Calendario Operativo'])
+  rows.push([`Sucursal: ${sucursalNombre}`])
   rows.push([`Período: ${desde} al ${hasta}`, '', `Generado: ${new Date().toLocaleString('es-AR')}`])
   rows.push([])
-  const header = ['Repartidor', 'Email', ...data.dias]
+  const header = ['Repartidor', 'Email', 'Jornada', ...data.dias]
   rows.push(header)
   for (const rep of data.repartidores) {
-    const row: (string | number)[] = [rep.nombre, rep.email]
+    const row: (string | number)[] = [rep.nombre, rep.email, jornadaLabel(rep)]
     for (const celda of rep.celdas) {
       row.push(celda.paquetes.length === 0 ? '' : `${celda.paquetes.length} envíos · ${celda.pesoTotal.toFixed(0)} kg`)
     }
@@ -57,7 +70,7 @@ async function exportToExcel(data: CalendarioOperativo, desde: string, hasta: st
   writeFile(wb, `logitrack-calendario-${desde}-${hasta}.xlsx`)
 }
 
-async function exportToPdf(data: CalendarioOperativo, desde: string, hasta: string) {
+async function exportToPdf(data: CalendarioOperativo, desde: string, hasta: string, sucursalNombre: string) {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -74,21 +87,23 @@ async function exportToPdf(data: CalendarioOperativo, desde: string, hasta: stri
   doc.text('Calendario Operativo', 60, 11)
   doc.setTextColor(0, 0, 0)
   doc.setFontSize(8)
-  doc.text(`Período: ${desde} al ${hasta}`, 14, 24)
-  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 29)
+  doc.text(`Sucursal: ${sucursalNombre}`, 14, 24)
+  doc.text(`Período: ${desde} al ${hasta}`, 14, 29)
+  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 34)
 
-  const head = [['Repartidor', ...data.dias.map((d) => {
+  const head = [['Repartidor', 'Jornada', ...data.dias.map((d) => {
     const date = dateOnlyForDisplay(d)
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
   })]]
   const body = data.repartidores.map((rep) => [
     rep.nombre,
+    jornadaLabel(rep),
     ...rep.celdas.map((c) => c.paquetes.length === 0 ? '—' : `${c.paquetes.length}p · ${c.pesoTotal.toFixed(0)}kg`),
   ])
   autoTable(doc, {
     head,
     body,
-    startY: 34,
+    startY: 39,
     styles: { fontSize: 7 },
     headStyles: { fillColor: [21, 101, 192] },
     didDrawPage: (_data: any) => {
@@ -163,6 +178,9 @@ type CalendarioRepartidor = {
   nombre: string
   email: string
   capacidadKg?: number
+  // G1L-144: el endpoint ya expone tipoJornada ("Part Time"/"Full Time") y horasTrabajo.
+  tipoJornada?: string
+  horasTrabajo?: number
   celdas: CalendarioCelda[]
 }
 
@@ -178,9 +196,14 @@ const dateForDisplay = dateOnlyForDisplay
 
 export default function CalendarioOperativoPage({ permissions }: { permissions: Set<string> }) {
   const navigate = useNavigate()
+  const user = useOutletContext<User>()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [data, setData] = useState<CalendarioOperativo | null>(null)
+  // G1L-144: el endpoint de calendario no devuelve el nombre de la sucursal,
+  // solo lo tenemos por el sucursalId del usuario logueado. Lo resolvemos para el export.
+  // TODO backend: exponer el nombre de la sucursal en el endpoint de calendario para no depender de este lookup.
+  const [sucursalNombre, setSucursalNombre] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pageOffset, setPageOffset] = useState(0)
@@ -205,14 +228,22 @@ export default function CalendarioOperativoPage({ permissions }: { permissions: 
     setExportDialogOpen(false)
     setExporting(true)
     const filtered = filterCalendarioByRange(data, desde, hasta)
-    if (format === 'excel') await exportToExcel(filtered, desde, hasta)
-    else await exportToPdf(filtered, desde, hasta)
+    const sucursal = sucursalNombre || '—'
+    if (format === 'excel') await exportToExcel(filtered, desde, hasta, sucursal)
+    else await exportToPdf(filtered, desde, hasta, sucursal)
     setExporting(false)
   }
 
   useEffect(() => {
     void load()
   }, [])
+
+  useEffect(() => {
+    if (!user?.sucursalId) return
+    branchService.getBranchById(user.sucursalId).then((b) => {
+      if (b?.name) setSucursalNombre(b.name)
+    })
+  }, [user?.sucursalId])
 
   const load = async () => {
     setLoading(true)

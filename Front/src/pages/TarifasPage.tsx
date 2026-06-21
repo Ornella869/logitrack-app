@@ -42,7 +42,10 @@ function ClickCapturer({ onClick }: { onClick: (p: LatLng) => void }) {
 
 export default function TarifasPage() {
   const user = useOutletContext<User>()
-  const isAdmin = user.role === 'gerente'
+  // La ruta ya está gateada por el permiso 'tarifas' (App.tsx → permitted()); cualquier rol con el
+  // permiso concedido (Gerente por defecto, o Supervisor/Operador si el Admin se lo da) puede configurar.
+  void user
+  const isAdmin = true
 
   const [config, setConfig] = useState<ConfiguracionTarifa | null>(null)
   const [kg, setKg] = useState('')

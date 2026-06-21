@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -21,7 +20,6 @@ import {
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import PeopleIcon from '@mui/icons-material/People'
 import api from '../services/api'
-import type { User } from '../types'
 
 interface SemanaEnvios { semana: number; envios: number }
 
@@ -49,7 +47,6 @@ interface ProyeccionPersonal {
 }
 
 export default function ProyeccionPersonalPage() {
-  const user = useOutletContext<User>()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [data, setData] = useState<ProyeccionPersonal | null>(null)
@@ -57,10 +54,6 @@ export default function ProyeccionPersonalPage() {
   const [error, setError] = useState('')
   const [volumenManual, setVolumenManual] = useState<number | null>(null)
   const [inputVolumen, setInputVolumen] = useState('')
-
-  if (user.role !== 'supervisor') {
-    return <Alert severity="warning">Solo Supervisores pueden acceder a esta pantalla.</Alert>
-  }
 
   const load = async (volumen?: number) => {
     setLoading(true)

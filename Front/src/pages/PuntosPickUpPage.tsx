@@ -59,7 +59,7 @@ function MapAutoCenter({ coords }: { coords: [number, number] | null }) {
 
 export default function PuntosPickUpPage() {
   const user = useOutletContext<User>()
-  const puedeEditar = user.role === 'gerente'
+  const puedeEditar = true
   const [items, setItems] = useState<PuntoPickUp[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -105,7 +105,7 @@ export default function PuntosPickUpPage() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ ...emptyForm, provincia: user.role === 'gerente' ? user.provincia ?? '' : '' })
+    setForm({ ...emptyForm, provincia: user.provincia ?? '' })
     setScheduleMode('builder')
     setDias('Lunes a Viernes')
     setApertura('09:00')
@@ -322,10 +322,6 @@ export default function PuntosPickUpPage() {
     }
   }
 
-  if (user.role !== 'gerente') {
-    return <Alert severity="warning">No tenés permisos para ver puntos PickUp.</Alert>
-  }
-
   return (
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mb: 3 }} spacing={2}>
@@ -433,7 +429,7 @@ export default function PuntosPickUpPage() {
                   error={!!formErrors.provincia}
                   helperText={formErrors.provincia}
                   fullWidth
-                  disabled={user.role === 'gerente'}
+                  disabled={!!user.provincia && !editing}
                 >
                   {AR_PROVINCIAS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                 </TextField>

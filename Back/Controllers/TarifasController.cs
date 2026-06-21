@@ -117,7 +117,7 @@ namespace Back.Controllers
         // ===== G1L-88: Cotización =====
 
         /// <summary>Calcula el desglose de la cotización para una dirección destino.</summary>
-        [Authorize(Roles = Roles.OperadorOSupervisorOAdministrador)]
+        [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor + "," + Roles.SocioPickUp)]
         [HttpPost("cotizar")]
         public async Task<ActionResult<CotizacionResultado>> Cotizar([FromBody] CotizarRequest request)
         {

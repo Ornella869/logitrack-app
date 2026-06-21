@@ -65,7 +65,8 @@ import {
 } from '../services/incidenciaService'
 import { mensajeIncidenciaService, type MensajeIncidencia } from '../services/mensajeIncidenciaService'
 import { shipmentService } from '../services/shipmentService'
-import type { Shipment, User } from '../types'
+import { branchService } from '../services/branchService'
+import type { Branch, Shipment, User } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { formatInstantArgentina, formatInstantArgentinaTime } from '../utils/argentinaDate'
 
@@ -818,6 +819,8 @@ export default function IncidenciasPage() {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
   })
   const [cruzadoHasta, setCruzadoHasta] = useState(() => new Date().toISOString().slice(0, 10))
+  const [cruzadoSucursalId, setCruzadoSucursalId] = useState('')
+  const [sucursales, setSucursales] = useState<Branch[]>([])
   const [drillCell, setDrillCell] = useState<{ repartidorId: string; repartidorNombre: string; tipo: string } | null>(null)
   const [drillItems, setDrillItems] = useState<DetalleIncidenciaCruzado[]>([])
   const [drillLoading, setDrillLoading] = useState(false)
@@ -848,12 +851,14 @@ export default function IncidenciasPage() {
     )
   }
 
-  const cargarCruzado = async (desde = cruzadoDesde, hasta = cruzadoHasta) => {
+  const cargarCruzado = async (desde = cruzadoDesde, hasta = cruzadoHasta, sucursalId = cruzadoSucursalId) => {
     setCruzadoLoading(true)
     setCruzadoError('')
     try {
       const apiModule = await import('../services/api')
-      const res = await apiModule.default.get('/incidencias/panel-cruzado', { params: { desde, hasta } })
+      const params: Record<string, string> = { desde, hasta }
+      if (sucursalId) params.sucursalId = sucursalId
+      const res = await apiModule.default.get('/incidencias/panel-cruzado', { params })
       setPanelCruzado(res.data)
     } catch {
       setCruzadoError('No se pudo cargar el panel cruzado.')
@@ -895,6 +900,9 @@ export default function IncidenciasPage() {
   useEffect(() => {
     if (tabVista === 'cruzado' && !panelCruzado && !cruzadoLoading) {
       void cargarCruzado()
+      if (sucursales.length === 0) {
+        void branchService.getAllBranches().then(setSucursales).catch(() => setSucursales([]))
+      }
     }
   }, [tabVista])
 
@@ -1005,6 +1013,19 @@ export default function IncidenciasPage() {
                   onChange={e => setCruzadoHasta(e.target.value)}
                   InputLabelProps={{ shrink: true }} inputProps={{ min: cruzadoDesde }} sx={{ minWidth: 150 }}
                 />
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Sucursal</InputLabel>
+                  <Select
+                    value={cruzadoSucursalId}
+                    label="Sucursal"
+                    onChange={e => setCruzadoSucursalId(e.target.value)}
+                  >
+                    <MenuItem value="">Todas</MenuItem>
+                    {sucursales.map(s => (
+                      <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <Button variant="contained" disabled={cruzadoLoading}
                   onClick={() => cargarCruzado()} sx={{ minWidth: 100 }}>
                   {cruzadoLoading ? <CircularProgress size={18} color="inherit" /> : 'Filtrar'}

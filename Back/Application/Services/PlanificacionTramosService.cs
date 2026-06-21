@@ -498,7 +498,11 @@ namespace Back.Application.Services
         {
             var tramo = await TramoActualAsync(paquete.Id);
             if (tramo?.EsUltimaMilla == true)
+            {
                 tramo.Entregar();
+                // G1L-161: persistir el dato de entrenamiento de la última milla (tiempo total real + desviación).
+                await _estimacion.RegistrarDatoUltimaMillaAsync(paquete, tramo);
+            }
         }
 
         public async Task<bool> EsUltimaMillaActualAsync(Guid paqueteId)

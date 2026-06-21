@@ -546,6 +546,25 @@ namespace Back.Controllers
             }
         }
 
+        /// <summary>G1L-149: envíos que se liberarían si se transfiere al repartidor (para advertir ANTES de confirmar).</summary>
+        [Authorize(Roles = Roles.Gerente)]
+        [RequirePermission("transferir_repartidores")]
+        [HttpGet("repartidores/{repartidorId:guid}/paquetes-pendientes")]
+        public async Task<ActionResult> GetPaquetesPendientesRepartidor(Guid repartidorId)
+        {
+            var paquetes = await _enviosRepository.GetPaquetesAsignadosARepartidor(repartidorId);
+            var afectados = paquetes
+                .Where(p => p.Status == PaqueteStatus.AsignadoAVehiculo
+                         || p.Status == PaqueteStatus.CargadoEnVehiculo
+                         || p.Status == PaqueteStatus.ListoParaSalir)
+                .ToList();
+            return Ok(new
+            {
+                pendientes = afectados.Count,
+                codigos = afectados.Select(p => p.CodigoSeguimiento).ToList(),
+            });
+        }
+
         [Authorize(Roles = Roles.Gerente)]
         [RequirePermission("transferir_repartidores")]
         [HttpPut("repartidores/{repartidorId:guid}/sucursal")]
@@ -662,8 +681,22 @@ namespace Back.Controllers
             var normalizedPage = PaginationDefaults.NormalizePage(page);
             var normalizedPageSize = PaginationDefaults.NormalizePageSize(pageSize);
             var usuarios = await _userRepository.GetPaged(search, role, active, sucursalId, normalizedPage, normalizedPageSize);
+            var items = usuarios.Items.Select(MapUsuario).ToList();
+            // Provincia del Socio PickUp (la de su punto): permite acotar el selector de sucursales por-usuario en Permisos.
+            var sociosConPunto = usuarios.Items.OfType<SocioPickUp>().Where(s => s.PuntoPickUpId != Guid.Empty).ToList();
+            if (sociosConPunto.Count > 0)
+            {
+                var puntoIds = sociosConPunto.Select(s => s.PuntoPickUpId).Distinct().ToList();
+                var puntos = await _context.PuntosPickUp.Where(p => puntoIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => p.Provincia);
+                foreach (var item in items)
+                {
+                    if (item.Role == Roles.SocioPickUp && Guid.TryParse(item.PuntoPickUpId, out var pid) && puntos.TryGetValue(pid, out var prov))
+                        item.Provincia = prov;
+                }
+            }
             return Ok(PagedResponse<UserInfoResponse>.Create(
-                usuarios.Items.Select(MapUsuario).ToList(),
+                items,
                 usuarios.Page,
                 usuarios.PageSize,
                 usuarios.TotalItems));

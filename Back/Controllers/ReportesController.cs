@@ -49,13 +49,13 @@ namespace Back.Controllers
         }
 
         /// <summary>Comparativo de rendimiento entre sucursales (Gerente / Administrador).</summary>
-        [Authorize(Roles = Roles.Gerente + "," + Roles.Administrador)]
+        [Authorize]
         [HttpGet("comparativo-sucursales")]
         public async Task<ActionResult<List<Back.Application.Services.ComparativoSucursalDto>>> ComparativoSucursales(
             [FromQuery] DateTime? desde, [FromQuery] DateTime? hasta)
         {
             var scope = await CurrentScopeAsync();
-            var resultado = await _service.GetComparativoSucursalesAsync(desde, hasta, scope.Provincias);
+            var resultado = await _service.GetComparativoSucursalesAsync(desde, hasta, scope.Provincias, scope.SucursalId);
             return Ok(resultado);
         }
     }

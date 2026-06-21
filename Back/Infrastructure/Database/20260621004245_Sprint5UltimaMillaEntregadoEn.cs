@@ -6,15 +6,15 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Back.Infrastructure.Database
 {
     /// <inheritdoc />
-    public partial class AddSocioPickUpRelation : Migration
+    public partial class Sprint5UltimaMillaEntregadoEn : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<Guid>(
-                name: "PuntoPickUpId",
-                table: "Usuarios",
-                type: "uuid",
+            migrationBuilder.AddColumn<DateTime>(
+                name: "EntregadoEn",
+                table: "Paquetes",
+                type: "timestamp with time zone",
                 nullable: true);
         }
 
@@ -22,8 +22,8 @@ namespace Back.Infrastructure.Database
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "PuntoPickUpId",
-                table: "Usuarios");
+                name: "EntregadoEn",
+                table: "Paquetes");
         }
     }
 }

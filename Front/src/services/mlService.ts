@@ -14,6 +14,30 @@ export interface MlMetricas {
   maeHistorico: PuntoMaeHistorico[]
   puedeReentrenar: boolean
   version: string
+  maeHeuristico: number
+  maeModeloMl: number | null
+  comparativaDisponible: boolean
+  versiones: VersionModelo[]
+  precisionAlertas: number | null
+  alertasEvaluadas: number
+}
+
+export interface VersionModelo {
+  entrenadoEn: string
+  registrosUsados: number
+  maeModelo: number
+  maeHeuristico: number
+  version: string
+  algoritmo: string
+}
+
+export interface ResultadoReentrenamiento {
+  mensaje: string
+  version: string
+  registrosUsados: number
+  maeModelo: number
+  maeHeuristico: number
+  entrenadoEn: string
 }
 
 export interface TramoDificil {
@@ -58,8 +82,8 @@ export const mlService = {
     await api.put(`/ml-metricas/alertas/${id}/gestionar`, { llegoATiempo })
   },
 
-  async reentrenar(): Promise<string> {
-    const res = await api.post<{ mensaje: string }>('/ml-metricas/reentrenar')
-    return res.data.mensaje
+  async reentrenar(): Promise<ResultadoReentrenamiento> {
+    const res = await api.post<ResultadoReentrenamiento>('/ml-metricas/reentrenar')
+    return res.data
   },
 }

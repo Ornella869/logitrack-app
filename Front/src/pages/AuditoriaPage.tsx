@@ -143,14 +143,12 @@ export default function AuditoriaPage() {
   const [pageSize, setPageSize] = useState(10)
   const [totalItems, setTotalItems] = useState(0)
 
-  const canAccess = user.role === 'administrador' || user.role === 'supervisor'
   const isAdmin = user.role === 'administrador'
   const accionesDisponibles = isAdmin ? ACCIONES : SUPERVISOR_ACCIONES
 
   useEffect(() => {
-    if (!canAccess) return
     void load(page, pageSize)
-  }, [canAccess, page, pageSize])
+  }, [page, pageSize])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -212,10 +210,6 @@ export default function AuditoriaPage() {
       return acc
     }, {})
   }, [logs])
-
-  if (!canAccess) {
-    return <Alert severity="warning">El log de auditoría es exclusivo del Administrador.</Alert>
-  }
 
   return (
     <Box>

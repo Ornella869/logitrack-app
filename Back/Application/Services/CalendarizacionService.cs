@@ -1,6 +1,7 @@
 using Back.Application.Common;
 using Back.Domain.Models;
 using Back.Domain.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace Back.Application.Services
 {
@@ -40,6 +41,9 @@ namespace Back.Application.Services
         public required string CodigoSeguimiento { get; init; }
         public required double Peso { get; init; }
         public required string Motivo { get; init; }
+        // G1L-142: repartidor más cercano al destino, para acceso rápido a su perfil y ajustar su jornada.
+        public Guid? RepartidorCercanoId { get; init; }
+        public string? RepartidorCercanoNombre { get; init; }
     }
 
     public class CalendarioCelda
@@ -106,6 +110,7 @@ namespace Back.Application.Services
         private readonly AuditoriaService _auditoria;
         private readonly OjoPatronService _ojoPatron;
         private readonly PlanificacionTramosService _tramos;
+        private readonly Back.Infrastructure.Database.LogiTrackDbContext _context;
 
         public CalendarizacionService(
             IEnviosRepository enviosRepository,
@@ -113,7 +118,8 @@ namespace Back.Application.Services
             HistorialEstadoEnvioService historial,
             AuditoriaService auditoria,
             OjoPatronService ojoPatron,
-            PlanificacionTramosService tramos)
+            PlanificacionTramosService tramos,
+            Back.Infrastructure.Database.LogiTrackDbContext context)
         {
             _enviosRepository = enviosRepository;
             _userRepository = userRepository;
@@ -121,7 +127,12 @@ namespace Back.Application.Services
             _auditoria = auditoria;
             _ojoPatron = ojoPatron;
             _tramos = tramos;
+            _context = context;
         }
+
+        // G1L-152: el punto Pick Up destino está cerrado ese día (default: abierto si no hay horario configurado).
+        private static bool PickUpCerrado(Guid puntoId, DateTime fecha, List<HorarioPickUp> horarios) =>
+            horarios.FirstOrDefault(h => h.PuntoPickUpId == puntoId && h.DiaSemana == (int)fecha.DayOfWeek)?.Cerrado == true;
 
         // Épica D: si se pasa sucursalId, todo se filtra a esa sucursal (envíos y repartidores).
         public async Task<int> ContarPendientesAsync(Guid? sucursalId = null)
@@ -417,10 +428,15 @@ namespace Back.Application.Services
                 r => existentes.Count(p => p.RepartidorAsignadoId == r.Id));
 
             var hoy = OperationalClock.TodayUtcDate;
+            var horariosReagendar = paquete.PuntoPickUpId.HasValue
+                ? await _context.HorariosPickUp.Where(h => h.PuntoPickUpId == paquete.PuntoPickUpId.Value).ToListAsync()
+                : new List<HorarioPickUp>();
             for (int offset = 1; offset <= MaxDiasParaProgramar; offset++)
             {
                 var fecha = hoy.AddDays(offset);
                 if (fecha.DayOfWeek == DayOfWeek.Sunday) continue;
+                // G1L-152: punto Pick Up cerrado ese día → no asignar.
+                if (paquete.PuntoPickUpId.HasValue && PickUpCerrado(paquete.PuntoPickUpId.Value, fecha, horariosReagendar)) continue;
 
                 var candidato = repartidores
                     .Where(r => TieneCapacidadParaRango(r, fecha, paquete, carga))
@@ -522,28 +538,42 @@ namespace Back.Application.Services
                 bool asignado = false;
                 var cpPaquete = ParseCp(paquete.Destinatario.Direccion.CP);
 
-                var repsElegibles = (paquete.SucursalId.HasValue
+                var repsSucursal = (paquete.SucursalId.HasValue
                     ? repartidores.Where(r => r.SucursalId == paquete.SucursalId)
                     : repartidores.AsEnumerable())
+                    .ToList();
+                var repsElegibles = repsSucursal
                     .Where(r => !r.EsPartTime
                         || (!paquete.RequiereRepartidorFullTime && paquete.HorasEstimadasRuta <= 6f))
                     .ToList();
 
                 if (repsElegibles.Count == 0)
                 {
+                    // G1L-142: desglose explícito del motivo de no asignación.
+                    var requiereFt = paquete.RequiereRepartidorFullTime || paquete.HorasEstimadasRuta > 6f;
+                    var cercanoSinElegibles = CercanoParaPerfil(repsSucursal, cpPaquete);
                     paquetesSinAsignar.Add(new PaqueteSinAsignarResumen
                     {
                         PaqueteId = paquete.Id,
                         CodigoSeguimiento = paquete.CodigoSeguimiento,
                         Peso = paquete.Peso,
-                        Motivo = "Sin repartidores elegibles",
+                        Motivo = repsSucursal.Count > 0 && requiereFt
+                            ? "Requiere Full Time — sin cobertura"
+                            : "Sin repartidor disponible",
+                        RepartidorCercanoId = cercanoSinElegibles?.Id,
+                        RepartidorCercanoNombre = cercanoSinElegibles?.Nombre,
                     });
                     continue;
                 }
 
+                var horariosPickUp = paquete.PuntoPickUpId.HasValue
+                    ? await _context.HorariosPickUp.Where(h => h.PuntoPickUpId == paquete.PuntoPickUpId.Value).ToListAsync()
+                    : new List<HorarioPickUp>();
                 for (int offset = 1; offset <= MaxDiasParaProgramar && !asignado; offset++)
                 {
                     var fecha = hoy.AddDays(offset);
+                    // G1L-152: si el destino es un punto Pick Up, no asignar en días en que está cerrado.
+                    if (paquete.PuntoPickUpId.HasValue && PickUpCerrado(paquete.PuntoPickUpId.Value, fecha, horariosPickUp)) continue;
 
                     var candidatosCP = repsElegibles
                         .Where(r =>
@@ -589,13 +619,18 @@ namespace Back.Application.Services
                 }
 
                 if (!asignado)
+                {
+                    var cercanoSinCupo = CercanoParaPerfil(repsElegibles, cpPaquete);
                     paquetesSinAsignar.Add(new PaqueteSinAsignarResumen
                     {
                         PaqueteId = paquete.Id,
                         CodigoSeguimiento = paquete.CodigoSeguimiento,
                         Peso = paquete.Peso,
-                        Motivo = "Sin capacidad disponible en los próximos 30 días",
+                        Motivo = "Capacidad de peso excedida",
+                        RepartidorCercanoId = cercanoSinCupo?.Id,
+                        RepartidorCercanoNombre = cercanoSinCupo?.Nombre,
                     });
+                }
             }
 
             var repIndex = repartidores.ToDictionary(r => r.Id);
@@ -644,6 +679,25 @@ namespace Back.Application.Services
                 ResumenPorDia = resumen,
                 PaquetesSinAsignar = paquetesSinAsignar,
             };
+
+            // G1L-142: repartidor más cercano al CP destino (por sus paquetes ya asignados), para acceso rápido a su perfil.
+            (Guid Id, string Nombre)? CercanoParaPerfil(List<Repartidor> candidatos, int cp)
+            {
+                if (candidatos.Count == 0) return null;
+                Repartidor? mejor = null;
+                int mejorDist = int.MaxValue;
+                foreach (var r in candidatos)
+                {
+                    var dists = carga.Where(kv => kv.Key.Item1 == r.Id)
+                        .SelectMany(kv => kv.Value)
+                        .Select(p => Math.Abs(ParseCp(p.Destinatario.Direccion.CP) - cp))
+                        .ToList();
+                    var d = dists.Count > 0 ? dists.Min() : int.MaxValue - 1;
+                    if (d < mejorDist) { mejorDist = d; mejor = r; }
+                }
+                mejor ??= candidatos[0];
+                return (mejor.Id, $"{mejor.Nombre} {mejor.Apellido}");
+            }
 
             void AsignarPreview(Repartidor rep, DateTime fecha, Paquete pk)
             {
@@ -772,9 +826,14 @@ namespace Back.Application.Services
 
                 if (repsElegibles.Count == 0) { sinAsignar++; continue; }
 
+                var horariosPickUp = paquete.PuntoPickUpId.HasValue
+                    ? await _context.HorariosPickUp.Where(h => h.PuntoPickUpId == paquete.PuntoPickUpId.Value).ToListAsync()
+                    : new List<HorarioPickUp>();
                 for (int offset = 1; offset <= MaxDiasParaProgramar && !asignado; offset++)
                 {
                     var fecha = hoy.AddDays(offset);
+                    // G1L-152: si el destino es un punto Pick Up, no asignar en días en que está cerrado.
+                    if (paquete.PuntoPickUpId.HasValue && PickUpCerrado(paquete.PuntoPickUpId.Value, fecha, horariosPickUp)) continue;
 
                     // 1) Match exacto de CP con control de equidad.
                     //    Solo agrupa por zona si el repartidor con ese CP no tiene más de 1 paquete

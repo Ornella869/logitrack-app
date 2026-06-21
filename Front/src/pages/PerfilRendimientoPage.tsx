@@ -450,7 +450,7 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
             </Card>
           )}
 
-          {(user.role === 'supervisor' || user.role === 'administrador') && (
+          {permissions.has('repartidores') && (
             <Card variant="outlined" sx={{ borderLeft: data?.licenciaVencida ? '4px solid #c62828' : data?.licenciaProximaAVencer ? '4px solid #e65100' : '4px solid #bdbdbd' }}>
               <CardContent sx={{ pb: '12px !important' }}>
                 <Typography variant="subtitle2" gutterBottom>Vencimiento de licencia</Typography>
@@ -488,7 +488,7 @@ export default function PerfilRendimientoPage({ permissions }: { permissions: Se
             </Card>
           )}
 
-          {user.role === 'gerente' && (
+          {permissions.has('transferir_repartidores') && (
             <Card variant="outlined">
               <CardContent sx={{ pb: '12px !important' }}>
                 <Typography variant="subtitle2" gutterBottom>Transferir a otra sucursal</Typography>

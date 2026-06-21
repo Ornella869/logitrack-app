@@ -25,7 +25,8 @@ import OjoPatronSupervisorPanel from './OjoPatronSupervisorPanel'
 
 export default function OjoPatronConfigPage() {
   const user = useOutletContext<User>()
-  const isGerente = user.role === 'gerente'
+  // Ruta gateada por permiso 'ojo_patron'. El Supervisor ve su panel; Gerente/Operador (con permiso
+  // concedido) y Admin ven la configuración de umbral provincial.
 
   const [umbral, setUmbral] = useState(0.4)
   const [activo, setActivo] = useState(true)
@@ -35,7 +36,7 @@ export default function OjoPatronConfigPage() {
   const [msg, setMsg] = useState<{ sev: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
-    if (!isGerente) {
+    if (user.role === 'supervisor') {
       setLoading(false)
       return
     }
@@ -48,7 +49,7 @@ export default function OjoPatronConfigPage() {
       }
       setLoading(false)
     })()
-  }, [isGerente])
+  }, [user.role])
 
   const handleSave = async () => {
     setSaving(true)
@@ -65,7 +66,6 @@ export default function OjoPatronConfigPage() {
   }
 
   if (user.role === 'supervisor') return <OjoPatronSupervisorPanel />
-  if (!isGerente) return <Alert severity="warning">Solo el Gerente.</Alert>
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
 
   return (

@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Back.Infrastructure.Database
 {
     [DbContext(typeof(LogiTrackDbContext))]
-    [Migration("20260617162928_AddSucursalesPermitidasIdsFix")]
-    partial class AddSucursalesPermitidasIdsFix
+    [Migration("20260620224054_Sprint5Baseline")]
+    partial class Sprint5Baseline
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -642,6 +642,37 @@ namespace Back.Infrastructure.Database
                     b.HasKey("Id");
 
                     b.ToTable("MensajesIncidencia");
+                });
+
+            modelBuilder.Entity("Back.Domain.Models.ModeloVersionTramo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Algoritmo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("EntrenadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("MaeHeuristico")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MaeModelo")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("RegistrosUsados")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ModeloVersionesTramo");
                 });
 
             modelBuilder.Entity("Back.Domain.Models.OverrideOjoPatron", b =>

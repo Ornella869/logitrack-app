@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -24,7 +25,9 @@ import HistoryIcon from '@mui/icons-material/History'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
 import SearchIcon from '@mui/icons-material/Search'
+import StorefrontIcon from '@mui/icons-material/Storefront'
 import { pickupOperacionService, type PickUpAgenda, type PickUpHistorialPaquete, type PickUpPaqueteStatus } from '../services/pickupOperacionService'
+import type { User } from '../types'
 import { formatDateOnlyEs } from '../utils/argentinaDate'
 
 const statusLabel: Record<PickUpPaqueteStatus, string> = {
@@ -63,16 +66,25 @@ const formatRouteDate = (value?: string | null) => value
   : '-'
 
 export default function PickUpHistorialPage() {
+  const user = useOutletContext<User>()
   const [agenda, setAgenda] = useState<PickUpAgenda | null>(null)
   const [historial, setHistorial] = useState<PickUpHistorialPaquete[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sinPunto, setSinPunto] = useState(false)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setError(null)
+      // El usuario no tiene un Punto Pick Up asociado: no hay ámbito que trazar.
+      if (!user?.puntoPickUpId) {
+        setSinPunto(true)
+        setLoading(false)
+        return
+      }
+      setSinPunto(false)
       try {
         const [agendaResp, historialResp] = await Promise.all([
           pickupOperacionService.esperadosHoy(),
@@ -81,13 +93,19 @@ export default function PickUpHistorialPage() {
         setAgenda(agendaResp)
         setHistorial(historialResp)
       } catch (err: any) {
+        const status = err?.response?.status
+        // 403/404: el backend no encuentra un punto Pick Up asociado al usuario.
+        if (status === 403 || status === 404) {
+          setSinPunto(true)
+          return
+        }
         setError(err?.response?.data || 'No se pudo cargar la trazabilidad del punto PickUp.')
       } finally {
         setLoading(false)
       }
     }
     void load()
-  }, [])
+  }, [user?.puntoPickUpId])
 
   const filteredHistorial = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -103,6 +121,22 @@ export default function PickUpHistorialPage() {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
         <CircularProgress />
+      </Box>
+    )
+  }
+
+  if (sinPunto) {
+    return (
+      <Box sx={{ p: { xs: 2, md: 4 }, width: '100%', maxWidth: 'none' }}>
+        <Stack spacing={3}>
+          <Box>
+            <Typography variant="h4" fontWeight={800}>Historial Pick Up</Typography>
+            <Typography color="text.secondary">Trazabilidad de paquetes relacionados con tu punto y agenda de recepciones del día.</Typography>
+          </Box>
+          <Alert severity="info" icon={<StorefrontIcon />}>
+            Tu usuario no tiene un Punto Pick Up asignado para operar.
+          </Alert>
+        </Stack>
       </Box>
     )
   }

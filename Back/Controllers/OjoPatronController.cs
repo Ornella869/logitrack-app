@@ -174,7 +174,7 @@ namespace Back.Controllers
         }
 
         /// <summary>Ajusta el umbral de activación vocal de la provincia del Gerente.</summary>
-        [Authorize(Roles = Roles.Gerente)]
+        [Authorize]
         [RequirePermission("ojo_patron")]
         [HttpPut("configuracion")]
         public async Task<ActionResult<ConfiguracionOjoPatron>> ActualizarConfiguracion([FromBody] ConfiguracionOjoPatronRequest request)

@@ -41,12 +41,26 @@ namespace Back.Application.Services
         private readonly IUserRepository _userRepository;
         private readonly EmpresaService _empresaService;
         private readonly Back.Domain.Repositories.IGerenteProvinciaRepository _gerenteProvinciaRepo;
+        private readonly Back.Infrastructure.Database.LogiTrackDbContext _context;
 
-        public AuthService(IUserRepository userRepository, EmpresaService empresaService, Back.Domain.Repositories.IGerenteProvinciaRepository gerenteProvinciaRepo)
+        public AuthService(IUserRepository userRepository, EmpresaService empresaService, Back.Domain.Repositories.IGerenteProvinciaRepository gerenteProvinciaRepo, Back.Infrastructure.Database.LogiTrackDbContext context)
         {
             _userRepository = userRepository;
             _empresaService = empresaService;
             _gerenteProvinciaRepo = gerenteProvinciaRepo;
+            _context = context;
+        }
+
+        // Provincia efectiva del usuario: Gerente → su provincia; Operador/Supervisor/Repartidor → la de su
+        // sucursal; Socio PickUp → la de su punto. Se expone en el login para que el front pueda acotar formularios.
+        private async Task<string?> ResolverProvinciaUsuarioAsync(Usuario user)
+        {
+            if (user is Gerente gerente) return gerente.Provincia;
+            if (user.SucursalId is Guid sucId)
+                return (await _context.Sucursales.FindAsync(sucId))?.Provincia;
+            if (user is SocioPickUp socio && socio.PuntoPickUpId is Guid pid)
+                return (await _context.PuntosPickUp.FindAsync(pid))?.Provincia;
+            return null;
         }
 
         public async Task<dynamic> Login(LoginRequest request)
@@ -122,7 +136,7 @@ namespace Back.Application.Services
                     dni = user.DNI,
                     role = user.GetType().Name,
                     sucursalId = user.SucursalId?.ToString(),
-                    provincia = user is Gerente gerente ? gerente.Provincia : null,
+                    provincia = await ResolverProvinciaUsuarioAsync(user),
                     puntoPickUpId = user is SocioPickUp socio ? socio.PuntoPickUpId.ToString() : null,
                     capacidadCargaKg = user is Repartidor repartidor ? repartidor.CapacidadCargaKg : (double?)null,
                     provincias = user is Gerente g ? await _gerenteProvinciaRepo.GetProvinciasByGerente(g.Id) : null,

@@ -176,7 +176,7 @@ export default function PermisosPage() {
   }, [selectedUser])
 
   useEffect(() => {
-    if (!selectedUser || selectedUser.role !== 'gerente') {
+    if (!selectedUser || (selectedUser.role !== 'gerente' && selectedUser.role !== 'socio_pickup')) {
       setGerenteBranches({ available: [], selectedIds: [], loading: false, saving: false })
       return
     }
@@ -308,7 +308,7 @@ export default function PermisosPage() {
   }
 
   const saveGerenteBranches = async () => {
-    if (!selectedUser || selectedUser.role !== 'gerente') return
+    if (!selectedUser || (selectedUser.role !== 'gerente' && selectedUser.role !== 'socio_pickup')) return
     setGerenteBranches((prev) => ({ ...prev, saving: true }))
     setError('')
     try {
@@ -629,7 +629,7 @@ export default function PermisosPage() {
         )}
 
         <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
-          {selectedUser?.role === 'gerente' && (
+          {(selectedUser?.role === 'gerente' || selectedUser?.role === 'socio_pickup') && (
             <Paper
               variant="outlined"
               sx={{

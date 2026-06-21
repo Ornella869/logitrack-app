@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -43,6 +44,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import EditIcon from '@mui/icons-material/Edit'
 import { pickupOperacionService, type PickUpInventario, type PickUpPaquete } from '../services/pickupOperacionService'
 import { pickupService, type ResumenCalificaciones, type HorarioPickUpItem } from '../services/pickupService'
+import type { User } from '../types'
 import StarIcon from '@mui/icons-material/Star'
 import StarHalfIcon from '@mui/icons-material/StarHalf'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
@@ -277,8 +279,10 @@ function StarRating({ value }: { value: number }) {
 }
 
 export default function PickUpOperacionPage() {
+  const user = useOutletContext<User>()
   const [data, setData] = useState<PickUpInventario | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sinPunto, setSinPunto] = useState(false)
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [codigoRecepcion, setCodigoRecepcion] = useState('')
@@ -334,6 +338,14 @@ export default function PickUpOperacionPage() {
 
   const load = async () => {
     setLoading(true)
+    // El usuario no tiene un Punto Pick Up asociado: no hay ámbito sobre el que operar.
+    if (!user?.puntoPickUpId) {
+      setSinPunto(true)
+      setData(null)
+      setLoading(false)
+      return
+    }
+    setSinPunto(false)
     try {
       const [inventario, calificaciones] = await Promise.all([
         pickupOperacionService.inventario(),
@@ -342,6 +354,13 @@ export default function PickUpOperacionPage() {
       setData(inventario)
       setResumenCalificaciones(calificaciones)
     } catch (error: unknown) {
+      const status = (error as { response?: { status?: number } })?.response?.status
+      // 403/404: el backend no encuentra un punto Pick Up asociado al usuario.
+      if (status === 403 || status === 404) {
+        setSinPunto(true)
+        setData(null)
+        return
+      }
       const msg = (error as { response?: { data?: string } })?.response?.data
       setMessage({ type: 'error', text: typeof msg === 'string' ? msg : 'No se pudo cargar el inventario Pick Up.' })
     } finally {
@@ -471,6 +490,22 @@ export default function PickUpOperacionPage() {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
         <CircularProgress />
+      </Box>
+    )
+  }
+
+  if (sinPunto) {
+    return (
+      <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1320, mx: 'auto' }}>
+        <Stack spacing={3}>
+          <Box>
+            <Typography variant="h4" fontWeight={800}>Operación Pick Up</Typography>
+            <Typography color="text.secondary">Recepción, inventario y entrega con código de seguridad.</Typography>
+          </Box>
+          <Alert severity="info" icon={<StorefrontIcon />}>
+            Tu usuario no tiene un Punto Pick Up asignado para operar.
+          </Alert>
+        </Stack>
       </Box>
     )
   }

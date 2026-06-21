@@ -752,6 +752,8 @@ export interface PaqueteSinAsignarResumen {
   codigoSeguimiento: string
   peso: number
   motivo: string
+  repartidorCercanoId?: string | null
+  repartidorCercanoNombre?: string | null
 }
 
 export interface CalendarizacionResultado {

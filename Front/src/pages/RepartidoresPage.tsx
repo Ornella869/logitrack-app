@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import RepartidoresList from '../components/RepartidoresList'
 import type { User } from '../types'
 
-export default function RepartidoresPage() {
+export default function RepartidoresPage({ permissions }: { permissions: Set<string> }) {
   const user = useOutletContext<User>()
 
   return (
@@ -17,7 +17,7 @@ export default function RepartidoresPage() {
         </Typography>
       </Box>
 
-      <RepartidoresList userRole={user.role} canTransfer={user.role === 'gerente'} />
+      <RepartidoresList userRole={user.role} canTransfer={permissions.has('transferir_repartidores')} />
     </Box>
   )
 }
