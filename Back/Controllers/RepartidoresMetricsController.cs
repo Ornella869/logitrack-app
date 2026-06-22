@@ -12,7 +12,6 @@ namespace Back.Controllers
 {
     [ApiController]
     [Route("api/repartidores")]
-    [RequirePermission("perfil_rendimiento")]
     public class RepartidoresMetricsController : ControllerBase
     {
         private readonly RepartidoresMetricsService _service;
@@ -44,6 +43,7 @@ namespace Back.Controllers
 
         /// <summary>G1L-20: Perfil de rendimiento de un repartidor en un período.</summary>
         [Authorize(Roles = Roles.OperadorOSupervisorOGerenteOAdministrador + "," + Roles.Repartidor)]
+        [RequirePermission("perfil_rendimiento")]
         [HttpGet("{repartidorId:guid}/rendimiento")]
         public async Task<ActionResult<RendimientoRepartidor>> GetRendimiento(
             Guid repartidorId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
@@ -186,13 +186,16 @@ namespace Back.Controllers
 
         /// <summary>Reporte semanal de demanda de horas de ruta vs capacidad disponible (Gerente/Admin).</summary>
         [Authorize(Roles = Roles.GerenteOAdministrador)]
+        [RequirePermission("metricas_personal")]
         [HttpGet("reporte-demanda-capacidad")]
         public async Task<IActionResult> GetReporteDemandaCapacidad(
             [FromQuery] DateTime? desde = null,
             [FromQuery] DateTime? hasta = null)
         {
-            var end = (hasta ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
-            var start = (desde ?? DateTime.UtcNow.AddDays(-7 * 8)).Date;
+            var startDate = (desde ?? OperationalClock.TodayUtcDate.AddDays(-7 * 8)).Date;
+            var endDate = (hasta ?? OperationalClock.TodayUtcDate).Date;
+            var start = OperationalClock.StartUtcForOperationalDate(startDate);
+            var endExclusive = OperationalClock.StartUtcForOperationalDate(endDate.AddDays(1));
 
             var repartidores = await _context.Usuarios.OfType<Repartidor>()
                 .Where(r => r.Estado == Repartidor.EstadoRepartidor.Activo)
@@ -204,20 +207,22 @@ namespace Back.Controllers
             var horasPtDisp = repartidores.Where(r => r.EsPartTime).Sum(r => (double)r.HorasTrabajo) * DIAS_HABILES;
 
             var paquetes = await _context.Paquetes
-                .Where(p => p.FechaCalendarizada >= start && p.FechaCalendarizada <= end)
+                .Where(p => p.FechaCalendarizada >= start && p.FechaCalendarizada < endExclusive)
                 .Select(p => new { p.FechaCalendarizada, p.TipoEnvio })
                 .ToListAsync();
 
             // Alinear al lunes
-            var weekStart = start;
+            var weekStart = startDate;
             while (weekStart.DayOfWeek != DayOfWeek.Monday) weekStart = weekStart.AddDays(-1);
 
             var semanas = new List<SemanaCapacidadDto>();
             int num = 1;
-            while (weekStart <= end)
+            while (weekStart <= endDate)
             {
                 var weekEnd = weekStart.AddDays(7);
-                var envios = paquetes.Where(p => p.FechaCalendarizada >= weekStart && p.FechaCalendarizada < weekEnd).ToList();
+                var weekStartUtc = OperationalClock.StartUtcForOperationalDate(weekStart);
+                var weekEndUtc = OperationalClock.StartUtcForOperationalDate(weekEnd);
+                var envios = paquetes.Where(p => p.FechaCalendarizada >= weekStartUtc && p.FechaCalendarizada < weekEndUtc).ToList();
                 var total = envios.Count;
                 var prioritarios = envios.Count(e => e.TipoEnvio == TipoEnvio.Prioritario);
                 var comunes = total - prioritarios;

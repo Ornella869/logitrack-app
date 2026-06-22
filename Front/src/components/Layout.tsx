@@ -478,6 +478,7 @@ function Layout({ user, permissions, onLogout }: LayoutProps) {
     { path: '/tarifas', label: 'Tarifas', icon: <PriceChangeIcon fontSize="small" />, permission: 'tarifas' },
     { path: '/ojo-patron', label: 'Ojo del Patrón', icon: <GraphicEqIcon fontSize="small" />, permission: 'ojo_patron' },
     { path: '/reportes', label: 'Reportes', icon: <BarChartIcon fontSize="small" />, permission: 'reportes' },
+    { path: '/reporte-demanda-capacidad', label: 'Métricas de personal', icon: <AssessmentIcon fontSize="small" />, permission: 'metricas_personal' },
     { path: '/satisfaccion', label: 'Satisfacción', icon: <StarBorderIcon fontSize="small" />, permission: 'satisfaccion' },
     { path: '/plantillas-email', label: 'Plantillas de email', icon: <EmailIcon fontSize="small" />, permission: 'plantillas_email' },
     { path: '/auditoria', label: 'Auditoría', icon: <HistoryIcon fontSize="small" />, permission: 'auditoria' },

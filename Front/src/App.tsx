@@ -480,7 +480,7 @@ function App() {
           />
           <Route
             path="/reporte-demanda-capacidad"
-            element={permitted('reportes', <ReporteDemandaCapacidadPage />)}
+            element={permitted('metricas_personal', <ReporteDemandaCapacidadPage />)}
           />
           <Route
             path="/proyeccion-personal"

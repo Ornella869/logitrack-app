@@ -15,6 +15,7 @@ using Back.Ml.Service;
 using Back.Background;
 using Back.Hubs;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -134,6 +135,84 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+const string BaselineMigrationId = "20260620224054_Sprint5Baseline";
+const string EfProductVersion = "10.0.1";
+
+static async Task<bool> TableExistsAsync(LogiTrackDbContext context, string tableName)
+{
+    var connection = context.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = @tableName
+            );";
+
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "@tableName";
+        parameter.Value = tableName;
+        command.Parameters.Add(parameter);
+
+        var result = await command.ExecuteScalarAsync();
+        return result is true || (result is bool exists && exists);
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureBaselineMigrationHistoryAsync(LogiTrackDbContext context)
+{
+    var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+    if (!pendingMigrations.Contains(BaselineMigrationId))
+    {
+        return;
+    }
+
+    // Si la base ya fue creada fuera del historial de EF, registramos la baseline
+    // para evitar que MigrateAsync intente recrear todas las tablas.
+    var representativeTables = new[] { "Usuarios", "Paquetes", "PuntosPickUp", "CalificacionesPickUp" };
+    foreach (var table in representativeTables)
+    {
+        if (!await TableExistsAsync(context, table))
+        {
+            return;
+        }
+    }
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
+            ""MigrationId"" character varying(150) NOT NULL,
+            ""ProductVersion"" character varying(32) NOT NULL,
+            CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY (""MigrationId"")
+        );
+    ");
+
+    await context.Database.ExecuteSqlInterpolatedAsync($@"
+        INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
+        SELECT {BaselineMigrationId}, {EfProductVersion}
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM ""__EFMigrationsHistory""
+            WHERE ""MigrationId"" = {BaselineMigrationId}
+        );
+    ");
+}
+
 
 // --- CONFIGURACIÓN DEL PIPELINE DE PETICIONES (HTTP Request Pipeline) ---
 
@@ -164,22 +243,8 @@ using (var scope = app.Services.CreateScope())
     try 
     {
         var context = services.GetRequiredService<LogiTrackDbContext>();
+        await EnsureBaselineMigrationHistoryAsync(context);
         await context.Database.MigrateAsync();
-
-        // G1L-132: tabla de calificaciones post-retiro en Punto Pick Up
-        await context.Database.ExecuteSqlRawAsync(@"
-            CREATE TABLE IF NOT EXISTS ""CalificacionesPickUp"" (
-                ""Id"" uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-                ""PuntoPickUpId"" uuid NOT NULL REFERENCES ""PuntosPickUp""(""Id""),
-                ""PaqueteId"" uuid NOT NULL REFERENCES ""Paquetes""(""Id""),
-                ""Estrellas"" integer NOT NULL CHECK (""Estrellas"" BETWEEN 1 AND 5),
-                ""Comentario"" text,
-                ""AutorNombre"" text,
-                ""CreadoEn"" timestamp with time zone NOT NULL DEFAULT now()
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CalificacionesPickUp_PaqueteId""
-                ON ""CalificacionesPickUp""(""PaqueteId"");
-        ");
 
         // Garantizar Empresa singleton (G1L-52..64)
         var empresaService = services.GetRequiredService<EmpresaService>();
