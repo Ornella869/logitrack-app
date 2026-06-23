@@ -50,6 +50,15 @@ import StarHalfIcon from '@mui/icons-material/StarHalf'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const DIA_SEMANA_TO_INDEX: Record<string, number> = {
+  Dom: 0,
+  Lun: 1,
+  Mar: 2,
+  'Mié': 3,
+  Jue: 4,
+  Vie: 5,
+  'Sáb': 6,
+}
 const TIME_OPTIONS: string[] = (() => {
   const opts: string[] = []
   for (let h = 0; h < 24; h++) {
@@ -96,6 +105,20 @@ function parseHorariosStr(horarios: string): { dias: string[]; desde: string; ha
   }
   if (dias.length === 0) dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
   return { dias, desde, hasta }
+}
+
+function buildHorariosDetalle(dias: string[], desde: string, hasta: string): HorarioPickUpItem[] {
+  const abiertos = new Set(dias)
+  return Array.from({ length: 7 }, (_, diaSemana) => {
+    const label = Object.entries(DIA_SEMANA_TO_INDEX).find(([, index]) => index === diaSemana)?.[0] ?? 'Dom'
+    const abierto = abiertos.has(label)
+    return {
+      diaSemana,
+      apertura: abierto ? `${desde}:00` : null,
+      cierre: abierto ? `${hasta}:00` : null,
+      cerrado: !abierto,
+    }
+  })
 }
 
 function QrScannerDialog({
@@ -327,6 +350,7 @@ export default function PickUpOperacionPage() {
     setSavingHorarios(true)
     try {
       await pickupService.setMisHorarios(horariosDia)
+      await load()
       setHorariosOpen(false)
       setSnackbar({ open: true, msg: 'Horarios guardados correctamente.', severity: 'success' })
     } catch {
@@ -387,9 +411,10 @@ export default function PickUpOperacionPage() {
     if (editCapacidad <= 0) { setConfigError('La capacidad debe ser mayor a 0.'); return }
     if (editCapacidad > 500) { setConfigError('La capacidad diaria no puede superar los 500 envíos.'); return }
     const horarios = buildHorariosStr(editDias, editDesde, editHasta)
+    const horariosDetalle = buildHorariosDetalle(editDias, editDesde, editHasta)
     setSavingConfig(true)
     try {
-      await pickupService.actualizarConfiguracion(horarios, editCapacidad)
+      await pickupService.actualizarConfiguracion(horarios, editCapacidad, horariosDetalle)
       setConfigOpen(false)
       setSnackbar({ open: true, msg: 'Configuración guardada correctamente.', severity: 'success' })
       await load()

@@ -52,11 +52,13 @@ export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, 
   const [repartidorId, setRepartidorId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [warning, setWarning] = useState('')
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!open) return
     setError('')
+    setWarning('')
     setRepartidorId('')
     setSearch('')
     void (async () => {
@@ -94,21 +96,33 @@ export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, 
   const pesoActual = repartidorId ? cargaPorRepartidor.get(repartidorId)?.peso ?? 0 : 0
   const pesoResultante = pesoActual + (shipment.weight ?? 0)
 
-  const handleConfirm = async () => {
+  const ejecutarPrecalendarizacion = async (confirmarAdvertenciaHorario: boolean) => {
     if (!repartidorId || !fecha) {
       setError('Elegí un repartidor y un día.')
       return
     }
     setSubmitting(true)
     setError('')
-    const res = await calendarizacionService.precalendarizar(shipment.id, repartidorId, fecha)
+    const res = await calendarizacionService.precalendarizar(shipment.id, repartidorId, fecha, confirmarAdvertenciaHorario)
     setSubmitting(false)
     if (!res.success) {
       setError(res.error ?? 'No se pudo asignar manualmente')
       return
     }
+    if (res.data?.requiereConfirmacion && !res.data?.asignado) {
+      setWarning(res.data?.mensaje ?? 'La asignación requiere confirmación adicional.')
+      return
+    }
     const extraMsg = res.data?.mensaje ? ` ${res.data.mensaje}` : ''
     onSuccess(`Envío asignado manualmente.${extraMsg}`)
+  }
+
+  const handleConfirm = async () => {
+    await ejecutarPrecalendarizacion(false)
+  }
+
+  const handleConfirmWarning = async () => {
+    await ejecutarPrecalendarizacion(true)
   }
 
   return (
@@ -272,19 +286,31 @@ export default function PrecalendarizarDialog({ open, shipment, tramo, onClose, 
               </Alert>
             )}
 
+            {warning && <Alert severity="warning">{warning}</Alert>}
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={submitting}>Cancelar</Button>
-        <Button
-          variant="contained"
-          onClick={() => void handleConfirm()}
-          disabled={submitting || !repartidorId || !fecha}
-        >
-          {submitting ? <CircularProgress size={20} color="inherit" /> : 'Asignar'}
-        </Button>
+        {warning ? (
+          <Button
+            color="warning"
+            variant="contained"
+            onClick={() => void handleConfirmWarning()}
+            disabled={submitting || !repartidorId || !fecha}
+          >
+            {submitting ? <CircularProgress size={20} color="inherit" /> : 'Confirmar igual'}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            onClick={() => void handleConfirm()}
+            disabled={submitting || !repartidorId || !fecha}
+          >
+            {submitting ? <CircularProgress size={20} color="inherit" /> : 'Asignar'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   )

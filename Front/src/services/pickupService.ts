@@ -64,8 +64,8 @@ export const pickupService = {
     await api.post(`/pickups/${pickupId}/asignar-envio/${paqueteId}`)
   },
 
-  async actualizarConfiguracion(horarios: string, capacidadDiaria: number): Promise<void> {
-    await api.patch('/pickup-operacion/configuracion', { horarios, capacidadDiaria })
+  async actualizarConfiguracion(horarios: string, capacidadDiaria: number, horariosDetalle?: HorarioPickUpItem[]): Promise<void> {
+    await api.patch('/pickup-operacion/configuracion', { horarios, capacidadDiaria, horariosDetalle })
   },
 
   async calificarExperiencia(payload: {

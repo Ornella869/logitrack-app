@@ -44,6 +44,54 @@ namespace Back.Controllers
             return await _context.Usuarios.OfType<SocioPickUp>().FirstOrDefaultAsync(u => u.Id == userId.Value);
         }
 
+        private static string ConstruirResumenHorarios(IEnumerable<HorarioPickUpDto> horarios)
+        {
+            var labels = new[] { "Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb" };
+            var abiertos = horarios
+                .Where(h => !h.Cerrado && !string.IsNullOrWhiteSpace(h.Apertura) && !string.IsNullOrWhiteSpace(h.Cierre))
+                .OrderBy(h => h.DiaSemana)
+                .ToList();
+
+            if (abiertos.Count == 0)
+                return "Sin atención (00:00 a 00:00)";
+
+            var mismoHorario = abiertos
+                .Select(h => $"{h.Apertura}-{h.Cierre}")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() == 1;
+
+            if (mismoHorario)
+            {
+                var apertura = abiertos[0].Apertura!;
+                var cierre = abiertos[0].Cierre!;
+                var dias = abiertos.Select(h => h.DiaSemana).ToHashSet();
+                if (dias.SetEquals(new[] { 1, 2, 3, 4, 5 })) return $"Lun a Vie de {apertura} a {cierre}";
+                if (dias.SetEquals(new[] { 0, 1, 2, 3, 4, 5, 6 })) return $"Todos los días de {apertura} a {cierre}";
+            }
+
+            return string.Join("; ", abiertos.Select(h => $"{labels[h.DiaSemana]} {h.Apertura} a {h.Cierre}"));
+        }
+
+        private async Task PersistirHorariosAsync(Guid puntoPickUpId, List<HorarioPickUpDto> request)
+        {
+            var existentes = await _context.HorariosPickUp
+                .Where(h => h.PuntoPickUpId == puntoPickUpId)
+                .ToListAsync();
+            _context.HorariosPickUp.RemoveRange(existentes);
+
+            foreach (var dto in request)
+            {
+                TimeSpan? apertura = null;
+                TimeSpan? cierre = null;
+                if (!dto.Cerrado)
+                {
+                    if (!string.IsNullOrWhiteSpace(dto.Apertura) && TimeSpan.TryParse(dto.Apertura, out var a)) apertura = a;
+                    if (!string.IsNullOrWhiteSpace(dto.Cierre) && TimeSpan.TryParse(dto.Cierre, out var c)) cierre = c;
+                }
+                _context.HorariosPickUp.Add(new HorarioPickUp(puntoPickUpId, dto.DiaSemana, apertura, cierre, dto.Cerrado));
+            }
+        }
+
         [HttpGet("inventario")]
         public async Task<ActionResult<PickUpInventarioResponse>> Inventario()
         {
@@ -398,7 +446,17 @@ namespace Back.Controllers
 
         try
         {
-            punto.ActualizarHorariosYCapacidad(request.Horarios, request.CapacidadDiaria);
+            var resumen = request.Horarios;
+            if (request.HorariosDetalle is { Count: > 0 })
+            {
+                if (request.HorariosDetalle.Count != 7 || request.HorariosDetalle.Any(h => h.DiaSemana < 0 || h.DiaSemana > 6))
+                    return BadRequest("Se deben enviar exactamente 7 entradas de horario detallado (0=Dom a 6=Sáb).");
+
+                await PersistirHorariosAsync(punto.Id, request.HorariosDetalle);
+                resumen = ConstruirResumenHorarios(request.HorariosDetalle);
+            }
+
+            punto.ActualizarHorariosYCapacidad(resumen, request.CapacidadDiaria);
             await _context.SaveChangesAsync();
             return Ok(new { punto.Horarios, punto.CapacidadDiaria });
         }
@@ -437,22 +495,11 @@ namespace Back.Controllers
         if (request.Count != 7 || request.Any(h => h.DiaSemana < 0 || h.DiaSemana > 6))
             return BadRequest("Se deben enviar exactamente 7 entradas (una por día, 0=Dom a 6=Sáb).");
 
-        var existentes = await _context.HorariosPickUp
-            .Where(h => h.PuntoPickUpId == socio.PuntoPickUpId)
-            .ToListAsync();
-        _context.HorariosPickUp.RemoveRange(existentes);
+        await PersistirHorariosAsync(socio.PuntoPickUpId, request);
 
-        foreach (var dto in request)
-        {
-            TimeSpan? apertura = null;
-            TimeSpan? cierre = null;
-            if (!dto.Cerrado)
-            {
-                if (!string.IsNullOrWhiteSpace(dto.Apertura) && TimeSpan.TryParse(dto.Apertura, out var a)) apertura = a;
-                if (!string.IsNullOrWhiteSpace(dto.Cierre) && TimeSpan.TryParse(dto.Cierre, out var c)) cierre = c;
-            }
-            _context.HorariosPickUp.Add(new HorarioPickUp(socio.PuntoPickUpId, dto.DiaSemana, apertura, cierre, dto.Cerrado));
-        }
+        var punto = await _context.PuntosPickUp.FirstOrDefaultAsync(p => p.Id == socio.PuntoPickUpId);
+        if (punto is not null)
+            punto.ActualizarHorariosYCapacidad(ConstruirResumenHorarios(request), punto.CapacidadDiaria);
 
         await _context.SaveChangesAsync();
         return Ok();
@@ -463,6 +510,7 @@ namespace Back.Controllers
     {
         public string Horarios { get; set; } = string.Empty;
         public int CapacidadDiaria { get; set; }
+        public List<HorarioPickUpDto>? HorariosDetalle { get; set; }
     }
 
     public class HorarioPickUpDto

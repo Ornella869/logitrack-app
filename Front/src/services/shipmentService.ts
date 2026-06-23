@@ -865,12 +865,14 @@ export const calendarizacionService = {
     paqueteId: string,
     repartidorId: string,
     fecha: string,
+    confirmarAdvertenciaHorario = false,
   ): Promise<{ success: boolean; data?: PrecalendarizacionResultado; error?: string }> => {
     try {
       const response = await api.post('/calendarizacion/precalendarizar', {
         PaqueteId: paqueteId,
         RepartidorId: repartidorId,
         Fecha: fecha,
+        ConfirmarAdvertenciaHorario: confirmarAdvertenciaHorario,
       })
       return { success: true, data: response.data as PrecalendarizacionResultado }
     } catch (error: any) {
@@ -923,6 +925,8 @@ export interface CalendarioOperativo {
 }
 
 export interface PrecalendarizacionResultado {
+  asignado?: boolean
+  requiereConfirmacion?: boolean
   pesoActual: number
   pesoResultante: number
   capacidadKg: number

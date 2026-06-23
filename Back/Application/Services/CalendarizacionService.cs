@@ -91,6 +91,8 @@ namespace Back.Application.Services
     // G1L-83: resultado de la precalendarización manual.
     public class PrecalendarizacionResultado
     {
+        public bool Asignado { get; init; } = true;
+        public bool RequiereConfirmacion { get; init; }
         public required double PesoActual { get; init; }
         public required double PesoResultante { get; init; }
         public required double CapacidadKg { get; init; }
@@ -98,6 +100,13 @@ namespace Back.Application.Services
         public string? Mensaje { get; init; }
         /// <summary>Fecha real en la que quedó agendado el envío.</summary>
         public DateTime? FechaAsignada { get; init; }
+    }
+
+    internal sealed class ValidacionHorarioPickUpResultado
+    {
+        public required bool Permitido { get; init; }
+        public string? MotivoBloqueo { get; init; }
+        public string? Advertencia { get; init; }
     }
 
     public class CalendarizacionService
@@ -133,6 +142,83 @@ namespace Back.Application.Services
         // G1L-152: el punto Pick Up destino está cerrado ese día (default: abierto si no hay horario configurado).
         private static bool PickUpCerrado(Guid puntoId, DateTime fecha, List<HorarioPickUp> horarios) =>
             horarios.FirstOrDefault(h => h.PuntoPickUpId == puntoId && h.DiaSemana == (int)fecha.DayOfWeek)?.Cerrado == true;
+
+        private static readonly TimeSpan HoraInicioOperativo = new(9, 0, 0);
+        private static readonly TimeSpan MargenMinimoAntesDelCierre = new(0, 30, 0);
+
+        private static HorarioPickUp? ObtenerHorarioPickUp(Guid puntoId, DateTime fecha, List<HorarioPickUp> horarios) =>
+            horarios.FirstOrDefault(h => h.PuntoPickUpId == puntoId && h.DiaSemana == (int)fecha.DayOfWeek);
+
+        private static bool CuentaComoCargaActiva(Paquete paquete) =>
+            paquete.Status != PaqueteStatus.Entregado
+            && paquete.Status != PaqueteStatus.Cancelado
+            && paquete.Status != PaqueteStatus.RetornandoASucursal
+            && paquete.Status != PaqueteStatus.RetornadoASucursal
+            && paquete.Status != PaqueteStatus.EntregadoEnPunto
+            && paquete.Status != PaqueteStatus.ListoParaRetirar;
+
+        private static double EstimarHorasOperativas(Paquete paquete) => Math.Max(0.25d, paquete.HorasEstimadasRuta);
+
+        private static DateTime EstimarLlegadaPickUp(DateTime fecha, IEnumerable<Paquete> paquetesPrevios, Paquete paquete)
+        {
+            var horaInicio = HoraInicioOperativo;
+            if (fecha.Date == OperationalClock.TodayUtcDate)
+            {
+                var ahora = OperationalClock.Now.TimeOfDay;
+                if (ahora > horaInicio) horaInicio = ahora;
+            }
+
+            var inicio = DateTime.SpecifyKind(fecha.Date.Add(horaInicio), DateTimeKind.Utc);
+            var horasAcumuladas = paquetesPrevios.Where(CuentaComoCargaActiva).Sum(EstimarHorasOperativas) + EstimarHorasOperativas(paquete);
+            return inicio.AddHours(horasAcumuladas);
+        }
+
+        private static ValidacionHorarioPickUpResultado ValidarHorarioPickUp(
+            Paquete paquete,
+            DateTime fecha,
+            IEnumerable<Paquete> paquetesPrevios,
+            List<HorarioPickUp> horarios)
+        {
+            if (!paquete.PuntoPickUpId.HasValue) return new ValidacionHorarioPickUpResultado { Permitido = true };
+
+            var horario = ObtenerHorarioPickUp(paquete.PuntoPickUpId.Value, fecha, horarios);
+            if (horario is null || horario.Cerrado) return new ValidacionHorarioPickUpResultado { Permitido = true };
+            if (!horario.Apertura.HasValue || !horario.Cierre.HasValue) return new ValidacionHorarioPickUpResultado { Permitido = true };
+
+            var eta = EstimarLlegadaPickUp(fecha, paquetesPrevios, paquete);
+            var horaEta = eta.TimeOfDay;
+            var apertura = horario.Apertura.Value;
+            var cierre = horario.Cierre.Value;
+
+            if (horaEta > cierre)
+            {
+                return new ValidacionHorarioPickUpResultado
+                {
+                    Permitido = false,
+                    MotivoBloqueo = $"El punto Pick Up cierra a las {cierre:hh\\:mm} y la llegada estimada sería {horaEta:hh\\:mm}.",
+                };
+            }
+
+            if (horaEta < apertura)
+            {
+                return new ValidacionHorarioPickUpResultado
+                {
+                    Permitido = true,
+                    Advertencia = $"La llegada estimada al punto Pick Up sería {horaEta:hh\\:mm}, antes de la apertura ({apertura:hh\\:mm}).",
+                };
+            }
+
+            if ((cierre - horaEta) <= MargenMinimoAntesDelCierre)
+            {
+                return new ValidacionHorarioPickUpResultado
+                {
+                    Permitido = true,
+                    Advertencia = $"La llegada estimada al punto Pick Up sería {horaEta:hh\\:mm}, con poco margen antes del cierre ({cierre:hh\\:mm}).",
+                };
+            }
+
+            return new ValidacionHorarioPickUpResultado { Permitido = true };
+        }
 
         // Épica D: si se pasa sucursalId, todo se filtra a esa sucursal (envíos y repartidores).
         public async Task<int> ContarPendientesAsync(Guid? sucursalId = null)
@@ -267,7 +353,7 @@ namespace Back.Application.Services
 
         // G1L-83: Precalendarización manual de un envío a un repartidor y día específicos.
         public async Task<PrecalendarizacionResultado> PrecalendarizarManualAsync(
-            Guid paqueteId, Guid repartidorId, DateTime fecha, Guid? supervisorId, Guid? sucursalOperativaId = null)
+            Guid paqueteId, Guid repartidorId, DateTime fecha, Guid? supervisorId, Guid? sucursalOperativaId = null, bool confirmarAdvertenciaHorario = false)
         {
             var paquete = await _enviosRepository.GetPaquete(paqueteId)
                 ?? throw new InvalidOperationException("Paquete no encontrado.");
@@ -342,6 +428,27 @@ namespace Back.Application.Services
                     $"({pesoActual:0.#}/{rep.CapacidadCargaKg:0.#} kg). Elegí otro día.");
             }
 
+            var horariosPickUp = paquete.PuntoPickUpId.HasValue
+                ? await _context.HorariosPickUp.Where(h => h.PuntoPickUpId == paquete.PuntoPickUpId.Value).ToListAsync()
+                : new List<HorarioPickUp>();
+            var validacionHorarioPickUp = ValidarHorarioPickUp(paquete, fechaUtc, delDia, horariosPickUp);
+            if (!validacionHorarioPickUp.Permitido)
+                throw new InvalidOperationException(validacionHorarioPickUp.MotivoBloqueo ?? "El horario del punto Pick Up no permite esa asignación.");
+            if (!confirmarAdvertenciaHorario && !string.IsNullOrWhiteSpace(validacionHorarioPickUp.Advertencia))
+            {
+                return new PrecalendarizacionResultado
+                {
+                    Asignado = false,
+                    RequiereConfirmacion = true,
+                    PesoActual = pesoActual,
+                    PesoResultante = pesoResultante,
+                    CapacidadKg = rep.CapacidadCargaKg,
+                    HuboReversion = false,
+                    FechaAsignada = fechaUtc,
+                    Mensaje = validacionHorarioPickUp.Advertencia,
+                };
+            }
+
             paquete.AsignarParaCalendarizacion(repartidorId, fechaUtc);
             await _tramos.SincronizarAsignacionAsync(paquete);
             await _ojoPatron.InvalidarPruebasAprobadasDelDiaAsync(repartidorId, fechaUtc);
@@ -377,14 +484,19 @@ namespace Back.Application.Services
 
             return new PrecalendarizacionResultado
             {
+                Asignado = true,
                 PesoActual = pesoActual,
                 PesoResultante = pesoResultante,
                 CapacidadKg = rep.CapacidadCargaKg,
                 HuboReversion = huboReversion,
                 FechaAsignada = fechaUtc,
-                Mensaje = huboReversion
-                    ? "El repartidor estaba listo para salir. Debe escanear el nuevo envío antes de iniciar la ruta; los ya cargados siguen en el vehículo."
-                    : null,
+                Mensaje = string.Join(" ", new[]
+                {
+                    huboReversion
+                        ? "El repartidor estaba listo para salir. Debe escanear el nuevo envío antes de iniciar la ruta; los ya cargados siguen en el vehículo."
+                        : null,
+                    validacionHorarioPickUp.Advertencia,
+                }.Where(m => !string.IsNullOrWhiteSpace(m))),
             };
         }
 
@@ -536,6 +648,7 @@ namespace Back.Application.Services
             foreach (var paquete in cola)
             {
                 bool asignado = false;
+                bool bloqueadoPorHorarioPickUp = false;
                 var cpPaquete = ParseCp(paquete.Destinatario.Direccion.CP);
 
                 var repsSucursal = (paquete.SucursalId.HasValue
@@ -579,6 +692,11 @@ namespace Back.Application.Services
                         .Where(r =>
                         {
                             if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0) return false;
+                            if (!ValidarHorarioPickUp(paquete, fecha, lista, horariosPickUp).Permitido)
+                            {
+                                bloqueadoPorHorarioPickUp = true;
+                                return false;
+                            }
                             return lista.Any(p => p.Destinatario.Direccion.CP == paquete.Destinatario.Direccion.CP)
                                 && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg;
                         })
@@ -597,7 +715,13 @@ namespace Back.Application.Services
                     }
 
                     var menosCargado = repsElegibles
-                        .Where(r => (carga.TryGetValue((r.Id, fecha), out var lista2) ? lista2.Sum(p => p.Peso) : 0) + paquete.Peso <= r.CapacidadCargaKg)
+                        .Where(r =>
+                        {
+                            var lista2 = carga.TryGetValue((r.Id, fecha), out var existentesDia) ? existentesDia : new List<Paquete>();
+                            var permitido = ValidarHorarioPickUp(paquete, fecha, lista2, horariosPickUp).Permitido;
+                            if (!permitido) bloqueadoPorHorarioPickUp = true;
+                            return permitido && lista2.Sum(p => p.Peso) + paquete.Peso <= r.CapacidadCargaKg;
+                        })
                         .OrderBy(r => carga.TryGetValue((r.Id, fecha), out var l3) ? l3.Count : 0)
                         .ThenBy(r => totalHistorico[r.Id])
                         .ThenBy(r => r.Id)
@@ -606,6 +730,7 @@ namespace Back.Application.Services
 
                     var cercano = repsElegibles
                         .Where(r => carga.TryGetValue((r.Id, fecha), out var lista) && lista.Count > 0
+                                    && ValidarHorarioPickUp(paquete, fecha, lista, horariosPickUp).Permitido
                                     && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg)
                         .Select(r => new
                         {
@@ -626,7 +751,7 @@ namespace Back.Application.Services
                         PaqueteId = paquete.Id,
                         CodigoSeguimiento = paquete.CodigoSeguimiento,
                         Peso = paquete.Peso,
-                        Motivo = "Capacidad de peso excedida",
+                        Motivo = bloqueadoPorHorarioPickUp ? "Horario de PickUp insuficiente" : "Capacidad de peso excedida",
                         RepartidorCercanoId = cercanoSinCupo?.Id,
                         RepartidorCercanoNombre = cercanoSinCupo?.Nombre,
                     });
@@ -843,6 +968,7 @@ namespace Back.Application.Services
                         .Where(r =>
                         {
                             if (!carga.TryGetValue((r.Id, fecha), out var lista) || lista.Count == 0) return false;
+                            if (!ValidarHorarioPickUp(paquete, fecha, lista, horariosPickUp).Permitido) return false;
                             var coincide = lista.Any(p => p.Destinatario.Direccion.CP == paquete.Destinatario.Direccion.CP);
                             return coincide && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg;
                         })
@@ -868,7 +994,12 @@ namespace Back.Application.Services
                     //    Ya no exige "libre" (0 paquetes): distribuye entre todos los disponibles
                     //    ordenando por cantidad de paquetes asignados, garantizando reparto parejo.
                     var menosCargado = repsElegibles
-                        .Where(r => (carga.TryGetValue((r.Id, fecha), out var lista2) ? lista2.Sum(p => p.Peso) : 0) + paquete.Peso <= r.CapacidadCargaKg)
+                        .Where(r =>
+                        {
+                            var lista2 = carga.TryGetValue((r.Id, fecha), out var existentesDia) ? existentesDia : new List<Paquete>();
+                            return ValidarHorarioPickUp(paquete, fecha, lista2, horariosPickUp).Permitido
+                                && lista2.Sum(p => p.Peso) + paquete.Peso <= r.CapacidadCargaKg;
+                        })
                         .OrderBy(r => carga.TryGetValue((r.Id, fecha), out var l3) ? l3.Count : 0)
                         .ThenBy(r => totalHistorico[r.Id])
                         .ThenBy(r => r.Id)
@@ -884,6 +1015,7 @@ namespace Back.Application.Services
                     //    Si no hay ninguno con capacidad, avanzamos al siguiente día.
                     var cercano = repsElegibles
                         .Where(r => carga.TryGetValue((r.Id, fecha), out var lista) && lista.Count > 0
+                                    && ValidarHorarioPickUp(paquete, fecha, lista, horariosPickUp).Permitido
                                     && (lista.Sum(p => p.Peso) + paquete.Peso) <= r.CapacidadCargaKg)
                         .Select(r => new
                         {
