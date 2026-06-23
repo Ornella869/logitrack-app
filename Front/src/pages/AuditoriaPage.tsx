@@ -119,6 +119,24 @@ function parsePruebaContexto(contexto: string | null): Record<string, string> | 
   return null
 }
 
+const CONTEXT_LABELS: Record<string, string> = {
+  Repartidor: 'Repartidor',
+  SucursalAnteriorNombre: 'Sucursal anterior',
+  NuevaSucursalNombre: 'Nueva sucursal',
+}
+
+function formatGenericContext(contexto: string | null): string | null {
+  const parsed = parsePruebaContexto(contexto)
+  if (!parsed) return contexto
+
+  const ignoredKeys = new Set(['SucursalAnterior', 'NuevaSucursal'])
+  const entries = Object.entries(parsed)
+    .filter(([key, value]) => value && value !== 'null' && !ignoredKeys.has(key) && !key.endsWith('Id'))
+    .map(([key, value]) => `${CONTEXT_LABELS[key] ?? key}: ${value}`)
+
+  return entries.length > 0 ? entries.join(' · ') : null
+}
+
 const ROL_COLORS: Record<string, string> = {
   Supervisor: '#ed6c02',
   Operador: '#0288d1',
@@ -338,11 +356,6 @@ export default function AuditoriaPage() {
                             <Typography variant="body2" fontWeight={600}>{log.usuarioNombre}</Typography>
                             <Chip size="small" label={log.usuarioRol} sx={{ bgcolor: `${rolColor}22`, color: rolColor, fontSize: 10, height: 18 }} />
                             <Chip size="small" label={ACCION_LABELS[log.accion] ?? log.accion} sx={{ bgcolor: accionColor.bg, color: accionColor.color, fontSize: 10, height: 18 }} />
-                            {log.recursoId && log.accion !== 'JornadaLaboral' && (
-                              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#1976d2' }}>
-                                {log.recursoId}
-                              </Typography>
-                            )}
                           </Stack>
                           <Typography variant="body2" sx={{ mt: 0.3 }}>{log.descripcion}</Typography>
                           {log.contexto && (() => {
@@ -383,11 +396,12 @@ export default function AuditoriaPage() {
                                 )
                               }
                             }
-                            return (
+                            const formatted = formatGenericContext(log.contexto)
+                            return formatted ? (
                               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
-                                {log.contexto}
+                                {formatted}
                               </Typography>
-                            )
+                            ) : null
                           })()}
                         </Box>
                       </Stack>

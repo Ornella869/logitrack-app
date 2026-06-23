@@ -650,6 +650,12 @@ namespace Back.Controllers
                 }
 
                 var sucursalAnterior = rep.SucursalId;
+                var sucursalAnteriorNombre = rep.SucursalId.HasValue
+                    ? (await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == rep.SucursalId.Value))?.Nombre
+                    : null;
+                var sucursalNuevaNombre = request.SucursalId.HasValue
+                    ? (await _context.Sucursales.FirstOrDefaultAsync(s => s.Id == request.SucursalId.Value))?.Nombre
+                    : null;
                 rep.AsignarSucursal(request.SucursalId);
                 
                 await _auditoria.RegistrarAsync(
@@ -658,9 +664,9 @@ namespace Back.Controllers
                     rep.Id.ToString(),
                     JsonSerializer.Serialize(new
                     {
-                        RepartidorId = rep.Id,
-                        SucursalAnterior = sucursalAnterior,
-                        NuevaSucursal = request.SucursalId
+                        Repartidor = $"{rep.Nombre} {rep.Apellido}",
+                        SucursalAnteriorNombre = sucursalAnteriorNombre ?? "Sin sucursal",
+                        NuevaSucursalNombre = sucursalNuevaNombre ?? "Sin sucursal"
                     }));
 
                 await _context.SaveChangesAsync();
