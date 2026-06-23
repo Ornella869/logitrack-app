@@ -65,9 +65,11 @@ namespace Back.Controllers
             if (user is Gerente gerente)
             {
                 if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
-                var habilitada = await _context.GerentesSucursales
-                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
-                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+                var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
+                if (sucursal == null || string.IsNullOrWhiteSpace(sucursal.Provincia)) return Guid.Empty;
+                return gerente.ProvinciasAsignadas.Any(p => string.Equals(p.Trim(), sucursal.Provincia.Trim(), StringComparison.OrdinalIgnoreCase))
+                    ? gerente.SucursalActivaId.Value
+                    : Guid.Empty;
             }
             // Supervisor/Operador sin sucursal asignada → Guid.Empty no coincide con ninguna sucursal real.
             return user?.SucursalId ?? Guid.Empty;
@@ -81,9 +83,11 @@ namespace Back.Controllers
             if (user is not Gerente gerente) return new List<Guid>();
 
             if (!gerente.SucursalActivaId.HasValue) return new List<Guid>();
-            var habilitada = await _context.GerentesSucursales
-                .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
-            return habilitada ? new List<Guid> { gerente.SucursalActivaId.Value } : new List<Guid>();
+            var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
+            if (sucursal == null || string.IsNullOrWhiteSpace(sucursal.Provincia)) return new List<Guid>();
+            return gerente.ProvinciasAsignadas.Any(p => string.Equals(p.Trim(), sucursal.Provincia.Trim(), StringComparison.OrdinalIgnoreCase))
+                ? new List<Guid> { gerente.SucursalActivaId.Value }
+                : new List<Guid>();
         }
 
         private async Task<bool> PuedeVerPaqueteAsync(Paquete paquete)

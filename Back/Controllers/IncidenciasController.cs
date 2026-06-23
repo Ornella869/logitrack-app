@@ -492,9 +492,11 @@ namespace Back.Controllers
             if (user is Gerente gerente)
             {
                 if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
-                var habilitada = await _context.GerentesSucursales
-                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
-                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+                var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
+                if (sucursal == null || string.IsNullOrWhiteSpace(sucursal.Provincia)) return Guid.Empty;
+                return gerente.ProvinciasAsignadas.Any(p => string.Equals(p.Trim(), sucursal.Provincia.Trim(), StringComparison.OrdinalIgnoreCase))
+                    ? gerente.SucursalActivaId.Value
+                    : Guid.Empty;
             }
             return user?.SucursalId ?? Guid.Empty;
         }

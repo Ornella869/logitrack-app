@@ -66,9 +66,11 @@ namespace Back.Controllers
             if (usuario is Gerente gerente)
             {
                 if (!gerente.SucursalActivaId.HasValue) return Guid.Empty;
-                var habilitada = await _context.GerentesSucursales
-                    .AnyAsync(x => x.GerenteId == gerente.Id && x.SucursalId == gerente.SucursalActivaId.Value);
-                return habilitada ? gerente.SucursalActivaId.Value : Guid.Empty;
+                var sucursal = await _context.Sucursales.FindAsync(gerente.SucursalActivaId.Value);
+                if (sucursal == null || string.IsNullOrWhiteSpace(sucursal.Provincia)) return Guid.Empty;
+                return gerente.ProvinciasAsignadas.Any(p => string.Equals(p.Trim(), sucursal.Provincia.Trim(), StringComparison.OrdinalIgnoreCase))
+                    ? gerente.SucursalActivaId.Value
+                    : Guid.Empty;
             }
             return usuario?.SucursalId ?? Guid.Empty;
         }
@@ -580,9 +582,15 @@ namespace Back.Controllers
                 if (currentUser is not Gerente gerente) return Forbid();
 
                 // Resolver provincias permitidas según el rol del usuario actual
-                var sucursalesHabilitadas = await _context.GerentesSucursales
-                    .Where(x => x.GerenteId == gerente.Id)
-                    .Select(x => x.SucursalId)
+                var provinciasAsignadas = gerente.ProvinciasAsignadas
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Select(p => p.Trim().ToLower())
+                    .Distinct()
+                    .ToList();
+                var sucursalesHabilitadas = await _context.Sucursales
+                    .Where(s => s.Provincia != null
+                        && provinciasAsignadas.Contains(s.Provincia.Trim().ToLower()))
+                    .Select(s => s.Id)
                     .ToListAsync();
                 if (sucursalesHabilitadas.Count == 0)
                     return BadRequest("El gerente no tiene sucursales habilitadas para transferir repartidores.");
